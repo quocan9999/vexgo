@@ -13,6 +13,7 @@ export type PaymentDraftLeg = {
   bookingCode?: string;
   orderId?: number;
   orderCode?: string;
+  comboCode?: string;
   status?: string;
   paymentStatus?: string;
 };
@@ -22,6 +23,7 @@ type PaymentDraftBase = {
   totalFare: number;
   orderId?: number;
   orderCode?: string;
+  comboCode?: string;
   status?: string;
   paymentStatus?: string;
   paymentMethod?: string;
@@ -224,45 +226,152 @@ export function validatePaymentDraft(data: unknown): PaymentDraft | null {
   return d as unknown as BookingPaymentDraft;
 }
 
+function getAvailableStorages(): Storage[] {
+  const storages: Storage[] = [];
+  if (typeof window === 'undefined') return storages;
+  try {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+      storages.push(sessionStorage);
+    }
+  } catch {
+    // sessionStorage disabled or inaccessible
+  }
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage) {
+      storages.push(localStorage);
+    }
+  } catch {
+    // localStorage disabled or inaccessible
+  }
+  return storages;
+}
+
 export function savePaymentDraft(draft: PaymentDraft): void {
   if (typeof window === 'undefined' || !draft?.id) return;
-  try {
-    sessionStorage.setItem(
-      `${PAYMENT_DRAFT_STORAGE_PREFIX}${draft.id}`,
-      JSON.stringify(draft),
-    );
-  } catch (err) {
-    console.error('Failed to save payment draft to sessionStorage', err);
+  const serialized = JSON.stringify(draft);
+  const key = `${PAYMENT_DRAFT_STORAGE_PREFIX}${draft.id}`;
+  for (const storage of getAvailableStorages()) {
+    try {
+      storage.setItem(key, serialized);
+    } catch (err) {
+      console.error('Failed to save payment draft to storage', err);
+    }
   }
 }
 
 export function getPaymentDraft(draftId: string | null | undefined): PaymentDraft | null {
   if (typeof window === 'undefined' || !draftId) return null;
-  try {
-    const raw = sessionStorage.getItem(`${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return validatePaymentDraft(parsed);
-  } catch {
-    return null;
+  const key = `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`;
+  for (const storage of getAvailableStorages()) {
+    try {
+      const raw = storage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const draft = validatePaymentDraft(parsed);
+      if (draft) return draft;
+    } catch {
+      // Continue checking next storage
+    }
   }
+  return null;
 }
 
 export const PAYMENT_DRAFT_TERMINAL_PREFIX = 'vexgo:payment-draft-terminal:';
+
+function isDraftTerminal(draftId: string): boolean {
+  const key = `${PAYMENT_DRAFT_TERMINAL_PREFIX}${draftId}`;
+  for (const storage of getAvailableStorages()) {
+    try {
+      if (storage.getItem(key)) return true;
+    } catch {
+      // Ignore
+    }
+  }
+  return false;
+}
 
 export function markPaymentDraftTerminal(
   draftId: string | null | undefined,
   terminalStatus: string,
 ): void {
   if (typeof window === 'undefined' || !draftId) return;
-  try {
-    sessionStorage.setItem(
-      `${PAYMENT_DRAFT_TERMINAL_PREFIX}${draftId}`,
-      terminalStatus,
-    );
-  } catch {
-    // Ignore storage write errors
+  const key = `${PAYMENT_DRAFT_TERMINAL_PREFIX}${draftId}`;
+  for (const storage of getAvailableStorages()) {
+    try {
+      storage.setItem(key, terminalStatus);
+    } catch {
+      // Ignore storage write errors
+    }
   }
+  try {
+    window.dispatchEvent(new Event('vexgo:payment-drafts-changed'));
+  } catch {
+    // Ignore dispatch errors
+  }
+}
+
+export function clearAllPaymentDrafts(): void {
+  if (typeof window === 'undefined') return;
+  for (const storage of getAvailableStorages()) {
+    try {
+      const keysToRemove: string[] = [];
+      const len = storage.length;
+      for (let i = 0; i < len; i++) {
+        const key = storage.key(i);
+        if (
+          key &&
+          (key.startsWith(PAYMENT_DRAFT_STORAGE_PREFIX) ||
+            key.startsWith(PAYMENT_DRAFT_TERMINAL_PREFIX))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const k of keysToRemove) {
+        storage.removeItem(k);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }
+  try {
+    window.dispatchEvent(new Event('vexgo:payment-drafts-changed'));
+  } catch {
+    // Ignore dispatch errors
+  }
+}
+
+function getAllStoredPaymentDrafts(): PaymentDraft[] {
+  const storages = getAvailableStorages();
+  const seenIds = new Set<string>();
+  const drafts: PaymentDraft[] = [];
+
+  for (const storage of storages) {
+    try {
+      const len = storage.length;
+      for (let i = 0; i < len; i++) {
+        const key = storage.key(i);
+        if (!key || !key.startsWith(PAYMENT_DRAFT_STORAGE_PREFIX)) continue;
+        const draftId = key.slice(PAYMENT_DRAFT_STORAGE_PREFIX.length);
+        if (seenIds.has(draftId)) continue;
+        const raw = storage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const draft = validatePaymentDraft(parsed);
+          if (draft) {
+            seenIds.add(draft.id);
+            drafts.push(draft);
+          }
+        } catch {
+          // Ignore malformed drafts
+        }
+      }
+    } catch {
+      // Ignore storage traversal errors
+    }
+  }
+
+  return drafts;
 }
 
 export function markPaymentDraftsTerminalByOrder(
@@ -276,15 +385,8 @@ export function markPaymentDraftsTerminalByOrder(
 ): void {
   if (typeof window === 'undefined') return;
   try {
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      if (!key || !key.startsWith(PAYMENT_DRAFT_STORAGE_PREFIX)) continue;
-      const raw = sessionStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const draft = validatePaymentDraft(parsed);
-      if (!draft) continue;
-
+    const drafts = getAllStoredPaymentDrafts();
+    for (const draft of drafts) {
       let matched = false;
       if (draft.kind === 'shipment') {
         if (
@@ -330,15 +432,10 @@ export function findActivePaymentDraftByOrder(
   if (typeof window === 'undefined') return null;
   try {
     let best: { draft: PaymentDraft; legCount: number; expiresAtMs: number } | null = null;
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      if (!key || !key.startsWith(PAYMENT_DRAFT_STORAGE_PREFIX)) continue;
-      const raw = sessionStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const draft = validatePaymentDraft(parsed);
-      if (!draft) continue;
-      if (sessionStorage.getItem(`${PAYMENT_DRAFT_TERMINAL_PREFIX}${draft.id}`)) {
+    const drafts = getAllStoredPaymentDrafts();
+
+    for (const draft of drafts) {
+      if (isDraftTerminal(draft.id)) {
         continue;
       }
       if (
@@ -399,15 +496,14 @@ export function getLatestActivePaymentDraft(
   if (typeof window === 'undefined') return null;
   try {
     let best: { draft: PaymentDraft; expiresAtMs: number } | null = null;
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      if (!key || !key.startsWith(PAYMENT_DRAFT_STORAGE_PREFIX)) continue;
-      const raw = sessionStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const draft = validatePaymentDraft(parsed);
-      if (!draft) continue;
-      if (sessionStorage.getItem(`${PAYMENT_DRAFT_TERMINAL_PREFIX}${draft.id}`)) {
+    const drafts = getAllStoredPaymentDrafts();
+
+    for (const draft of drafts) {
+      if (isDraftTerminal(draft.id)) {
+        continue;
+      }
+      // Shipments are only paid in cash at counter (TAI_BEN); they do not use online payment countdowns
+      if (draft.kind === 'shipment') {
         continue;
       }
       if (

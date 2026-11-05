@@ -27,6 +27,7 @@ const company = {
   maNhaXe: 'FUTA',
   tenNhaXe: 'Phương Trang',
   thongTinLienHe: null,
+  cauHinhHanhLy: null,
   trangThai: 'HOAT_DONG',
   createdAt: new Date('2026-09-22T07:34:00.000Z'),
   updatedAt: new Date('2026-09-22T07:34:00.000Z'),

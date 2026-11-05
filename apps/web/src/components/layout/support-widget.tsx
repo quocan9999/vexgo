@@ -117,15 +117,15 @@ export const SupportWidget: React.FC = () => {
         <button
           onClick={handleToggleStaff}
           data-testid="staff-chat-floating-button"
-          className="fixed bottom-24 right-6 w-14 h-14 bg-brand text-white rounded-full shadow-lg hover:bg-brand-hover hover:scale-105 transition-all flex items-center justify-center z-50 group"
+          className="fixed bottom-[74px] sm:bottom-24 right-3.5 sm:right-6 w-11 h-11 sm:w-14 sm:h-14 bg-brand text-white rounded-full shadow-lg hover:bg-brand-hover hover:scale-105 active:scale-95 transition-all flex items-center justify-center z-40 group cursor-pointer"
           aria-label="Mở chat CSKH nhà xe"
           title="Chat trực tiếp với CSKH Nhà xe"
         >
-          <Headphones className="w-6 h-6" />
-          <span className="absolute right-full mr-4 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md">
+          <Headphones className="w-5 h-5 sm:w-6 sm:h-6" />
+          <span className="absolute right-full mr-4 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md hidden sm:block">
             CSKH Nhà xe
           </span>
-          <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
+          <span className="absolute top-0 right-0 w-3 h-3 sm:w-3.5 sm:h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
         </button>
       )}
 
@@ -136,15 +136,15 @@ export const SupportWidget: React.FC = () => {
         <button
           onClick={handleToggleBot}
           data-testid="ai-bot-floating-button"
-          className="fixed bottom-6 right-6 w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg hover:bg-emerald-700 hover:scale-105 transition-all flex items-center justify-center z-50 group"
+          className="fixed bottom-4 sm:bottom-6 right-3.5 sm:right-6 w-11 h-11 sm:w-14 sm:h-14 bg-emerald-600 text-white rounded-full shadow-lg hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all flex items-center justify-center z-40 group cursor-pointer"
           aria-label="Mở trợ lý ảo AI"
           title="Trợ lý ảo VexGo 24/7"
         >
-          <Bot className="w-6 h-6" />
-          <span className="absolute right-full mr-4 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md">
+          <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
+          <span className="absolute right-full mr-4 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-md hidden sm:block">
             Trợ lý AI VexGo
           </span>
-          <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-rose-500 border-2 border-white rounded-full" />
+          <span className="absolute top-0 right-0 w-3 h-3 sm:w-3.5 sm:h-3.5 bg-rose-500 border-2 border-white rounded-full" />
         </button>
       )}
 

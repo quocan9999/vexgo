@@ -34,6 +34,7 @@ describe('Timed Pickup/Dropoff Booking & Pricing (Stage 4)', () => {
     mockSeatHolds = {
       verifyHold: vi.fn().mockResolvedValue(true),
       consumeHoldInTx: vi.fn().mockResolvedValue({ giuChoId: 999 }),
+      assertNoSpamUnpaidBookings: vi.fn().mockResolvedValue(undefined),
     };
 
     bookingService = new BookingsService(

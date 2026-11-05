@@ -3,10 +3,12 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Newspaper, Calendar, Clock, ChevronRight, ArrowRight, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Newspaper, Calendar, Clock, ChevronLeft, ChevronRight, ArrowRight, User } from 'lucide-react';
 import { NEWS_ARTICLES, type NewsArticle } from '../data/news.data';
 
 export function NewsListPage() {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
   const categories = [
@@ -25,14 +27,17 @@ export function NewsListPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-16 font-sans">
-      {/* Breadcrumb Header */}
+      {/* Back Header */}
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 text-xs font-semibold text-slate-500">
-          <Link href="/" className="hover:text-[#FF5722] transition-colors">
-            Trang chủ
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <span className="text-slate-900 font-bold">Tin tức</span>
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#FF5722] transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span>Quay lại</span>
+          </button>
         </div>
       </div>
 

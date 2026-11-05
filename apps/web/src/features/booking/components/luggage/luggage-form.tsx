@@ -1,7 +1,12 @@
 /* eslint-disable */
 'use client';
 
-import type { ILuggageItem } from "./luggage-item";
+import type {
+  ILuggageItem,
+  LuggageSizePackage,
+  LuggageVehiclesPricing,
+  LuggageSurchargesPricing,
+} from "./luggage-item";
 import React from 'react';
 import { Plus } from 'lucide-react';
 
@@ -11,10 +16,20 @@ import type { CargoCategory } from '@/features/shipments/services/shipments.api'
 interface LuggageFormProps {
   items: ILuggageItem[];
   cargoCategories: CargoCategory[];
+  packages?: LuggageSizePackage[];
+  vehicles?: LuggageVehiclesPricing;
+  surcharges?: LuggageSurchargesPricing;
   onChange: (items: ILuggageItem[]) => void;
 }
 
-export const LuggageForm: React.FC<LuggageFormProps> = ({ items, cargoCategories, onChange }) => {
+export const LuggageForm: React.FC<LuggageFormProps> = ({
+  items,
+  cargoCategories,
+  packages,
+  vehicles,
+  surcharges,
+  onChange,
+}) => {
   const [showLimitModal, setShowLimitModal] = React.useState(false);
 
   const handleAddItem = () => {
@@ -68,6 +83,9 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({ items, cargoCategories
           index={index}
           item={item}
           cargoCategories={cargoCategories}
+          packages={packages}
+          vehicles={vehicles}
+          surcharges={surcharges}
           onChange={handleChangeItem}
           onRemove={handleRemoveItem}
         />

@@ -4,6 +4,10 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
+import {
+  DEFAULT_LUGGAGE_RATES,
+  resolveEffectiveLuggageRates,
+} from '../bus-companies/dto/luggage-rates.dto.js';
 import { assertValidCargoDimensions } from './cargo-dimensions.validation.js';
 
 type CapacityGroup = 'XE_MAY' | 'HANG_CONG_KENH' | 'HANG_NHE';
@@ -66,10 +70,11 @@ export interface CargoPricingResult {
   baseFee: Prisma.Decimal;
   serviceFee: Prisma.Decimal;
   totalFee: Prisma.Decimal;
+  surcharges: {
+    fragile: number;
+    valuable: number;
+  };
 }
-
-const SURCHARGE_FRAGILE = new Prisma.Decimal(20_000);
-const SURCHARGE_VALUABLE = new Prisma.Decimal(50_000);
 
 function throwConflict(error: string, message: string): never {
   throw new ConflictException({ error, message });
@@ -487,9 +492,29 @@ export class CargoPricingService {
       baseFee = baseFee.plus(fee);
     }
 
+    let fragileSurcharge = DEFAULT_LUGGAGE_RATES.fragileSurcharge;
+    let valuableSurcharge = DEFAULT_LUGGAGE_RATES.valuableSurcharge;
+
+    if (trip.nhaXeId && (tx as any).nhaXe?.findUnique) {
+      const company = await (tx as any).nhaXe.findUnique({
+        where: { nhaXeId: trip.nhaXeId },
+        select: { cauHinhHanhLy: true },
+      });
+      if (company) {
+        const effectiveRates = resolveEffectiveLuggageRates(
+          company.cauHinhHanhLy,
+          trip.tuyenXeId,
+        );
+        fragileSurcharge = effectiveRates.fragileSurcharge;
+        valuableSurcharge = effectiveRates.valuableSurcharge;
+      }
+    }
+
     const serviceFee = (
-      hasFragile ? SURCHARGE_FRAGILE : new Prisma.Decimal(0)
-    ).plus(hasValuable ? SURCHARGE_VALUABLE : new Prisma.Decimal(0));
+      hasFragile ? new Prisma.Decimal(fragileSurcharge) : new Prisma.Decimal(0)
+    ).plus(
+      hasValuable ? new Prisma.Decimal(valuableSurcharge) : new Prisma.Decimal(0),
+    );
 
     return {
       senderPointId,
@@ -499,6 +524,10 @@ export class CargoPricingService {
       baseFee,
       serviceFee,
       totalFee: baseFee.plus(serviceFee),
+      surcharges: {
+        fragile: fragileSurcharge,
+        valuable: valuableSurcharge,
+      },
     };
   }
 }

@@ -3,6 +3,8 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  HttpException,
+  HttpStatus,
   Logger,
   ServiceUnavailableException,
   type OnModuleInit,
@@ -10,7 +12,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { normalizePhone } from '../common/validation/vietnamese-phone.js';
 import {
   combineDeparture,
   resolveBusinessTimeZone,
@@ -189,10 +193,84 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Chống phá hoại (Spam giữ chỗ):
+   * Khi 1 số điện thoại (hoặc tài khoản) có từ 3 đơn giữ chỗ bị hết hạn mà không thanh toán trong vòng 30 phút qua:
+   * Hệ thống sẽ tạm khóa, từ chối nhận giữ chỗ/đặt vé từ số điện thoại đó trong vòng 30 phút.
+   */
+  async assertNoSpamUnpaidBookings(
+    phone?: string | null,
+    khachHangId?: number | null,
+    now = new Date(),
+  ): Promise<void> {
+    const rawPhone = phone?.trim();
+    const normalized = rawPhone ? normalizePhone(rawPhone) : null;
+    const phoneList = Array.from(new Set([rawPhone, normalized])).filter(
+      (p): p is string => Boolean(p && p.length > 0),
+    );
+
+    if (phoneList.length === 0 && !khachHangId) {
+      return;
+    }
+
+    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+    const conditions: Prisma.DonGiaoDichWhereInput[] = [];
+    if (phoneList.length > 0) {
+      conditions.push({ soDienThoaiKhachHang: { in: phoneList } });
+    }
+    if (khachHangId) {
+      conditions.push({ khachHangId });
+    }
+
+    const identityWhere: Prisma.DonGiaoDichWhereInput =
+      conditions.length === 1 ? conditions[0] : { OR: conditions };
+
+    let unpaidBookingsCount = 0;
+    if (typeof this.prisma.donGiaoDich?.count === 'function') {
+      unpaidBookingsCount = await this.prisma.donGiaoDich.count({
+        where: {
+          ...identityWhere,
+          ngayTao: { gte: thirtyMinutesAgo },
+          trangThai: { in: ['CHO_THANH_TOAN', 'DA_HUY'] },
+          thanhToans: {
+            none: {
+              trangThai: { in: ['THANH_CONG', 'DA_THANH_TOAN'] },
+            },
+          },
+        },
+      });
+    }
+
+    let expiredHoldsCount = 0;
+    if (khachHangId && typeof this.prisma.giuCho?.count === 'function') {
+      expiredHoldsCount = await this.prisma.giuCho.count({
+        where: {
+          khachHangId,
+          createdAt: { gte: thirtyMinutesAgo },
+          trangThai: 'HET_HAN',
+        },
+      });
+    }
+
+    if (unpaidBookingsCount >= 3 || expiredHoldsCount >= 3) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          error: 'TOO_MANY_UNPAID_BOOKINGS',
+          message:
+            'Số điện thoại này đã tạo nhiều đơn giữ chỗ chưa thanh toán. Vui lòng quay lại sau 30 phút để tiếp tục.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
   async createSeatHold(
     tripId: number,
     seatIds: number[],
     principal?: AuthPrincipal,
+    phone?: string,
   ) {
     // 0. Dọn dẹp ghế kẹt hết hạn trước khi kiểm tra
     await this.releaseStaleHolds();
@@ -284,15 +362,25 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     // Toàn bộ quy trình dùng gheChuyenXeId xuyên suốt
     const resolvedTripSeatIds = tripSeats.map((s) => s.gheChuyenXeId);
 
-    // 3. Lấy customerId nếu có principal
+    // 3. Lấy customerId và số điện thoại từ principal nếu có
     let customerId: number | null = null;
+    let accountPhone: string | null = null;
     if (principal?.taiKhoanId) {
       const cust = await this.prisma.khachHang.findUnique({
         where: { taiKhoanId: principal.taiKhoanId },
-        select: { khachHangId: true },
+        select: {
+          khachHangId: true,
+          taiKhoan: { select: { soDienThoai: true } },
+        },
       });
-      if (cust) customerId = cust.khachHangId;
+      if (cust) {
+        customerId = cust.khachHangId;
+        accountPhone = cust.taiKhoan?.soDienThoai ?? null;
+      }
     }
+
+    const effectivePhone = phone?.trim() || accountPhone;
+    await this.assertNoSpamUnpaidBookings(effectivePhone, customerId);
 
     // 4. Tạo signed hold token & thiết lập TTL 10 phút
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút

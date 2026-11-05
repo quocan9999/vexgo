@@ -4,7 +4,22 @@
 import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, Bus, Menu, X, ChevronDown, FileText, Package, Settings, LogOut, Award, Globe, Clock, QrCode } from 'lucide-react';
+import {
+  User,
+  Bus,
+  Menu,
+  X,
+  ChevronDown,
+  FileText,
+  Package,
+  Settings,
+  LogOut,
+  Award,
+  Globe,
+  Clock,
+  QrCode,
+  Ticket,
+} from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
@@ -21,13 +36,31 @@ interface NavLinksNavProps {
 
 const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => {
   const pathname = usePathname();
+  const searchQuery = useSyncExternalStore(emptySubscribe, getClientSearch, getServerSearch);
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const navLinks = [
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setLookupOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const navLinksBefore = [
     { href: '/', label: 'Trang chủ' },
     { href: '/shipments/new', label: 'Gửi hàng' },
     { href: '/promotions', label: 'Khuyến mãi' },
     { href: '/news', label: 'Tin tức' },
-    { href: '/tickets/lookup', label: 'Tra cứu vé' },
+  ];
+
+  const navLinksAfter = [
     { href: '/cancel-ticket', label: 'Hủy vé' },
     { href: '/contact', label: 'Liên hệ' },
   ];
@@ -42,10 +75,66 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
     return pathname.startsWith(href);
   };
 
+  const isLookupActive =
+    pathname.startsWith('/tickets/lookup') ||
+    pathname.startsWith('/tra-cuu-ve') ||
+    (pathname.startsWith('/send-freight') && searchQuery.includes('tab=lookup'));
+
   if (isMobile) {
     return (
       <div className="space-y-1">
-        {navLinks.map((link) => {
+        {navLinksBefore.map((link) => {
+          const isActive = checkIsActive(link.href);
+          return (
+            <Link
+              key={link.label}
+              href={link.href}
+              onClick={onItemClick}
+              className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                isActive
+                  ? 'text-amber-300 font-bold bg-black/15 border-l-4 border-amber-400 pl-3'
+                  : 'text-white/90 hover:bg-black/10 hover:text-white'
+              }`}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
+
+        {/* Tra cứu section for mobile */}
+        <div className="pt-2 pb-1 border-y border-white/10 my-2 space-y-1">
+          <div className="px-3 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-white/50">
+            Tra cứu thông tin
+          </div>
+          <Link
+            href="/tickets/lookup"
+            onClick={onItemClick}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              pathname.startsWith('/tickets/lookup') ||
+              pathname.startsWith('/tra-cuu-ve')
+                ? 'text-amber-300 font-bold bg-black/15 border-l-4 border-amber-400 pl-3'
+                : 'text-white/90 hover:bg-black/10 hover:text-white'
+            }`}
+          >
+            <Ticket className="w-4 h-4 text-sky-400" />
+            <span>Tra cứu vé xe</span>
+          </Link>
+          <Link
+            href="/send-freight?tab=lookup"
+            onClick={onItemClick}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              pathname.startsWith('/send-freight') &&
+              searchQuery.includes('tab=lookup')
+                ? 'text-amber-300 font-bold bg-black/15 border-l-4 border-amber-400 pl-3'
+                : 'text-white/90 hover:bg-black/10 hover:text-white'
+            }`}
+          >
+            <Package className="w-4 h-4 text-orange-400" />
+            <span>Tra cứu đơn gửi hàng</span>
+          </Link>
+        </div>
+
+        {navLinksAfter.map((link) => {
           const isActive = checkIsActive(link.href);
           return (
             <Link
@@ -68,7 +157,98 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
 
   return (
     <nav className="hidden lg:flex items-center gap-4 xl:gap-7 text-sm xl:text-[15px] font-semibold">
-      {navLinks.map((link) => {
+      {navLinksBefore.map((link) => {
+        const isActive = checkIsActive(link.href);
+        return (
+          <Link
+            key={link.label}
+            href={link.href}
+            className={`relative py-1.5 transition-all duration-200 cursor-pointer ${
+              isActive
+                ? 'text-white font-extrabold after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-amber-400 after:rounded-full'
+                : 'text-white/85 hover:text-white'
+            }`}
+          >
+            {link.label}
+          </Link>
+        );
+      })}
+
+      {/* Tra cứu Dropdown */}
+      <div
+        ref={dropdownRef}
+        className="relative"
+        onMouseEnter={() => setLookupOpen(true)}
+        onMouseLeave={() => setLookupOpen(false)}
+      >
+        <button
+          type="button"
+          onClick={() => setLookupOpen((prev) => !prev)}
+          className={`flex items-center gap-1 py-1.5 transition-all duration-200 cursor-pointer ${
+            isLookupActive
+              ? 'text-white font-extrabold after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-amber-400 after:rounded-full'
+              : 'text-white/85 hover:text-white'
+          }`}
+          aria-expanded={lookupOpen}
+        >
+          <span>Tra cứu</span>
+          <ChevronDown
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${
+              lookupOpen ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+
+        {lookupOpen && (
+          <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 z-50">
+            <div className="w-72 bg-white rounded-2xl shadow-[0_12px_36px_rgba(0,0,0,0.18)] border border-slate-100 p-2 text-slate-800 animate-in fade-in zoom-in-95 duration-150 origin-top">
+              <Link
+                href="/tickets/lookup"
+                onClick={() => {
+                  setLookupOpen(false);
+                  onItemClick?.();
+                }}
+                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-[#0060c4] group-hover:text-white transition-all">
+                  <Ticket className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-sm font-bold text-slate-900 group-hover:text-[#0060c4] transition-colors">
+                    Tra cứu vé xe
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-normal">
+                    Kiểm tra vé, giờ đón & số ghế
+                  </span>
+                </div>
+              </Link>
+
+              <Link
+                href="/send-freight?tab=lookup"
+                onClick={() => {
+                  setLookupOpen(false);
+                  onItemClick?.();
+                }}
+                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors group mt-1"
+              >
+                <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:bg-[#FF7D42] group-hover:text-white transition-all">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-sm font-bold text-slate-900 group-hover:text-[#FF7D42] transition-colors">
+                    Tra cứu đơn gửi hàng
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-normal">
+                    Theo dõi hành trình bưu kiện
+                  </span>
+                </div>
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {navLinksAfter.map((link) => {
         const isActive = checkIsActive(link.href);
         return (
           <Link
@@ -116,9 +296,14 @@ export const CustomerHeader: React.FC = () => {
     const timer = setInterval(() => {
       setNowMs(Date.now());
     }, 1000);
+    const handleDraftsChanged = () => {
+      setNowMs(Date.now());
+    };
+    window.addEventListener('vexgo:payment-drafts-changed', handleDraftsChanged);
     return () => {
       clearTimeout(initialTimer);
       clearInterval(timer);
+      window.removeEventListener('vexgo:payment-drafts-changed', handleDraftsChanged);
     };
   }, [shouldHidePaymentBar, pathname]);
 
@@ -368,20 +553,28 @@ export const CustomerHeader: React.FC = () => {
         const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
         const ss = String(remainingSec % 60).padStart(2, '0');
         const draft = visibleDraftInfo.draft;
-        const isShipment = draft.kind === 'shipment';
-        const code =
-          draft.kind === 'shipment'
-            ? draft.waybillCode
-            : draft.bookingCode || draft.orderCode || '';
+        if (draft.kind === 'shipment') {
+          return null;
+        }
+        const isHexCode = (val?: string | null) => Boolean(val && /^[0-9a-f]{16,}$/i.test(val.trim()));
+        const friendlyCode = draft.bookingCode && !isHexCode(draft.bookingCode)
+          ? draft.bookingCode
+          : null;
+        const routeName = draft.legs?.[0]?.route ?? null;
+
         return (
           <div className="bg-amber-50 border-t border-amber-200 text-slate-900">
             <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
               <div className="flex items-center gap-2 min-w-0">
                 <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                 <span className="font-semibold text-amber-950 truncate">
-                  Bạn đang có {isShipment ? 'đơn gửi hàng' : 'đơn đặt vé'}{' '}
-                  {code ? <strong className="font-mono">{code}</strong> : ''}{' '}
-                  chờ thanh toán
+                  Bạn đang có đơn đặt vé
+                  {friendlyCode ? (
+                    <> <strong className="font-mono text-amber-900">{friendlyCode}</strong></>
+                  ) : routeName ? (
+                    <> chuyến <strong className="text-amber-900">{routeName}</strong></>
+                  ) : null}{' '}
+                  đang chờ thanh toán
                 </span>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900 shrink-0">
                   Còn {mm}:{ss}

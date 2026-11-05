@@ -19,10 +19,14 @@ describe('BusCompaniesService', () => {
     create: vi.fn(),
     update: vi.fn(),
   };
+  const chuyenXe = {
+    findUnique: vi.fn(),
+  };
   const getConfig = vi.fn().mockReturnValue('Asia/Ho_Chi_Minh');
   const config = { get: getConfig } as unknown as ConfigService;
   const service = new BusCompaniesService({
     nhaXe,
+    chuyenXe,
   } as unknown as PrismaService, config);
 
   beforeEach(() => {
@@ -804,6 +808,89 @@ describe('BusCompaniesService', () => {
       }),
       principal,
     )).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  describe('luggage rates', () => {
+    it('returns default fallback luggage rates when company has no custom configuration', async () => {
+      nhaXe.findUnique.mockResolvedValueOnce({
+        nhaXeId: 3,
+        tenNhaXe: 'Phương Trang',
+        cauHinhHanhLy: null,
+        tuyenXes: [
+          { tuyenXeId: 10, maTuyenXe: 'TX10', diemDi: 'SG', diemDen: 'ĐL' },
+        ],
+      });
+
+      const res = await service.getLuggageRates(3);
+      expect(res.data.busCompanyId).toBe(3);
+      expect(res.data.default.packageS).toBe(50_000);
+      expect(res.data.default.packageM).toBe(80_000);
+      expect(res.data.default.packageL).toBe(120_000);
+      expect(res.data.default.packageXL).toBe(180_000);
+      expect(res.data.availableRoutes).toHaveLength(1);
+      expect(res.data.availableRoutes[0].hasOverride).toBe(false);
+    });
+
+    it('updates company luggage configuration with custom rates and route overrides', async () => {
+      nhaXe.findUnique
+        .mockResolvedValueOnce({ nhaXeId: 3 })
+        .mockResolvedValueOnce({
+          nhaXeId: 3,
+          tenNhaXe: 'Phương Trang',
+          cauHinhHanhLy: JSON.stringify({
+            default: { packageS: 40_000, packageM: 70_000, packageL: 110_000, packageXL: 160_000 },
+            routes: { '10': { inherit: false, packageS: 30_000 } },
+          }),
+          tuyenXes: [
+            { tuyenXeId: 10, maTuyenXe: 'TX10', diemDi: 'SG', diemDen: 'ĐL' },
+          ],
+        });
+
+      const res = await service.updateLuggageRates(3, {
+        default: {
+          packageS: 40_000,
+          packageM: 70_000,
+          packageL: 110_000,
+          packageXL: 160_000,
+        },
+        routes: {
+          '10': { inherit: false, packageS: 30_000 },
+        },
+      });
+
+      expect(nhaXe.update).toHaveBeenCalledWith({
+        where: { nhaXeId: 3 },
+        data: expect.objectContaining({
+          cauHinhHanhLy: expect.stringContaining('"packageS":40000'),
+        }),
+      });
+      expect(res.data.default.packageS).toBe(40_000);
+      expect(res.data.availableRoutes[0].hasOverride).toBe(true);
+    });
+
+    it('returns trip luggage rates with route override applied', async () => {
+      chuyenXe.findUnique.mockResolvedValueOnce({
+        chuyenXeId: 101,
+        tuyenXeId: 10,
+        tuyenXe: {
+          tuyenXeId: 10,
+          nhaXeId: 3,
+          nhaXe: {
+            nhaXeId: 3,
+            tenNhaXe: 'Phương Trang',
+            cauHinhHanhLy: JSON.stringify({
+              default: { packageS: 50_000, packageM: 80_000 },
+              routes: { '10': { inherit: false, packageS: 35_000 } },
+            }),
+          },
+        },
+      });
+
+      const res = await service.getTripLuggageRates(101);
+      expect(res.data.tripId).toBe(101);
+      expect(res.data.rates.packageS).toBe(35_000);
+      expect(res.data.packages[0].baseFee).toBe(35_000);
+    });
   });
 
 });

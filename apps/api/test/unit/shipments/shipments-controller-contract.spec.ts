@@ -113,6 +113,7 @@ describe('ShipmentsController route and authorization contract', () => {
       [
         `${RequestMethod.POST}|(root)`,
         `${RequestMethod.POST}|lookup`,
+        `${RequestMethod.POST}|cancel`,
         `${RequestMethod.GET}|options`,
         `${RequestMethod.GET}|routes/:routeId/route-points`,
         `${RequestMethod.POST}|quotes`,
@@ -262,10 +263,11 @@ describe('ShipmentsController route and authorization contract', () => {
     );
   });
 
-  it('keeps create, lookup, category and route-point endpoints optional-auth', () => {
+  it('keeps create, lookup, cancel, category and route-point endpoints optional-auth', () => {
     for (const name of [
       'createShipment',
       'lookupShipment',
+      'cancelShipment',
       'getCargoCategories',
       'getRoutePoints',
     ]) {
@@ -277,6 +279,11 @@ describe('ShipmentsController route and authorization contract', () => {
       'lookupShipment',
     );
     expect(lookupGuards).toContain(ThrottlerGuard);
+    const cancelGuards = handlerMetadata<Function[]>(
+      GUARDS_METADATA,
+      'cancelShipment',
+    );
+    expect(cancelGuards).toContain(ThrottlerGuard);
   });
 
   it('preserves Admin and Customer response envelopes through their scoped service methods', async () => {

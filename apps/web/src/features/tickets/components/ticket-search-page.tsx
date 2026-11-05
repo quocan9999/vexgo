@@ -17,13 +17,17 @@ import {
   FileText,
   Loader2,
   MapPin,
+  Package,
   Phone,
   Printer,
+  QrCode,
   RotateCcw,
+  Search,
   ShieldCheck,
   Star,
   Ticket,
   User,
+  X,
   XCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +37,7 @@ import { ticketsApi, type TicketItem } from '@/features/account/services/tickets
 import { checkTicketCancelEligibility } from '@/features/tickets/services/cancel-eligibility';
 import { saveCancelSession } from '@/features/tickets/services/cancel-session';
 import { ReviewDialog } from '@/features/tickets/components/review-dialog';
+import { useAuthSession } from '@/features/auth/auth-session';
 
 const VIETNAM_PHONE_REGEX = /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
 
@@ -74,19 +79,22 @@ function getTripDuration(depIso: string | null | undefined, arrIso: string | nul
 }
 
 function mapPaymentMethod(method: string | null): string {
-  if (!method) return 'Chưa cập nhật';
+  if (!method) return 'Chuyển khoản VietQR';
   const upper = method.toUpperCase();
   switch (upper) {
+    case 'SEPAY':
+    case 'CHUYEN_KHOAN':
+    case 'VIETQR':
+      return 'Chuyển khoản VietQR';
+    case 'TAI_BEN':
+    case 'TIEN_MAT':
+      return 'Tiền mặt tại bến';
     case 'MOMO':
       return 'Ví MoMo';
     case 'VNPAY':
       return 'Cổng VNPay';
     case 'ZALOPAY':
       return 'Ví ZaloPay';
-    case 'TIEN_MAT':
-      return 'Tiền mặt';
-    case 'CHUYEN_KHOAN':
-      return 'Chuyển khoản ngân hàng';
     default:
       return method;
   }
@@ -126,6 +134,14 @@ function TicketSearchForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  let authContext: ReturnType<typeof useAuthSession> | null = null;
+  try {
+    authContext = useAuthSession();
+  } catch {
+    authContext = null;
+  }
+  const isAuthenticated = authContext?.isAuthenticated ?? false;
+
   const [phone, setPhone] = useState(
     searchParams.get('phone') || searchParams.get('phoneNumber') || '',
   );
@@ -140,6 +156,7 @@ function TicketSearchForm() {
   const [ticket, setTicket] = useState<TicketItem | null>(null);
   const [copied, setCopied] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showLookupGuide, setShowLookupGuide] = useState(false);
   const [ineligibleModal, setIneligibleModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -293,7 +310,20 @@ function TicketSearchForm() {
   return (
     <div className="w-full max-w-2xl space-y-8">
       {/* Search Input Box */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6 sm:p-8">
+      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl p-6 sm:p-8">
+        <div className="flex items-center gap-3.5 pb-5 mb-6 border-b border-slate-100">
+          <div className="w-11 h-11 rounded-2xl bg-blue-50 text-[#0060c4] flex items-center justify-center shrink-0 border border-blue-100/60 shadow-xs">
+            <Search className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-black text-slate-900">
+              Tra cứu vé &amp; Hành trình đặt chỗ
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Nhập số điện thoại và mã vé để xem chi tiết thông tin chuyến xe
+            </p>
+          </div>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -365,11 +395,18 @@ function TicketSearchForm() {
             )}
           </div>
 
-          <div className="pt-2 flex justify-center">
+          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setShowLookupGuide(true)}
+              className="text-sm font-bold text-[#f05123] hover:text-[#ea4a18] hover:underline transition-colors cursor-pointer text-left"
+            >
+              Hướng dẫn tra cứu vé
+            </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-14 py-3 bg-[#f05123] hover:bg-[#ea4a18] active:scale-[0.99] text-white font-bold text-base rounded-full transition-all shadow-md shadow-[#f05123]/25 disabled:opacity-60 flex items-center justify-center gap-2.5 cursor-pointer"
+              className="w-full sm:w-auto px-10 h-12 bg-[#f05123] hover:bg-[#ea4a18] active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-full transition-all shadow-md shadow-[#f05123]/25 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
             >
               {isLoading ? (
                 <>
@@ -377,7 +414,10 @@ function TicketSearchForm() {
                   <span>Đang tra cứu...</span>
                 </>
               ) : (
-                <span>Tra cứu vé</span>
+                <>
+                  <Search className="w-4 h-4 shrink-0" />
+                  <span>Tra cứu vé</span>
+                </>
               )}
             </button>
           </div>
@@ -622,6 +662,94 @@ function TicketSearchForm() {
             </div>
           </div>
 
+          {/* Thời gian có mặt trước giờ khởi hành & Hành lý gửi kèm */}
+          {(() => {
+            const cargoItems = ticket.cargoItems || [];
+            const hasMotorbike = cargoItems.some((item) =>
+              item.name?.toLowerCase().includes('xe máy'),
+            );
+            const hasBicycle = cargoItems.some((item) =>
+              item.name?.toLowerCase().includes('xe đạp'),
+            );
+            const snapshotMinutes =
+              typeof ticket.diemDonSnapshot?.phutCoMatTruoc === 'number' &&
+              ticket.diemDonSnapshot.phutCoMatTruoc > 0
+                ? ticket.diemDonSnapshot.phutCoMatTruoc
+                : 20;
+            const checkInText = hasMotorbike
+              ? '90 – 120 phút (do có gửi xe máy kèm vé)'
+              : hasBicycle
+                ? '20 – 30 phút (do có gửi xe đạp kèm vé)'
+                : `ít nhất ${snapshotMinutes} phút`;
+
+            return (
+              <div className="mx-6 sm:mx-8 mb-5 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {/* Thời gian có mặt */}
+                <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200/80 flex items-start gap-2.5 text-amber-900">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 leading-relaxed">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 block">
+                      Thời gian có mặt trước giờ khởi hành
+                    </span>
+                    <p className="text-slate-800">
+                      Quý khách vui lòng có mặt tại điểm đón trước giờ khởi hành{' '}
+                      <strong className="text-amber-900 underline">{checkInText}</strong> để làm thủ tục
+                      lên xe và xếp hành lý.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Hành lý gửi kèm */}
+                <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-200/60">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-[#0060c4]" />
+                      Hành lý theo vé
+                    </span>
+                    <span className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/70">
+                      {cargoItems.length > 0
+                        ? `${cargoItems.reduce((s, i) => s + (i.quantity || 1), 0)} kiện ký gửi`
+                        : 'Không có'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 text-slate-700">
+                    {cargoItems.length > 0 ? (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-slate-900">
+                          Kiện hành lý ký gửi hầm xe:
+                        </div>
+                        <ul className="space-y-1 pl-4 list-disc text-slate-700">
+                          {cargoItems.map((item, idx) => (
+                            <li key={idx}>
+                              <strong className="text-slate-900">
+                                {item.quantity}x {item.name}
+                              </strong>{' '}
+                              ({item.weight}kg)
+                              {item.note ? (
+                                <span className="text-slate-500"> — {item.note}</span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                        {typeof ticket.cargoFee === 'number' && ticket.cargoFee > 0 && (
+                          <p className="text-[11px] text-slate-500 pt-0.5">
+                            Phụ phí hành lý ký gửi:{' '}
+                            <strong className="text-slate-800">{formatCurrency(ticket.cargoFee)}</strong>
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-slate-500">
+                        Không có hành lý ký gửi kèm vé.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Cancellation Notice if ticket is cancelled */}
           {isCancelled && (
             <div className="mx-6 sm:mx-8 mb-5 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm font-medium flex items-center gap-3">
@@ -632,35 +760,72 @@ function TicketSearchForm() {
             </div>
           )}
 
-          {/* Review Prompt when trip is completed/departed */}
-          {ticket.departureTime &&
-            new Date(ticket.departureTime).getTime() <= Date.now() &&
-            !isCancelled &&
-            payment.isPaid && (
-              <div className="mx-6 sm:mx-8 mb-5 p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                    <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 text-sm">
-                      Chuyến đi đã hoàn tất! Hãy chia sẻ trải nghiệm của bạn
-                    </h4>
-                    <p className="text-xs text-slate-600">
-                      Đánh giá chất lượng phục vụ của {ticket.busCompanyName || 'nhà xe'} giúp hành khách khác có thêm thông tin tham khảo.
-                    </p>
-                  </div>
+          {/* Review Section: 4 states for a paid, non-cancelled ticket */}
+          {!isCancelled && payment.isPaid && ticket.departureTime && (() => {
+            const departureMs = new Date(ticket.departureTime).getTime();
+            const nowMs = Date.now();
+            const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+            const isNotDeparted = departureMs > nowMs;
+            const isPastSevenDays = nowMs - departureMs > SEVEN_DAYS_MS;
+            const isWithinSevenDays = !isNotDeparted && !isPastSevenDays;
+
+            if (isNotDeparted) {
+              return (
+                <div className="mx-6 sm:mx-8 mb-5 p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3 text-xs text-slate-600">
+                  <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>
+                    Chuyến xe chưa khởi hành. Bạn có thể gửi đánh giá dịch vụ sau khi chuyến đi bắt đầu.
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowReviewModal(true)}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Star className="w-3.5 h-3.5 fill-white text-white" />
-                  Đánh giá chuyến đi
-                </button>
-              </div>
-            )}
+              );
+            }
+
+            if (isPastSevenDays) {
+              return (
+                <div className="mx-6 sm:mx-8 mb-5 p-3.5 rounded-xl bg-slate-100/80 border border-slate-200 flex items-center justify-between gap-3 text-xs text-slate-500">
+                  <span className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                    Chuyến xe đã kết thúc quá 7 ngày, đã hết thời hạn gửi đánh giá.
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-[11px] font-semibold text-slate-600">
+                    Hết hạn đánh giá
+                  </span>
+                </div>
+              );
+            }
+
+            if (isWithinSevenDays) {
+              return (
+                <div className="mx-6 sm:mx-8 mb-5 p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                      <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">
+                        Chuyến đi đã hoàn tất! Hãy chia sẻ trải nghiệm của bạn
+                      </h4>
+                      <p className="text-xs text-slate-600">
+                        {isAuthenticated
+                          ? `Đánh giá chất lượng phục vụ của ${ticket.busCompanyName || 'nhà xe'} giúp hành khách khác có thêm thông tin tham khảo.`
+                          : `Đăng nhập số điện thoại đặt vé (${ticket.passengerPhone || phone}) để gửi đánh giá chuyến đi.`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewModal(true)}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Star className="w-3.5 h-3.5 fill-white text-white" />
+                    {isAuthenticated ? 'Đánh giá chuyến đi' : 'Đăng nhập để đánh giá'}
+                  </button>
+                </div>
+              );
+            }
+
+            return null;
+          })()}
           {/* Danh sách tất cả các vé thuộc cùng đơn đặt chỗ */}
           {ticket.bookingTickets && ticket.bookingTickets.length > 1 && (
             <div className="mx-6 sm:mx-8 mb-5 p-4 rounded-2xl bg-slate-50 border border-slate-200">
@@ -799,22 +964,219 @@ function TicketSearchForm() {
         confirmText="Đã hiểu"
         onClose={() => setIneligibleModal((prev) => ({ ...prev, isOpen: false }))}
       />
+
+      {/* Ticket Lookup Guide Modal */}
+      {showLookupGuide && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setShowLookupGuide(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ticket-lookup-guide-title"
+        >
+          <div
+            className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-orange-50/70 via-white to-amber-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f05123] text-white shadow-xs">
+                  <Ticket className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2
+                    id="ticket-lookup-guide-title"
+                    className="text-base sm:text-lg font-black text-slate-900 tracking-tight"
+                  >
+                    Hướng dẫn tra cứu vé trực tuyến
+                  </h2>
+                  <p className="text-xs text-slate-500 font-medium">
+                    4 bước kiểm tra thông tin vé xe, hành trình và mã QR lên xe trên VexGo
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLookupGuide(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer"
+                aria-label="Đóng"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto p-5 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {[
+                  {
+                    step: '1',
+                    icon: Phone,
+                    title: 'Chuẩn bị SĐT & Mã vé',
+                    desc: 'Lấy Mã vé xe (trên Vé điện tử E-Ticket, Email xác nhận hoặc mục Hoạt động của tôi) và Số điện thoại đã dùng khi đặt vé.',
+                    tag: 'Thông tin xác thực',
+                    bg: 'bg-blue-50 text-blue-600 border-blue-200',
+                  },
+                  {
+                    step: '2',
+                    icon: Search,
+                    title: 'Nhập thông tin tra cứu',
+                    desc: 'Điền chính xác Số điện thoại (10 chữ số) và Mã vé xe vào biểu mẫu tra cứu, sau đó nhấn nút "Tra cứu vé".',
+                    tag: 'Tra cứu tức thì',
+                    bg: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+                  },
+                  {
+                    step: '3',
+                    icon: Bus,
+                    title: 'Kiểm tra chi tiết chuyến đi',
+                    desc: 'Xem đầy đủ nhà xe, biển số xe, số ghế, giờ khởi hành, điểm đón/trả, thời gian cần có mặt tại bến và hành lý ký gửi đi kèm.',
+                    tag: 'Hành trình minh bạch',
+                    bg: 'bg-amber-50 text-amber-700 border-amber-200',
+                  },
+                  {
+                    step: '4',
+                    icon: QrCode,
+                    title: 'Tải vé PDF & Quản lý vé',
+                    desc: 'Mở trang Vé điện tử (E-Ticket) để lấy mã QR lên xe và tải vé PDF, hoặc thực hiện Hủy vé trực tuyến nếu đủ điều kiện.',
+                    tag: 'Tiện ích trực tuyến',
+                    bg: 'bg-rose-50 text-rose-600 border-rose-200',
+                  },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={item.step}
+                      className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 transition-all hover:bg-white hover:border-[#f05123]/40 hover:shadow-xs flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f05123] text-white text-xs font-black shadow-2xs">
+                              {item.step}
+                            </span>
+                            <h3 className="font-extrabold text-slate-900 text-sm">
+                              {item.title}
+                            </h3>
+                          </div>
+                          <div className={`p-1.5 rounded-lg ${item.bg} shrink-0`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <p className="text-xs leading-relaxed text-slate-600 font-medium">
+                          {item.desc}
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                          {item.tag}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                          ✓ Trực tuyến
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-4">
+                <h4 className="text-xs font-black text-[#0060c4] uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                  <ShieldCheck className="w-4 h-4 text-[#0060c4]" />
+                  Lưu ý khi tra cứu & sử dụng vé
+                </h4>
+                <ul className="text-xs text-slate-700 space-y-1.5 font-medium">
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-[#f05123] font-bold">•</span>
+                    <span>
+                      Nếu một đơn có <strong>nhiều ghế</strong>, bạn chỉ cần nhập mã vé của bất kỳ ghế nào trong đơn để xem toàn bộ danh sách ghế.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-[#f05123] font-bold">•</span>
+                    <span>
+                      Vui lòng có mặt tại điểm đón trước giờ khởi hành theo đúng thời gian quy định ghi trên vé (mặc định tối thiểu <strong>20 phút</strong>).
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-[#f05123] font-bold">•</span>
+                    <span>
+                      Hỗ trợ hủy vé trực tuyến trước giờ khởi hành từ <strong>2 giờ 30 phút</strong> trở lên; sau khi hủy vui lòng liên hệ nhà xe để nhận tiền hoàn.
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                <QrCode className="w-4 h-4 text-[#f05123]" />
+                <span>
+                  Tổng đài CSKH 24/7: <strong className="text-slate-900">1900 6067</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLookupGuide(false)}
+                className="px-5 py-2 rounded-xl bg-[#f05123] hover:bg-[#d8441a] text-white font-extrabold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
+              >
+                Đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export const TicketSearchPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-[#F4F7F9] flex flex-col items-center pt-12 px-4 pb-24 font-sans">
-      <div className="text-center mb-8">
-        <h1 className="text-2xl md:text-3xl font-black text-[#0060c4] tracking-tight uppercase">
-          TRA CỨU THÔNG TIN ĐẶT VÉ
-        </h1>
+    <div className="min-h-screen bg-[#F4F6F8] font-sans pb-24">
+      {/* HERO BANNER SECTION */}
+      <div className="bg-[#17223B] text-white pt-10 pb-20 px-4 sm:px-6 relative overflow-hidden">
+        {/* Glow ambient background effects */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
+              Tra cứu thông tin vé xe , <br className="hidden sm:inline" />
+              <span className="text-[#FF7D42]">nhanh chóng – chuẩn xác</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
+              Kiểm tra chi tiết vé xe, vị trí chỗ ngồi, thời gian xuất bến và quản lý hành trình di chuyển an tâm trên mọi nẻo đường.
+            </p>
+          </div>
+
+          {/* Switch Tab: Tra cứu vé xe <-> Tra cứu vận đơn */}
+          <div className="inline-flex p-1 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/10 self-start md:self-auto shrink-0">
+            <Link
+              href="/tickets/lookup"
+              className="px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all bg-white text-[#17223B] shadow-sm flex items-center gap-2"
+            >
+              <Ticket className="w-4 h-4 text-[#0060c4]" />
+              <span>Tra cứu vé xe</span>
+            </Link>
+            <Link
+              href="/send-freight?tab=lookup"
+              className="px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all text-white/80 hover:text-white flex items-center gap-2"
+            >
+              <Package className="w-4 h-4 text-orange-400" />
+              <span>Tra cứu vận đơn</span>
+            </Link>
+          </div>
+        </div>
       </div>
 
-      <Suspense fallback={<div className="text-slate-400 text-sm">Đang tải...</div>}>
-        <TicketSearchForm />
-      </Suspense>
+      {/* Floating Card Container */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 -mt-10 relative z-20 flex flex-col items-center">
+        <Suspense fallback={<div className="text-slate-400 text-sm">Đang tải...</div>}>
+          <TicketSearchForm />
+        </Suspense>
+      </div>
     </div>
   );
 };

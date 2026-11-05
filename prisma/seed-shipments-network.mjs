@@ -388,6 +388,17 @@ export async function runSeedShipmentsNetwork() {
         tripCount += res.count;
       }
       console.log(`   ✓ Đã tạo mới ${tripCount} chuyến xe phủ khắp từ 03/11 đến 31/12/2026.`);
+
+      console.log(`   * Đang khởi tạo sơ đồ ghế (GheChuyenXe) cho các chuyến xe chưa có ghế...`);
+      const insertedSeats = await prisma.$executeRawUnsafe(`
+        INSERT IGNORE INTO GheChuyenXe (trangThai, chuyenXeId, gheId, tang, toaDoX, toaDoY)
+        SELECT 'TRONG', cx.chuyenXeId, g.gheId, g.tang, g.toaDoX, g.toaDoY
+        FROM ChuyenXe cx
+        INNER JOIN Ghe g ON g.xeId = cx.xeId
+        LEFT JOIN GheChuyenXe gcx ON gcx.chuyenXeId = cx.chuyenXeId AND gcx.gheId = g.gheId
+        WHERE gcx.gheChuyenXeId IS NULL
+      `);
+      console.log(`   ✓ Đã khởi tạo ${insertedSeats} ghế chuyến xe (GheChuyenXe).`);
     }
 
     console.log(`\n===============================================================`);

@@ -2,11 +2,13 @@
 'use client';
 
 import React from 'react';
-import { Award, ChevronRight, History, Star, Shield, Gift } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Award, ChevronLeft, ChevronRight, History, Star, Shield, Gift } from 'lucide-react';
 import Link from 'next/link';
 
 
 export default function LoyaltyPage() {
+  const router = useRouter();
   const currentPoints = 12500;
   const targetPoints = 20000;
   const progressPercent = (currentPoints / targetPoints) * 100;
@@ -21,10 +23,15 @@ export default function LoyaltyPage() {
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="min-h-screen bg-[#F8FAF9] py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link href="/" className="hover:text-brand transition-colors">Trang chủ</Link>
-          <ChevronRight className="w-4 h-4" />
-          <span className="font-semibold text-slate-800">Thành viên VexGo</span>
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-brand transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span>Quay lại</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

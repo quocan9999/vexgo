@@ -1414,3 +1414,101 @@ it('supports round-trip payment with leg switching and redirects when both legs 
 
   expect(routerPush).toHaveBeenCalledWith('/invoice/4201?returnBookingId=4202');
 });
+
+it('supports unified combo QR payment for round-trip with single combined memo and amount', async () => {
+  configureVietQr();
+  const comboCode = 'RT-COMBO-999';
+  window.sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
+    JSON.stringify({
+      id: draftId,
+      tripType: 'round-trip',
+      totalFare: 320000,
+      passenger: {
+        fullName: 'Nguyễn Văn Combo',
+        phoneNumber: '0901234567',
+        email: 'combo@example.test',
+      },
+      comboCode,
+      legs: [
+        {
+          tripId: 101,
+          route: 'TP.HCM - Đà Lạt',
+          departureTime: '2026-10-20T08:00:00.000Z',
+          seats: ['A01'],
+          pickup: 'Bến xe Miền Đông',
+          dropoff: 'Bến xe Đà Lạt',
+          unitFare: 160000,
+          subtotal: 160000,
+          bookingId: 4301,
+          bookingCode: 'VG-CB-4301',
+          orderCode: 'DGD-LEG-4301',
+          comboCode,
+        },
+        {
+          tripId: 102,
+          route: 'Đà Lạt - TP.HCM',
+          departureTime: '2026-10-25T14:00:00.000Z',
+          seats: ['B01'],
+          pickup: 'Bến xe Đà Lạt',
+          dropoff: 'Bến xe Miền Đông',
+          unitFare: 160000,
+          subtotal: 160000,
+          bookingId: 4302,
+          bookingCode: 'VG-CB-4302',
+          orderCode: 'DGD-LEG-4302',
+          comboCode,
+        },
+      ],
+    }),
+  );
+
+  const leg0 = bookingDetail({
+    bookingId: 4301,
+    bookingCode: 'VG-CB-4301',
+    orderCode: 'DGD-LEG-4301',
+    totalAmount: 160000,
+    ticketSubtotal: 160000,
+    status: 'CHO_THANH_TOAN',
+    paymentStatus: 'CHO_THANH_TOAN',
+  });
+
+  const leg1 = bookingDetail({
+    bookingId: 4302,
+    bookingCode: 'VG-CB-4302',
+    orderCode: 'DGD-LEG-4302',
+    totalAmount: 160000,
+    ticketSubtotal: 160000,
+    status: 'CHO_THANH_TOAN',
+    paymentStatus: 'CHO_THANH_TOAN',
+  });
+
+  fetchMock.mockImplementation((url: string) => {
+    if (url.includes('/4301/detail')) return Promise.resolve(jsonResponse(leg0));
+    if (url.includes('/4302/detail')) return Promise.resolve(jsonResponse(leg1));
+    return Promise.reject(new Error('Not found'));
+  });
+
+  render(<PaymentPage />);
+  await flushPromises();
+
+  // Selected by default is combo payment
+  expect(screen.getByText('Tổng thanh toán vé khứ hồi')).toBeTruthy();
+  expect(screen.getAllByText('320.000đ').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('RT-COMBO-999')).toBeTruthy();
+
+  const qr = screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' });
+  expect(qr.getAttribute('src')).toContain('amount=320000');
+  expect(qr.getAttribute('src')).toContain('addInfo=RT-COMBO-999');
+
+  // Both legs settle at once via combo webhook
+  leg0.status = 'DA_THANH_TOAN';
+  leg0.paymentStatus = 'DA_THANH_TOAN';
+  leg1.status = 'DA_THANH_TOAN';
+  leg1.paymentStatus = 'DA_THANH_TOAN';
+
+  await advanceTime(2600);
+  await flushPromises();
+
+  expect(routerPush).toHaveBeenCalledWith('/invoice/4301?returnBookingId=4302');
+});

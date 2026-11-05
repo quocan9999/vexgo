@@ -1,6 +1,8 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -352,6 +354,47 @@ describe('SeatHoldsService (Unit)', () => {
       if (consumeLogCall) {
         expect(String(consumeLogCall[0])).not.toContain(hold.holdToken);
       }
+    });
+  });
+
+  describe('Anti-spam Hold Lockout (assertNoSpamUnpaidBookings)', () => {
+    it('allows hold when customer has less than 3 unpaid bookings in past 30 minutes', async () => {
+      prisma.donGiaoDich = {
+        count: vi.fn().mockResolvedValue(2),
+      };
+
+      await expect(
+        service.assertNoSpamUnpaidBookings('0912345678', 10),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects with 429 TOO_MANY_UNPAID_BOOKINGS when 3 or more unpaid bookings exist in past 30 minutes', async () => {
+      prisma.donGiaoDich = {
+        count: vi.fn().mockResolvedValue(3),
+      };
+
+      try {
+        await service.assertNoSpamUnpaidBookings('0912345678', 10);
+        expect.unreachable('Should have thrown 429');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(HttpException);
+        expect(err.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+        const resp = err.getResponse();
+        expect(resp.error).toBe('TOO_MANY_UNPAID_BOOKINGS');
+        expect(resp.message).toBe(
+          'Số điện thoại này đã tạo nhiều đơn giữ chỗ chưa thanh toán. Vui lòng quay lại sau 30 phút để tiếp tục.',
+        );
+      }
+    });
+
+    it('createSeatHold rejects with 429 when phone has exceeded unpaid booking threshold', async () => {
+      prisma.donGiaoDich = {
+        count: vi.fn().mockResolvedValue(3),
+      };
+
+      await expect(
+        service.createSeatHold(50, [101], undefined, '0912345678'),
+      ).rejects.toThrow(HttpException);
     });
   });
 });

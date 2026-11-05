@@ -213,6 +213,17 @@ export const ADMIN_PERMISSION_CATALOG = [
     description:
       'Tiếp nhận, phản hồi và quản lý cuộc trò chuyện trong phạm vi nhà xe.',
   },
+  {
+    key: 'review:read',
+    scope: 'tenant',
+    description:
+      'Xem danh sách và thống kê đánh giá, phản hồi trong phạm vi nhà xe.',
+  },
+  {
+    key: 'review:moderate',
+    scope: 'tenant',
+    description: 'Kiểm duyệt (ẩn/hiển thị) đánh giá và phản hồi của khách hàng.',
+  },
 ] as const;
 
 export type AdminPermissionKey =
@@ -270,6 +281,8 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'shipment:update',
     'chat:read',
     'chat:manage',
+    'review:read',
+    'review:moderate',
   ],
   NHAN_VIEN_DIEU_HANH: [
     'vehicle-type:read',
@@ -298,7 +311,7 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'shipment:update',
   ],
   NHAN_VIEN_BAN_VE: [],
-  NHAN_VIEN_CSKH: ['chat:read', 'chat:manage', 'customer:read'],
+  NHAN_VIEN_CSKH: ['chat:read', 'chat:manage', 'customer:read', 'review:read'],
   NHAN_VIEN_PHU_XE: [],
   NHAN_VIEN_KINH_DOANH: [],
   KHACH_HANG: [],

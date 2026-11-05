@@ -231,12 +231,15 @@ export class AuthService {
 
     const roles = account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro);
     const employee = account.nhanVien;
+    const isTenantEmployee = Boolean(
+      employee?.nhaXeId && employee?.nhaXe && !roles.includes('SUPER_ADMIN'),
+    );
     const effectiveAssignments = await this.permissionLoader.load(
       account.taiKhoanVaiTros.map(({ vaiTro }) => ({
         roleId: vaiTro.vaiTroId,
         roleName: vaiTro.tenVaiTro,
       })),
-      employee?.nhaXeId ?? null,
+      isTenantEmployee ? employee!.nhaXeId : null,
     );
     return {
       accountId: account.taiKhoanId,
@@ -245,18 +248,18 @@ export class AuthService {
       email: account.email,
       roles,
       permissions: this.permissionResolver.resolve(effectiveAssignments, {
-        nhanVienId: employee?.nhanVienId ?? null,
-        nhaXeId: employee?.nhaXeId ?? null,
+        nhanVienId: isTenantEmployee ? employee!.nhanVienId : null,
+        nhaXeId: isTenantEmployee ? employee!.nhaXeId : null,
       }),
-      employee: employee
+      employee: isTenantEmployee
         ? {
-            employeeId: employee.nhanVienId,
-            busCompanyId: employee.nhaXeId ?? null,
-            busCompanyCode: employee.nhaXe?.maNhaXe ?? null,
-            busCompanyName: employee.nhaXe?.tenNhaXe ?? null,
+            employeeId: employee!.nhanVienId,
+            busCompanyId: employee!.nhaXeId!,
+            busCompanyCode: employee!.nhaXe!.maNhaXe,
+            busCompanyName: employee!.nhaXe!.tenNhaXe,
           }
         : null,
-      busCompanyId: employee?.nhaXeId ?? null,
+      busCompanyId: isTenantEmployee ? employee!.nhaXeId : null,
     };
   }
 

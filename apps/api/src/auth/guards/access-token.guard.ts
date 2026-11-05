@@ -127,8 +127,15 @@ export class AccessTokenGuard implements CanActivate {
 
     const roleAssignments = session.taiKhoan.taiKhoanVaiTros;
     const roles = roleAssignments.map(({ vaiTro }) => vaiTro.tenVaiTro);
-    const nhanVienId = session.taiKhoan.nhanVien?.nhanVienId ?? null;
-    const nhaXeId = session.taiKhoan.nhanVien?.nhaXeId ?? null;
+    const isTenantEmployee = Boolean(
+      session.taiKhoan.nhanVien?.nhaXeId && !roles.includes('SUPER_ADMIN'),
+    );
+    const nhanVienId = isTenantEmployee
+      ? (session.taiKhoan.nhanVien?.nhanVienId ?? null)
+      : null;
+    const nhaXeId = isTenantEmployee
+      ? (session.taiKhoan.nhanVien?.nhaXeId ?? null)
+      : null;
     const effectiveAssignments = await this.permissionLoader.load(
       roleAssignments.map(({ vaiTro }) => ({
         roleId: vaiTro.vaiTroId,

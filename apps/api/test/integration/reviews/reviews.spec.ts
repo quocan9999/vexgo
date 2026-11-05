@@ -121,12 +121,12 @@ describe('Reviews API Integration with MySQL', () => {
       data: {
         soDienThoai: `+8493${suffix.slice(0, 7)}`,
         matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `Reviewer A ${suffix}`,
         trangThai: 'HOAT_DONG',
         daXacThucSoDienThoai: true,
         khachHang: {
           create: {
             maKhachHang: `KH-RA-${suffix}`,
+            hoTen: `Reviewer A ${suffix}`,
           },
         },
       },
@@ -146,12 +146,12 @@ describe('Reviews API Integration with MySQL', () => {
       data: {
         soDienThoai: `+8494${suffix.slice(0, 7)}`,
         matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `Reviewer B ${suffix}`,
         trangThai: 'HOAT_DONG',
         daXacThucSoDienThoai: true,
         khachHang: {
           create: {
             maKhachHang: `KH-RB-${suffix}`,
+            hoTen: `Reviewer B ${suffix}`,
           },
         },
       },
@@ -171,7 +171,7 @@ describe('Reviews API Integration with MySQL', () => {
     const departedTrip = await prisma.chuyenXe.create({
       data: {
         maChuyenXe: `CX-DEP-${suffix}`,
-        ngayKhoiHanh: new Date('2020-01-01T00:00:00.000Z'),
+        ngayKhoiHanh: new Date(Date.now() - 24 * 60 * 60 * 1000),
         gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
         trangThai: 'HOAN_THANH',
         nhaXeId: busCompanyId,

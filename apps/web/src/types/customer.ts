@@ -18,6 +18,9 @@ export type Trip = {
   image: string;
   amenities: string[];
   status: TripStatus;
+  busCompanyId?: number;
+  reviewsCount?: number;
+  departureDate?: string;
   pickupPoints?: ApiTripStopPoint[];
   dropoffPoints?: ApiTripStopPoint[];
   stops?: ApiTripStopPoint[];

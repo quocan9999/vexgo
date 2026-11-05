@@ -240,4 +240,15 @@ export class CreateBookingDto {
   @ValidateNested({ each: true })
   @Type(() => CargoItemDto)
   cargoItems?: CargoItemDto[];
+
+  @ApiPropertyOptional({
+    description: 'Mã gom nhóm thanh toán khứ hồi (comboCode)',
+    example: 'RT-20261105-ABCD1234',
+  })
+  @IsOptional()
+  @IsString({ message: 'comboCode phải là chuỗi ký tự.' })
+  @Matches(/^[A-Za-z0-9_-]{4,50}$/, {
+    message: 'comboCode không đúng định dạng.',
+  })
+  comboCode?: string;
 }

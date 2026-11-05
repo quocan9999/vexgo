@@ -12,6 +12,7 @@ model NhaXe {
   maNhaXe                  String                    @unique @db.VarChar(50)
   tenNhaXe                 String                    @db.VarChar(150)
   thongTinLienHe           String?                   @db.Text
+  cauHinhHanhLy            String?                   @db.Text
   trangThai                String                    @db.VarChar(30)
   createdAt                DateTime                  @default(now()) @db.DateTime(0)
   updatedAt                DateTime                  @default(now()) @updatedAt @db.DateTime(0)
@@ -429,6 +430,7 @@ model SuDungKhuyenMai {
 model DonGiaoDich {
   donGiaoDichId        Int           @id @default(autoincrement()) @db.Int
   maDonGiaoDich        String        @unique @db.VarChar(50)
+  comboCode            String?       @db.VarChar(50)
   ngayTao              DateTime      @db.DateTime(0)
   tongTien             Decimal       @db.Decimal(18, 2)
   trangThai            String        @db.VarChar(30)
@@ -444,6 +446,8 @@ model DonGiaoDich {
   phieuDatVe           PhieuDatVe?
   phieuGuiHang         PhieuGuiHang?
   thanhToans           ThanhToan[]
+
+  @@index([comboCode], map: "DonGiaoDich_comboCode_idx")
 }
 
 model PhieuDatVe {
@@ -826,6 +830,9 @@ model PhanHoi {
   noiDung        String?       @db.VarChar(1000)
   thoiGian       DateTime      @db.DateTime(0)
   trangThai      String        @db.VarChar(30)
+  traLoi         String?       @db.Text
+  thoiGianTraLoi DateTime?     @db.DateTime(0)
+  nguoiTraLoi    String?       @db.VarChar(100)
   khachHangId    Int           @db.Int
   chuyenXeId     Int?          @db.Int
   phieuGuiHangId Int?          @db.Int

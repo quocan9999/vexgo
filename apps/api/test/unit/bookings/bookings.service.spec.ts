@@ -1,6 +1,8 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -111,13 +113,16 @@ describe('BookingsService', () => {
     ],
   };
 
-  const prisma = {
+  const prisma: any = {
     khachHang: {
       findUnique: vi.fn(),
     },
     phieuDatVe: {
       count: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    chuyenXe: {
       findUnique: vi.fn(),
     },
   };
@@ -129,6 +134,7 @@ describe('BookingsService', () => {
   const seatHoldsService = {
     verifyHold: vi.fn(),
     consumeHoldInTx: vi.fn().mockResolvedValue({ giuChoId: 1 }),
+    assertNoSpamUnpaidBookings: vi.fn().mockResolvedValue(undefined),
   };
 
   const cargoCapacityService = {
@@ -580,6 +586,43 @@ describe('BookingsService', () => {
       expect(Number(createdPaymentData?.soTien)).toBe(250000);
       expect(createdBookingData?.maPhieuDatVe).toMatch(/^[0-9a-f]{32}$/);
     });
+
+    it('rejects with 429 when phone has exceeded unpaid booking spam limit', async () => {
+      prisma.chuyenXe.findUnique.mockResolvedValue({
+        chuyenXeId: 1,
+        nhaXeId: 10,
+        tuyenXeId: 2,
+        trangThai: 'CHUA_KHOI_HANH',
+        ngayKhoiHanh: new Date('2099-01-01'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00Z'),
+      });
+
+      seatHoldsService.assertNoSpamUnpaidBookings.mockRejectedValueOnce(
+        new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            error: 'TOO_MANY_UNPAID_BOOKINGS',
+            message:
+              'Số điện thoại này đã tạo nhiều đơn giữ chỗ chưa thanh toán. Vui lòng quay lại sau 30 phút để tiếp tục.',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        ),
+      );
+
+      await expect(
+        service.createBooking({
+          tripId: 1,
+          seatIds: [1],
+          holdToken: 'hold_test_token',
+          pickupPoint: 'Bến xe Miền Đông',
+          dropoffPoint: 'Bến xe Đà Lạt',
+          contact: {
+            fullName: 'Nguyễn Văn Spam',
+            phone: '0901234567',
+          },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
   });
 
   describe('createBooking cargo rates', () => {
@@ -776,8 +819,7 @@ describe('BookingsService', () => {
       expect(rateLookup).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            diemGuiId: 11,
-            diemNhanId: 12,
+            tuyenXeId: 2,
           }),
         }),
       );
@@ -913,6 +955,7 @@ describe('BookingsService', () => {
         verifyHold: vi.fn(),
         consumeHold: vi.fn(),
         consumeHoldInTx: vi.fn().mockResolvedValue({ giuChoId: 1 }),
+        assertNoSpamUnpaidBookings: vi.fn().mockResolvedValue(undefined),
       };
       const mockPromotions = {
         validatePromotion: vi.fn().mockResolvedValue({ isValid: false, discountAmount: 0 }),

@@ -241,6 +241,37 @@ export type ApiBusCompany = {
   status: string;
 };
 
+export type ApiTripLuggagePackagesResponse = {
+  tripId: number;
+  routeId: number;
+  busCompanyId: number;
+  busCompanyName: string;
+  rates: Record<string, number>;
+  packages: Array<{
+    code: 'S' | 'M' | 'L' | 'XL';
+    name: string;
+    shortName: string;
+    weight: number;
+    length: number;
+    width: number;
+    height: number;
+    baseFee: number;
+    ruleText: string;
+    examples: string;
+  }>;
+  vehicles?: {
+    motorcycleWave?: number;
+    motorcycleScooter?: number;
+    motorcycleBig?: number;
+    bicycle?: number;
+  };
+  surcharges?: {
+    fragile?: number;
+    valuable?: number;
+  };
+  maxFreeWeightKg?: number;
+};
+
 export const busCompaniesApi = {
   async getBusCompanies(): Promise<ApiBusCompany[]> {
     try {
@@ -252,6 +283,21 @@ export const busCompaniesApi = {
       return body.data ?? [];
     } catch {
       return [];
+    }
+  },
+
+  async getTripLuggagePackages(
+    tripId: number,
+  ): Promise<ApiTripLuggagePackagesResponse | null> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/bus-companies/trips/${tripId}/luggage-packages`,
+      );
+      if (!response.ok) return null;
+      const body = await response.json();
+      return body.data ?? null;
+    } catch {
+      return null;
     }
   },
 };

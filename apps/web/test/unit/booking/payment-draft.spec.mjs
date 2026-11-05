@@ -3,21 +3,37 @@ import test, { beforeEach } from 'node:test';
 import {
   createPaymentDraft,
   getPaymentDraft,
+  getLatestActivePaymentDraft,
+  markPaymentDraftTerminal,
+  clearAllPaymentDrafts,
   PAYMENT_DRAFT_STORAGE_PREFIX,
 } from '../../../src/features/booking/services/payment-draft.ts';
 
-// Mock sessionStorage in Node.js test environment
-const mockStorage = new Map();
-globalThis.sessionStorage = {
-  getItem: (key) => mockStorage.get(key) ?? null,
-  setItem: (key, val) => mockStorage.set(key, String(val)),
-  removeItem: (key) => mockStorage.delete(key),
-  clear: () => mockStorage.clear(),
-};
+// Mock storage in Node.js test environment
+function createMockStorage() {
+  const map = new Map();
+  return {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, val) => map.set(key, String(val)),
+    removeItem: (key) => map.delete(key),
+    clear: () => map.clear(),
+    key: (i) => Array.from(map.keys())[i] ?? null,
+    get length() {
+      return map.size;
+    },
+  };
+}
+
+const mockSessionStorage = createMockStorage();
+const mockLocalStorage = createMockStorage();
+
+globalThis.sessionStorage = mockSessionStorage;
+globalThis.localStorage = mockLocalStorage;
 globalThis.window = globalThis;
 
 beforeEach(() => {
-  mockStorage.clear();
+  mockSessionStorage.clear();
+  mockLocalStorage.clear();
 });
 test('createPaymentDraft creates an opaque id and stores the draft in sessionStorage', () => {
   const draft = createPaymentDraft({
@@ -283,4 +299,118 @@ test('unassigned shipment payment draft accepts a nullable departure and retains
     '2026-11-05T10:00:00Z',
   );
   assert.equal(getPaymentDraft(draft.id)?.route.departureTime, null);
+});
+
+test('getPaymentDraft falls back to localStorage when sessionStorage is empty', () => {
+  const draft = createPaymentDraft({
+    tripType: 'one-way',
+    passenger: {
+      fullName: 'Phạm Văn B',
+      phoneNumber: '0912345678',
+      email: 'van.b@example.com',
+    },
+    legs: [
+      {
+        tripId: 'trip-99',
+        route: 'Hà Nội - Sapa',
+        departureTime: '22:00 20/11/2026',
+        seats: ['A01'],
+        pickup: 'Bến xe Mỹ Đình',
+        dropoff: 'Bến xe Sapa',
+        unitFare: 300000,
+        subtotal: 300000,
+      },
+    ],
+    totalFare: 300000,
+  });
+
+  // Verify it exists in both
+  assert.ok(mockSessionStorage.getItem(`${PAYMENT_DRAFT_STORAGE_PREFIX}${draft.id}`));
+  assert.ok(mockLocalStorage.getItem(`${PAYMENT_DRAFT_STORAGE_PREFIX}${draft.id}`));
+
+  // Simulate tab close / reload in a new tab: clear sessionStorage
+  mockSessionStorage.clear();
+
+  const retrieved = getPaymentDraft(draft.id);
+  assert.ok(retrieved, 'Should retrieve from localStorage');
+  assert.equal(retrieved.id, draft.id);
+  assert.equal(retrieved.passenger.fullName, 'Phạm Văn B');
+});
+
+test('getLatestActivePaymentDraft returns active unexpired draft and excludes expired or terminal drafts', () => {
+  const now = Date.now();
+  const futureExpiry = new Date(now + 10 * 60 * 1000).toISOString(); // +10 mins
+  const pastExpiry = new Date(now - 1000).toISOString(); // expired
+
+  const activeDraft = createPaymentDraft({
+    tripType: 'one-way',
+    paymentExpiresAt: futureExpiry,
+    passenger: {
+      fullName: 'Hoàng Văn C',
+      phoneNumber: '0988888888',
+      email: 'c@example.com',
+    },
+    legs: [
+      {
+        tripId: 'trip-1',
+        route: 'Sài Gòn - Vũng Tàu',
+        departureTime: '08:00 25/11/2026',
+        seats: ['B01'],
+        pickup: 'Bến xe Miền Đông',
+        dropoff: 'Bến xe Vũng Tàu',
+        unitFare: 150000,
+        subtotal: 150000,
+      },
+    ],
+    totalFare: 150000,
+  });
+
+  // 1. Should find active draft
+  const activeInfo = getLatestActivePaymentDraft(now);
+  assert.ok(activeInfo, 'Should find active draft');
+  assert.equal(activeInfo.draft.id, activeDraft.id);
+  assert.equal(activeInfo.expiresAtMs, Date.parse(futureExpiry));
+
+  // 2. Draft expired should be ignored
+  const pastActiveInfo = getLatestActivePaymentDraft(now + 15 * 60 * 1000);
+  assert.equal(pastActiveInfo, null, 'Should return null when expired');
+
+  // 3. Terminal draft should be ignored
+  markPaymentDraftTerminal(activeDraft.id, 'paid');
+  const terminalActiveInfo = getLatestActivePaymentDraft(now);
+  assert.equal(terminalActiveInfo, null, 'Terminal draft must not be active');
+});
+
+test('clearAllPaymentDrafts completely removes all drafts and terminal keys from storage', () => {
+  const now = Date.now();
+  createPaymentDraft({
+    tripType: 'one-way',
+    paymentExpiresAt: new Date(now + 10 * 60 * 1000).toISOString(),
+    passenger: {
+      fullName: 'Khách A',
+      phoneNumber: '0901234567',
+      email: 'a@example.com',
+    },
+    legs: [
+      {
+        tripId: 'trip-1',
+        route: 'Sài Gòn - Đà Lạt',
+        departureTime: '08:00 25/11/2026',
+        seats: ['A01'],
+        pickup: 'Bến xe Miền Đông',
+        dropoff: 'Bến xe Đà Lạt',
+        unitFare: 200000,
+        subtotal: 200000,
+      },
+    ],
+    totalFare: 200000,
+  });
+
+  assert.ok(getLatestActivePaymentDraft(now) !== null, 'Draft should exist before clear');
+
+  clearAllPaymentDrafts();
+
+  assert.equal(getLatestActivePaymentDraft(now), null, 'Draft should be cleared');
+  assert.equal(mockLocalStorage.length, 0, 'LocalStorage must be empty of drafts');
+  assert.equal(mockSessionStorage.length, 0, 'SessionStorage must be empty of drafts');
 });

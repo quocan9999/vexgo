@@ -1,6 +1,7 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsInt, IsNotEmpty, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ArrayMaxSize, IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { VIETNAM_PHONE_NUMBER_REGEX } from '../../common/validation/vietnamese-phone.js';
 
 export class CreateSeatHoldDto {
   @ApiProperty({ description: 'ID chuyến xe cần giữ chỗ', example: 101 })
@@ -21,4 +22,15 @@ export class CreateSeatHoldDto {
   @Type(() => Number)
   @IsInt({ each: true, message: 'Mỗi seatId phải là số nguyên.' })
   seatIds!: number[];
+
+  @ApiPropertyOptional({
+    description: 'Số điện thoại liên hệ giữ chỗ (nếu có)',
+    example: '0912345678',
+  })
+  @IsOptional()
+  @IsString({ message: 'Số điện thoại phải là chuỗi ký tự.' })
+  @Matches(VIETNAM_PHONE_NUMBER_REGEX, {
+    message: 'Số điện thoại không hợp lệ.',
+  })
+  phone?: string;
 }

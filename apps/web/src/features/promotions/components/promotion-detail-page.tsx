@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import {
   Tag,
   Calendar,
@@ -11,6 +11,7 @@ import {
   Check,
   ArrowRight,
   Bus,
+  ChevronLeft,
   ChevronRight,
   ShieldCheck,
   Info,
@@ -20,6 +21,8 @@ import {
 import { type Promotion, PROMOTIONS } from '../data/promotions.data';
 
 export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
+  const router = useRouter();
+
   if (!promotion) {
     notFound();
   }
@@ -38,18 +41,17 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-16 font-sans">
-      {/* Breadcrumb Header */}
+      {/* Back Header */}
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 text-xs font-semibold text-slate-500 overflow-x-auto whitespace-nowrap">
-          <Link href="/" className="hover:text-[#FF5722] transition-colors">
-            Trang chủ
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <Link href="/promotions" className="hover:text-[#FF5722] transition-colors">
-            Khuyến mãi
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <span className="text-slate-900 font-bold truncate max-w-xs">{promotion.title}</span>
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#FF5722] transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span>Quay lại</span>
+          </button>
         </div>
       </div>
 

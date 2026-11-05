@@ -823,7 +823,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // SePay có thể nhận diện `code` không đầy đủ dù `content` chứa đúng mã đơn.
-    // Chỉ tìm mã đầy đủ; mã legacy mất dấu '-' được khôi phục theo cấu trúc cố định.
+    // Hỗ trợ cả mã đơn đơn lẻ, mã combo khứ hồi (comboCode) và tách các từ khóa từ nội dung.
     const references = new Set<string>();
     for (const reference of [content, paymentCode]) {
       if (!reference) continue;
@@ -831,28 +831,185 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       const legacy = /^([A-Z0-9]{1,8})GD([A-F\d]{30})$/.exec(reference);
       if (legacy) references.add(`${legacy[1]}-GD-${legacy[2]}`);
     }
-    const matchingOrders = (
-      await Promise.all(
-        [...references].map((reference) =>
-          this.prisma.donGiaoDich.findUnique({
-            where: { maDonGiaoDich: reference },
+    for (const token of content.split(/[\s,;+_-]+/)) {
+      const cleanToken = token.trim();
+      if (cleanToken.length >= 4) {
+        references.add(cleanToken);
+      }
+    }
+
+    // 1. Kiểm tra nếu mã chuyển khoản khớp comboCode khứ hồi
+    const comboOrders = this.prisma.donGiaoDich.findMany
+      ? await this.prisma.donGiaoDich.findMany({
+          where: {
+            comboCode: { in: [...references] },
+          },
+          include: { phieuDatVe: true, phieuGuiHang: true },
+          orderBy: { donGiaoDichId: 'asc' },
+        })
+      : [];
+
+    let matchingOrders: Array<
+      Prisma.DonGiaoDichGetPayload<{
+        include: { phieuDatVe: true; phieuGuiHang: true };
+      }>
+    > = [];
+
+    if (comboOrders.length > 0) {
+      matchingOrders = comboOrders;
+    } else {
+      const candidates = (
+        await Promise.all(
+          [...references].map((reference) =>
+            this.prisma.donGiaoDich.findUnique({
+              where: { maDonGiaoDich: reference },
+              include: { phieuDatVe: true, phieuGuiHang: true },
+            }),
+          ),
+        )
+      ).filter(
+        (candidate): candidate is NonNullable<typeof candidate> =>
+          candidate !== null,
+      );
+
+      if (candidates.length > 0) {
+        const uniqueOrders = Array.from(
+          new Map(candidates.map((o) => [o.donGiaoDichId, o])).values(),
+        );
+        const firstWithCombo = uniqueOrders.find((o) => o.comboCode);
+        if (firstWithCombo?.comboCode && this.prisma.donGiaoDich.findMany) {
+          const allInCombo = await this.prisma.donGiaoDich.findMany({
+            where: { comboCode: firstWithCombo.comboCode },
             include: { phieuDatVe: true, phieuGuiHang: true },
-          }),
-        ),
-      )
-    ).filter((candidate) => candidate !== null);
-    const order = matchingOrders[0];
-    if (
-      matchingOrders.some(
-        (candidate) => candidate.donGiaoDichId !== order?.donGiaoDichId,
-      )
-    ) {
-      throw new BadRequestException({
-        error: 'SEPAY_REFERENCE_MISMATCH',
+            orderBy: { donGiaoDichId: 'asc' },
+          });
+          const comboSum = allInCombo.reduce(
+            (acc, cur) => acc + Number(cur.tongTien),
+            0,
+          );
+          if (transferAmount === comboSum) {
+            matchingOrders = allInCombo;
+          } else {
+            matchingOrders = [firstWithCombo];
+          }
+        } else if (uniqueOrders.length > 1) {
+          const ordersSum = uniqueOrders.reduce(
+            (acc, cur) => acc + Number(cur.tongTien),
+            0,
+          );
+          if (transferAmount === ordersSum) {
+            matchingOrders = uniqueOrders;
+          } else {
+            throw new BadRequestException({
+              error: 'SEPAY_REFERENCE_MISMATCH',
+              message:
+                'Mã thanh toán và nội dung chuyển khoản trỏ tới các đơn khác nhau.',
+            });
+          }
+        } else {
+          matchingOrders = uniqueOrders;
+        }
+      }
+    }
+
+    if (matchingOrders.length === 0) {
+      throw new NotFoundException({
+        error: 'SEPAY_ORDER_NOT_FOUND',
         message:
-          'Mã thanh toán và nội dung chuyển khoản trỏ tới các đơn khác nhau.',
+          'Không tìm thấy đơn giao dịch khớp chính xác với mã chuyển khoản.',
       });
     }
+
+    // Xử lý thanh toán Combo nhiều chặng (Khứ hồi)
+    if (matchingOrders.length > 1) {
+      const expectedTotal = matchingOrders.reduce(
+        (sum, ord) => sum + Number(ord.tongTien),
+        0,
+      );
+      if (
+        !Number.isSafeInteger(expectedTotal) ||
+        expectedTotal <= 0 ||
+        expectedTotal !== transferAmount
+      ) {
+        throw new BadRequestException({
+          error: 'PAYMENT_AMOUNT_MISMATCH',
+          message:
+            'Số tiền SePay nhận được không khớp chính xác với tổng đơn hàng combo VND.',
+        });
+      }
+
+      // Idempotency: Kiểm tra các event đã ghi nhận
+      const existingComboEvents = await this.prisma.thanhToan.findMany({
+        where: {
+          maGiaoDichSePay: {
+            in: [
+              transactionId,
+              ...matchingOrders.map((_, idx) => `${transactionId}-${idx + 1}`),
+            ],
+          },
+        },
+      });
+
+      if (
+        existingComboEvents.length >= matchingOrders.length &&
+        existingComboEvents.every(
+          (e) => e.trangThai === 'THANH_CONG' || e.trangThai === 'CAN_DOI_SOAT',
+        )
+      ) {
+        return {
+          success: true,
+          message: 'Webhook SePay đã được ghi nhận trước đó.',
+        };
+      }
+
+      // Quyết toán từng đơn trong combo
+      for (let i = 0; i < matchingOrders.length; i++) {
+        const ord = matchingOrders[i];
+        const subAmount = Number(ord.tongTien);
+        const subTxId = `${transactionId}-${i + 1}`;
+
+        const paymentFilter = {
+          donGiaoDichId: ord.donGiaoDichId,
+          phuongThuc: 'SEPAY',
+          loaiGiaoDich: 'THANH_TOAN',
+        };
+        const p =
+          (await this.prisma.thanhToan.findFirst({
+            where: { ...paymentFilter, trangThai: 'DANG_XU_LY' },
+            orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
+          })) ??
+          (await this.prisma.thanhToan.findFirst({
+            where: { ...paymentFilter, trangThai: 'THANH_CONG' },
+            orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
+          })) ??
+          (await this.prisma.thanhToan.findFirst({
+            where: paymentFilter,
+            orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
+          }));
+
+        if (!p) {
+          throw new ConflictException({
+            error: 'SEPAY_PAYMENT_NOT_FOUND',
+            message: `Đơn giao dịch #${ord.donGiaoDichId} chưa có khoản thanh toán SePay hợp lệ.`,
+          });
+        }
+
+        await this.confirmPaymentSuccess({
+          paymentId: p.thanhToanId,
+          provider: 'SEPAY',
+          amount: subAmount,
+          providerTransactionId: subTxId,
+          providerTransactionAt,
+        });
+      }
+
+      return {
+        success: true,
+        message: 'Thanh toán combo khứ hồi SePay thành công.',
+      };
+    }
+
+    const order = matchingOrders[0];
     if (!order || (!order.phieuDatVe && !order.phieuGuiHang)) {
       throw new NotFoundException({
         error: 'SEPAY_ORDER_NOT_FOUND',

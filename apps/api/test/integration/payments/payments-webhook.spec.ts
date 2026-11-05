@@ -42,7 +42,9 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
   let currentPrincipal: AuthPrincipal | null = null;
 
   async function cleanupNotificationFixtures() {
-    const bookings = await prisma.phieuDatVe.findMany({where:{donGiaoDich:{khachHangId:{in:[customerAId,customerBId]}}},select:{phieuDatVeId:true}});
+    const validIds = [customerAId, customerBId].filter((id): id is number => typeof id === 'number');
+    if (validIds.length === 0) return;
+    const bookings = await prisma.phieuDatVe.findMany({where:{donGiaoDich:{khachHangId:{in:validIds}}},select:{phieuDatVeId:true}});
     const keys = bookings.map(b => `booking-paid:${b.phieuDatVeId}`);
     await prisma.thongBaoNguoiNhan.deleteMany({where:{thongBao:{eventKey:{in:keys}}}});
     await prisma.thongBao.deleteMany({where:{eventKey:{in:keys}}});
@@ -111,12 +113,12 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       data: {
         soDienThoai: `+8495${suffix.slice(0, 7)}`,
         matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `Payer A ${suffix}`,
         trangThai: 'HOAT_DONG',
         daXacThucSoDienThoai: true,
         khachHang: {
           create: {
             maKhachHang: `KH-PA-${suffix}`,
+            hoTen: `Payer A ${suffix}`,
           },
         },
       },
@@ -137,12 +139,12 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       data: {
         soDienThoai: `+8496${suffix.slice(0, 7)}`,
         matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `Payer B ${suffix}`,
         trangThai: 'HOAT_DONG',
         daXacThucSoDienThoai: true,
         khachHang: {
           create: {
             maKhachHang: `KH-PB-${suffix}`,
+            hoTen: `Payer B ${suffix}`,
           },
         },
       },
@@ -3290,6 +3292,141 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       } finally {
         await fixture.cleanup();
       }
+    });
+
+    it('authenticates, settles both legs of a round-trip combo order in one SePay transfer', async () => {
+      const suffix = randomUUID().slice(0, 8).toUpperCase();
+      const comboCode = `RT-${suffix}`;
+
+      // Leg 1: 300.000đ
+      const dgd1 = await prisma.donGiaoDich.create({
+        data: {
+          maDonGiaoDich: `VXG-GD1-${suffix}`,
+          comboCode,
+          ngayTao: new Date(),
+          tongTien: 300000,
+          trangThai: 'CHO_THANH_TOAN',
+          tenKhachHang: 'Combo Customer',
+          soDienThoaiKhachHang: '+84950000001',
+          khachHangId: customerAId,
+          nhaXeId: busCompanyId,
+          phieuDatVe: {
+            create: {
+              maPhieuDatVe: `VXG-PDV1-${suffix}`,
+              ngayDat: new Date(),
+              soLuongVeBanDau: 1,
+              tongTienBanDau: 300000,
+              trangThai: 'CHO_THANH_TOAN',
+            },
+          },
+          thanhToans: {
+            create: {
+              soTien: 300000,
+              phuongThuc: 'SEPAY',
+              loaiGiaoDich: 'THANH_TOAN',
+              thoiGian: new Date(),
+              trangThai: 'DANG_XU_LY',
+            },
+          },
+        },
+        include: { phieuDatVe: true, thanhToans: true },
+      });
+
+      // Leg 2: 200.000đ
+      const dgd2 = await prisma.donGiaoDich.create({
+        data: {
+          maDonGiaoDich: `VXG-GD2-${suffix}`,
+          comboCode,
+          ngayTao: new Date(),
+          tongTien: 200000,
+          trangThai: 'CHO_THANH_TOAN',
+          tenKhachHang: 'Combo Customer',
+          soDienThoaiKhachHang: '+84950000001',
+          khachHangId: customerAId,
+          nhaXeId: busCompanyId,
+          phieuDatVe: {
+            create: {
+              maPhieuDatVe: `VXG-PDV2-${suffix}`,
+              ngayDat: new Date(),
+              soLuongVeBanDau: 1,
+              tongTienBanDau: 200000,
+              trangThai: 'CHO_THANH_TOAN',
+            },
+          },
+          thanhToans: {
+            create: {
+              soTien: 200000,
+              phuongThuc: 'SEPAY',
+              loaiGiaoDich: 'THANH_TOAN',
+              thoiGian: new Date(),
+              trangThai: 'DANG_XU_LY',
+            },
+          },
+        },
+        include: { phieuDatVe: true, thanhToans: true },
+      });
+
+      // Send 1 SePay webhook for 500.000đ (total of both legs) with comboCode in content
+      const sepayTxId = Math.floor(Math.random() * 800000) + 100000;
+      const rawBody = JSON.stringify({
+        id: sepayTxId,
+        transferAmount: 500000,
+        code: comboCode,
+        content: `VEXGO ${comboCode}`,
+        accountNumber: sepayTestAccountNumber,
+        transactionDate: '2026-10-15 17:03:00',
+        transferType: 'in',
+      });
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const signature = `sha256=${createHmac('sha256', sepayTestSecret)
+        .update(`${timestamp}.`)
+        .update(rawBody)
+        .digest('hex')}`;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .set('X-SePay-Timestamp', timestamp)
+        .set('X-SePay-Signature', signature)
+        .set('Content-Type', 'application/json')
+        .send(rawBody);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true });
+
+      // Verify leg 1 is paid
+      const order1 = await prisma.donGiaoDich.findUnique({
+        where: { donGiaoDichId: dgd1.donGiaoDichId },
+        include: { phieuDatVe: true, thanhToans: true },
+      });
+      expect(order1?.trangThai).toBe('DA_THANH_TOAN');
+      expect(order1?.phieuDatVe?.trangThai).toBe('DA_THANH_TOAN');
+      const payment1 = order1?.thanhToans.find((p) => p.trangThai === 'THANH_CONG');
+      expect(payment1).toBeDefined();
+      expect(payment1?.maGiaoDichSePay).toBe(`${sepayTxId}-1`);
+      expect(Number(payment1?.soTien)).toBe(300000);
+
+      // Verify leg 2 is paid
+      const order2 = await prisma.donGiaoDich.findUnique({
+        where: { donGiaoDichId: dgd2.donGiaoDichId },
+        include: { phieuDatVe: true, thanhToans: true },
+      });
+      expect(order2?.trangThai).toBe('DA_THANH_TOAN');
+      expect(order2?.phieuDatVe?.trangThai).toBe('DA_THANH_TOAN');
+      const payment2 = order2?.thanhToans.find((p) => p.trangThai === 'THANH_CONG');
+      expect(payment2).toBeDefined();
+      expect(payment2?.maGiaoDichSePay).toBe(`${sepayTxId}-2`);
+      expect(Number(payment2?.soTien)).toBe(200000);
+
+      // Test replay / duplicate webhook idempotency
+      const replayRes = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .set('X-SePay-Timestamp', timestamp)
+        .set('X-SePay-Signature', signature)
+        .set('Content-Type', 'application/json')
+        .send(rawBody);
+
+      expect(replayRes.status).toBe(200);
+      expect(replayRes.body).toEqual({ success: true });
     });
 
     it('rolls back payment and order updates when the booking state CAS fails', async () => {

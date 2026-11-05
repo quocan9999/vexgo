@@ -30,6 +30,7 @@ import { getBookingPaymentDeadline } from '../common/booking-payment-deadline.js
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import type { CreateShipmentDto } from './dto/create-shipment.dto.js';
 import type { LookupShipmentDto } from './dto/lookup-shipment.dto.js';
+import type { CancelShipmentDto } from './dto/cancel-shipment.dto.js';
 import type { ShipmentQueryDto } from './dto/shipment-query.dto.js';
 import type { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto.js';
 import type {
@@ -43,6 +44,7 @@ import { LocationsService } from '../locations/locations.service.js';
 import { locationSearchTerms } from '../locations/location-search.js';
 import { generateStandaloneShipmentCodes } from './shipment-codes.js';
 import { generateBusinessUuid } from '../common/business-uuid.js';
+import { resolveEffectiveLuggageRates } from '../bus-companies/dto/luggage-rates.dto.js';
 import {
   parseShipmentDate,
   type ShipmentOptionsQueryDto,
@@ -317,13 +319,23 @@ export class ShipmentsService {
       }
     }
     const options = available
-      .map((route) => ({
-        routeId: route.tuyenXeId,
-        busCompany: { id: route.nhaXeId, name: route.nhaXe.tenNhaXe },
-        route: { origin: route.diemDi, destination: route.diemDen },
-        minimumEstimatedFee:
-          minimumFeeByRouteId.get(route.tuyenXeId)?.toNumber() ?? null,
-      }))
+      .map((route) => {
+        const rates = resolveEffectiveLuggageRates(
+          route.nhaXe.cauHinhHanhLy,
+          route.tuyenXeId,
+        );
+        return {
+          routeId: route.tuyenXeId,
+          busCompany: { id: route.nhaXeId, name: route.nhaXe.tenNhaXe },
+          route: { origin: route.diemDi, destination: route.diemDen },
+          minimumEstimatedFee:
+            minimumFeeByRouteId.get(route.tuyenXeId)?.toNumber() ?? null,
+          surcharges: {
+            fragile: rates.fragileSurcharge,
+            valuable: rates.valuableSurcharge,
+          },
+        };
+      })
       .sort((left, right) => {
         if (left.minimumEstimatedFee === null)
           return right.minimumEstimatedFee === null
@@ -438,6 +450,7 @@ export class ShipmentsService {
         billableWeight: rate.totalWeight.toNumber(),
         fee: rate.fee.toNumber(),
       })),
+      surcharges: quote.surcharges,
     };
   }
 
@@ -1604,6 +1617,182 @@ export class ShipmentsService {
         time: log.thoiGian.toISOString(),
       })),
     };
+  }
+
+  async cancelCustomerShipment(
+    dto: CancelShipmentDto,
+    principal?: AuthPrincipal,
+  ) {
+    const waybillCode = dto.waybillCode.trim().toUpperCase();
+    const phone = normalizePhone(dto.phoneNumber);
+
+    const snapshot = await this.prisma.phieuGuiHang.findFirst({
+      where: {
+        OR: [
+          { maVanDon: waybillCode },
+          { donGiaoDich: { maDonGiaoDich: waybillCode } },
+        ],
+      },
+      select: {
+        phieuGuiHangId: true,
+        donGiaoDichId: true,
+        soDienThoaiNguoiNhan: true,
+        donGiaoDich: {
+          select: {
+            soDienThoaiKhachHang: true,
+          },
+        },
+      },
+    });
+
+    if (!snapshot) {
+      throw new NotFoundException({
+        error: 'SHIPMENT_NOT_FOUND',
+        message:
+          'Không tìm thấy phiếu gửi hàng khớp với mã vận đơn đã cung cấp.',
+      });
+    }
+
+    const senderPhoneMatch =
+      normalizePhone(snapshot.donGiaoDich.soDienThoaiKhachHang) === phone;
+    const receiverPhoneMatch =
+      normalizePhone(snapshot.soDienThoaiNguoiNhan) === phone;
+
+    if (!senderPhoneMatch && !receiverPhoneMatch) {
+      throw new NotFoundException({
+        error: 'SHIPMENT_NOT_FOUND',
+        message:
+          'Số điện thoại không khớp với người gửi hoặc người nhận của mã vận đơn này.',
+      });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const orderLocked = await lockPaymentOrder(tx, snapshot.donGiaoDichId);
+      if (!orderLocked) {
+        throw new NotFoundException({
+          error: 'SHIPMENT_NOT_FOUND',
+          message: 'Không tìm thấy phiếu gửi hàng.',
+        });
+      }
+
+      const shipment = await tx.phieuGuiHang.findUnique({
+        where: { phieuGuiHangId: snapshot.phieuGuiHangId },
+        select: {
+          phieuGuiHangId: true,
+          maVanDon: true,
+          trangThai: true,
+          donGiaoDich: {
+            select: {
+              donGiaoDichId: true,
+              trangThai: true,
+              phieuDatVe: { select: { phieuDatVeId: true } },
+              thanhToans: {
+                select: {
+                  loaiGiaoDich: true,
+                  trangThai: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!shipment) {
+        throw new NotFoundException({
+          error: 'SHIPMENT_NOT_FOUND',
+          message: 'Không tìm thấy phiếu gửi hàng.',
+        });
+      }
+
+      if (shipment.donGiaoDich.phieuDatVe) {
+        throw new ConflictException({
+          error: 'BOOKING_SHIPMENT_TRIP_FIXED',
+          message:
+            'Đây là hành lý/hàng hóa đi kèm vé xe. Vui lòng thực hiện hủy vé hoặc liên hệ nhà xe để được hỗ trợ.',
+        });
+      }
+
+      if (shipment.trangThai === 'DA_HUY') {
+        throw new BadRequestException({
+          error: 'SHIPMENT_ALREADY_CANCELLED',
+          message: 'Đơn gửi hàng này đã được hủy trước đó.',
+        });
+      }
+
+      if (shipment.trangThai !== 'MOI_TAO') {
+        throw new ConflictException({
+          error: 'SHIPMENT_CANNOT_BE_CANCELLED_ONLINE',
+          message:
+            'Chỉ có thể hủy trực tuyến khi đơn hàng ở trạng thái Mới tạo (chưa mang hàng ra bến). Hàng đã được tiếp nhận, vui lòng liên hệ trực tiếp nhà xe để được hỗ trợ.',
+        });
+      }
+
+      const now = new Date();
+
+      await tx.donGiaoDich.updateMany({
+        where: {
+          donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+        },
+        data: { trangThai: 'DA_HUY' },
+      });
+
+      await tx.thanhToan.updateMany({
+        where: {
+          donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+          trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+        },
+        data: { trangThai: 'THAT_BAI' },
+      });
+
+      const updated = await tx.phieuGuiHang.updateMany({
+        where: {
+          phieuGuiHangId: shipment.phieuGuiHangId,
+          trangThai: 'MOI_TAO',
+        },
+        data: {
+          trangThai: 'DA_HUY',
+          updatedAt: now,
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new ConflictException({
+          error: 'CONCURRENT_STATUS_UPDATE',
+          message:
+            'Trạng thái phiếu gửi hàng đã bị thay đổi bởi thao tác khác.',
+        });
+      }
+
+      const cancelReason =
+        dto.reason?.trim() || 'Khách hàng chủ động hủy đơn trực tuyến';
+
+      await tx.lichSuTrangThaiPhieuGuiHang.create({
+        data: {
+          phieuGuiHangId: shipment.phieuGuiHangId,
+          trangThai: 'DA_HUY',
+          thoiGian: now,
+          taiKhoanId: principal?.taiKhoanId ?? null,
+          ghiChu: cancelReason,
+        },
+      });
+
+      const hasPaidBeforeCancel = shipment.donGiaoDich.thanhToans.some(
+        (payment) =>
+          payment.loaiGiaoDich !== 'HOAN_TIEN' &&
+          (payment.trangThai === 'THANH_CONG' ||
+            payment.trangThai === 'DA_THANH_TOAN'),
+      );
+
+      return {
+        waybillCode: shipment.maVanDon,
+        status: 'DA_HUY' as const,
+        updatedAt: now.toISOString(),
+        hasPaidBeforeCancel,
+        message: hasPaidBeforeCancel
+          ? 'Hủy đơn gửi hàng thành công. Quý khách đã thanh toán cước trước đó vui lòng liên hệ trực tiếp nhà xe để được hỗ trợ hoàn tiền.'
+          : 'Hủy đơn gửi hàng thành công.',
+      };
+    });
   }
 
   async getShipmentDetail(id: number, principal?: AuthPrincipal) {

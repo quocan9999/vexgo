@@ -56,8 +56,10 @@ async function prepareRouteTemplates() {
         diaDiemCuId: dalatBase?.diaDiemCuId ?? null,
         diaDiemMoiId: dalatBase?.diaDiemMoiId ?? null,
         trangThai: 'HOAT_DONG',
-        nhaXeId: 2,
-        benTrungChuyenId: dalatBase?.diemDonTraId ?? null,
+        nhaXe: { connect: { nhaXeId: 2 } },
+        ...(dalatBase?.diemDonTraId
+          ? { benTrungChuyen: { connect: { diemDonTraId: dalatBase.diemDonTraId } } }
+          : {}),
       },
     });
     console.log(`+ Đã tạo điểm trung chuyển Thành Bưởi: ${tbTransferPoint.tenDiem} (ID: ${tbTransferPoint.diemDonTraId})`);

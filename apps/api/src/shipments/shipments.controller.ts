@@ -38,6 +38,7 @@ import {
 import { ApiErrorResponseDto } from '../common/swagger/api-response-envelope.dto.js';
 import { CreateShipmentDto } from './dto/create-shipment.dto.js';
 import { LookupShipmentDto } from './dto/lookup-shipment.dto.js';
+import { CancelShipmentDto } from './dto/cancel-shipment.dto.js';
 import { ShipmentQueryDto } from './dto/shipment-query.dto.js';
 import { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto.js';
 import { ShipmentsService } from './shipments.service.js';
@@ -311,6 +312,46 @@ export class ShipmentsController {
   })
   async lookupShipment(@Body() dto: LookupShipmentDto) {
     const data = await this.shipmentsService.lookupShipment(dto);
+    return { data };
+  }
+
+  @Post('cancel')
+  @OptionalAuth()
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({
+    default: {
+      limit: PUBLIC_SHIPMENT_LOOKUP_RATE_LIMIT,
+      ttl: PUBLIC_RATE_LIMIT_TTL_MS,
+    },
+  })
+  @ApiOperation({
+    summary: 'Khách hàng chủ động hủy đơn gửi hàng (khi còn ở trạng thái Mới tạo)',
+    description:
+      'Cho phép khách hàng hủy phiếu gửi hàng trực tuyến khi đơn còn ở trạng thái Mới tạo (chưa mang hàng ra bến).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Hủy đơn gửi hàng thành công.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy bưu kiện hoặc số điện thoại không khớp.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Đơn gửi hàng đã tiếp nhận hoặc không đủ điều kiện hủy trực tuyến.',
+    type: ApiErrorResponseDto,
+  })
+  async cancelShipment(
+    @Body() dto: CancelShipmentDto,
+    @CurrentPrincipal() principal?: AuthPrincipal,
+  ) {
+    const data = await this.shipmentsService.cancelCustomerShipment(
+      dto,
+      principal,
+    );
     return { data };
   }
 

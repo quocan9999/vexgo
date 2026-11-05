@@ -1,10 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -17,13 +20,94 @@ import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator
 import { Public } from '../auth/decorators/public.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { ApiErrorResponseDto } from '../common/swagger/api-response-envelope.dto.js';
+import {
+  AdminReplyReviewDto,
+  AdminReviewQueryDto,
+  AdminUpdateReviewStatusDto,
+} from './dto/admin-review.dto.js';
 import { CreateReviewDto } from './dto/create-review.dto.js';
+import { UpdateReviewDto } from './dto/update-review.dto.js';
 import { ReviewsService } from './reviews.service.js';
 
 @ApiTags('Đánh giá & Nhận xét chất lượng (Reviews)')
 @Controller('reviews')
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
+
+  // ================= ADMIN REVIEW ENDPOINTS =================
+
+  @Get('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Danh sách đánh giá dành cho Admin/Nhà xe (phân trang & bộ lọc)',
+    description:
+      'Lấy danh sách đánh giá của khách hàng, hỗ trợ lọc theo số sao, trạng thái (HIEN_THI/DA_AN), từ khóa tìm kiếm và nhà xe.',
+  })
+  async getAdminReviews(
+    @Query() query: AdminReviewQueryDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.reviewsService.getAdminReviews(query, principal);
+  }
+
+  @Get('admin/stats')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Thống kê tổng quan CSAT và đánh giá cho Admin',
+    description:
+      'Trả về điểm trung bình, tổng số đánh giá, tỷ lệ hài lòng (>= 4 sao), số lượng tiêu cực (<= 2 sao) và số lượng đã ẩn.',
+  })
+  async getAdminReviewStats(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Query('busCompanyId') busCompanyId?: string,
+  ) {
+    const numericCompanyId = busCompanyId ? Number(busCompanyId) : undefined;
+    return this.reviewsService.getAdminReviewStats(principal, numericCompanyId);
+  }
+
+  @Patch('admin/:id/status')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Kiểm duyệt trạng thái đánh giá (Ẩn / Hiện)',
+    description:
+      'Chuyển đổi trạng thái hiển thị của đánh giá (HIEN_THI hoặc DA_AN).',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID đánh giá (phanHoiId)',
+    example: 1,
+  })
+  async updateAdminReviewStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminUpdateReviewStatusDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.reviewsService.updateAdminReviewStatus(id, dto, principal);
+  }
+
+  @Patch('admin/:id/reply')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Nhà xe phản hồi đánh giá của khách hàng',
+    description:
+      'Gửi, chỉnh sửa hoặc xóa phản hồi từ nhà xe đối với nhận xét của hành khách.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID đánh giá (phanHoiId)',
+    example: 1,
+  })
+  async replyAdminReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminReplyReviewDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.reviewsService.replyAdminReview(id, dto, principal);
+  }
+
+  // ================= CUSTOMER & PUBLIC REVIEW ENDPOINTS =================
 
   @Post()
   @ApiBearerAuth('JWT-auth')
@@ -91,9 +175,99 @@ export class ReviewsController {
     status: 200,
     description: 'Lấy danh sách đánh giá chuyến xe thành công.',
   })
-  async getTripReviews(
+  async getTripReviews(@Param('tripId', ParseIntPipe) tripId: number) {
+    return this.reviewsService.getTripReviews(tripId);
+  }
+
+  @Get('my')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Danh sách đánh giá của tôi',
+    description: 'Lấy danh sách tất cả các đánh giá mà tài khoản khách hàng hiện tại đã gửi.',
+  })
+  async getMyReviews(@CurrentPrincipal() principal: AuthPrincipal) {
+    return this.reviewsService.getMyReviews(principal.taiKhoanId);
+  }
+
+  @Delete('trip/:tripId')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Xóa đánh giá của tôi theo chuyến xe',
+    description: 'Khách hàng xóa đánh giá mình đã gửi cho một chuyến xe cụ thể.',
+  })
+  @ApiParam({
+    name: 'tripId',
+    type: Number,
+    description: 'ID chuyến xe',
+    example: 10,
+  })
+  async deleteTripReview(
+    @CurrentPrincipal() principal: AuthPrincipal,
     @Param('tripId', ParseIntPipe) tripId: number,
   ) {
-    return this.reviewsService.getTripReviews(tripId);
+    return this.reviewsService.deleteTripReview(principal.taiKhoanId, tripId);
+  }
+
+  @Delete(':id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Xóa đánh giá theo ID',
+    description: 'Khách hàng xóa đánh giá của chính mình theo reviewId.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID đánh giá',
+    example: 1,
+  })
+  async deleteReview(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.reviewsService.deleteReview(principal.taiKhoanId, id);
+  }
+
+  @Patch('trip/:tripId')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Chỉnh sửa đánh giá của tôi theo chuyến xe',
+    description: 'Khách hàng cập nhật số sao hoặc nhận xét của mình cho chuyến xe.',
+  })
+  @ApiParam({
+    name: 'tripId',
+    type: Number,
+    description: 'ID chuyến xe',
+    example: 10,
+  })
+  async updateTripReview(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('tripId', ParseIntPipe) tripId: number,
+    @Body() dto: UpdateReviewDto,
+  ) {
+    return this.reviewsService.updateTripReview(
+      principal.taiKhoanId,
+      tripId,
+      dto,
+    );
+  }
+
+  @Patch(':id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Chỉnh sửa đánh giá theo ID',
+    description: 'Khách hàng cập nhật số sao hoặc nhận xét theo ID đánh giá.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID đánh giá',
+    example: 1,
+  })
+  async updateReview(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateReviewDto,
+  ) {
+    return this.reviewsService.updateReview(principal.taiKhoanId, id, dto);
   }
 }

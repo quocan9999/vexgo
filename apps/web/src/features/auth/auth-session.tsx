@@ -19,6 +19,7 @@ import {
 import { usePathname } from 'next/navigation';
 import { authApi, API_BASE_URL, ApiError } from './services/auth.api';
 import { runWithAuthRetry, type TokenPair } from './services/auth-retry';
+import { clearAllPaymentDrafts } from '@/features/booking/services/payment-draft';
 
 export type { AuthState, AuthUser } from './auth-session-state';
 
@@ -156,6 +157,7 @@ export function AuthSessionProvider({
     updateState(nextState);
     try {
       clearStoredAuth(window.localStorage);
+      clearAllPaymentDrafts();
     } catch {}
   }, [updateState]);
 
