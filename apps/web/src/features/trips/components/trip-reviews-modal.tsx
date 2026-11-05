@@ -242,17 +242,17 @@ export function TripReviewsModal({
               <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">
                 Lọc theo số sao:
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setSelectedStar(null)}
-                  className={`w-full px-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
                     selectedStar === null
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  <span>Tất cả</span>
+                  <span className="whitespace-nowrap">Tất cả</span>
                   <span className="text-[11px] opacity-80">({reviews.length})</span>
                 </button>
                 {[5, 4, 3].map((s) => (
@@ -262,7 +262,7 @@ export function TripReviewsModal({
                     onClick={() =>
                       setSelectedStar(selectedStar === s ? null : s)
                     }
-                    className={`w-full px-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
                       selectedStar === s
                         ? 'bg-amber-500 text-white shadow-xs'
                         : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-50/60'
@@ -287,13 +287,13 @@ export function TripReviewsModal({
                   onClick={() =>
                     setSelectedStar(selectedStar === '1-2' ? null : '1-2')
                   }
-                  className={`w-full px-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
                     selectedStar === '1-2'
                       ? 'bg-amber-500 text-white shadow-xs'
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-amber-50/60'
                   }`}
                 >
-                  <span>1-2</span>
+                  <span className="whitespace-nowrap tabular-nums">1–2</span>
                   <Star
                     size={12}
                     className={
