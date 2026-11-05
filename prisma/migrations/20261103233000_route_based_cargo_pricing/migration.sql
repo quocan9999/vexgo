@@ -15,6 +15,9 @@ ALTER TABLE `BangCuocGuiHang` DROP COLUMN `diemGuiId`,
     DROP COLUMN `diemNhanId`,
     ADD COLUMN `tuyenXeId` INTEGER NOT NULL;
 
+-- Backfill legacy records to a valid route if any exist
+UPDATE `BangCuocGuiHang` SET `tuyenXeId` = (SELECT `tuyenXeId` FROM `TuyenXe` ORDER BY `tuyenXeId` ASC LIMIT 1) WHERE `tuyenXeId` = 0;
+
 -- CreateIndex
 CREATE INDEX `BangCuocGuiHang_tuyenXeId_idx` ON `BangCuocGuiHang`(`tuyenXeId`);
 

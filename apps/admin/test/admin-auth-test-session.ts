@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { beforeEach, vi } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach, beforeEach, vi } from 'vitest';
 
 type TestSessionState =
   | { status: 'checking' }
@@ -101,4 +102,10 @@ beforeEach(() => {
     };
   }
   resetAdminTestSession();
+});
+
+afterEach(() => {
+  if (typeof window !== 'undefined') {
+    cleanup();
+  }
 });

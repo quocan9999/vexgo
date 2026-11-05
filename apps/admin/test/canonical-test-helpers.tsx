@@ -42,7 +42,5 @@ export async function inspectCanonicalOption(trigger: HTMLElement, name: string 
 export function renderPortalMarkup(element: ReactElement) {
   cleanup();
   render(element);
-  const markup = document.body.innerHTML;
-  cleanup();
-  return markup;
+  return document.body.innerHTML;
 }
