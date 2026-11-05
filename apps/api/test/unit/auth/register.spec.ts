@@ -115,11 +115,22 @@ describe('AuthService register', () => {
       otpProof: dto.otpProof,
       usedAt: NOW,
     });
+    expect(tx.taiKhoan.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          soDienThoai_loaiTaiKhoan: {
+            soDienThoai: dto.phoneNumber,
+            loaiTaiKhoan: 'KHACH_HANG',
+          },
+        },
+      }),
+    );
     expect(tx.taiKhoan.create).toHaveBeenCalledWith({
       data: {
         soDienThoai: dto.phoneNumber,
         matKhau: expect.not.stringMatching(/^VexGo@123$/),
         email: dto.email,
+        loaiTaiKhoan: 'KHACH_HANG',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
       },

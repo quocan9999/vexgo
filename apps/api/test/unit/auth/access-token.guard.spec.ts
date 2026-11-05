@@ -71,6 +71,7 @@ function activeSession(overrides: Record<string, unknown> = {}) {
     updatedAt: NOW,
     taiKhoan: {
       taiKhoanId: 42,
+      loaiTaiKhoan: 'KHACH_HANG',
       trangThai: 'HOAT_DONG',
       nhanVien: null,
       taiKhoanVaiTros: [
@@ -209,6 +210,7 @@ describe('AccessTokenGuard', () => {
       permissions: [],
       nhanVienId: null,
       nhaXeId: null,
+      loaiTaiKhoan: 'KHACH_HANG',
     });
     expect(jwtService.verifyAsync).toHaveBeenCalledWith('signed-token', {
       secret: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
@@ -269,6 +271,7 @@ describe('AccessTokenGuard', () => {
       activeSession({
         taiKhoan: {
           taiKhoanId: 42,
+          loaiTaiKhoan: 'QUAN_TRI',
           trangThai: 'HOAT_DONG',
           nhanVien: {
             nhanVienId: 77,
@@ -314,6 +317,7 @@ describe('AccessTokenGuard', () => {
       permissions: ['vehicle:read', 'route:read'],
       nhanVienId: 77,
       nhaXeId: 901,
+      loaiTaiKhoan: 'QUAN_TRI',
     });
     expect(permissionLoader.load).toHaveBeenCalledWith(
       [{ roleId: 2, roleName: 'NHA_XE_ADMIN' }],

@@ -1,3 +1,5 @@
+import type { LoaiTaiKhoan } from '../../generated/prisma/client.js';
+
 export interface AuthPrincipal {
   taiKhoanId: number;
   sessionId: string;
@@ -5,6 +7,7 @@ export interface AuthPrincipal {
   permissions: string[];
   nhanVienId: number | null;
   nhaXeId: number | null;
+  loaiTaiKhoan?: LoaiTaiKhoan;
 }
 
 export interface AuthUserSummary {

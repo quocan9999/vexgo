@@ -141,6 +141,7 @@ export class SupportChatGateway
           taiKhoan: {
             select: {
               taiKhoanId: true,
+              loaiTaiKhoan: true,
               trangThai: true,
               nhanVien: {
                 select: {
@@ -230,6 +231,7 @@ export class SupportChatGateway
         permissions,
         nhanVienId,
         nhaXeId,
+        loaiTaiKhoan: session.taiKhoan.loaiTaiKhoan,
       };
 
       const socketData: SocketPrincipalData = {

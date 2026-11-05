@@ -5,15 +5,19 @@ import {
   ConflictException,
   ForbiddenException,
   InternalServerErrorException,
+  NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RegisterDto, LoginDto } from './dto/auth.dto.js';
+import { ResetForgotPasswordDto } from './dto/forgot-password.dto.js';
 import * as bcrypt from 'bcrypt';
 import { OtpService } from './otp/otp.service.js';
 import { TokenService } from './tokens/token.service.js';
 import { EffectiveRolePermissionLoaderService } from './permissions/effective-role-permission-loader.service.js';
 import { PermissionResolverService } from './permissions/permission-resolver.service.js';
+import { RealtimeSessionInvalidatorService } from './realtime-session-invalidator.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { normalizeEmail } from '../common/normalize-email.js';
 import { assertAccountActive } from './account-status.helper.js';
@@ -29,6 +33,8 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly permissionResolver: PermissionResolverService,
     private readonly permissionLoader: EffectiveRolePermissionLoaderService,
+    @Optional()
+    private readonly sessionInvalidator?: RealtimeSessionInvalidatorService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -44,7 +50,12 @@ export class AuthService {
         });
 
         const existing = await tx.taiKhoan.findUnique({
-          where: { soDienThoai: dto.phoneNumber },
+          where: {
+            soDienThoai_loaiTaiKhoan: {
+              soDienThoai: dto.phoneNumber,
+              loaiTaiKhoan: 'KHACH_HANG',
+            },
+          },
           select: { taiKhoanId: true },
         });
         if (existing) this.throwPhoneAlreadyRegistered();
@@ -54,6 +65,7 @@ export class AuthService {
             soDienThoai: dto.phoneNumber,
             matKhau: hashedPassword,
             email: normalizeEmail(dto.email),
+            loaiTaiKhoan: 'KHACH_HANG',
             daXacThucSoDienThoai: true,
             trangThai: 'HOAT_DONG',
           },
@@ -135,6 +147,14 @@ export class AuthService {
       identifier = `+${identifier}`;
     }
     const isPhoneNumber = /^\+84\d{9}$/.test(identifier);
+
+    if (dto.accountType === 'KHACH_HANG' && !isPhoneNumber) {
+      throw new BadRequestException({
+        error: 'VALIDATION_ERROR',
+        message: 'Tài khoản khách hàng chỉ hỗ trợ đăng nhập bằng số điện thoại.',
+      });
+    }
+
     const operatorAliases: Record<string, string> = {
       'futa@vexgo.test': 'admin.futa@vexgo.test',
       'tb@vexgo.test': 'admin.tb@vexgo.test',
@@ -143,8 +163,18 @@ export class AuthService {
     const lookupEmail =
       operatorAliases[identifier.toLowerCase()] ?? identifier.toLowerCase();
     const where = isPhoneNumber
-      ? { soDienThoai: identifier }
-      : { email: lookupEmail };
+      ? {
+          soDienThoai_loaiTaiKhoan: {
+            soDienThoai: identifier,
+            loaiTaiKhoan: dto.accountType,
+          },
+        }
+      : {
+          email_loaiTaiKhoan: {
+            email: lookupEmail,
+            loaiTaiKhoan: dto.accountType,
+          },
+        };
     const account = await this.prisma.taiKhoan.findUnique({
       where,
       include: {
@@ -165,6 +195,24 @@ export class AuthService {
         message: 'Thông tin đăng nhập không chính xác.',
       });
     }
+
+    const roles = account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro);
+    if (dto.accountType === 'KHACH_HANG') {
+      if (!roles.includes('KHACH_HANG') || roles.some((r) => r !== 'KHACH_HANG')) {
+        throw new UnauthorizedException({
+          error: 'INVALID_CREDENTIALS',
+          message: 'Thông tin đăng nhập không chính xác.',
+        });
+      }
+    } else if (dto.accountType === 'QUAN_TRI') {
+      if (roles.includes('KHACH_HANG')) {
+        throw new UnauthorizedException({
+          error: 'INVALID_CREDENTIALS',
+          message: 'Thông tin đăng nhập không chính xác.',
+        });
+      }
+    }
+
     await assertAccountActive(this.prisma, account);
 
     return this.prisma.$transaction((tx) =>
@@ -173,7 +221,7 @@ export class AuthService {
         customerId: account.khachHang?.khachHangId ?? null,
         fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? '',
         phoneNumber: account.soDienThoai,
-        roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
+        roles,
       }),
     );
   }
@@ -272,10 +320,17 @@ export class AuthService {
     accountId: number,
     oldPassword: string,
     newPassword: string,
+    currentSessionId?: string,
   ): Promise<{ message: string }> {
     const account = await this.prisma.taiKhoan.findUnique({
       where: { taiKhoanId: accountId },
-      select: { taiKhoanId: true, matKhau: true, trangThai: true },
+      select: {
+        taiKhoanId: true,
+        matKhau: true,
+        trangThai: true,
+        khoaDenNgay: true,
+        lyDoKhoa: true,
+      },
     });
 
     if (!account) {
@@ -285,12 +340,7 @@ export class AuthService {
       });
     }
 
-    if (account.trangThai !== 'HOAT_DONG') {
-      throw new ForbiddenException({
-        error: 'ACCOUNT_INACTIVE',
-        message: 'Tài khoản không hoạt động.',
-      });
-    }
+    await assertAccountActive(this.prisma, account);
 
     const isMatch = await bcrypt.compare(
       oldPassword,
@@ -313,13 +363,118 @@ export class AuthService {
     }
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    const now = new Date();
 
-    await this.prisma.taiKhoan.update({
-      where: { taiKhoanId: accountId },
-      data: { matKhau: hashedNewPassword },
+    const otherSessions = await this.prisma.$transaction(async (tx) => {
+      await tx.taiKhoan.update({
+        where: { taiKhoanId: accountId },
+        data: { matKhau: hashedNewPassword },
+      });
+
+      const sessionsToRevoke =
+        (await tx.phienDangNhap.findMany({
+          where: {
+            taiKhoanId: accountId,
+            thuHoiLuc: null,
+            ...(currentSessionId
+              ? { sessionId: { not: currentSessionId } }
+              : {}),
+          },
+          select: { sessionId: true },
+        })) ?? [];
+
+      if (sessionsToRevoke.length > 0) {
+        await tx.phienDangNhap.updateMany({
+          where: {
+            taiKhoanId: accountId,
+            thuHoiLuc: null,
+            ...(currentSessionId
+              ? { sessionId: { not: currentSessionId } }
+              : {}),
+          },
+          data: { thuHoiLuc: now },
+        });
+      }
+
+      return sessionsToRevoke;
     });
 
+    for (const session of otherSessions ?? []) {
+      this.sessionInvalidator?.invalidateSession(session.sessionId);
+    }
+
     return { message: 'Đổi mật khẩu thành công.' };
+  }
+
+  async resetForgotPassword(
+    dto: ResetForgotPasswordDto,
+  ): Promise<{ message: string }> {
+    const hashedNewPassword = await bcrypt.hash(dto.newPassword, 10);
+    const usedAt = new Date();
+
+    const revokedSessions = await this.prisma.$transaction(async (tx) => {
+      await this.otpService.consumeForgotPasswordProof(tx, {
+        soDienThoai: dto.phoneNumber,
+        otpProof: dto.otpProof,
+        usedAt,
+      });
+
+      const account = await tx.taiKhoan.findUnique({
+        where: {
+          soDienThoai_loaiTaiKhoan: {
+            soDienThoai: dto.phoneNumber,
+            loaiTaiKhoan: 'KHACH_HANG',
+          },
+        },
+        select: {
+          taiKhoanId: true,
+          trangThai: true,
+          khoaDenNgay: true,
+          lyDoKhoa: true,
+        },
+      });
+
+      if (!account) {
+        throw new NotFoundException({
+          error: 'PHONE_NOT_REGISTERED',
+          message: 'Số điện thoại chưa được đăng ký tài khoản.',
+        });
+      }
+
+      await assertAccountActive(tx, account);
+
+      await tx.taiKhoan.update({
+        where: { taiKhoanId: account.taiKhoanId },
+        data: { matKhau: hashedNewPassword },
+      });
+
+      const activeSessions =
+        (await tx.phienDangNhap.findMany({
+          where: {
+            taiKhoanId: account.taiKhoanId,
+            thuHoiLuc: null,
+          },
+          select: { sessionId: true },
+        })) ?? [];
+
+      if (activeSessions.length > 0) {
+        await tx.phienDangNhap.updateMany({
+          where: {
+            taiKhoanId: account.taiKhoanId,
+            thuHoiLuc: null,
+          },
+          data: { thuHoiLuc: usedAt },
+        });
+      }
+
+      return activeSessions;
+    });
+
+    for (const session of revokedSessions ?? []) {
+      this.sessionInvalidator?.invalidateSession(session.sessionId);
+    }
+
+    return { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' };
   }
 }
 

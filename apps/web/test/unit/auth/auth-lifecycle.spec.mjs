@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runWithAuthRetry } from '../../../src/features/auth/services/auth-retry.ts';
+import { authApi } from '../../../src/features/auth/services/auth.api.ts';
 import { ApiError } from '../../../src/features/account/services/customer.api.ts';
 
 test('runWithAuthRetry executes action with valid access token on happy path', async () => {
@@ -299,4 +300,73 @@ test('runWithAuthRetry signs out immediately and does not retry on 403 ACCOUNT_S
   assert.equal(callCount, 1);
   assert.equal(refreshCalled, false, 'must not attempt refresh when account is suspended');
   assert.equal(failedCalled, true, 'must sign out immediately when account is suspended');
+});
+
+test('authApi.login sends accountType: KHACH_HANG and formatted phoneNumber', async () => {
+  const originalFetch = globalThis.fetch;
+  let requestUrl = '';
+  let requestBody = null;
+
+  globalThis.fetch = async (url, init) => {
+    requestUrl = String(url);
+    requestBody = JSON.parse(String(init.body));
+    return {
+      ok: true,
+      json: async () => ({ data: { accessToken: 'test-token' } }),
+    };
+  };
+
+  try {
+    const result = await authApi.login('0901234567', 'Password@123');
+    assert.match(requestUrl, /\/auth\/login$/);
+    assert.deepEqual(requestBody, {
+      phoneNumber: '+84901234567',
+      password: 'Password@123',
+      accountType: 'KHACH_HANG',
+    });
+    assert.equal(result.data.accessToken, 'test-token');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('authApi forgot-password methods call respective endpoints and format phone', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), body: JSON.parse(String(init.body)) });
+    return {
+      ok: true,
+      json: async () => ({ data: { success: true } }),
+    };
+  };
+
+  try {
+    await authApi.requestForgotPasswordOtp('0901234567');
+    assert.match(calls[0].url, /\/auth\/forgot-password\/request-otp$/);
+    assert.deepEqual(calls[0].body, { phoneNumber: '+84901234567' });
+
+    await authApi.verifyForgotPasswordOtp('0901234567', 'ch-123', '123456');
+    assert.match(calls[1].url, /\/auth\/forgot-password\/verify-otp$/);
+    assert.deepEqual(calls[1].body, {
+      phoneNumber: '+84901234567',
+      challengeId: 'ch-123',
+      otp: '123456',
+    });
+
+    await authApi.resetForgotPassword({
+      phoneNumber: '0901234567',
+      otpProof: 'proof-token',
+      newPassword: 'NewPassword@123',
+    });
+    assert.match(calls[2].url, /\/auth\/forgot-password\/reset$/);
+    assert.deepEqual(calls[2].body, {
+      phoneNumber: '+84901234567',
+      otpProof: 'proof-token',
+      newPassword: 'NewPassword@123',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

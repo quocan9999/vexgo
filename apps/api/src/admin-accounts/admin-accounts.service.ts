@@ -85,6 +85,7 @@ function managedAdminAccountWhere(
 ): Prisma.TaiKhoanWhereInput {
   return {
     ...(taiKhoanId === undefined ? {} : { taiKhoanId }),
+    loaiTaiKhoan: 'QUAN_TRI',
     nhanVien: { isNot: null },
     taiKhoanVaiTros: {
       every: {
@@ -350,7 +351,12 @@ export class AdminAccountsService {
           select: { vaiTroId: true, tenVaiTro: true },
         }),
         tx.taiKhoan.findUnique({
-          where: { soDienThoai: input.phoneNumber },
+          where: {
+            soDienThoai_loaiTaiKhoan: {
+              soDienThoai: input.phoneNumber,
+              loaiTaiKhoan: 'QUAN_TRI',
+            },
+          },
           select: { taiKhoanId: true },
         }),
       ]);
@@ -371,6 +377,7 @@ export class AdminAccountsService {
             soDienThoai: input.phoneNumber,
             matKhau: passwordHash,
             email: normalizeEmail(input.email),
+            loaiTaiKhoan: 'QUAN_TRI',
             daXacThucSoDienThoai: true,
             trangThai: 'HOAT_DONG',
           },
