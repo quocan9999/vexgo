@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -16,9 +17,11 @@ import {
   DEFAULT_OTP_TTL_SECONDS,
   MAX_OTP_ATTEMPTS,
   REGISTRATION_OTP_PURPOSE,
+  FORGOT_PASSWORD_OTP_PURPOSE,
 } from './otp.constants.js';
 import { OtpCryptoService } from './otp-crypto.service.js';
 import { SMS_SENDER, type SmsSender } from '../sms/sms-sender.js';
+import { assertAccountActive } from '../account-status.helper.js';
 
 export interface RegistrationOtpChallenge {
   challengeId: string;
@@ -67,6 +70,19 @@ export class OtpService {
   async verifyRegistrationOtp(
     input: VerifyRegistrationOtpInput,
   ): Promise<RegistrationOtpProof> {
+    return this.verifyOtpByPurpose(input, REGISTRATION_OTP_PURPOSE);
+  }
+
+  async verifyForgotPasswordOtp(
+    input: VerifyRegistrationOtpInput,
+  ): Promise<RegistrationOtpProof> {
+    return this.verifyOtpByPurpose(input, FORGOT_PASSWORD_OTP_PURPOSE);
+  }
+
+  private async verifyOtpByPurpose(
+    input: VerifyRegistrationOtpInput,
+    mucDich: string,
+  ): Promise<RegistrationOtpProof> {
     const challenge = await this.prisma.yeuCauOtp.findUnique({
       where: { challengeId: input.challengeId },
     });
@@ -75,7 +91,7 @@ export class OtpService {
     if (
       !challenge ||
       challenge.soDienThoai !== input.soDienThoai ||
-      challenge.mucDich !== REGISTRATION_OTP_PURPOSE ||
+      challenge.mucDich !== mucDich ||
       challenge.daXacThucLuc !== null
     ) {
       this.throwOtpInvalid();
@@ -143,10 +159,25 @@ export class OtpService {
     tx: Prisma.TransactionClient,
     input: { soDienThoai: string; otpProof: string; usedAt: Date },
   ): Promise<void> {
+    return this.consumeProofByPurpose(tx, input, REGISTRATION_OTP_PURPOSE);
+  }
+
+  async consumeForgotPasswordProof(
+    tx: Prisma.TransactionClient,
+    input: { soDienThoai: string; otpProof: string; usedAt: Date },
+  ): Promise<void> {
+    return this.consumeProofByPurpose(tx, input, FORGOT_PASSWORD_OTP_PURPOSE);
+  }
+
+  private async consumeProofByPurpose(
+    tx: Prisma.TransactionClient,
+    input: { soDienThoai: string; otpProof: string; usedAt: Date },
+    mucDich: string,
+  ): Promise<void> {
     const claimed = await tx.yeuCauOtp.updateMany({
       where: {
         soDienThoai: input.soDienThoai,
-        mucDich: REGISTRATION_OTP_PURPOSE,
+        mucDich,
         proofHash: this.hashProof(input.otpProof),
         daXacThucLuc: { not: null },
         proofHetHanLuc: { gt: input.usedAt },
@@ -166,7 +197,12 @@ export class OtpService {
     soDienThoai: string,
   ): Promise<RegistrationOtpChallenge> {
     const account = await this.prisma.taiKhoan.findUnique({
-      where: { soDienThoai },
+      where: {
+        soDienThoai_loaiTaiKhoan: {
+          soDienThoai,
+          loaiTaiKhoan: 'KHACH_HANG',
+        },
+      },
       select: { taiKhoanId: true },
     });
     if (account) {
@@ -176,6 +212,43 @@ export class OtpService {
       });
     }
 
+    return this.createAndSendOtpChallenge(soDienThoai, REGISTRATION_OTP_PURPOSE);
+  }
+
+  async requestForgotPasswordOtp(
+    soDienThoai: string,
+  ): Promise<RegistrationOtpChallenge> {
+    const account = await this.prisma.taiKhoan.findUnique({
+      where: {
+        soDienThoai_loaiTaiKhoan: {
+          soDienThoai,
+          loaiTaiKhoan: 'KHACH_HANG',
+        },
+      },
+      select: {
+        taiKhoanId: true,
+        trangThai: true,
+        khoaDenNgay: true,
+        lyDoKhoa: true,
+      },
+    });
+    if (!account) {
+      throw new NotFoundException({
+        error: 'PHONE_NOT_REGISTERED',
+        message: 'Số điện thoại chưa được đăng ký tài khoản.',
+      });
+    }
+
+    await assertAccountActive(this.prisma, account);
+
+    return this.createAndSendOtpChallenge(soDienThoai, FORGOT_PASSWORD_OTP_PURPOSE);
+  }
+
+  private async createAndSendOtpChallenge(
+    soDienThoai: string,
+    mucDich: string,
+  ): Promise<RegistrationOtpChallenge> {
+
     const now = new Date();
     const cooldownCutoff = new Date(
       now.getTime() - this.resendCooldownSeconds * 1000,
@@ -184,7 +257,7 @@ export class OtpService {
       where: {
         soDienThoai_mucDich: {
           soDienThoai,
-          mucDich: REGISTRATION_OTP_PURPOSE,
+          mucDich,
         },
       },
     });
@@ -227,7 +300,7 @@ export class OtpService {
           data: {
             ...challengeData,
             soDienThoai,
-            mucDich: REGISTRATION_OTP_PURPOSE,
+            mucDich,
           },
         });
       }

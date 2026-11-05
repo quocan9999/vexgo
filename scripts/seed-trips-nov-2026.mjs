@@ -56,10 +56,8 @@ async function prepareRouteTemplates() {
         diaDiemCuId: dalatBase?.diaDiemCuId ?? null,
         diaDiemMoiId: dalatBase?.diaDiemMoiId ?? null,
         trangThai: 'HOAT_DONG',
-        nhaXe: { connect: { nhaXeId: 2 } },
-        ...(dalatBase?.diemDonTraId
-          ? { benTrungChuyen: { connect: { diemDonTraId: dalatBase.diemDonTraId } } }
-          : {}),
+        nhaXeId: 2,
+        benTrungChuyenId: dalatBase?.diemDonTraId ?? null,
       },
     });
     console.log(`+ Đã tạo điểm trung chuyển Thành Bưởi: ${tbTransferPoint.tenDiem} (ID: ${tbTransferPoint.diemDonTraId})`);
@@ -274,19 +272,48 @@ async function seedTrips() {
       if (opVehicles.length === 0) continue;
       const vehicle = opVehicles[(day + i) % opVehicles.length];
 
+      const departureTime = new Date(`1970-01-01T${schedule.time}:00.000Z`);
+      const arrivalTime = calculateClockTime(departureTime, schedule.duration);
       const maChuyenXe = deterministicUuid('CX', schedule.nhaXeId, schedule.routeId, dateStr, schedule.time);
 
-      const existing = await prisma.chuyenXe.findUnique({
-        where: { maChuyenXe },
-        select: { chuyenXeId: true },
+      const existing = await prisma.chuyenXe.findFirst({
+        where: {
+          OR: [
+            { maChuyenXe },
+            {
+              tuyenXeId: schedule.routeId,
+              ngayKhoiHanh: departureDate,
+              gioKhoiHanh: departureTime,
+            },
+          ],
+        },
+        select: {
+          chuyenXeId: true,
+          _count: { select: { diemDonTraChuyenXes: true } },
+        },
       });
       if (existing) {
+        if (existing._count.diemDonTraChuyenXes === 0 && route.tuyenXeDiemDungs.length > 0) {
+          await prisma.diemDonTraChuyenXe.createMany({
+            data: route.tuyenXeDiemDungs.map((stop) => ({
+              chuyenXeId: existing.chuyenXeId,
+              diemDonTraId: stop.diemDonTraId,
+              loaiDiem: stop.loaiDiem,
+              thoiGianDuKien: calculateClockTime(departureTime, stop.phutLech),
+              phutLech: stop.phutLech,
+              thuTu: stop.thuTu,
+              phuPhi: stop.phuPhi,
+              phutCoMatTruoc: stop.phutCoMatTruoc,
+              nhanKhach: stop.nhanKhach,
+              ghiChu: stop.ghiChu,
+            })),
+            skipDuplicates: true,
+          });
+          addedTripStops += route.tuyenXeDiemDungs.length;
+        }
         skippedTrips++;
         continue;
       }
-
-      const departureTime = new Date(`1970-01-01T${schedule.time}:00.000Z`);
-      const arrivalTime = calculateClockTime(departureTime, schedule.duration);
 
       const createdTrip = await prisma.chuyenXe.create({
         data: {

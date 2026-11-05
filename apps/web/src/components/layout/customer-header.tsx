@@ -21,7 +21,6 @@ import {
   Ticket,
 } from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
-import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
 import { getLatestActivePaymentDraft } from '@/features/booking/services/payment-draft';
 
@@ -273,7 +272,6 @@ export const CustomerHeader: React.FC = () => {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [dismissedDraftId, setDismissedDraftId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(0);
   const userDropdownRef = useRef<HTMLDivElement>(null);
@@ -458,7 +456,8 @@ export const CustomerHeader: React.FC = () => {
                       onClick={(e) => {
                         e.stopPropagation();
                         setUserDropdownOpen(false);
-                        setLogoutModalOpen(true);
+                        signOut();
+                        router.push('/');
                       }}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors group w-full text-left"
                     >
@@ -601,21 +600,6 @@ export const CustomerHeader: React.FC = () => {
           </div>
         );
       })()}
-
-      <ConfirmModal
-        isOpen={logoutModalOpen}
-        title="Đăng xuất"
-        message="Bạn có chắc chắn muốn đăng xuất?"
-        confirmText="Xác nhận"
-        cancelText="Hủy"
-        variant="danger"
-        onConfirm={() => {
-          signOut();
-          setLogoutModalOpen(false);
-          router.push('/');
-        }}
-        onClose={() => setLogoutModalOpen(false)}
-      />
     </header>
   );
 };

@@ -5,6 +5,7 @@ import {
   ValidatorConstraintInterface,
   Validate,
   IsEmail,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -42,14 +43,20 @@ class ExactlyOneLoginIdentifierConstraint
 class LoginIdentifierFormatConstraint
   implements ValidatorConstraintInterface
 {
-  validate(value: unknown): boolean {
-    return (
-      typeof value === 'string' &&
-      (LOGIN_PHONE_PATTERN.test(value) || isEmail(value))
-    );
+  validate(value: unknown, args: ValidationArguments): boolean {
+    if (typeof value !== 'string') return false;
+    const dto = args.object as LoginDto;
+    if (dto.accountType === 'KHACH_HANG') {
+      return LOGIN_PHONE_PATTERN.test(value);
+    }
+    return LOGIN_PHONE_PATTERN.test(value) || isEmail(value);
   }
 
-  defaultMessage(): string {
+  defaultMessage(args: ValidationArguments): string {
+    const dto = args.object as LoginDto;
+    if (dto.accountType === 'KHACH_HANG') {
+      return 'Số điện thoại không hợp lệ.';
+    }
     return 'Email hoặc số điện thoại không hợp lệ.';
   }
 }
@@ -72,7 +79,7 @@ export class RegisterDto {
   phoneNumber!: string;
 
   @ApiProperty({
-    description: 'Mật khẩu bảo mật của tài khoản (tối thiểu 6 ký tự, tối đa 72 bytes)',
+    description: 'Mật khẩu bảo mật của tài khoản (tối thiểu 8 ký tự, tối đa 72 bytes UTF-8)',
     example: 'MatKhau@123',
   })
   @IsString()
@@ -118,6 +125,16 @@ export class RegisterDto {
 }
 
 export class LoginDto {
+  @ApiProperty({
+    description: 'Loại tài khoản đăng nhập (KHACH_HANG cho Customer Web, QUAN_TRI cho Admin Web)',
+    enum: ['KHACH_HANG', 'QUAN_TRI'],
+    example: 'KHACH_HANG',
+  })
+  @IsIn(['KHACH_HANG', 'QUAN_TRI'], {
+    message: 'Loại tài khoản không hợp lệ (phải là KHACH_HANG hoặc QUAN_TRI).',
+  })
+  accountType!: 'KHACH_HANG' | 'QUAN_TRI';
+
   @ApiPropertyOptional({
     description: 'Email hoặc số điện thoại định danh để đăng nhập (áp dụng cho tài khoản Admin/Nhân viên)',
     example: 'admin@vexgo.vn',

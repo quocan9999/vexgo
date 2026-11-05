@@ -75,8 +75,20 @@ describe('AuthService login', () => {
       service.login({
         phoneNumber: customerAccount.soDienThoai,
         password: 'VexGo@123',
+        accountType: 'KHACH_HANG',
       }),
     ).resolves.toEqual(authResponse);
+
+    expect(prisma.taiKhoan.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          soDienThoai_loaiTaiKhoan: {
+            soDienThoai: customerAccount.soDienThoai,
+            loaiTaiKhoan: 'KHACH_HANG',
+          },
+        },
+      }),
+    );
 
     expect(tokenService.createSession).toHaveBeenCalledWith(tx, {
       accountId: 42,
@@ -99,10 +111,18 @@ describe('AuthService login', () => {
     await service.login({
       identifier: '  ADMIN@EXAMPLE.COM ',
       password: 'VexGo@123',
+      accountType: 'QUAN_TRI',
     });
 
     expect(prisma.taiKhoan.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { email: 'admin@example.com' } }),
+      expect.objectContaining({
+        where: {
+          email_loaiTaiKhoan: {
+            email: 'admin@example.com',
+            loaiTaiKhoan: 'QUAN_TRI',
+          },
+        },
+      }),
     );
     expect(tokenService.createSession).toHaveBeenCalledWith(
       tx,
@@ -128,6 +148,7 @@ describe('AuthService login', () => {
       const login = service.login({
         phoneNumber: customerAccount.soDienThoai,
         password,
+        accountType: 'KHACH_HANG',
       });
       await expect(login).rejects.toBeInstanceOf(UnauthorizedException);
       await expect(login).rejects.toMatchObject({
@@ -147,6 +168,7 @@ describe('AuthService login', () => {
     const login = service.login({
       phoneNumber: customerAccount.soDienThoai,
       password: 'VexGo@123',
+      accountType: 'KHACH_HANG',
     });
     await expect(login).rejects.toBeInstanceOf(ForbiddenException);
     await expect(login).rejects.toMatchObject({
@@ -165,7 +187,19 @@ describe('AuthService login', () => {
     await service.login({
       phoneNumber: customerAccount.soDienThoai,
       password: 'VexGo@123',
+      accountType: 'QUAN_TRI',
     });
+
+    expect(prisma.taiKhoan.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          soDienThoai_loaiTaiKhoan: {
+            soDienThoai: customerAccount.soDienThoai,
+            loaiTaiKhoan: 'QUAN_TRI',
+          },
+        },
+      }),
+    );
 
     expect(tokenService.createSession).toHaveBeenCalledWith(
       tx,
@@ -174,6 +208,43 @@ describe('AuthService login', () => {
         roles: ['SUPER_ADMIN'],
       }),
     );
+  });
+
+  it('rejects cross-portal role mismatch with INVALID_CREDENTIALS', async () => {
+    // Admin role trying to login as KHACH_HANG
+    prisma.taiKhoan.findUnique.mockResolvedValueOnce({
+      ...customerAccount,
+      matKhau: passwordHash,
+      khachHang: null,
+      taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'SUPER_ADMIN' } }],
+    });
+
+    await expect(
+      service.login({
+        phoneNumber: customerAccount.soDienThoai,
+        password: 'VexGo@123',
+        accountType: 'KHACH_HANG',
+      }),
+    ).rejects.toMatchObject({
+      response: { error: 'INVALID_CREDENTIALS' },
+    });
+
+    // Customer role trying to login as QUAN_TRI
+    prisma.taiKhoan.findUnique.mockResolvedValueOnce({
+      ...customerAccount,
+      matKhau: passwordHash,
+      taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'KHACH_HANG' } }],
+    });
+
+    await expect(
+      service.login({
+        phoneNumber: customerAccount.soDienThoai,
+        password: 'VexGo@123',
+        accountType: 'QUAN_TRI',
+      }),
+    ).rejects.toMatchObject({
+      response: { error: 'INVALID_CREDENTIALS' },
+    });
   });
 
   it('returns only platform permissions for a SUPER_ADMIN current session', async () => {

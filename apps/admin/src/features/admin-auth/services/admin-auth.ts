@@ -479,7 +479,11 @@ export async function signInAdmin(
         'Content-Type': 'application/json',
         [REFRESH_TRANSPORT_HEADER]: REFRESH_TRANSPORT_VALUE,
       },
-      body: JSON.stringify({ identifier: normalizedIdentifier, password }),
+      body: JSON.stringify({
+        identifier: normalizedIdentifier,
+        password,
+        accountType: 'QUAN_TRI',
+      }),
       cache: 'no-store',
     });
     if (!response.ok) throw await makeAuthError(response);

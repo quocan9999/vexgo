@@ -174,7 +174,7 @@ export class SupportChatService {
       },
     });
 
-    if (!taiKhoan || taiKhoan.nhanVien !== null) {
+    if (!taiKhoan || taiKhoan.nhanVien !== null || taiKhoan.loaiTaiKhoan === 'QUAN_TRI') {
       throw new ForbiddenException({
         error: 'CUSTOMER_ROLE_REQUIRED',
         message: 'Tài khoản nhân viên không được phép tạo bản ghi khách hàng.',

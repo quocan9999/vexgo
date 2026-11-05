@@ -1,9 +1,20 @@
+import { Suspense } from 'react';
 import { AuthPageShell } from '@/features/auth/components/auth-page-shell';
 import { RegisterForm } from '@/features/auth/components/register-form';
 import { Bus } from 'lucide-react';
 import Link from 'next/link';
 
-export default function RegisterPage() {
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ next?: string; redirect?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const nextTarget = resolvedParams.next || resolvedParams.redirect;
+  const loginHref = nextTarget
+    ? `/login?next=${encodeURIComponent(nextTarget)}`
+    : '/login';
+
   return (
     <AuthPageShell>
       <div className="mb-10 flex flex-col items-center">
@@ -21,10 +32,14 @@ export default function RegisterPage() {
           Trải nghiệm đặt vé xe khách tiện lợi và nhanh chóng
         </p>
       </div>
-      <RegisterForm />
+
+      <Suspense fallback={<div className="p-8 text-center text-slate-400">Đang tải...</div>}>
+        <RegisterForm />
+      </Suspense>
+
       <p className="mt-8 text-center text-sm text-slate-600">
         Đã có tài khoản?{' '}
-        <Link href="/login" className="font-semibold text-[#E50012] hover:text-red-800 transition-colors underline underline-offset-4 decoration-2 decoration-red-200 hover:decoration-[#E50012]">
+        <Link href={loginHref} className="font-semibold text-[#E50012] hover:text-red-800 transition-colors underline underline-offset-4 decoration-2 decoration-red-200 hover:decoration-[#E50012]">
           Đăng nhập ngay
         </Link>
       </p>

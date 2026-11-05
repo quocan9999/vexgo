@@ -1,5 +1,10 @@
 import { ConfigService } from '@nestjs/config';
-import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { OtpCryptoService } from '../../../src/auth/otp/otp-crypto.service.js';
@@ -177,6 +182,16 @@ describe('OtpService requestRegistrationOtp', () => {
     await expect(
       service.requestRegistrationOtp('+84901234567'),
     ).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaMock.taiKhoan.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          soDienThoai_loaiTaiKhoan: {
+            soDienThoai: '+84901234567',
+            loaiTaiKhoan: 'KHACH_HANG',
+          },
+        },
+      }),
+    );
     expect(sentMessages).toEqual([]);
   });
 
@@ -223,5 +238,81 @@ describe('OtpService requestRegistrationOtp', () => {
       1,
     );
     expect(sentMessages).toHaveLength(1);
+  });
+});
+
+describe('OtpService forgot password OTP', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.clearAllMocks();
+    sentMessages.length = 0;
+    prismaMock.taiKhoan.findUnique.mockResolvedValue({
+      taiKhoanId: 10,
+      soDienThoai: '+84901234567',
+      loaiTaiKhoan: 'KHACH_HANG',
+      trangThai: 'HOAT_DONG',
+      khoaDenNgay: null,
+      lyDoKhoa: null,
+    });
+    prismaMock.yeuCauOtp.findUnique.mockResolvedValue(null);
+    prismaMock.yeuCauOtp.create.mockImplementation(async ({ data }) => ({
+      yeuCauOtpId: 1,
+      ...data,
+    }));
+    prismaMock.yeuCauOtp.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('rejects with 404 PHONE_NOT_REGISTERED when KHACH_HANG account is not found', async () => {
+    prismaMock.taiKhoan.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.requestForgotPasswordOtp('+84901234567'),
+    ).rejects.toMatchObject({
+      response: { error: 'PHONE_NOT_REGISTERED' },
+    });
+    expect(prismaMock.taiKhoan.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          soDienThoai_loaiTaiKhoan: {
+            soDienThoai: '+84901234567',
+            loaiTaiKhoan: 'KHACH_HANG',
+          },
+        },
+      }),
+    );
+    expect(sentMessages).toEqual([]);
+  });
+
+  it('rejects with 403 ACCOUNT_SUSPENDED when KHACH_HANG account is inactive', async () => {
+    prismaMock.taiKhoan.findUnique.mockResolvedValue({
+      taiKhoanId: 10,
+      soDienThoai: '+84901234567',
+      loaiTaiKhoan: 'KHACH_HANG',
+      trangThai: 'TAM_KHOA',
+      khoaDenNgay: null,
+      lyDoKhoa: 'Vi phạm',
+    });
+
+    await expect(
+      service.requestForgotPasswordOtp('+84901234567'),
+    ).rejects.toMatchObject({
+      response: { error: 'ACCOUNT_SUSPENDED' },
+    });
+    expect(sentMessages).toEqual([]);
+  });
+
+  it('creates challenge with QUEN_MAT_KHAU purpose and sends OTP for active customer', async () => {
+    const result = await service.requestForgotPasswordOtp('+84901234567');
+
+    expect(result).toMatchObject({
+      challengeId: expect.any(String),
+      expiresAt: '2026-09-28T00:05:00.000Z',
+      resendAfter: '2026-09-28T00:01:00.000Z',
+    });
+    expect(sentMessages).toHaveLength(1);
+    const createCall = prismaMock.yeuCauOtp.create.mock.calls[0][0];
+    expect(createCall.data.mucDich).toBe('QUEN_MAT_KHAU');
+    expect(createCall.data.soDienThoai).toBe('+84901234567');
   });
 });

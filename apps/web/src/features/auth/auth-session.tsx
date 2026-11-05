@@ -13,6 +13,7 @@ import {
   clearStoredAuth,
   readStoredAuth,
   writeStoredAuth,
+  AUTH_STORAGE_KEY,
   type AuthState,
   type AuthUser,
 } from './auth-session-state';
@@ -116,8 +117,23 @@ export function AuthSessionProvider({
     queueMicrotask(() => {
       if (active) updateState(readStoredAuth(window.localStorage));
     });
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === AUTH_STORAGE_KEY || event.key === null) {
+        invalidatePending();
+        updateState(readStoredAuth(window.localStorage));
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+    }
+
     return () => {
       active = false;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageChange);
+      }
       invalidatePending();
     };
   }, [updateState, invalidatePending]);

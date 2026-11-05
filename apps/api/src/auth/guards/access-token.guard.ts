@@ -90,6 +90,7 @@ export class AccessTokenGuard implements CanActivate {
         taiKhoan: {
           select: {
             taiKhoanId: true,
+            loaiTaiKhoan: true,
             trangThai: true,
             khoaDenNgay: true,
             lyDoKhoa: true,
@@ -127,14 +128,12 @@ export class AccessTokenGuard implements CanActivate {
 
     const roleAssignments = session.taiKhoan.taiKhoanVaiTros;
     const roles = roleAssignments.map(({ vaiTro }) => vaiTro.tenVaiTro);
-    const isTenantEmployee = Boolean(
-      session.taiKhoan.nhanVien?.nhaXeId && !roles.includes('SUPER_ADMIN'),
-    );
-    const nhanVienId = isTenantEmployee
-      ? (session.taiKhoan.nhanVien?.nhanVienId ?? null)
+    const isTenantStaff = session.taiKhoan.nhanVien?.nhaXeId != null;
+    const nhanVienId = isTenantStaff
+      ? session.taiKhoan.nhanVien?.nhanVienId ?? null
       : null;
-    const nhaXeId = isTenantEmployee
-      ? (session.taiKhoan.nhanVien?.nhaXeId ?? null)
+    const nhaXeId = isTenantStaff
+      ? session.taiKhoan.nhanVien?.nhaXeId ?? null
       : null;
     const effectiveAssignments = await this.permissionLoader.load(
       roleAssignments.map(({ vaiTro }) => ({
@@ -153,6 +152,7 @@ export class AccessTokenGuard implements CanActivate {
       }),
       nhanVienId,
       nhaXeId,
+      loaiTaiKhoan: session.taiKhoan.loaiTaiKhoan,
     };
     return true;
   }

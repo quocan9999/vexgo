@@ -137,7 +137,7 @@ export class CustomersService {
       });
     }
     const roles = account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro);
-    if (!roles.includes('KHACH_HANG')) {
+    if (account.loaiTaiKhoan !== 'KHACH_HANG' || !roles.includes('KHACH_HANG')) {
       throw new ForbiddenException({
         error: 'CUSTOMER_ROLE_REQUIRED',
         message: 'Tài khoản không có quyền khách hàng.',
