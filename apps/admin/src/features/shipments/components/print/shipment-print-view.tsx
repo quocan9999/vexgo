@@ -29,9 +29,6 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
     let active = true;
     const controller = new AbortController();
 
-    setLoading(true);
-    setError(null);
-
     getShipmentById(shipmentId, controller.signal)
       .then((data) => {
         if (active) {
@@ -39,9 +36,9 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
           setLoading(false);
         }
       })
-      .catch((err: any) => {
-        if (active && err.name !== 'AbortError') {
-          setError(err.message || 'Không thể tải thông tin phiếu gửi hàng.');
+      .catch((err: unknown) => {
+        if (active && (err as Error)?.name !== 'AbortError') {
+          setError((err as Error)?.message || 'Không thể tải thông tin phiếu gửi hàng.');
           setLoading(false);
         }
       });

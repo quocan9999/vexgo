@@ -233,6 +233,10 @@ function isValidCargoItem(item: ILuggageItem): boolean {
   );
 }
 
+function generateRoundTripComboCode() {
+  return `RT${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+}
+
 export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   outboundPost,
   returnPost,
@@ -1120,7 +1124,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
       activeHoldsRef.current.bookingStarted = true;
 
-      const roundTripComboCode = `RT${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const roundTripComboCode = generateRoundTripComboCode();
 
       const outboundPayload: CreateBookingPayload = {
         tripId: outboundTripId,

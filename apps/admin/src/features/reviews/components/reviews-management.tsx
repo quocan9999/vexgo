@@ -22,7 +22,6 @@ import {
   ResourceTableSkeleton,
 } from '@/components/admin/resource-ui';
 import {
-  FilterToolbar,
   SearchInput,
   SelectFilter,
   type FilterOption,
@@ -39,7 +38,7 @@ import {
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useReviews } from '../hooks/use-reviews';
-import type { AdminReviewItem, AdminReviewSortKey } from '../types/review';
+import type { AdminReviewSortKey, ReviewStatus } from '../types/review';
 import { ReviewStatsCards } from './review-stats-cards';
 
 const RATING_OPTIONS: FilterOption[] = [
@@ -126,7 +125,6 @@ export function ReviewsManagement() {
     setTimeRangeFilter,
     routeOptions,
     busCompanyOptions,
-    page,
     setPage,
     sortBy,
     sortDirection,
@@ -260,7 +258,13 @@ export function ReviewsManagement() {
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
                   allLabel="Tất cả nhận xét"
                   label="Nội dung nhận xét"
-                  onChange={(val) => setHasCommentFilter(val ? (val as any) : undefined)}
+                  onChange={(val) =>
+                    setHasCommentFilter(
+                      val
+                        ? (val as 'ALL' | 'WITH_COMMENT' | 'WITHOUT_COMMENT')
+                        : undefined,
+                    )
+                  }
                   options={COMMENT_OPTIONS}
                   value={hasCommentFilter ?? ''}
                 />
@@ -269,7 +273,13 @@ export function ReviewsManagement() {
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
                   allLabel="Tất cả thời gian"
                   label="Thời gian gửi"
-                  onChange={(val) => setTimeRangeFilter(val ? (val as any) : undefined)}
+                  onChange={(val) =>
+                    setTimeRangeFilter(
+                      val
+                        ? (val as 'ALL' | '7_DAYS' | '30_DAYS' | 'THIS_MONTH')
+                        : undefined,
+                    )
+                  }
                   options={TIME_RANGE_OPTIONS}
                   value={timeRangeFilter ?? ''}
                 />
@@ -278,7 +288,9 @@ export function ReviewsManagement() {
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
                   allLabel="Tất cả trạng thái"
                   label="Trạng thái kiểm duyệt"
-                  onChange={(val) => setStatusFilter(val ? (val as any) : undefined)}
+                  onChange={(val) =>
+                    setStatusFilter(val ? (val as ReviewStatus) : undefined)
+                  }
                   options={STATUS_OPTIONS}
                   value={statusFilter ?? ''}
                 />

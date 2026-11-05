@@ -133,7 +133,7 @@ export const reviewsApi = {
     accessToken: string,
     tripId: number,
     payload: UpdateReviewPayload,
-  ): Promise<{ data: { success: boolean; message: string; review: any } }> {
+  ): Promise<{ data: { success: boolean; message: string; review: ReviewItem } }> {
     const res = await fetch(`${API_BASE_URL}/reviews/trip/${tripId}`, {
       method: 'PATCH',
       headers: {
@@ -153,7 +153,7 @@ export const reviewsApi = {
     accessToken: string,
     reviewId: number,
     payload: UpdateReviewPayload,
-  ): Promise<{ data: { success: boolean; message: string; review: any } }> {
+  ): Promise<{ data: { success: boolean; message: string; review: ReviewItem } }> {
     const res = await fetch(`${API_BASE_URL}/reviews/${reviewId}`, {
       method: 'PATCH',
       headers: {

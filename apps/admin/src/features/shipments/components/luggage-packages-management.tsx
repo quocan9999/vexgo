@@ -1,18 +1,14 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Package,
   Bike,
   ShieldCheck,
   RotateCcw,
   Save,
   CheckCircle2,
-  AlertCircle,
-  Sparkles,
-  Info,
   Layers,
-  ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/action-button';
@@ -22,7 +18,6 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -37,11 +32,6 @@ import {
 
 interface LuggagePackagesManagementProps {
   canUpdate?: boolean;
-}
-
-function formatVnd(val?: number): string {
-  if (val === undefined || val === null || Number.isNaN(val)) return '0đ';
-  return `${Number(val).toLocaleString('vi-VN')}đ`;
 }
 
 function parseCurrencyInput(text: string): number {

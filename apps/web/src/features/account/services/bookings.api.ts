@@ -325,7 +325,10 @@ export const bookingsApi = {
       const error = await res.json().catch(() => ({}));
       const message =
         Array.isArray(error.details) && error.details.length > 0
-          ? error.details.map((d: any) => d.message).filter(Boolean).join('; ')
+          ? error.details
+              .map((d: { message?: string }) => d.message)
+              .filter(Boolean)
+              .join('; ')
           : error.message || 'Tạo đơn đặt vé thất bại';
       throw new ApiError(
         message,

@@ -17,7 +17,6 @@ describe('seat-layout', () => {
         x: col,
         y: row,
         status: 'TRONG',
-        price: 0,
       };
     });
 
@@ -60,8 +59,8 @@ describe('seat-layout', () => {
         floor: 1,
         x: 180,
         y: 1000,
+        position: null,
         status: 'TRONG',
-        price: 150000,
       },
       {
         tripSeatId: 2,
@@ -69,8 +68,8 @@ describe('seat-layout', () => {
         floor: 1,
         x: 500,
         y: 1000,
+        position: null,
         status: 'TRONG',
-        price: 150000,
       },
       {
         tripSeatId: 3,
@@ -78,8 +77,8 @@ describe('seat-layout', () => {
         floor: 1,
         x: 820,
         y: 1000,
+        position: null,
         status: 'TRONG',
-        price: 150000,
       },
     ];
 
@@ -96,15 +95,15 @@ describe('seat-layout', () => {
         tripSeatId: 1,
         seatNumber: 'A01',
         floor: 1,
+        position: null,
         status: 'TRONG',
-        price: 100000,
       },
       {
         tripSeatId: 2,
         seatNumber: 'A02',
         floor: 1,
+        position: null,
         status: 'TRONG',
-        price: 100000,
       },
     ];
 
@@ -122,8 +121,8 @@ describe('seat-layout', () => {
         floor: 1,
         x: 180,
         y: 1000,
+        position: null,
         status: 'TRONG',
-        price: 100000,
       },
       {
         tripSeatId: 2,
@@ -131,8 +130,8 @@ describe('seat-layout', () => {
         floor: 1,
         x: 180,
         y: 1000, // duplicate!
+        position: null,
         status: 'TRONG',
-        price: 100000,
       },
     ];
 

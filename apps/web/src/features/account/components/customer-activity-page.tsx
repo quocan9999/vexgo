@@ -224,12 +224,12 @@ export default function CustomerActivityPage() {
             .then((revRes) => {
               if (!ignore && revRes?.data?.reviews) {
                 const ids = revRes.data.reviews
-                  .map((r: any) => r.tripId)
+                  .map((r) => r.tripId)
                   .filter(Boolean);
                 setReviewedTripIds(ids);
 
                 const revMap: Record<number, MyReviewData> = {};
-                revRes.data.reviews.forEach((r: any) => {
+                revRes.data.reviews.forEach((r) => {
                   if (r.tripId) {
                     revMap[r.tripId] = {
                       id: r.id,
@@ -237,8 +237,8 @@ export default function CustomerActivityPage() {
                       rating: r.rating,
                       comment: r.comment,
                       createdAt: r.createdAt,
-                      routeName: r.routeName,
-                      date: r.tripDate,
+                      routeName: r.routeName ?? undefined,
+                      date: r.tripDate ?? undefined,
                       reply: r.reply || null,
                     };
                   }
@@ -1051,7 +1051,7 @@ export default function CustomerActivityPage() {
               .then((revRes) => {
                 if (revRes?.data?.reviews) {
                   const revMap: Record<number, MyReviewData> = {};
-                  revRes.data.reviews.forEach((r: any) => {
+                  revRes.data.reviews.forEach((r) => {
                     if (r.tripId) {
                       revMap[r.tripId] = {
                         id: r.id,
@@ -1059,8 +1059,8 @@ export default function CustomerActivityPage() {
                         rating: r.rating,
                         comment: r.comment,
                         createdAt: r.createdAt,
-                        routeName: r.routeName,
-                        date: r.tripDate,
+                        routeName: r.routeName ?? undefined,
+                        date: r.tripDate ?? undefined,
                         reply: r.reply || null,
                       };
                     }

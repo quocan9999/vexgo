@@ -193,10 +193,9 @@ async function scalar(prisma, sql) {
   return Number(rows[0]?.value ?? 0);
 }
 
-async function createAccount(prisma, phone, name) {
+async function createAccount(prisma, phone) {
   const account = await prisma.taiKhoan.create({
     data: {
-      hoTen: name,
       soDienThoai: phone,
       matKhau: 'history-migration-fixture-password-hash',
       daXacThucSoDienThoai: true,
@@ -215,10 +214,10 @@ async function seedPreMigrationCohort(prisma) {
     data: { maNhaXe: `HIST-NX-${suffix}`, tenNhaXe: `History fixture ${suffix}`, trangThai: 'HOAT_DONG' },
     select: { nhaXeId: true },
   });
-  const customerAccountId = await createAccount(prisma, customerPhone, `History customer ${suffix}`);
-  const staffAccountId = await createAccount(prisma, staffPhone, `History staff ${suffix}`);
+  const customerAccountId = await createAccount(prisma, customerPhone);
+  const staffAccountId = await createAccount(prisma, staffPhone);
   const khachHang = await prisma.khachHang.create({
-    data: { maKhachHang: `HIST-KH-${suffix}`, taiKhoanId: customerAccountId },
+    data: { maKhachHang: `HIST-KH-${suffix}`, hoTen: `History customer ${suffix}`, taiKhoanId: customerAccountId },
     select: { khachHangId: true },
   });
   const loaiXe = await prisma.loaiXe.create({
@@ -480,7 +479,7 @@ async function addValidTransitionsAndRunVerifier(prisma, adminUrl, database) {
     select: { veId: true },
   });
   const staff = await prisma.taiKhoan.findFirstOrThrow({
-    where: { hoTen: { startsWith: 'History staff ' } },
+    where: { soDienThoai: { startsWith: '8' } },
     select: { taiKhoanId: true },
   });
   const [operationRow] = await prisma.$queryRaw`SELECT UUID() AS maThaoTac`;

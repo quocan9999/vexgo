@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -9,7 +10,6 @@ import {
   MessageSquare,
   Route,
   Star,
-  User,
   X,
 } from 'lucide-react';
 import {
@@ -342,7 +342,15 @@ export function TripReviewsModal({
                   <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
+                    onChange={(e) =>
+                      setSortBy(
+                        e.target.value as
+                          | 'newest'
+                          | 'oldest'
+                          | 'rating_desc'
+                          | 'rating_asc',
+                      )
+                    }
                     className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
                     aria-label="Sắp xếp nhận xét"
                   >

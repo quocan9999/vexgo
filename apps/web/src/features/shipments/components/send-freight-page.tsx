@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/preserve-manual-memoization, react-hooks/set-state-in-effect */
 'use client';
 
 import React, {
@@ -355,7 +356,9 @@ function SendFreightContent() {
 
   const availableCargoCategories = cargoCategories;
   const cargoItemsRef = useRef(cargoItems);
-  cargoItemsRef.current = cargoItems;
+  useEffect(() => {
+    cargoItemsRef.current = cargoItems;
+  }, [cargoItems]);
 
   // Key xác định cước chỉ phụ thuộc vào tuyến, điểm bến, ngày, và thông số cước (loại hàng, trọng lượng, số lượng, kích thước, phụ phí).
   // Tuyệt đối KHÔNG đưa tên kiện hàng (item.name) vào đây để tránh việc gõ tên làm nhảy cước liên tục.
