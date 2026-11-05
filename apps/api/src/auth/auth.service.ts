@@ -279,12 +279,13 @@ export class AuthService {
 
     const roles = account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro);
     const employee = account.nhanVien;
+    const isTenantStaff = employee !== null && employee.nhaXeId !== null;
     const effectiveAssignments = await this.permissionLoader.load(
       account.taiKhoanVaiTros.map(({ vaiTro }) => ({
         roleId: vaiTro.vaiTroId,
         roleName: vaiTro.tenVaiTro,
       })),
-      employee?.nhaXeId ?? null,
+      isTenantStaff ? employee.nhaXeId : null,
     );
     return {
       accountId: account.taiKhoanId,
@@ -293,18 +294,18 @@ export class AuthService {
       email: account.email,
       roles,
       permissions: this.permissionResolver.resolve(effectiveAssignments, {
-        nhanVienId: employee?.nhanVienId ?? null,
-        nhaXeId: employee?.nhaXeId ?? null,
+        nhanVienId: isTenantStaff ? employee.nhanVienId : null,
+        nhaXeId: isTenantStaff ? employee.nhaXeId : null,
       }),
-      employee: employee
+      employee: isTenantStaff
         ? {
             employeeId: employee.nhanVienId,
-            busCompanyId: employee.nhaXeId ?? null,
+            busCompanyId: employee.nhaXeId!,
             busCompanyCode: employee.nhaXe?.maNhaXe ?? null,
             busCompanyName: employee.nhaXe?.tenNhaXe ?? null,
           }
         : null,
-      busCompanyId: employee?.nhaXeId ?? null,
+      busCompanyId: isTenantStaff ? employee.nhaXeId : null,
     };
   }
 
