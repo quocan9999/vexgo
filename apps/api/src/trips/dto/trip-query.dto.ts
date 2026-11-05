@@ -5,6 +5,7 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  IsString,
   Matches,
   Max,
   Min,
@@ -18,6 +19,15 @@ export const TRIP_STATUSES = [
   'DA_HUY',
 ] as const;
 export type TripStatus = (typeof TRIP_STATUSES)[number];
+
+export const TRIP_TIME_RANGES = [
+  'all',
+  'early-morning',
+  'morning',
+  'afternoon',
+  'evening',
+] as const;
+export type TripTimeRange = (typeof TRIP_TIME_RANGES)[number];
 
 export const TRIP_SORT_FIELDS = [
   'code',
@@ -115,4 +125,31 @@ export class TripQueryDto extends PaginationQueryDto {
   @IsDateString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   toDate?: string;
+
+  @ApiPropertyOptional({ description: 'Lọc theo điểm xuất phát', example: 'TP. Hồ Chí Minh' })
+  @IsOptional()
+  @IsString()
+  origin?: string;
+
+  @ApiPropertyOptional({ description: 'Lọc theo điểm đến', example: 'Đà Lạt' })
+  @IsOptional()
+  @IsString()
+  destination?: string;
+
+  @ApiPropertyOptional({
+    description: 'Lọc theo khung giờ khởi hành trong ngày',
+    enum: TRIP_TIME_RANGES,
+    example: 'morning',
+  })
+  @IsOptional()
+  @IsIn(TRIP_TIME_RANGES)
+  timeRange?: TripTimeRange;
+
+  @ApiPropertyOptional({
+    description: 'Lọc theo giờ khởi hành (HH:mm hoặc HH:mm:ss)',
+    example: '08:00',
+  })
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/)
+  departureTime?: string;
 }

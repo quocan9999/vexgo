@@ -5,7 +5,7 @@
  *    - 1 tầng (tang = 1)
  *    - 28 ghế: '01' -> '28'
  *    - 8 hàng đầu x 3 ghế (2 ghế dãy trái x=180, 400; lối đi ở giữa; 1 ghế dãy phải x=820)
- *    - Hàng 9 cuối x 4 ghế (x=160, 380, 620, 840)
+ *    - Hàng 9 cuối x 4 ghế căn thẳng hàng (x=180, 400, 610, 820)
  *
  * 2. Thành Bưởi Giường Nằm 34 phòng (Hình 2):
  *    - 2 tầng (tang = 1: 1A-17A, tang = 2: 1B-17B)
@@ -46,12 +46,12 @@ export function getFutaLimousine28Seats() {
     seats.push({ tenGhe: s3, viTri: 'Dãy phải', tang: 1, toaDoX: 820, toaDoY: y });
   }
 
-  // Hàng cuối 4 ghế liền nhau
+  // Hàng cuối 4 ghế liền nhau (căn thẳng hàng với các cột 180, 400, 820 và ghế 27 ở giữa lối đi)
   const yBack = 9000;
-  seats.push({ tenGhe: '25', viTri: 'Băng cuối', tang: 1, toaDoX: 160, toaDoY: yBack });
-  seats.push({ tenGhe: '26', viTri: 'Băng cuối', tang: 1, toaDoX: 380, toaDoY: yBack });
-  seats.push({ tenGhe: '27', viTri: 'Băng cuối', tang: 1, toaDoX: 620, toaDoY: yBack });
-  seats.push({ tenGhe: '28', viTri: 'Băng cuối', tang: 1, toaDoX: 840, toaDoY: yBack });
+  seats.push({ tenGhe: '25', viTri: 'Băng cuối', tang: 1, toaDoX: 180, toaDoY: yBack });
+  seats.push({ tenGhe: '26', viTri: 'Băng cuối', tang: 1, toaDoX: 400, toaDoY: yBack });
+  seats.push({ tenGhe: '27', viTri: 'Băng cuối', tang: 1, toaDoX: 610, toaDoY: yBack });
+  seats.push({ tenGhe: '28', viTri: 'Băng cuối', tang: 1, toaDoX: 820, toaDoY: yBack });
 
   return seats;
 }
@@ -184,12 +184,12 @@ export function getHoaMaiLimousine16Seats() {
   seats.push({ tenGhe: '10', viTri: 'Dãy giữa', tang: 1, toaDoX: 500, toaDoY: 5500 });
   seats.push({ tenGhe: '11', viTri: 'Dãy phải', tang: 1, toaDoX: 820, toaDoY: 5500 });
 
-  // Hàng 5 (băng cuối 5 ghế)
-  seats.push({ tenGhe: '12', viTri: 'Băng cuối', tang: 1, toaDoX: 160, toaDoY: 7000 });
-  seats.push({ tenGhe: '13', viTri: 'Băng cuối', tang: 1, toaDoX: 330, toaDoY: 7000 });
+  // Hàng 5 (băng cuối 5 ghế căn thẳng hàng với các dãy 200, 500, 820 và xen kẽ đều 350, 660)
+  seats.push({ tenGhe: '12', viTri: 'Băng cuối', tang: 1, toaDoX: 200, toaDoY: 7000 });
+  seats.push({ tenGhe: '13', viTri: 'Băng cuối', tang: 1, toaDoX: 350, toaDoY: 7000 });
   seats.push({ tenGhe: '14', viTri: 'Băng cuối', tang: 1, toaDoX: 500, toaDoY: 7000 });
-  seats.push({ tenGhe: '15', viTri: 'Băng cuối', tang: 1, toaDoX: 670, toaDoY: 7000 });
-  seats.push({ tenGhe: '16', viTri: 'Băng cuối', tang: 1, toaDoX: 840, toaDoY: 7000 });
+  seats.push({ tenGhe: '15', viTri: 'Băng cuối', tang: 1, toaDoX: 660, toaDoY: 7000 });
+  seats.push({ tenGhe: '16', viTri: 'Băng cuối', tang: 1, toaDoX: 820, toaDoY: 7000 });
 
   return seats;
 }
@@ -205,9 +205,10 @@ export function getHoaMaiLimousine9Seats() {
   seats.push({ tenGhe: '05', viTri: 'VIP thương gia', tang: 1, toaDoX: 250, toaDoY: 4000 });
   seats.push({ tenGhe: '06', viTri: 'VIP thương gia', tang: 1, toaDoX: 750, toaDoY: 4000 });
 
-  seats.push({ tenGhe: '07', viTri: 'Băng cuối', tang: 1, toaDoX: 200, toaDoY: 5500 });
+  // Hàng 4 (băng cuối 3 ghế căn thẳng hàng với dãy VIP 250, 750 và ghế 08 ở giữa 500)
+  seats.push({ tenGhe: '07', viTri: 'Băng cuối', tang: 1, toaDoX: 250, toaDoY: 5500 });
   seats.push({ tenGhe: '08', viTri: 'Băng cuối', tang: 1, toaDoX: 500, toaDoY: 5500 });
-  seats.push({ tenGhe: '09', viTri: 'Băng cuối', tang: 1, toaDoX: 800, toaDoY: 5500 });
+  seats.push({ tenGhe: '09', viTri: 'Băng cuối', tang: 1, toaDoX: 750, toaDoY: 5500 });
 
   return seats;
 }
@@ -226,11 +227,11 @@ export function getGheNgoi45Seats() {
 
   const yBack = 11000;
   const p = (n) => `A${String(n).padStart(2, '0')}`;
-  seats.push({ tenGhe: p(41), viTri: 'Băng cuối', tang: 1, toaDoX: 160, toaDoY: yBack });
-  seats.push({ tenGhe: p(42), viTri: 'Băng cuối', tang: 1, toaDoX: 330, toaDoY: yBack });
+  seats.push({ tenGhe: p(41), viTri: 'Băng cuối', tang: 1, toaDoX: 180, toaDoY: yBack });
+  seats.push({ tenGhe: p(42), viTri: 'Băng cuối', tang: 1, toaDoX: 360, toaDoY: yBack });
   seats.push({ tenGhe: p(43), viTri: 'Băng cuối', tang: 1, toaDoX: 500, toaDoY: yBack });
-  seats.push({ tenGhe: p(44), viTri: 'Băng cuối', tang: 1, toaDoX: 670, toaDoY: yBack });
-  seats.push({ tenGhe: p(45), viTri: 'Băng cuối', tang: 1, toaDoX: 840, toaDoY: yBack });
+  seats.push({ tenGhe: p(44), viTri: 'Băng cuối', tang: 1, toaDoX: 640, toaDoY: yBack });
+  seats.push({ tenGhe: p(45), viTri: 'Băng cuối', tang: 1, toaDoX: 820, toaDoY: yBack });
 
   return seats;
 }

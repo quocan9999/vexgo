@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type AriaAttributes, type ReactNode } from 'react';
 import { Combobox } from '@base-ui/react/combobox';
-import { Bus, Check, ChevronDown, LoaderCircle, MapPin, Plus, Search } from 'lucide-react';
+import { Bus, Check, ChevronDown, LoaderCircle, MapPin, Plus, Search, X } from 'lucide-react';
 import { Input } from './input';
 
 export type SearchableOption = {
@@ -145,7 +145,7 @@ export function SearchableCombobox({
           <span className="flex items-center gap-1.5 font-semibold leading-snug">
             <span>{item.label}</span>
             {item.badge && (
-              <span className="inline-flex items-center rounded border border-border/70 bg-muted px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
+              <span className="inline-flex items-center rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shrink-0">
                 {item.badge}
               </span>
             )}
@@ -190,12 +190,30 @@ export function SearchableCombobox({
         <Combobox.Input
           id={id}
           render={<Input />}
-          className="bg-background pl-10 pr-10 shadow-xs transition-[border-color,box-shadow] hover:border-primary/40 focus-visible:border-primary"
+          className={`bg-background pl-10 shadow-xs transition-[border-color,box-shadow] hover:border-primary/40 focus-visible:border-primary ${
+            value ? 'pr-16' : 'pr-10'
+          }`}
           {...aria}
           aria-busy={loading}
           placeholder={loading ? 'Đang tải địa điểm…' : placeholder}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
+        {value && !disabled && (
+          <button
+            type="button"
+            aria-label="Xóa địa điểm đã chọn"
+            className="absolute right-9 top-1/2 -translate-y-1/2 grid size-6 place-items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setSelectedId('');
+              onChange('');
+              setSearchQuery('');
+            }}
+          >
+            <X aria-hidden className="size-3.5" />
+          </button>
+        )}
         <Combobox.Trigger
           aria-label="Mở danh sách địa điểm"
           className="group absolute right-0 top-0 grid h-full w-10 place-items-center rounded-[var(--admin-radius-control)] text-muted-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"

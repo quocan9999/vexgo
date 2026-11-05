@@ -221,6 +221,7 @@ export function RouteFormDialog({
           onChange={(value) => updateField(field, value)}
           value={values[field]}
           excludeValue={excludeValue}
+          required
         />
         <FieldError id={`${idPrefix}-${field}-error`}>
           {fieldErrors[field]}

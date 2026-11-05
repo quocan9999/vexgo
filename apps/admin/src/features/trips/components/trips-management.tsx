@@ -20,6 +20,7 @@ import {
   type FilterOption,
 } from '@/components/data-filters/resource-filters';
 import { DateRangeFilter } from '@/components/data-filters/data-filters';
+import { LocationPicker } from '@/features/locations/components/location-picker';
 import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import {
@@ -46,10 +47,17 @@ const STATUS_OPTIONS: FilterOption[] = [
   { value: 'DA_HUY', label: 'Đã hủy' },
 ];
 
+const TIME_RANGE_OPTIONS: FilterOption[] = [
+  { value: 'early-morning', label: 'Sáng sớm (00:00 - 06:00)' },
+  { value: 'morning', label: 'Buổi sáng (06:00 - 12:00)' },
+  { value: 'afternoon', label: 'Buổi chiều (12:00 - 18:00)' },
+  { value: 'evening', label: 'Buổi tối (18:00 - 24:00)' },
+];
+
 const SORT_OPTIONS: FilterOption[] = [
   { value: 'departureDate', label: 'Ngày khởi hành' },
   { value: 'departureTime', label: 'Giờ khởi hành' },
-  { value: 'code', label: 'Mã chuyến' },
+  { value: 'code', label: 'Chuyến xe' },
   { value: 'status', label: 'Trạng thái' },
   { value: 'createdAt', label: 'Ngày tạo' },
   { value: 'updatedAt', label: 'Cập nhật' },
@@ -81,6 +89,12 @@ export function TripsManagement() {
     departureDate,
     departureDateRange,
     updateDepartureDateRange,
+    origin,
+    destination,
+    timeRange,
+    updateOrigin,
+    updateDestination,
+    updateTimeRange,
     sortBy,
     sortDirection,
     changePage,
@@ -128,7 +142,10 @@ export function TripsManagement() {
       status ||
       departureDate ||
       departureDateRange?.from ||
-      departureDateRange?.to,
+      departureDateRange?.to ||
+      origin ||
+      destination ||
+      timeRange,
   );
   const items = tripPage?.data ?? [];
 
@@ -164,16 +181,39 @@ export function TripsManagement() {
               <SearchInput
                 label="Tìm chuyến xe"
                 onChange={updateSearch}
-                placeholder="Tìm mã chuyến, điểm đi, điểm đến, biển số xe..."
+                placeholder="Tìm mã chuyến, biển số xe..."
                 value={searchInput}
               />
-              <SelectFilter
-                allLabel="Tất cả trạng thái"
-                label="Trạng thái"
-                onChange={updateStatus}
-                options={STATUS_OPTIONS}
-                value={status}
-              />
+              <div className="min-w-0 flex-[1_1_180px] sm:flex-[1_1_200px]">
+                <label
+                  className="mb-2 block text-[13px] font-semibold"
+                  htmlFor="trip-filter-origin"
+                >
+                  Điểm đi
+                </label>
+                <LocationPicker
+                  id="trip-filter-origin"
+                  placeholder="Tất cả điểm đi"
+                  value={origin}
+                  onChange={updateOrigin}
+                  excludeValue={destination}
+                />
+              </div>
+              <div className="min-w-0 flex-[1_1_180px] sm:flex-[1_1_200px]">
+                <label
+                  className="mb-2 block text-[13px] font-semibold"
+                  htmlFor="trip-filter-destination"
+                >
+                  Điểm đến
+                </label>
+                <LocationPicker
+                  id="trip-filter-destination"
+                  placeholder="Tất cả điểm đến"
+                  value={destination}
+                  onChange={updateDestination}
+                  excludeValue={origin}
+                />
+              </div>
               <DateRangeFilter
                 label="Ngày khởi hành"
                 title="Khoảng ngày khởi hành"
@@ -182,6 +222,20 @@ export function TripsManagement() {
                 toLabel="Đến ngày"
                 value={departureDateRange}
                 onApply={updateDepartureDateRange}
+              />
+              <SelectFilter
+                allLabel="Tất cả khung giờ"
+                label="Giờ khởi hành"
+                onChange={updateTimeRange}
+                options={TIME_RANGE_OPTIONS}
+                value={timeRange}
+              />
+              <SelectFilter
+                allLabel="Tất cả trạng thái"
+                label="Trạng thái"
+                onChange={updateStatus}
+                options={STATUS_OPTIONS}
+                value={status}
               />
             </FilterToolbar>
 
@@ -259,7 +313,7 @@ export function TripsManagement() {
                               }
                               scope="col"
                             >
-                              {sortButton('Mã chuyến', 'code')}
+                              {sortButton('Chuyến xe', 'code')}
                             </TableHead>
                             <TableHead
                               aria-sort={
@@ -285,7 +339,6 @@ export function TripsManagement() {
                             >
                               {sortButton('Giờ khởi hành', 'departureTime')}
                             </TableHead>
-                            <TableHead scope="col">Tuyến xe</TableHead>
                             <TableHead scope="col">Xe</TableHead>
                             <TableHead scope="col">Nhận gửi hàng</TableHead>
                             <TableHead scope="col">Sức chứa hàng</TableHead>
@@ -308,22 +361,21 @@ export function TripsManagement() {
                           {items.map((trip) => (
                             <TableRow key={trip.tripId}>
                               <TableHead
-                                className="admin-data-mono bg-transparent py-3 text-[13px]"
+                                className="bg-transparent py-3 text-[13px] font-normal"
                                 scope="row"
                               >
-                                {trip.code}
+                                <div className="font-semibold text-foreground">
+                                  {trip.route.origin} → {trip.route.destination}
+                                </div>
+                                <span className="admin-data-mono mt-1 block text-xs text-muted-foreground">
+                                  {trip.code}
+                                </span>
                               </TableHead>
                               <TableCell>
                                 {formatDate(trip.departureDate)}
                               </TableCell>
                               <TableCell>
                                 {formatTime(trip.departureTime)}
-                              </TableCell>
-                              <TableCell>
-                                {trip.route.origin} → {trip.route.destination}
-                                <span className="admin-data-mono mt-1 block text-xs text-muted-foreground">
-                                  {trip.route.code}
-                                </span>
                               </TableCell>
                               <TableCell>
                                 <span className="admin-data-mono">
@@ -377,9 +429,14 @@ export function TripsManagement() {
                       {items.map((trip) => (
                         <Card className="gap-4 p-4" key={trip.tripId}>
                           <div className="flex flex-wrap items-center justify-between gap-3">
-                            <h2 className="admin-data-mono text-sm font-semibold break-all">
-                              {trip.code}
-                            </h2>
+                            <div>
+                              <h2 className="text-sm font-semibold">
+                                {trip.route.origin} → {trip.route.destination}
+                              </h2>
+                              <span className="admin-data-mono text-xs text-muted-foreground">
+                                {trip.code}
+                              </span>
+                            </div>
                             <ResourceStatusBadge
                               tone={
                                 trip.status === 'DANG_CHAY' ? 'active' : 'muted'
@@ -388,9 +445,6 @@ export function TripsManagement() {
                               {tripStatusLabel(trip.status)}
                             </ResourceStatusBadge>
                           </div>
-                          <p className="text-sm font-medium">
-                            {trip.route.origin} → {trip.route.destination}
-                          </p>
                           <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                             <div>
                               <dt>Khởi hành</dt>

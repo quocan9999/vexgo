@@ -29,6 +29,9 @@ export function useTrips() {
   const [vehicleId, setVehicleId] = useState('');
   const [departureDate, setDepartureDate] = useState('');
   const [departureDateRange, setDepartureDateRange] = useState<DateRangeValue | null>(null);
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
+  const [timeRange, setTimeRange] = useState('');
   const [refreshCount, setRefreshCount] = useState(0);
 
   const requestKey = JSON.stringify([
@@ -42,6 +45,9 @@ export function useTrips() {
     departureDate,
     departureDateRange?.from ?? '',
     departureDateRange?.to ?? '',
+    origin,
+    destination,
+    timeRange,
   ]);
   const tripPage = result?.key === requestKey ? result.page : null;
 
@@ -70,6 +76,9 @@ export function useTrips() {
       departureDate,
       departureDateRange?.from ?? '',
       departureDateRange?.to ?? '',
+      origin,
+      destination,
+      timeRange,
     ]);
 
     getTrips(
@@ -85,6 +94,9 @@ export function useTrips() {
         departureDate: departureDate || undefined,
         fromDepartureDate: departureDateRange?.from || undefined,
         toDepartureDate: departureDateRange?.to || undefined,
+        origin: origin || undefined,
+        destination: destination || undefined,
+        timeRange: timeRange || undefined,
       },
       controller.signal,
     )
@@ -122,6 +134,9 @@ export function useTrips() {
     departureDate,
     departureDateRange?.from,
     departureDateRange?.to,
+    origin,
+    destination,
+    timeRange,
     refreshCount,
   ]);
 
@@ -191,6 +206,30 @@ export function useTrips() {
     setDepartureDateRange(value);
   }
 
+  function updateOrigin(value: string) {
+    if (value === origin) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setOrigin(value);
+  }
+
+  function updateDestination(value: string) {
+    if (value === destination) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setDestination(value);
+  }
+
+  function updateTimeRange(value: string) {
+    if (value === timeRange) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setTimeRange(value);
+  }
+
   function sortTrips(key: TripSortKey) {
     setLoading(true);
     setError(null);
@@ -218,6 +257,9 @@ export function useTrips() {
     routeId,
     vehicleId,
     departureDate,
+    origin,
+    destination,
+    timeRange,
     sortBy,
     sortDirection,
     changePage,
@@ -228,6 +270,9 @@ export function useTrips() {
     updateDepartureDate,
     departureDateRange,
     updateDepartureDateRange,
+    updateOrigin,
+    updateDestination,
+    updateTimeRange,
     sortTrips,
     refresh,
   };

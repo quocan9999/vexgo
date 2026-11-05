@@ -23,6 +23,9 @@ const state = vi.hoisted(() => ({
   status: '',
   departureDate: '',
   departureDateRange: null as DateRangeValue | null,
+  origin: '',
+  destination: '',
+  timeRange: '',
 }));
 
 const mockTrip: Trip = {
@@ -117,6 +120,12 @@ vi.mock('@/features/trips/hooks/use-trips', () => ({
     departureDate: state.departureDate,
     departureDateRange: state.departureDateRange,
     updateDepartureDateRange: vi.fn(),
+    origin: state.origin,
+    destination: state.destination,
+    timeRange: state.timeRange,
+    updateOrigin: vi.fn(),
+    updateDestination: vi.fn(),
+    updateTimeRange: vi.fn(),
     sortBy: 'departureDate',
     sortDirection: 'asc',
     changePage: vi.fn(),
@@ -137,6 +146,9 @@ beforeEach(() => {
   state.status = '';
   state.departureDate = '';
   state.departureDateRange = null;
+  state.origin = '';
+  state.destination = '';
+  state.timeRange = '';
   vi.restoreAllMocks();
 });
 
@@ -177,6 +189,21 @@ describe('Admin trips read page and components', () => {
     expect(html).toContain('data-slot="card"');
     expect(html.match(/aria-label="Xem chi tiết chuyến FUTA-CX-001"/g)).toHaveLength(2);
     expect(html).not.toContain('Đang tải danh sách chuyến xe');
+    expect(html).toContain('Sắp xếp theo Chuyến xe');
+    expect(html).not.toContain('Sắp xếp theo Mã chuyến');
+  });
+
+  it('renders filters for origin, destination, and departure time range', () => {
+    state.loading = false;
+    state.tripPage = {
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    };
+
+    const html = renderToStaticMarkup(<TripsManagement />);
+    expect(html).toContain('Điểm đi');
+    expect(html).toContain('Điểm đến');
+    expect(html).toContain('Giờ khởi hành');
   });
 
   it('displays empty state with distinct messages when filtered vs unfiltered', () => {

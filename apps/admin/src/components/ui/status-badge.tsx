@@ -18,6 +18,8 @@ const badgeVariants = cva(
         default: 'bg-primary text-primary-foreground [a]:hover:bg-primary/80',
         secondary:
           'bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80',
+        legacy:
+          'border-transparent bg-slate-600 text-white font-bold uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded shadow-xs',
         destructive:
           'bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20',
         outline:
@@ -53,6 +55,24 @@ function Badge({
       variant,
     },
   });
+}
+
+export function LegacyBadge({
+  className,
+  children = 'CŨ',
+  ...props
+}: React.ComponentProps<'span'>) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shrink-0',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </span>
+  );
 }
 
 export { Badge, badgeVariants };

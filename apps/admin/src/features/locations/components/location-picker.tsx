@@ -19,6 +19,8 @@ export function LocationPicker({
   excludeValue,
   placeholder = 'Chọn địa điểm',
   allowCustom = true,
+  required = false,
+  className,
 }: {
   id: string;
   value: string;
@@ -29,6 +31,8 @@ export function LocationPicker({
   excludeValue?: string;
   placeholder?: string;
   allowCustom?: boolean;
+  required?: boolean;
+  className?: string;
 }) {
   const [options, setOptions] = useState<SearchableOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,13 +44,26 @@ export function LocationPicker({
     getLocations()
       .then((locations) => {
         if (!active) return;
+        const sorted = [...locations].sort((a, b) => {
+          if (a.kind === 'province' && b.kind === 'province') {
+            const aLegacy = Boolean(a.isLegacy);
+            const bLegacy = Boolean(b.isLegacy);
+            if (aLegacy !== bLegacy) {
+              return aLegacy ? 1 : -1;
+            }
+          }
+          return a.name.localeCompare(b.name, 'vi');
+        });
+
         setOptions(
-          locations.map((location) => ({
+          sorted.map((location) => ({
             id: location.id,
             value: location.value,
             label: location.name,
             keywords: location.aliases.join(' '),
+            badge: location.isLegacy ? 'CŨ' : undefined,
             description:
+              location.mergedFromText ??
               location.address ??
               (location.province ? `Thuộc ${location.province}` : undefined),
             group:
@@ -73,7 +90,7 @@ export function LocationPicker({
   }, [attempt]);
 
   return (
-    <div className="space-y-2">
+    <div className={className}>
       <SearchableCombobox
         id={id}
         value={value}
@@ -82,7 +99,7 @@ export function LocationPicker({
         disabled={disabled}
         aria-invalid={invalid}
         aria-describedby={describedBy}
-        aria-required="true"
+        aria-required={required ? 'true' : undefined}
         loading={loading}
         placeholder={placeholder}
         icon={<MapPin />}
@@ -90,7 +107,7 @@ export function LocationPicker({
         allowCustom={allowCustom}
       />
       {error && (
-        <div role="alert" className="text-xs text-destructive">
+        <div role="alert" className="mt-2 text-xs text-destructive">
           {error}{' '}
           <Button
             variant="link"

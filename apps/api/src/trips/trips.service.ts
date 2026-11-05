@@ -2105,6 +2105,50 @@ export class TripsService {
       where.ngayKhoiHanh = new Date(`${query.departureDate}T00:00:00.000Z`);
     }
 
+    if (query.origin?.trim() || query.destination?.trim()) {
+      where.tuyenXe = {
+        is: {
+          ...(query.origin?.trim()
+            ? { diemDi: { contains: query.origin.trim() } }
+            : {}),
+          ...(query.destination?.trim()
+            ? { diemDen: { contains: query.destination.trim() } }
+            : {}),
+        },
+      };
+    }
+
+    if (query.timeRange && query.timeRange !== 'all') {
+      const timeFilter: Prisma.DateTimeFilter = {};
+      switch (query.timeRange) {
+        case 'early-morning':
+          timeFilter.gte = new Date('1970-01-01T00:00:00.000Z');
+          timeFilter.lt = new Date('1970-01-01T06:00:00.000Z');
+          break;
+        case 'morning':
+          timeFilter.gte = new Date('1970-01-01T06:00:00.000Z');
+          timeFilter.lt = new Date('1970-01-01T12:00:00.000Z');
+          break;
+        case 'afternoon':
+          timeFilter.gte = new Date('1970-01-01T12:00:00.000Z');
+          timeFilter.lt = new Date('1970-01-01T18:00:00.000Z');
+          break;
+        case 'evening':
+          timeFilter.gte = new Date('1970-01-01T18:00:00.000Z');
+          timeFilter.lte = new Date('1970-01-01T23:59:59.999Z');
+          break;
+      }
+      where.gioKhoiHanh = timeFilter;
+    } else if (query.departureTime?.trim()) {
+      const trimmedTime = query.departureTime.trim();
+      const normalizedTime =
+        trimmedTime.length === 5 ? `${trimmedTime}:00` : trimmedTime;
+      where.gioKhoiHanh = {
+        gte: new Date(`1970-01-01T${normalizedTime}.000Z`),
+        lte: new Date(`1970-01-01T${normalizedTime.slice(0, 5)}:59.999Z`),
+      };
+    }
+
     if (query.search?.trim()) {
       const term = query.search.trim();
       where.OR = [

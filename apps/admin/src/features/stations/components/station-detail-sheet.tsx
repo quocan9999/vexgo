@@ -2,7 +2,7 @@
 
 import { Building2, Pencil, Trash2 } from 'lucide-react';
 import { ResourceSheet, ResourceStatusBadge } from '@/components/admin/resource-ui';
-import { Badge } from '@/components/ui/status-badge';
+import { Badge, LegacyBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/action-button';
 import type { Station } from '../types/station';
 
@@ -92,9 +92,7 @@ export function StationDetailSheet({
             <dt>Khu vực (trước sáp nhập)</dt>
             <dd className="flex items-center gap-1.5">
               <span>{station.diaDiemCu?.tenDiaDiem ?? '—'}</span>
-              <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 py-0">
-                CŨ
-              </Badge>
+              <LegacyBadge />
             </dd>
           </div>
           <div>
