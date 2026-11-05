@@ -237,7 +237,7 @@ describe('Customer invoice page', () => {
 
     await renderInvoice();
 
-    expect(await screen.findByRole('button', { name: 'In vé' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Tải vé PDF/i })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`/bookings/${bookingId}/detail`),
       expect.objectContaining({
@@ -266,7 +266,7 @@ describe('Customer invoice page', () => {
       </Suspense>,
     );
 
-    expect(await screen.findByRole('button', { name: 'In vé' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Tải vé PDF/i })).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

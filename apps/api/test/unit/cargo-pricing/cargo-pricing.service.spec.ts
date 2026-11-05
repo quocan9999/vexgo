@@ -31,8 +31,12 @@ function makeTransaction(options: {
   points?: unknown[];
   types?: unknown[];
   rates?: unknown[];
+  busCompany?: unknown;
 } = {}) {
   return {
+    nhaXe: {
+      findUnique: vi.fn().mockResolvedValue(options.busCompany ?? null),
+    },
     diemGiaoNhanTuyenXe: {
       findMany: vi.fn().mockResolvedValue(options.points ?? [sender, receiver]),
     },
@@ -103,6 +107,47 @@ describe('CargoPricingService', () => {
         }),
       }),
     );
+  });
+
+  it('loads dynamic surcharges configured in nhaXe.cauHinhHanhLy', async () => {
+    const customConfig = JSON.stringify({
+      default: {
+        fragileSurcharge: 35000,
+        valuableSurcharge: 80000,
+      },
+    });
+    const tx = makeTransaction({
+      busCompany: { nhaXeId: 3, cauHinhHanhLy: customConfig },
+    });
+    const service = new CargoPricingService();
+
+    const result = await service.calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      items: [
+        {
+          name: 'Bình gốm',
+          quantity: 1,
+          weight: 2,
+          loaiHangHoaId: 21,
+          serviceType: 'FRAGILE',
+        },
+        {
+          name: 'Điện thoại',
+          quantity: 1,
+          weight: 1,
+          loaiHangHoaId: 21,
+          serviceType: 'VALUABLE',
+        },
+      ],
+    });
+
+    expect(result.surcharges).toEqual({
+      fragile: 35000,
+      valuable: 80000,
+    });
+    expect(result.serviceFee.toNumber()).toBe(115000);
+    expect(result.totalFee.toNumber()).toBe(175000);
   });
 
   it('requires an explicit type when the capacity group is ambiguous', async () => {

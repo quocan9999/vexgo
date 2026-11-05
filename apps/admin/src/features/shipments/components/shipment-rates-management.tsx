@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import Link from 'next/link';
@@ -7,10 +8,12 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowUpDown,
+  Luggage,
   Package,
   Ticket,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
   ResourceCreateAction,
@@ -58,6 +61,7 @@ import {
   ShipmentRateDetailSheet,
 } from './shipment-rate-detail-sheet';
 import { ShipmentRateFormDialog } from './shipment-rate-form-dialog';
+import { LuggagePackagesManagement } from './luggage-packages-management';
 
 const STATUS_LABELS: Record<ShipmentRateStatus, string> = {
   HOAT_DONG: 'Đang hoạt động',
@@ -124,6 +128,7 @@ export function ShipmentRatesManagement() {
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [formOpen, setFormOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ShipmentRate | null>(null);
+  const [rateTab, setRateTab] = useState<'freight' | 'luggage'>('freight');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -301,10 +306,10 @@ export function ShipmentRatesManagement() {
           aria-label="Chuyển đổi loại bảng giá"
           className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-3"
         >
-          <div className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/50 p-1">
+          <div className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/70 p-1.5 shadow-xs">
             <Link
               href="/fare-prices"
-              className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-background/80 hover:text-foreground"
             >
               <Ticket className="size-4" />
               Bảng giá vé hành khách
@@ -312,9 +317,9 @@ export function ShipmentRatesManagement() {
             <Link
               href="/shipments/rates"
               aria-current="page"
-              className="inline-flex items-center gap-2 rounded-md bg-background px-3 py-1.5 text-sm font-semibold text-foreground shadow-xs"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all"
             >
-              <Package className="size-4 text-primary" />
+              <Package className="size-4" />
               Bảng giá cước gửi hàng
             </Link>
           </div>
@@ -328,33 +333,79 @@ export function ShipmentRatesManagement() {
           </Link>
         </nav>
 
-        <div>
-          <AdminPageHeader
-            eyebrow="CẤU HÌNH CƯỚC VẬN CHUYỂN"
-            title="Quản lý bảng giá cước gửi hàng"
-            titleId="shipment-rates-title"
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <ResourceRefreshAction loading={loading} onClick={refresh} />
-                {canCreate && (
-                  <ResourceCreateAction
-                    label="Thêm mức cước"
-                    onClick={handleOpenCreate}
-                  />
-                )}
-              </div>
-            }
-          />
-          <p className="mt-2 text-[13px] text-muted-foreground">
-            Thiết lập đơn giá gửi hàng theo tuyến xe, loại hàng hóa, nấc khối
-            lượng và thời gian hiệu lực.
-          </p>
+        {/* Tab Switcher */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRateTab('freight')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all cursor-pointer',
+              rateTab === 'freight'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+            )}
+          >
+            <Package className="size-4" />
+            Cước gửi hàng theo tuyến
+          </button>
+          <button
+            type="button"
+            onClick={() => setRateTab('luggage')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all cursor-pointer',
+              rateTab === 'luggage'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+            )}
+          >
+            <Luggage className="size-4" />
+            Cước gói hành lý kèm vé (Size S, M, L, XL)
+          </button>
         </div>
 
-        <section
-          className="overflow-hidden rounded-xl border bg-card shadow-sm"
-          aria-labelledby="shipment-rates-table-heading"
-        >
+        {rateTab === 'luggage' ? (
+          <div className="space-y-4">
+            <div>
+              <AdminPageHeader
+                eyebrow="HÀNH LÝ KÝ GỬI XE KHÁCH"
+                title="Cấu hình gói hành lý kèm vé xe"
+                titleId="luggage-rates-title"
+              />
+              <p className="mt-2 text-[13px] text-muted-foreground">
+                Thiết lập mức cước 4 gói kích thước quy chuẩn (Size S, M, L, XL), phương tiện và phụ phí ký gửi cho hành khách khi đặt vé xe. Mặc định áp dụng toàn nhà xe hoặc tùy chỉnh riêng theo từng tuyến.
+              </p>
+            </div>
+            <LuggagePackagesManagement canUpdate={canUpdate} />
+          </div>
+        ) : (
+          <>
+            <div>
+              <AdminPageHeader
+                eyebrow="CẤU HÌNH CƯỚC VẬN CHUYỂN"
+                title="Quản lý bảng giá cước gửi hàng"
+                titleId="shipment-rates-title"
+                actions={
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ResourceRefreshAction loading={loading} onClick={refresh} />
+                    {canCreate && (
+                      <ResourceCreateAction
+                        label="Thêm mức cước"
+                        onClick={handleOpenCreate}
+                      />
+                    )}
+                  </div>
+                }
+              />
+              <p className="mt-2 text-[13px] text-muted-foreground">
+                Thiết lập đơn giá gửi hàng theo tuyến xe, loại hàng hóa, nấc khối
+                lượng và thời gian hiệu lực.
+              </p>
+            </div>
+
+            <section
+              className="overflow-hidden rounded-xl border bg-card shadow-sm"
+              aria-labelledby="shipment-rates-table-heading"
+            >
           <h2 id="shipment-rates-table-heading" className="sr-only">
             Danh sách mức cước gửi hàng
           </h2>
@@ -638,6 +689,8 @@ export function ShipmentRatesManagement() {
             onPageChange={changePage}
           />
         </section>
+        </>
+        )}
 
         <ShipmentRateDetailSheet
           open={detailOpen}

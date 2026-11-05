@@ -34,6 +34,7 @@ test('former demo credentials are sent to the real login endpoint', async () => 
   assert.deepEqual(JSON.parse(calls[0].init.body), {
     phoneNumber: '+84912345678',
     password: '123456',
+    accountType: 'KHACH_HANG',
   });
   assert.equal(response.data.accessToken, 'server-token');
 });

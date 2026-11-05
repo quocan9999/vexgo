@@ -89,4 +89,38 @@ describe('ticket lookup promotion snapshot', () => {
     expect(screen.getByText('Giảm giá của toàn đơn').parentElement?.textContent).toContain('50.000');
     expect(screen.getByText(/không lặp lại mức giảm trên từng vé/i)).toBeTruthy();
   });
+
+  it('displays check-in time before departure and accompanying luggage items on ticket detail', async () => {
+    const body = await (await fetchMock()).json();
+    body.data.diemDonSnapshot = { tenDiem: 'Bến xe Miền Đông', phutCoMatTruoc: 30 };
+    body.data.cargoFee = 80000;
+    body.data.cargoItems = [
+      {
+        name: 'Vali cỡ lớn',
+        quantity: 2,
+        weight: 25,
+        categoryName: 'Hành lý cồng kềnh',
+        note: 'Màu đen',
+      },
+    ];
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => body });
+
+    render(<TicketSearchPage />);
+    fireEvent.change(screen.getByPlaceholderText('Vui lòng nhập số điện thoại'), {
+      target: { value: '0901234567' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Vui lòng nhập mã vé'), {
+      target: { value: 'VE-501' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tra cứu vé' }));
+
+    expect(await screen.findByText(/Thời gian có mặt trước giờ khởi hành/i)).toBeTruthy();
+    expect(screen.getByText(/ít nhất 30 phút/i)).toBeTruthy();
+    expect(screen.getByText(/2x Vali cỡ lớn/i)).toBeTruthy();
+    expect(screen.getByText(/Màu đen/i)).toBeTruthy();
+    expect(screen.getByText(/Kiện hành lý ký gửi hầm xe:/i)).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Mã QR vé VE-501' })).toBeTruthy();
+    const eticketLink = screen.getByRole('link', { name: /Xem vé điện tử/i });
+    expect(eticketLink.getAttribute('href')).toBe('/invoice/41');
+  });
 });

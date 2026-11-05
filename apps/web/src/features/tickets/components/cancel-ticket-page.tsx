@@ -10,6 +10,7 @@ import {
   Loader2,
   MapPin,
   Phone,
+  RotateCcw,
   ShieldAlert,
   Ticket,
   User,
@@ -66,19 +67,22 @@ function formatTimeAndDate(isoString: string | null | undefined): { time: string
 }
 
 function mapPaymentMethod(method: string | null): string {
-  if (!method) return 'Phương thức ban đầu';
+  if (!method) return 'Chuyển khoản VietQR';
   const upper = method.toUpperCase();
   switch (upper) {
+    case 'SEPAY':
+    case 'CHUYEN_KHOAN':
+    case 'VIETQR':
+      return 'Chuyển khoản VietQR';
+    case 'TAI_BEN':
+    case 'TIEN_MAT':
+      return 'Tiền mặt tại bến';
     case 'MOMO':
       return 'Ví MoMo';
     case 'VNPAY':
       return 'Cổng VNPay';
     case 'ZALOPAY':
       return 'Ví ZaloPay';
-    case 'TIEN_MAT':
-      return 'Tiền mặt';
-    case 'CHUYEN_KHOAN':
-      return 'Chuyển khoản ngân hàng';
     default:
       return method;
   }
@@ -621,29 +625,56 @@ function CancelTicketContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAF9] py-8 font-sans">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6">
-        {/* Title OUTSIDE card, centered, blue */}
-        <div className="mb-6 sm:mb-8 text-center">
-          <h1 className="text-2xl md:text-3xl font-black text-[#0060c4] tracking-tight uppercase">
-            HỦY VÉ
-          </h1>
-        </div>
+    <div className="min-h-screen bg-[#F4F6F8] font-sans pb-24">
+      {/* HERO BANNER SECTION */}
+      <div className="bg-[#17223B] text-white pt-10 pb-20 px-4 sm:px-6 relative overflow-hidden">
+        {/* Glow ambient background effects */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          {/* "Xem điều kiện hủy vé" button INSIDE the card */}
-          <div className="flex justify-end pt-5 pr-6 sm:pt-6 sm:pr-8">
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
+              Hủy vé trực tuyến , <br className="hidden sm:inline" />
+              <span className="text-[#FF7D42]">nhanh chóng – minh bạch</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
+              Kiểm tra điều kiện hoàn hủy, mức phí theo quy định nhà xe và nhận tiền hoàn nhanh chóng, an toàn.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Card Container */}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 -mt-10 relative z-20">
+        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+          {/* Top card bar: Header & "Xem điều kiện hủy vé" */}
+          <div className="px-6 sm:px-8 py-5 bg-gradient-to-r from-rose-50/70 via-white to-slate-50 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100/60 shadow-xs">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-black text-slate-900">
+                  Thủ tục hủy vé xe
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {step === 1 ? 'Nhập thông tin xác thực để kiểm tra vé' : step === 2 ? 'Xác nhận thông tin & tính toán hoàn tiền' : 'Hoàn tất thủ tục hủy vé'}
+                </p>
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={() => setShowPolicyModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-amber-600 hover:text-amber-700 hover:underline transition-all cursor-pointer bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200/60"
             >
               <HelpCircle className="w-4 h-4 text-amber-500 shrink-0" />
               <span>Xem điều kiện hủy vé</span>
             </button>
           </div>
 
-          <div className="p-6 md:p-10 pt-2 sm:pt-3">
+          <div className="p-6 md:p-10 pt-6 sm:pt-8">
             {/* Step 1: Input Code and Phone */}
             {step === 1 && (
               <form onSubmit={handleLookup} className="max-w-xl mx-auto space-y-5">
@@ -982,20 +1013,22 @@ function CancelTicketContent() {
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-base pt-3 border-t border-slate-200">
-                      <span className="font-bold text-slate-900">Số tiền hoàn lại:</span>
-                      <span className="font-black text-rose-600 text-lg">
+                      <span className="font-bold text-slate-900">Số tiền hoàn lại dự kiến:</span>
+                      <span className="font-black text-emerald-600 text-lg">
                         {formatCurrency(refundAmount)}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="text-[13px] text-slate-500 text-center">
-                  Tiền sẽ được xử lý hoàn về phương thức{' '}
-                  <strong className="text-slate-700">
-                    {mapPaymentMethod(ticket.paymentMethod)} ({formatPhoneDisplay(ticket.passengerPhone || phone)})
-                  </strong>{' '}
-                  trong vòng 1-3 ngày làm việc.
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-2 font-bold text-amber-950">
+                    <Phone className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Lưu ý về thủ tục nhận tiền hoàn:</span>
+                  </div>
+                  <p className="leading-relaxed text-amber-800">
+                    Hệ thống chỉ thực hiện thao tác hủy vé và giải phóng chỗ ngồi. Sau khi xác nhận hủy, quý khách vui lòng <strong>liên hệ trực tiếp nhà xe {ticket.busCompanyName ? (ticket.busCompanyName.startsWith('Nhà xe') ? ticket.busCompanyName : `Nhà xe ${ticket.busCompanyName}`) : ''}</strong> để được hướng dẫn nhận lại tiền hoàn vé theo quy định.
+                  </p>
                 </div>
 
                 {!isCancelled && !isPastDeparture && (
@@ -1007,7 +1040,7 @@ function CancelTicketContent() {
                       className="mt-1 w-4 h-4 rounded border-slate-300 text-[#E04115] focus:ring-[#E04115] cursor-pointer"
                     />
                     <span className="text-sm text-slate-700 font-medium">
-                      Tôi đã đọc, hiểu và đồng ý với chính sách phí hủy vé của nhà xe.
+                      Tôi đã đọc, hiểu và đồng ý hủy vé (sẽ liên hệ nhà xe để nhận lại tiền hoàn).
                     </span>
                   </label>
                 )}
@@ -1081,11 +1114,27 @@ function CancelTicketContent() {
                         Vé <strong className="font-mono text-slate-800">{cancelResult?.ticketCode || ticket?.ticketCode}</strong> đã được hủy và hệ thống đã giải phóng ghế{' '}
                         <strong className="text-slate-800">{ticket?.seatNumber}</strong>.
                       </>
-                    )}{' '}
-                    Số tiền <strong className="text-rose-600 font-black">{formatCurrency(refundAmount)}</strong> đang được xử lý hoàn về phương thức thanh toán ban đầu.
+                    )}
                   </p>
                 </div>
-                <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+
+                <div className="p-5 rounded-2xl bg-amber-50/90 border border-amber-200 text-left max-w-md mx-auto space-y-2.5 shadow-xs">
+                  <div className="flex items-center gap-2 font-black text-amber-950 text-base">
+                    <Phone className="w-5 h-5 text-amber-600 shrink-0" />
+                    <span>Vui lòng liên hệ nhà xe để nhận tiền hoàn</span>
+                  </div>
+                  {cancelResult?.refundAmount !== undefined && cancelResult.refundAmount > 0 && (
+                    <div className="p-3 bg-white/80 rounded-xl border border-amber-200/60 flex items-center justify-between text-sm">
+                      <span className="text-slate-600 font-medium">Số tiền hoàn dự kiến:</span>
+                      <strong className="font-black text-emerald-600 text-base">{formatCurrency(cancelResult.refundAmount)}</strong>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Hệ thống website đã ghi nhận hủy vé và giải phóng chỗ ngồi thành công. Quý khách vui lòng <strong>liên hệ trực tiếp hotline {ticket?.busCompanyName || 'nhà xe'}</strong> để được hỗ trợ kiểm tra và nhận lại tiền hoàn vé theo quy định.
+                  </p>
+                </div>
+
+                <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Link
                     href="/"
                     className="w-full sm:w-auto h-12 px-8 flex items-center justify-center bg-[#0060c4] hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-md shadow-[#0060c4]/20"
@@ -1096,7 +1145,7 @@ function CancelTicketContent() {
                     href="/tickets/lookup"
                     className="w-full sm:w-auto h-12 px-8 flex items-center justify-center bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-colors"
                   >
-                    Tra cứu vé
+                    Tra cứu vé xe
                   </Link>
                 </div>
               </div>
@@ -1130,19 +1179,26 @@ function CancelTicketContent() {
               <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-900 space-y-1.5">
                 <p className="font-bold text-sm text-amber-900">Quy định về thời gian hủy:</p>
                 <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-amber-800">
-                  <li><strong>Trước giờ khởi hành {'>'} 24 tiếng:</strong> Phí hủy 10% giá vé, hoàn lại 90%.</li>
-                  <li><strong>Trước giờ khởi hành từ 2 giờ 30 phút đến 24 tiếng:</strong> Phí hủy 20% giá vé, hoàn lại 80%.</li>
+                  <li><strong>Trước giờ khởi hành {'>='} 2 giờ 30 phút:</strong> Được phép thực hiện hủy vé trực tuyến trên hệ thống.</li>
                   <li><strong>Trước giờ khởi hành dưới 2 giờ 30 phút:</strong> Không áp dụng hủy trực tuyến. Quý khách vui lòng liên hệ trực tiếp với nhà xe để được hỗ trợ.</li>
-                  <li><strong>Sau khi chuyến xe đã khởi hành:</strong> Vé không còn giá trị hủy hoặc hoàn tiền.</li>
+                  <li><strong>Sau khi chuyến xe đã khởi hành:</strong> Vé không còn giá trị hủy.</li>
                 </ul>
               </div>
 
               <div className="space-y-2">
-                <p className="font-bold text-slate-800 text-sm">Quy định hoàn tiền:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-slate-600">
-                  <li>Tiền hoàn sẽ được chuyển về đúng phương thức thanh toán ban đầu (Ví MoMo, VNPay, ZaloPay, Thẻ ngân hàng).</li>
-                  <li>Thời gian hoàn tiền: từ 1 đến 3 ngày làm việc (không tính Thứ 7, Chủ Nhật và ngày lễ).</li>
-                  <li>Mỗi vé chỉ được thực hiện hủy một lần duy nhất. Ghế sẽ được giải phóng ngay sau khi hủy thành công.</li>
+                <p className="font-bold text-slate-800 text-sm">Quy định về phí hủy & hoàn tiền:</p>
+                <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm text-slate-600">
+                  <li>
+                    <strong>Trước giờ khởi hành trên 24 giờ:</strong> Phí hủy 10% giá vé (dự kiến nhận lại 90% tiền vé).
+                  </li>
+                  <li>
+                    <strong>Từ 2 giờ 30 phút đến 24 giờ:</strong> Phí hủy 20% giá vé (dự kiến nhận lại 80% tiền vé).
+                  </li>
+                  <li>
+                    <strong>Phương thức nhận tiền hoàn:</strong> Website chỉ thực hiện hủy vé và giải phóng chỗ ngồi. Quý khách vui lòng <strong>liên hệ trực tiếp nhà xe</strong> để được hướng dẫn đối soát và nhận lại số tiền hoàn theo quy định.
+                  </li>
+                  <li>Hệ thống sẽ giải phóng ghế ngồi ngay lập tức sau khi quý khách xác nhận hủy vé để phục vụ hành khách khác.</li>
+                  <li>Mỗi vé chỉ được thực hiện hủy một lần duy nhất và không thể khôi phục sau khi đã hủy thành công.</li>
                 </ul>
               </div>
             </div>

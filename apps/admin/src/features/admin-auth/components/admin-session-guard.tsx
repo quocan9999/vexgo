@@ -113,7 +113,9 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
         : '/'
     : tenantNeedsRedirect
     ? tenantLandingPath
-    : scope === 'platform' && requiredPermissions !== null
+    : scope === 'platform' &&
+        requiredPermissions !== null &&
+        !pathname.startsWith('/reviews')
       ? '/'
       : scope === 'platform' &&
           requiredPlatformPermissions !== null &&

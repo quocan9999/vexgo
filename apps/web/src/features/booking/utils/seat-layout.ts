@@ -3,7 +3,9 @@ import type { ApiTripSeat } from '@/features/trips/services/trips.api';
 const COORDINATE_UNIT_PX = 64 / 1000;
 const FALLBACK_X_COORDINATES = [160, 360, 640, 840] as const;
 const FALLBACK_ROW_STEP = 1000;
-const FALLBACK_MIN_X_GAP = 180;
+// Khoảng cách tối thiểu giữa 2 ghế để chống đè chồng.
+// Đặt 100 để không bắt nhầm các hàng 5 ghế liền kề hợp lệ (khoảng cách 140 - 170 permille)
+const FALLBACK_MIN_X_GAP = 100;
 const FALLBACK_MIN_Y_GAP = 875;
 
 export type PositionedTripSeat = {
@@ -33,16 +35,44 @@ function getSeatFloor(seat: ApiTripSeat): number {
   return seatNumber.startsWith('B') || position.includes('trên') ? 2 : 1;
 }
 
-function hasCoordinates(seat: ApiTripSeat): seat is ApiTripSeat & {
-  x: number;
-  y: number;
-} {
-  return (
-    typeof seat.x === 'number' &&
-    Number.isFinite(seat.x) &&
-    typeof seat.y === 'number' &&
-    Number.isFinite(seat.y)
-  );
+const GRID_COLUMNS: Record<number, readonly number[]> = {
+  1: [500],
+  2: [340, 660],
+  3: [180, 500, 820],
+  4: [160, 360, 640, 840],
+  5: [110, 305, 500, 695, 890],
+};
+
+function resolveSeatCoordinates(
+  seat: ApiTripSeat,
+  maxGridCol = 4,
+): { x: number; y: number } | null {
+  if (
+    typeof seat.x !== 'number' ||
+    !Number.isFinite(seat.x) ||
+    typeof seat.y !== 'number' ||
+    !Number.isFinite(seat.y)
+  ) {
+    return null;
+  }
+
+  // Already standard permille coordinates (e.g. x: 50..950, y >= 200)
+  if (seat.x >= 50 && seat.y >= 200) {
+    return { x: seat.x, y: seat.y };
+  }
+
+  // Grid coordinates (col: 1..10, row: 1..50)
+  if (seat.x >= 1 && seat.x <= 10 && seat.y >= 1 && seat.y <= 50) {
+    const colIndex = Math.round(seat.x);
+    const rowIndex = Math.round(seat.y);
+    const columns = GRID_COLUMNS[maxGridCol] ?? GRID_COLUMNS[4];
+    const x =
+      columns[Math.min(Math.max(colIndex - 1, 0), columns.length - 1)] ?? 500;
+    const y = rowIndex * FALLBACK_ROW_STEP;
+    return { x, y };
+  }
+
+  return null;
 }
 
 function findFallbackCoordinates(
@@ -89,13 +119,30 @@ export function getTripSeatFloorLayouts(
           sensitivity: 'base',
         }),
       );
-      const occupied = bySeatNumber
-        .filter(hasCoordinates)
-        .map((seat) => ({ x: seat.x, y: seat.y }));
+      // Detect max grid column if floor has grid coordinates (e.g. 1..10)
+      const gridCols = bySeatNumber
+        .map((s) => s.x)
+        .filter(
+          (x): x is number =>
+            typeof x === 'number' && Number.isFinite(x) && x >= 1 && x <= 10,
+        );
+      const maxGridCol =
+        gridCols.length > 0 ? Math.min(5, Math.max(...gridCols)) : 4;
+
+      const occupied: Array<{ x: number; y: number }> = [];
       const positionedSeats = bySeatNumber.map((seat, index) => {
-        const coordinates = hasCoordinates(seat)
-          ? { x: seat.x, y: seat.y }
-          : findFallbackCoordinates(occupied, index);
+        const resolved = resolveSeatCoordinates(seat, maxGridCol);
+        const isColliding =
+          resolved &&
+          occupied.some(
+            (pos) =>
+              Math.abs(pos.x - resolved.x) < FALLBACK_MIN_X_GAP &&
+              Math.abs(pos.y - resolved.y) < FALLBACK_MIN_Y_GAP,
+          );
+        const coordinates =
+          resolved && !isColliding
+            ? resolved
+            : findFallbackCoordinates(occupied, index);
         occupied.push(coordinates);
 
         return {

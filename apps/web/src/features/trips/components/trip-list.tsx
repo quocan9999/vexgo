@@ -62,6 +62,9 @@ function mapApiToTrip(item: ApiTrip): Trip {
     availableSeats: item.availableSeats,
     totalSeats: item.vehicle.capacity,
     rating: item.busCompany.rating ?? Number.NaN,
+    busCompanyId: item.busCompany.id,
+    reviewsCount: item.busCompany.reviewsCount ?? undefined,
+    departureDate: item.departureTime,
     image: item.busCompany.logo || '/images/route1.jpg',
     amenities: item.vehicle.amenities || [],
     status:
@@ -768,17 +771,6 @@ export function TripList() {
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
-                    Từ khóa tìm kiếm
-                  </label>
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Điểm đi, điểm đến, loại xe..."
-                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123]"
-                  />
-                </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
                     Loại xe / dịch vụ

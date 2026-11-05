@@ -56,7 +56,7 @@ try {
   // Exercise legacy references in both domains in addition to the real develop seed.
   await db.$executeRawUnsafe('UPDATE PhieuDatVe SET khuyenMaiId = ? ORDER BY phieuDatVeId LIMIT 1', oldPromotions[0].khuyenMaiId);
   await db.$executeRawUnsafe('UPDATE PhieuGuiHang SET khuyenMaiId = ? ORDER BY phieuGuiHangId LIMIT 1', oldPromotions[0].khuyenMaiId);
-  const tables = ['PhieuDatVe', 'PhieuGuiHang', 'DonGiaoDich', 'Ve', 'ThanhToan', 'HoaDon'];
+  const tables = ['PhieuDatVe', 'PhieuGuiHang', 'DonGiaoDich', 'Ve', 'ThanhToan'];
   const snapshots = [];
   for (const table of tables) {
     const rows = await db.$queryRawUnsafe(`SELECT * FROM \`${table}\` ORDER BY 1`);

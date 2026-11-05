@@ -287,6 +287,52 @@ describe('AuthService login', () => {
     );
   });
 
+  it('keeps SUPER_ADMIN session clean as platform even if linked to a staff record', async () => {
+    prisma.taiKhoan.findUnique.mockResolvedValueOnce({
+      taiKhoanId: 1,
+      soDienThoai: '+84900000000',
+      email: 'superadmin@vexgo.test',
+      trangThai: 'HOAT_DONG',
+      taiKhoanVaiTros: [
+        {
+          vaiTro: {
+            vaiTroId: 1,
+            tenVaiTro: 'SUPER_ADMIN',
+            vaiTroQuyens: [{ quyen: { tenQuyen: 'admin-account:read' } }],
+          },
+        },
+      ],
+      nhanVien: {
+        nhanVienId: 378,
+        hoTen: 'Quản trị viên VexGo',
+        nhaXeId: null,
+        nhaXe: null,
+      },
+      khachHang: null,
+    });
+    permissionLoader.load.mockResolvedValueOnce([
+      {
+        roleName: 'SUPER_ADMIN',
+        permissions: ['admin-account:read'],
+      },
+    ]);
+
+    await expect(service.getCurrentSession(1)).resolves.toEqual({
+      accountId: 1,
+      fullName: 'Quản trị viên VexGo',
+      phoneNumber: '+84900000000',
+      email: 'superadmin@vexgo.test',
+      roles: ['SUPER_ADMIN'],
+      permissions: ['admin-account:read'],
+      employee: null,
+      busCompanyId: null,
+    });
+    expect(permissionLoader.load).toHaveBeenCalledWith(
+      [{ roleId: 1, roleName: 'SUPER_ADMIN' }],
+      null,
+    );
+  });
+
   it('returns only tenant permissions for an employee current session', async () => {
     prisma.taiKhoan.findUnique.mockResolvedValueOnce({
       taiKhoanId: 2,

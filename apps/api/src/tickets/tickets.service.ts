@@ -47,7 +47,15 @@ const TICKET_INCLUDE = {
         include: {
           khachHang: true,
           nhaXe: true,
-          phieuGuiHang: { select: { trangThai: true } },
+          phieuGuiHang: {
+            select: {
+              trangThai: true,
+              tongPhi: true,
+              hangHoas: {
+                include: { loaiHangHoa: true },
+              },
+            },
+          },
           thanhToans: {
             where: {
               loaiGiaoDich: 'THANH_TOAN',
@@ -746,7 +754,7 @@ export class TicketsService {
                 refundAmount: Number(totalRefundAmount.toString()),
                 message: totalRefundAmount.isZero()
                   ? 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.'
-                  : 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+                  : 'Hủy vé thành công. Quý khách vui lòng liên hệ nhà xe để được hỗ trợ hoàn tiền.',
               },
             },
           };
@@ -846,6 +854,31 @@ export class TicketsService {
       ticket.phieuDatVe?.tongTienBanDau ?? 0,
     );
     const discountAmount = Number(ticket.phieuDatVe?.soTienGiamKhuyenMai ?? 0);
+    const shipment = order?.phieuGuiHang as
+      | {
+          trangThai?: string;
+          tongPhi?: Prisma.Decimal | number | string | null;
+          hangHoas?: Array<{
+            tenHang: string;
+            soLuong: number;
+            khoiLuong: Prisma.Decimal | number | string;
+            moTa?: string | null;
+            loaiHangHoa?: {
+              tenLoai?: string;
+              nhomSucChua?: string;
+            } | null;
+          }>;
+        }
+      | null
+      | undefined;
+    const cargoItems = (shipment?.hangHoas ?? []).map((h) => ({
+      name: h.tenHang,
+      quantity: h.soLuong,
+      weight: Number(h.khoiLuong),
+      category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
+      categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
+      note: h.moTa ?? null,
+    }));
 
     return {
       ticketId: ticket.veId,
@@ -859,6 +892,8 @@ export class TicketsService {
       originalTicketSubtotal,
       discountAmount,
       ticketSubtotal: originalTicketSubtotal - discountAmount,
+      cargoFee: Number(shipment?.tongPhi ?? 0),
+      cargoItems,
       route,
       origin: tuyenXe?.diemDi ?? null,
       destination: tuyenXe?.diemDen ?? null,
@@ -874,7 +909,12 @@ export class TicketsService {
       paymentStatus: order?.trangThai ?? null,
       paymentMethod: latestPayment?.phuongThuc ?? null,
       pickup: ticket.diemDon ?? null,
-      dropoff: tuyenXe?.diemDen ?? null,
+      dropoff:
+        (ticket.diemTraSnapshot as { tenDiem?: string } | null)?.tenDiem ??
+        tuyenXe?.diemDen ??
+        null,
+      diemDonSnapshot: ticket.diemDonSnapshot ?? null,
+      diemTraSnapshot: ticket.diemTraSnapshot ?? null,
       passengerName: order?.tenKhachHang ?? null,
       passengerPhone: order?.soDienThoaiKhachHang ?? null,
       createdAt: ticket.createdAt.toISOString(),

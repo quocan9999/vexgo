@@ -190,12 +190,12 @@ test('trip booking renders the real seat map returned for that trip', async () =
 });
 
 const serviceScreens = [
-  { path: '/tra-cuu-ve', marker: 'TRA CỨU THÔNG TIN ĐẶT VÉ' },
+  { path: '/tra-cuu-ve', marker: 'Tra cứu thông tin đặt vé' },
   { path: '/cancel-ticket', marker: 'Hủy Vé' },
   { path: '/invoice/123', marker: 'VÉ ĐIỆN TỬ' },
   { path: '/payment', marker: 'Tổng thanh toán' },
   { path: '/send-freight', marker: 'Gửi hàng theo nhà xe' },
-  { path: '/tickets/lookup', marker: 'TRA CỨU THÔNG TIN ĐẶT VÉ' },
+  { path: '/tickets/lookup', marker: 'Tra cứu thông tin đặt vé' },
   { path: '/tickets/123/cancel', marker: 'Hủy Vé' },
   { path: '/invoices/123', marker: 'VÉ ĐIỆN TỬ' },
   { path: '/payments/bank-transfer', marker: 'Tổng thanh toán' },

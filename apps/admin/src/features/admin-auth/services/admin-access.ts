@@ -43,6 +43,11 @@ export const ADMIN_OPERATION_SECTIONS = [
     readPermission: 'chat:read',
   },
   {
+    section: 'reviews',
+    href: '/reviews',
+    readPermission: 'review:read',
+  },
+  {
     section: 'booking-management',
     href: '/booking-management',
     readPermission: 'booking:read',
@@ -99,7 +104,9 @@ export type AdminPermission =
   | 'role:read'
   | 'permission:assign'
   | 'chat:read'
-  | 'chat:manage';
+  | 'chat:manage'
+  | 'review:read'
+  | 'review:moderate';
 
 export type PlatformAdminPermission =
   | 'bus-company:read'
@@ -257,6 +264,7 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/promotions')) return ['promotion:read'];
   if (matchesPath(pathname, '/shipments')) return ['shipment:read'];
   if (matchesPath(pathname, '/revenue-reports')) return ['revenue:read'];
+  if (matchesPath(pathname, '/reviews')) return ['review:read'];
   return null;
 }
 

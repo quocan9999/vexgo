@@ -550,7 +550,7 @@ describe('Admin account management API', () => {
       .expect(400);
     expect(response.body.error).toBe('VALIDATION_ERROR');
     expect(
-      await prisma.taiKhoan.findUnique({
+      await prisma.taiKhoan.findFirst({
         where: { soDienThoai: identity.phoneNumber },
         select: { taiKhoanId: true },
       }),
@@ -576,7 +576,7 @@ describe('Admin account management API', () => {
 
       expect(response.body.error).toBe('VALIDATION_ERROR');
       expect(
-        await prisma.taiKhoan.findUnique({
+        await prisma.taiKhoan.findFirst({
           where: { soDienThoai: identity.phoneNumber },
           select: { taiKhoanId: true },
         }),
@@ -692,7 +692,7 @@ describe('Admin account management API', () => {
       .expect(409);
     expect(duplicateCode.body.error).toBe('EMPLOYEE_CODE_EXISTS');
     expect(
-      await prisma.taiKhoan.findUnique({
+      await prisma.taiKhoan.findFirst({
         where: { soDienThoai: duplicateCodeIdentity.phoneNumber },
         select: { taiKhoanId: true },
       }),
@@ -728,7 +728,7 @@ describe('Admin account management API', () => {
 
     expect(response.body.error).toBe('BUS_COMPANY_NOT_FOUND');
     expect(
-      await prisma.taiKhoan.findUnique({
+      await prisma.taiKhoan.findFirst({
         where: { soDienThoai: identity.phoneNumber },
         select: { taiKhoanId: true },
       }),

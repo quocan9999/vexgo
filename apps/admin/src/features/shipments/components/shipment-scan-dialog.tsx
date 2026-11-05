@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -54,6 +55,7 @@ export function ShipmentScanDialog({
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const scanLockRef = useRef<boolean>(false);
+  const handleLookupCodeRef = useRef<(rawCode: string, source: 'manual' | 'camera') => Promise<void>>(() => Promise.resolve());
 
   // Tự động focus input khi mở dialog hoặc chuyển về tab máy quét
   useEffect(() => {
@@ -138,14 +140,14 @@ export function ShipmentScanDialog({
         const controls = await reader.decodeFromVideoDevice(
           deviceIdToUse,
           videoRef.current,
-          (result, error) => {
+          (result) => {
             if (!result || scanLockRef.current) return;
 
             const text = result.getText();
             if (!text) return;
 
             scanLockRef.current = true;
-            handleLookupCode(text, 'camera');
+            handleLookupCodeRef.current(text, 'camera');
           },
         );
 
@@ -156,10 +158,10 @@ export function ShipmentScanDialog({
 
         controlsRef.current = controls;
         setCameraLoading(false);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isMounted) return;
         setCameraError(
-          err.message ||
+          (err instanceof Error ? err.message : '') ||
             'Không thể truy cập camera. Vui lòng cấp quyền máy ảnh trên trình duyệt.',
         );
         setCameraLoading(false);
@@ -173,6 +175,8 @@ export function ShipmentScanDialog({
       stopCamera();
     };
   }, [open, tab, selectedDeviceId]);
+
+  handleLookupCodeRef.current = handleLookupCode;
 
   // Thực hiện tra cứu mã vận đơn
   async function handleLookupCode(rawCode: string, source: 'manual' | 'camera') {
@@ -220,8 +224,10 @@ export function ShipmentScanDialog({
       onOpenChange(false);
       toast.success(`Đã tìm thấy vận đơn: ${match.waybillCode}`);
       onSelectShipment(match.shipmentId);
-    } catch (err: any) {
-      const errMsg = err.message || 'Lỗi khi tra cứu phiếu gửi hàng.';
+    } catch (err: unknown) {
+      const errMsg =
+        (err instanceof Error ? err.message : '') ||
+        'Lỗi khi tra cứu phiếu gửi hàng.';
       if (source === 'manual') {
         setManualError(errMsg);
       } else {

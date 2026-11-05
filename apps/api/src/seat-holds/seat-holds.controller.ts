@@ -41,6 +41,12 @@ export class SeatHoldsController {
     description: 'Ghế vừa được người khác giữ hoặc đặt mua (SEAT_UNAVAILABLE).',
     type: ApiErrorResponseDto,
   })
+  @ApiResponse({
+    status: 429,
+    description:
+      'Số điện thoại này đã tạo nhiều đơn giữ chỗ chưa thanh toán. Vui lòng quay lại sau 30 phút để tiếp tục.',
+    type: ApiErrorResponseDto,
+  })
   async createSeatHold(
     @Body() dto: CreateSeatHoldDto,
     @CurrentPrincipal() principal?: AuthPrincipal,
@@ -49,6 +55,7 @@ export class SeatHoldsController {
       dto.tripId,
       dto.seatIds,
       principal,
+      dto.phone,
     );
   }
 

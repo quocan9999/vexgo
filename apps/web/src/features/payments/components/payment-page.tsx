@@ -270,7 +270,7 @@ function PaymentContent() {
         ? `booking:${bookingDraft.bookingId}:${bookingDraft.bookingCode}:${bookingDraft.passenger.phoneNumber}`
         : null;
 
-  const [selectedLegIndex, setSelectedLegIndex] = useState(0);
+  const [selectedLegIndex, setSelectedLegIndex] = useState<number | 'all'>('all');
   const [legSnapshots, setLegSnapshots] = useState<[PaymentReadSnapshot | null, PaymentReadSnapshot | null]>([null, null]);
   const [clockTick, setClockTick] = useState(0);
   const [paymentReadSnapshot, setPaymentReadSnapshot] =
@@ -279,7 +279,71 @@ function PaymentContent() {
   const [showCargoDetailModal, setShowCargoDetailModal] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const activeLegSnapshot = isRoundTripBooking ? legSnapshots[selectedLegIndex] : null;
+  const roundTripCombinedSnapshot = useMemo<PaymentReadSnapshot | null>(() => {
+    if (!isRoundTripBooking || !bookingDraft) return null;
+    const snap0 = legSnapshots[0];
+    const snap1 = legSnapshots[1];
+    if (!snap0 || !snap1) return null;
+    const isPaid0 = snap0.terminalStatus === 'paid';
+    const isPaid1 = snap1.terminalStatus === 'paid';
+
+    if (isPaid0 && !isPaid1) return snap1;
+    if (!isPaid0 && isPaid1) return snap0;
+
+    const totalAmt =
+      snap0.totalAmount !== null && snap1.totalAmount !== null
+        ? snap0.totalAmount + snap1.totalAmount
+        : null;
+    const expectedTotal =
+      (snap0.expectedTotalAmount || bookingDraft.legs[0]?.subtotal || 0) +
+      (snap1.expectedTotalAmount || bookingDraft.legs[1]?.subtotal || 0);
+
+    const comboOrderCode =
+      bookingDraft.comboCode || bookingDraft.orderCode || snap0.expectedOrderCode || '';
+
+    const terminalStatus =
+      isPaid0 && isPaid1
+        ? 'paid'
+        : snap0.terminalStatus || snap1.terminalStatus || null;
+
+    return {
+      draftId: snap0.draftId,
+      resourceKey: paymentResourceKey || '',
+      expectedOrderCode: comboOrderCode,
+      expectedTotalAmount: expectedTotal,
+      orderCode: comboOrderCode,
+      totalAmount: totalAmt,
+      promotionCode: snap0.promotionCode || snap1.promotionCode,
+      originalTicketSubtotal:
+        snap0.originalTicketSubtotal !== null || snap1.originalTicketSubtotal !== null
+          ? (snap0.originalTicketSubtotal ?? 0) + (snap1.originalTicketSubtotal ?? 0)
+          : null,
+      discountAmount:
+        snap0.discountAmount !== null || snap1.discountAmount !== null
+          ? (snap0.discountAmount ?? 0) + (snap1.discountAmount ?? 0)
+          : null,
+      ticketSubtotal:
+        snap0.ticketSubtotal !== null || snap1.ticketSubtotal !== null
+          ? (snap0.ticketSubtotal ?? 0) + (snap1.ticketSubtotal ?? 0)
+          : null,
+      cargoFee:
+        snap0.cargoFee !== null || snap1.cargoFee !== null
+          ? (snap0.cargoFee ?? 0) + (snap1.cargoFee ?? 0)
+          : null,
+      paymentExpiresAt: snap0.paymentExpiresAt || snap1.paymentExpiresAt || null,
+      serverTimeOffsetMs: Math.max(
+        snap0.serverTimeOffsetMs,
+        snap1.serverTimeOffsetMs,
+      ),
+      terminalStatus,
+    };
+  }, [isRoundTripBooking, bookingDraft, legSnapshots, paymentResourceKey]);
+
+  const activeLegSnapshot = isRoundTripBooking
+    ? (selectedLegIndex === 'all'
+        ? roundTripCombinedSnapshot
+        : legSnapshots[selectedLegIndex])
+    : null;
   const activePaymentReadSnapshot = isRoundTripBooking
     ? (activeLegSnapshot?.draftId === draft?.id &&
        activeLegSnapshot?.resourceKey === paymentResourceKey
@@ -1137,61 +1201,14 @@ function PaymentContent() {
 
           {/* Cột 2: QR Code & Thông tin chuyển khoản */}
           <div className="flex-1 flex flex-col items-center">
-            {isRoundTripBooking && bookingDraft && (
-              <div className="flex items-center justify-center gap-3 mb-6 w-full max-w-[520px]">
-                {bookingDraft.legs.map((leg, idx) => {
-                  const isSelected = selectedLegIndex === idx;
-                  const snap = legSnapshots[idx];
-                  const isPaid = snap?.terminalStatus === 'paid';
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setSelectedLegIndex(idx)}
-                      className={`flex-1 py-3 px-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-brand bg-brand/5 ring-2 ring-brand/20 shadow-sm'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-black uppercase text-accent">
-                          {idx === 0 ? 'Chặng 1: Lượt đi' : 'Chặng 2: Lượt về'}
-                        </span>
-                        {isPaid ? (
-                          <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                            ✓ Đã thanh toán
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                            Chờ thanh toán
-                          </span>
-                        )}
-                      </div>
-                      <div className="font-bold text-slate-800 text-sm truncate">
-                        {leg.route}
-                      </div>
-                      <div className="text-xs font-black text-red-600 mt-1">
-                        {leg.subtotal.toLocaleString('vi-VN')}đ
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
             <p className="text-sm font-semibold text-slate-500 mb-1">
               {isRoundTripBooking
-                ? `Thanh toán ${selectedLegIndex === 0 ? 'Chặng 1 (Lượt đi)' : 'Chặng 2 (Lượt về)'}`
+                ? 'Tổng thanh toán vé khứ hồi'
                 : 'Tổng thanh toán'}
             </p>
-            <h1 className="text-5xl font-bold text-red-600 mb-2 tracking-tight">
+            <h1 className="text-5xl font-bold text-red-600 mb-6 tracking-tight">
               {totalFareText}
             </h1>
-            {isRoundTripBooking && (
-              <p className="text-xs font-semibold text-slate-500 mb-6">
-                Tổng 2 chặng: <strong className="text-slate-700">{bookingDraft?.totalFare.toLocaleString('vi-VN')}đ</strong>
-              </p>
-            )}
 
             <div className="w-full max-w-[520px] bg-white rounded-3xl p-7 shadow-sm border border-slate-200 flex flex-col items-center">
               {paymentExpiresAt && !paymentTerminalStatus && (
@@ -1211,25 +1228,8 @@ function PaymentContent() {
                         <CheckCircle2 className="w-8 h-8" />
                       </div>
                       <p className="text-base font-bold text-emerald-800">
-                        {selectedLegIndex === 0 ? 'Chặng 1 (Lượt đi)' : 'Chặng 2 (Lượt về)'} đã được thanh toán thành công!
+                        Vé khứ hồi (cả 2 chặng) đã được thanh toán thành công!
                       </p>
-                      {selectedLegIndex === 0 && legSnapshots[1]?.terminalStatus !== 'paid' ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLegIndex(1)}
-                          className="mt-2 h-10 px-5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
-                        >
-                          Chuyển sang Chặng 2 (Lượt về) để thanh toán
-                        </button>
-                      ) : selectedLegIndex === 1 && legSnapshots[0]?.terminalStatus !== 'paid' ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLegIndex(0)}
-                          className="mt-2 h-10 px-5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
-                        >
-                          Chuyển sang Chặng 1 (Lượt đi) để thanh toán
-                        </button>
-                      ) : null}
                     </div>
                   ) : paymentTerminalStatus === 'paid' && shipmentDraft ? (
                     <div className="flex flex-col items-center gap-3.5 py-5 px-4 text-center w-full">
@@ -1346,37 +1346,42 @@ function PaymentContent() {
               {/* Thông tin chuyển khoản sao chép */}
               {vietQrUrl && vietQrConfig && !paymentTerminalStatus && timeLeft !== 0 && (
                 <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-[13px] space-y-2.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Mã ngân hàng:</span>
-                    <span className="font-bold text-slate-900">{vietQrConfig.bankId}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Mã ngân hàng:</span>
+                    <span className="font-bold text-slate-900 text-right">{vietQrConfig.bankId}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Chủ tài khoản:</span>
-                    <span className="font-bold text-slate-900">{vietQrConfig.accountName}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Chủ tài khoản:</span>
+                    <span className="font-bold text-slate-900 text-right uppercase">{vietQrConfig.accountName}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Số tài khoản:</span>
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Số tài khoản:</span>
+                    <div className="flex items-center gap-2 justify-end min-w-0">
                       <strong className="text-slate-950 font-black tracking-wide">
                         {vietQrConfig.accountNumber}
                       </strong>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(vietQrConfig.accountNumber, 'stk')}
-                        className="text-[11px] text-accent font-bold px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 transition-colors whitespace-nowrap shrink-0"
+                        className="w-[66px] text-[11px] text-accent font-bold py-0.5 rounded bg-accent/10 hover:bg-accent/20 active:scale-95 transition-all whitespace-nowrap shrink-0 text-center cursor-pointer"
                       >
                         {copiedField === 'stk' ? 'Đã chép' : 'Sao chép'}
                       </button>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Nội dung CK:</span>
-                    <div className="flex items-center gap-2">
-                      <strong className="text-emerald-700 font-black">{transferContent}</strong>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Nội dung CK:</span>
+                    <div className="flex items-center gap-2 justify-end min-w-0">
+                      <strong
+                        className="text-emerald-700 font-black font-mono text-xs truncate max-w-[170px] sm:max-w-[210px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60"
+                        title={transferContent}
+                      >
+                        {transferContent}
+                      </strong>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(transferContent, 'nd')}
-                        className="text-[11px] text-accent font-bold px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 transition-colors whitespace-nowrap shrink-0"
+                        className="w-[66px] text-[11px] text-accent font-bold py-0.5 rounded bg-accent/10 hover:bg-accent/20 active:scale-95 transition-all whitespace-nowrap shrink-0 text-center cursor-pointer"
                       >
                         {copiedField === 'nd' ? 'Đã chép' : 'Sao chép'}
                       </button>

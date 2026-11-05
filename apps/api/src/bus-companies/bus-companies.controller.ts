@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
@@ -19,9 +20,13 @@ import { BusCompanyIdParamsDto } from './dto/bus-company-id-params.dto.js';
 import { BusCompanyQueryDto } from './dto/bus-company-query.dto.js';
 import { UpdateBusCompanyDto } from './dto/update-bus-company.dto.js';
 import { UpdateBusCompanyStatusDto } from './dto/update-bus-company-status.dto.js';
+import { UpdateLuggageRatesDto } from './dto/luggage-rates.dto.js';
 import { BusCompaniesService } from './bus-companies.service.js';
 import { OptionalAuth } from '../auth/decorators/public.decorator.js';
-import { OptionalPrincipal } from '../auth/decorators/current-principal.decorator.js';
+import {
+  CurrentPrincipal,
+  OptionalPrincipal,
+} from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
@@ -115,5 +120,72 @@ export class BusCompaniesController {
     @OptionalPrincipal() principal: AuthPrincipal | undefined,
   ) {
     return this.busCompaniesService.findOne(params.id, principal);
+  }
+
+  @Get('my/luggage-rates')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles('SUPER_ADMIN', 'NHA_XE_ADMIN')
+  @ApiOperation({
+    summary: 'Lấy cấu hình cước hành lý của nhà xe hiện tại',
+  })
+  getMyLuggageRates(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Query('busCompanyId') queryCompanyId?: string,
+  ) {
+    const isSuperAdmin = principal.roles.includes('SUPER_ADMIN');
+    const busCompanyId = isSuperAdmin
+      ? (queryCompanyId ? Number(queryCompanyId) : principal.nhaXeId || 1)
+      : (principal.nhaXeId || 1);
+    return this.busCompaniesService.getLuggageRates(busCompanyId);
+  }
+
+  @Put('my/luggage-rates')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles('SUPER_ADMIN', 'NHA_XE_ADMIN')
+  @ApiOperation({
+    summary: 'Cập nhật cấu hình cước hành lý của nhà xe hiện tại',
+  })
+  updateMyLuggageRates(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body() body: UpdateLuggageRatesDto,
+    @Query('busCompanyId') queryCompanyId?: string,
+  ) {
+    const isSuperAdmin = principal.roles.includes('SUPER_ADMIN');
+    const busCompanyId = isSuperAdmin
+      ? (queryCompanyId ? Number(queryCompanyId) : principal.nhaXeId || 1)
+      : (principal.nhaXeId || 1);
+    return this.busCompaniesService.updateLuggageRates(busCompanyId, body);
+  }
+
+  @Get(':id/luggage-rates')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles('SUPER_ADMIN', 'NHA_XE_ADMIN')
+  @ApiOperation({
+    summary: 'Lấy cấu hình cước hành lý theo ID nhà xe',
+  })
+  getLuggageRates(@Param() params: BusCompanyIdParamsDto) {
+    return this.busCompaniesService.getLuggageRates(params.id);
+  }
+
+  @Put(':id/luggage-rates')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles('SUPER_ADMIN', 'NHA_XE_ADMIN')
+  @ApiOperation({
+    summary: 'Cập nhật cấu hình cước hành lý theo ID nhà xe',
+  })
+  updateLuggageRates(
+    @Param() params: BusCompanyIdParamsDto,
+    @Body() body: UpdateLuggageRatesDto,
+  ) {
+    return this.busCompaniesService.updateLuggageRates(params.id, body);
+  }
+
+  @Get('trips/:tripId/luggage-packages')
+  @OptionalAuth()
+  @ApiOperation({
+    summary: 'Lấy bảng giá gói hành lý áp dụng cho chuyến xe (Public)',
+  })
+  getTripLuggagePackages(@Param('tripId') tripId: string) {
+    return this.busCompaniesService.getTripLuggageRates(Number(tripId));
   }
 }

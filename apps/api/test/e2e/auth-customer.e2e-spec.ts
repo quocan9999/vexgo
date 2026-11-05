@@ -39,7 +39,7 @@ describe('phone auth and customer profile flow', () => {
 
   afterAll(async () => {
     if (prisma) {
-      const account = await prisma.taiKhoan.findUnique({
+      const account = await prisma.taiKhoan.findFirst({
         where: { soDienThoai: phone },
         select: { taiKhoanId: true },
       });

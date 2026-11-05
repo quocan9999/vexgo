@@ -164,6 +164,7 @@ export type ShipmentResponseData = {
 export type PublicShipmentLookupData = {
   waybillCode: string;
   status: string;
+  freightPayer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
   orderCode?: string;
   amount?: number | string;
   orderStatus?: string;
@@ -181,6 +182,14 @@ export type PublicShipmentLookupData = {
   packageCount: number;
   bookingPromotionCode?: string | null;
   timeline: Array<{ status: string; time: string }>;
+};
+
+export type CancelShipmentResult = {
+  waybillCode: string;
+  status: 'DA_HUY';
+  updatedAt: string;
+  hasPaidBeforeCancel: boolean;
+  message: string;
 };
 
 export type CustomerShipmentListItem = {
@@ -225,12 +234,20 @@ export type ShipmentOption = {
   busCompany: { id: number; name: string };
   route: { origin: string; destination: string };
   minimumEstimatedFee: number | null;
+  surcharges?: {
+    fragile: number;
+    valuable: number;
+  };
 };
 
 export type ShipmentQuote = {
   baseFee: number;
   serviceFee: number;
   totalFee: number;
+  surcharges?: {
+    fragile: number;
+    valuable: number;
+  };
 };
 
 // Native date inputs use ISO internally; the shipment API uses DD-MM-YYYY.
@@ -439,6 +456,39 @@ export const shipmentsApi = {
         res.status,
         undefined,
         res.headers?.get('Retry-After') ?? null,
+      );
+    }
+
+    return res.json();
+  },
+
+  async cancelShipment(
+    params: {
+      waybillCode: string;
+      phoneNumber: string;
+      reason?: string;
+    },
+    accessToken?: string,
+  ): Promise<{ data: CancelShipmentResult }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/shipments/cancel`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
+        err.message || 'Không thể hủy đơn gửi hàng.',
+        res.status,
+        err.details,
       );
     }
 

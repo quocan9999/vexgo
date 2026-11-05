@@ -1779,11 +1779,43 @@ export class TripsService {
       : null;
     const defaultPrice = fare ? Number(fare.giaNiemYet) : undefined;
 
-    const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
+    let gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
       where: { chuyenXeId: id },
       include: { ghe: true },
       orderBy: { ghe: { tenGhe: 'asc' } },
     });
+
+    if (
+      gheChuyenXes.length === 0 &&
+      trip.xeId &&
+      this.prisma.ghe?.findMany &&
+      this.prisma.gheChuyenXe?.createMany
+    ) {
+      const vehicleSeats = await this.prisma.ghe.findMany({
+        where: { xeId: trip.xeId },
+        orderBy: { tenGhe: 'asc' },
+      });
+
+      if (vehicleSeats.length > 0) {
+        await this.prisma.gheChuyenXe.createMany({
+          data: vehicleSeats.map((ghe) => ({
+            chuyenXeId: id,
+            gheId: ghe.gheId,
+            trangThai: 'TRONG',
+            tang: ghe.tang,
+            toaDoX: ghe.toaDoX,
+            toaDoY: ghe.toaDoY,
+          })),
+          skipDuplicates: true,
+        });
+
+        gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
+          where: { chuyenXeId: id },
+          include: { ghe: true },
+          orderBy: { ghe: { tenGhe: 'asc' } },
+        });
+      }
+    }
 
     if (gheChuyenXes.length === 0) {
       throw new NotFoundException({
@@ -2855,7 +2887,11 @@ export class TripsService {
             ghe: true,
           },
         },
-        phanHois: true,
+        phanHois: {
+          where: {
+            trangThai: 'HIEN_THI',
+          },
+        },
       },
     });
 

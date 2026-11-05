@@ -15,6 +15,11 @@ import type { UpdateBusCompanyDto } from './dto/update-bus-company.dto.js';
 import type { UpdateBusCompanyStatusDto } from './dto/update-bus-company-status.dto.js';
 import type { BusCompanySortField } from './dto/bus-company-query.dto.js';
 import type { BusCompanyQueryDto } from './dto/bus-company-query.dto.js';
+import {
+  DEFAULT_LUGGAGE_RATES,
+  resolveEffectiveLuggageRates,
+  type UpdateLuggageRatesDto,
+} from './dto/luggage-rates.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
@@ -314,6 +319,207 @@ export class BusCompaniesService {
         pageSize: query.pageSize,
         totalItems,
         totalPages: Math.ceil(totalItems / query.pageSize),
+      },
+    };
+  }
+
+  async getLuggageRates(busCompanyId: number) {
+    const company = await this.prisma.nhaXe.findUnique({
+      where: { nhaXeId: busCompanyId },
+      select: {
+        nhaXeId: true,
+        tenNhaXe: true,
+        cauHinhHanhLy: true,
+        tuyenXes: {
+          select: {
+            tuyenXeId: true,
+            maTuyenXe: true,
+            diemDi: true,
+            diemDen: true,
+          },
+        },
+      },
+    });
+
+    if (!company) {
+      throw new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe.',
+      });
+    }
+
+    let parsed: any = null;
+    if (company.cauHinhHanhLy) {
+      try {
+        parsed = JSON.parse(company.cauHinhHanhLy);
+      } catch {
+        parsed = null;
+      }
+    }
+
+    const defaultRates = {
+      ...DEFAULT_LUGGAGE_RATES,
+      ...(parsed?.default ?? {}),
+    };
+
+    const routesOverrides = parsed?.routes ?? {};
+
+    return {
+      data: {
+        busCompanyId: company.nhaXeId,
+        busCompanyName: company.tenNhaXe,
+        default: defaultRates,
+        routes: routesOverrides,
+        availableRoutes: company.tuyenXes.map((t) => ({
+          routeId: t.tuyenXeId,
+          code: t.maTuyenXe,
+          origin: t.diemDi,
+          destination: t.diemDen,
+          hasOverride: Boolean(
+            routesOverrides[t.tuyenXeId] && !routesOverrides[t.tuyenXeId].inherit,
+          ),
+        })),
+      },
+    };
+  }
+
+  async updateLuggageRates(busCompanyId: number, dto: UpdateLuggageRatesDto) {
+    const company = await this.prisma.nhaXe.findUnique({
+      where: { nhaXeId: busCompanyId },
+      select: { nhaXeId: true },
+    });
+
+    if (!company) {
+      throw new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe.',
+      });
+    }
+
+    const payloadString = JSON.stringify({
+      default: dto.default,
+      routes: dto.routes ?? {},
+      updatedAt: new Date().toISOString(),
+    });
+
+    await this.prisma.nhaXe.update({
+      where: { nhaXeId: busCompanyId },
+      data: {
+        cauHinhHanhLy: payloadString,
+      },
+    });
+
+    return this.getLuggageRates(busCompanyId);
+  }
+
+  async getTripLuggageRates(tripId: number) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: tripId },
+      select: {
+        chuyenXeId: true,
+        tuyenXeId: true,
+        tuyenXe: {
+          select: {
+            tuyenXeId: true,
+            nhaXeId: true,
+            nhaXe: {
+              select: {
+                nhaXeId: true,
+                tenNhaXe: true,
+                cauHinhHanhLy: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    const company = trip.tuyenXe.nhaXe;
+    const effectiveRates = resolveEffectiveLuggageRates(
+      company?.cauHinhHanhLy,
+      trip.tuyenXeId,
+    );
+
+    const sMaxKg = effectiveRates.packageSMaxKg ?? 5;
+    const mMaxKg = effectiveRates.packageMMaxKg ?? 10;
+    const lMaxKg = effectiveRates.packageLMaxKg ?? 20;
+    const xlMaxKg = effectiveRates.packageXLMaxKg ?? 35;
+
+    return {
+      data: {
+        tripId,
+        routeId: trip.tuyenXeId,
+        busCompanyId: company.nhaXeId,
+        busCompanyName: company.tenNhaXe,
+        rates: effectiveRates,
+        packages: [
+          {
+            code: 'S',
+            name: 'Gói Kiện Nhỏ (Size S)',
+            shortName: `Size S (≤ ${sMaxKg}kg)`,
+            weight: sMaxKg,
+            length: 40,
+            width: 25,
+            height: 25,
+            baseFee: effectiveRates.packageS,
+            ruleText: `Tối đa ${sMaxKg}kg • Không quá 40×25×25cm`,
+            examples: 'Balo du lịch, túi quà nhỏ, hộp carton nhỏ',
+          },
+          {
+            code: 'M',
+            name: 'Gói Tiêu Chuẩn (Size M)',
+            shortName: `Size M (≤ ${mMaxKg}kg)`,
+            weight: mMaxKg,
+            length: 50,
+            width: 40,
+            height: 25,
+            baseFee: effectiveRates.packageM,
+            ruleText: `Tối đa ${mMaxKg}kg • Không quá 50×40×25cm`,
+            examples: 'Vali cỡ vừa (20–24 inch), thùng trái cây vừa',
+          },
+          {
+            code: 'L',
+            name: 'Gói Kiện Lớn (Size L)',
+            shortName: `Size L (≤ ${lMaxKg}kg)`,
+            weight: lMaxKg,
+            length: 60,
+            width: 40,
+            height: 40,
+            baseFee: effectiveRates.packageL,
+            ruleText: `Tối đa ${lMaxKg}kg • Không quá 60×40×40cm`,
+            examples: 'Vali đại (28 inch), thùng xốp lớn, kiện hàng nặng',
+          },
+          {
+            code: 'XL',
+            name: 'Gói Cồng Kềnh (Size XL)',
+            shortName: `Size XL (≤ ${xlMaxKg}kg)`,
+            weight: xlMaxKg,
+            length: 80,
+            width: 50,
+            height: 40,
+            baseFee: effectiveRates.packageXL,
+            ruleText: `Tối đa ${xlMaxKg}kg • Không quá 80×50×40cm`,
+            examples: 'Thùng hải sản/trái cây lớn, kiện hàng cồng kềnh',
+          },
+        ],
+        vehicles: {
+          motorcycleWave: effectiveRates.motorcycleWave,
+          motorcycleScooter: effectiveRates.motorcycleScooter,
+          motorcycleBig: effectiveRates.motorcycleBig,
+          bicycle: effectiveRates.bicycle,
+        },
+        surcharges: {
+          fragile: effectiveRates.fragileSurcharge,
+          valuable: effectiveRates.valuableSurcharge,
+        },
+        maxFreeWeightKg: effectiveRates.maxFreeWeightKg,
       },
     };
   }

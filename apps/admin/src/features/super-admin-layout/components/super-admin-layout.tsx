@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   Tag,
   ShieldCheck,
+  Star,
   Ticket,
   Truck,
   UsersRound,
@@ -69,6 +70,7 @@ type SuperAdminLayoutProps = {
     | 'promotions'
     | 'shipments'
     | 'revenue-reports'
+    | 'reviews'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac'
@@ -213,6 +215,10 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   'revenue-reports': {
     label: 'Báo cáo doanh thu',
     icon: () => <ChartNoAxesCombined size={18} />,
+  },
+  reviews: {
+    label: 'Đánh giá & Phản hồi',
+    icon: () => <Star size={18} />,
   },
 };
 
@@ -431,6 +437,14 @@ export function SuperAdminLayout({
                           tooltipEnabled={sidebarTooltipEnabled}
                         />
                       )}
+                      <AdminSidebarLink
+                        active={activeSection === 'reviews'}
+                        href="/reviews"
+                        icon={<Star size={18} />}
+                        label="Đánh giá & Phản hồi"
+                        onClick={closeMobileNavigation}
+                        tooltipEnabled={sidebarTooltipEnabled}
+                      />
                     </>
                   )}
             </nav>

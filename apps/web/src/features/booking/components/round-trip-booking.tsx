@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Info, Mail, Phone, User, X } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Info, Mail, Phone, Tag, Ticket, User, X } from 'lucide-react';
 import type { Post } from '@/features/posts/types/post';
 import { tripsApi, type ApiTrip, type ApiTripSeat, type ApiTripStopPoint } from '@/features/trips/services/trips.api';
 import {
@@ -17,7 +17,7 @@ import { validatePassengerInfo } from '../utils/passenger-validation';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { LuggageStep, calculateLuggageFee } from './luggage/luggage-step';
 import { LuggageSummary } from './luggage/luggage-summary';
-import type { ILuggageItem } from './luggage/luggage-item';
+import type { ILuggageItem, LuggageSizePackage } from './luggage/luggage-item';
 import {
   findOverweightRegularCargoItem,
   getEffectiveCargoUnitWeightKg,
@@ -28,9 +28,15 @@ import { customerApi } from '@/features/account/services/customer.api';
 import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
 import {
   bookingsApi,
+  type BookingQuoteData,
   type CreateBookingPayload,
   type CreatedBookingData,
 } from '@/features/account/services/bookings.api';
+import {
+  promotionsApi,
+  type AvailablePromotion,
+} from '@/features/promotions/services/promotions.api';
+import { PromotionSelectorModal } from '@/features/promotions/components/promotion-selector-modal';
 import { createPaymentDraft } from '@/features/booking/services/payment-draft';
 import {
   ApiError,
@@ -142,12 +148,12 @@ const SeatGrid = ({
     <div className="min-w-0 flex-1 p-4 md:p-5">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-black text-slate-950">Chọn ghế</h2>
-            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-black text-slate-950 whitespace-nowrap">Chọn ghế</h2>
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">
               {tripSeats.length} chỗ
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap">
               {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
             </span>
           </div>
@@ -158,7 +164,7 @@ const SeatGrid = ({
         <button
           type="button"
           onClick={onVehicleInfoClick}
-          className="min-h-11 px-2 text-xs font-bold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-md cursor-pointer"
+          className="min-h-11 px-2 text-xs font-bold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-md cursor-pointer whitespace-nowrap shrink-0"
         >
           Thông tin xe
         </button>
@@ -227,6 +233,10 @@ function isValidCargoItem(item: ILuggageItem): boolean {
   );
 }
 
+function generateRoundTripComboCode() {
+  return `RT${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+}
+
 export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   outboundPost,
   returnPost,
@@ -259,6 +269,21 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   const [showOutboundTripModal, setShowOutboundTripModal] = useState(false);
   const [showReturnTripModal, setShowReturnTripModal] = useState(false);
   const [showCargoInfoModal, setShowCargoInfoModal] = useState(false);
+
+  // Khuyến mãi / Promotion state
+  const [promotionInput, setPromotionInput] = useState('');
+  const [activePromotionCode, setActivePromotionCode] = useState<string | null>(null);
+  const [promotionRequestVersion, setPromotionRequestVersion] = useState(0);
+  const [promotionQuoteState, setPromotionQuoteState] = useState<{
+    requestKey: string;
+    status: 'idle' | 'loading' | 'valid' | 'invalid';
+    message: string;
+    quote?: BookingQuoteData;
+  }>({ requestKey: '', status: 'idle', message: '' });
+  const [availablePromotions, setAvailablePromotions] = useState<AvailablePromotion[]>([]);
+  const [loadingPromotions, setLoadingPromotions] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const promotionInputRef = useRef<HTMLInputElement | null>(null);
 
   // Sức chứa hàng hóa cho Chuyến đi
   const [outboundCargoCapacity, setOutboundCargoCapacity] = useState<{
@@ -309,15 +334,49 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     };
   }, [outboundPost.id, returnPost.id]);
 
+  useEffect(() => {
+    let active = true;
+    const outboundTripId = Number(outboundPost.id);
+    if (!Number.isSafeInteger(outboundTripId) || outboundTripId <= 0) {
+      setAvailablePromotions([]);
+      return;
+    }
+
+    setLoadingPromotions(true);
+    promotionsApi
+      .getAvailablePromotions({ tripId: outboundTripId })
+      .then(({ data }) => {
+        if (active) {
+          setAvailablePromotions(data);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAvailablePromotions([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingPromotions(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [outboundPost.id]);
+
   // Hành lý chuyến đi
   const [outboundLuggageFee, setOutboundLuggageFee] = useState(0);
   const [outboundLuggageWeight, setOutboundLuggageWeight] = useState(0);
   const [outboundLuggageItems, setOutboundLuggageItems] = useState<ILuggageItem[]>([]);
+  const [outboundLuggagePackages, setOutboundLuggagePackages] = useState<LuggageSizePackage[]>([]);
 
   // Hành lý chuyến về
   const [returnLuggageFee, setReturnLuggageFee] = useState(0);
   const [returnLuggageWeight, setReturnLuggageWeight] = useState(0);
   const [returnLuggageItems, setReturnLuggageItems] = useState<ILuggageItem[]>([]);
+  const [returnLuggagePackages, setReturnLuggagePackages] = useState<LuggageSizePackage[]>([]);
 
   // Tùy chọn: Áp dụng giống chuyến đi
   const [copyOutboundToReturn, setCopyOutboundToReturn] = useState(false);
@@ -791,6 +850,29 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     });
   };
 
+  const handleApplyPromotion = (codeOverride?: unknown) => {
+    const rawCode =
+      typeof codeOverride === 'string' ? codeOverride : promotionInput;
+    const code = rawCode.trim().toUpperCase();
+    if (!code) {
+      promotionInputRef.current?.focus();
+      return;
+    }
+    if (typeof codeOverride === 'string') {
+      setPromotionInput(codeOverride);
+    }
+    setSubmitError(null);
+    setActivePromotionCode(code);
+    setPromotionRequestVersion((version) => version + 1);
+  };
+
+  const handleRemovePromotion = () => {
+    setPromotionInput('');
+    setActivePromotionCode(null);
+    setPromotionQuoteState({ requestKey: '', status: 'idle', message: '' });
+    setSubmitError(null);
+  };
+
   const handleSubmit = async () => {
     if (submissionLockRef.current) return;
 
@@ -847,6 +929,19 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
     if (!acceptedTerms) {
       setSubmitError('Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.');
+      return;
+    }
+
+    if (promotionInput.trim() && !activePromotionCode) {
+      setSubmitError('Hãy áp dụng hoặc bỏ mã khuyến mãi đã nhập trước khi tiếp tục.');
+      promotionInputRef.current?.focus();
+      return;
+    }
+    if (activePromotionCode && !hasCurrentPromotionQuote) {
+      setSubmitError(
+        promotionMessage || 'Đang kiểm tra mã khuyến mãi. Vui lòng đợi rồi thử lại.',
+      );
+      promotionInputRef.current?.focus();
       return;
     }
 
@@ -938,7 +1033,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             ? `Xe máy (${item.motorbikeType || 'Xe số'})`
             : item.type === 'Xe đạp'
               ? `Xe đạp (${item.bicycleType || 'Xe đạp thường'})`
-              : item.type || 'Hành lý gửi kèm',
+              : item.customTypeName?.trim()
+                ? `${item.type}: ${item.customTypeName.trim()}`
+                : item.type || 'Hành lý gửi kèm',
         type: item.type,
         quantity: item.quantity || 1,
         weight:
@@ -1027,9 +1124,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
       activeHoldsRef.current.bookingStarted = true;
 
+      const roundTripComboCode = generateRoundTripComboCode();
+
       const outboundPayload: CreateBookingPayload = {
         tripId: outboundTripId,
         seatIds: outboundSeatIds,
+        comboCode: roundTripComboCode,
         contact: {
           fullName: customerName.trim(),
           phone: customerPhone.trim(),
@@ -1041,6 +1141,14 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         diemTraChuyenXeId: selectedOutboundDropoffPointId ?? undefined,
         holdToken: outboundHoldToken,
         cargoItems: outboundCargo,
+        ...(activePromotionCode && promotionQuote ? {
+          promotionCode: activePromotionCode,
+          expectedPromotionQuote: {
+            originalTotal: String(promotionQuote.originalTotal),
+            discountAmount: String(promotionQuote.discountAmount),
+            finalTotal: String(promotionQuote.finalTotal),
+          },
+        } : {}),
         ...(outboundCargo && outSenderPointId && outReceiverPointId
           ? { senderPointId: outSenderPointId, receiverPointId: outReceiverPointId }
           : {}),
@@ -1063,6 +1171,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       const returnPayload: CreateBookingPayload = {
         tripId: returnTripId,
         seatIds: returnSeatIds,
+        comboCode: roundTripComboCode,
         contact: {
           fullName: customerName.trim(),
           phone: customerPhone.trim(),
@@ -1102,6 +1211,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
       const draft = createPaymentDraft({
         tripType: 'round-trip',
+        comboCode: roundTripComboCode,
         passenger: {
           fullName: customerName.trim(),
           phoneNumber: customerPhone.trim(),
@@ -1123,6 +1233,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             bookingCode: b1.bookingCode,
             orderId: b1.orderId,
             orderCode: b1.orderCode,
+            comboCode: roundTripComboCode,
             status: b1.status,
           },
           {
@@ -1140,6 +1251,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             bookingCode: b2.bookingCode,
             orderId: b2.orderId,
             orderCode: b2.orderCode,
+            comboCode: roundTripComboCode,
             status: b2.status,
           },
         ],
@@ -1161,8 +1273,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         bookingId: b1.bookingId,
         bookingCode: b1.bookingCode,
         orderId: b1.orderId,
-        orderCode: b1.orderCode,
+        orderCode: roundTripComboCode,
         status: b1.status,
+        paymentExpiresAt: b1.paymentExpiresAt || b2.paymentExpiresAt,
       });
 
       if (totalOrderAmount === 0 && b1.status === 'DA_THANH_TOAN' && b2.status === 'DA_THANH_TOAN') {
@@ -1192,13 +1305,189 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   const returnUnitFare = (returnPost.minPriceNum ?? 0) + returnTotalSurcharge;
   const outboundFare = outboundUnitFare * outboundSeats.length;
   const returnFare = returnUnitFare * returnSeats.length;
-  const totalFare =
-    calculateRoundTripFare({
-      outboundUnitFare,
-      outboundSeatCount: outboundSeats.length,
-      returnUnitFare,
-      returnSeatCount: returnSeats.length,
-    }) + luggageFee;
+
+  const quoteOutboundTripId = Number(outboundPost.id);
+  const quoteOutboundSeatIds = outboundSeats
+    .map((seatNumber) =>
+      outboundSeatMap.find((seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG')?.tripSeatId,
+    )
+    .filter(
+      (seatId): seatId is number =>
+        typeof seatId === 'number' && Number.isSafeInteger(seatId) && seatId > 0,
+    );
+  const promotionIdentityPhone = isAuthenticated ? '' : customerPhone.trim();
+  const promotionRequestKey = JSON.stringify({
+    tripId: quoteOutboundTripId,
+    seatIds: quoteOutboundSeatIds,
+    selectedSeats: outboundSeats,
+    promotionCode: activePromotionCode,
+    identityPhone: promotionIdentityPhone,
+    isAuthenticated,
+    isHydrated,
+    fare: outboundUnitFare,
+    diemDonChuyenXeId: selectedOutboundPickupPointId,
+    diemTraChuyenXeId: selectedOutboundDropoffPointId,
+    version: promotionRequestVersion,
+  });
+
+  const currentPromotionState =
+    promotionQuoteState.requestKey === promotionRequestKey
+      ? promotionQuoteState
+      : null;
+  const promotionStatus = activePromotionCode
+    ? currentPromotionState?.status ?? 'loading'
+    : 'idle';
+  const promotionMessage = currentPromotionState?.message ?? '';
+  const promotionQuote =
+    promotionStatus === 'valid' ? currentPromotionState?.quote ?? null : null;
+  const hasCurrentPromotionQuote = Boolean(promotionQuote);
+
+  useEffect(() => {
+    if (!activePromotionCode) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: '',
+      });
+      return;
+    }
+
+    if (!isHydrated) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: 'Đang xác minh trạng thái tài khoản trước khi kiểm tra mã.',
+      });
+      return;
+    }
+
+    if (outboundSeats.length === 0) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: 'Chọn ít nhất một ghế cho chuyến đi để kiểm tra mã khuyến mãi.',
+      });
+      return;
+    }
+
+    if (!isAuthenticated && !customerPhone.trim()) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: 'Nhập số điện thoại để kiểm tra điều kiện sử dụng mã.',
+      });
+      return;
+    }
+
+    if (
+      !Number.isSafeInteger(quoteOutboundTripId) ||
+      quoteOutboundTripId <= 0 ||
+      quoteOutboundSeatIds.length !== outboundSeats.length
+    ) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'invalid',
+        message: 'Không thể xác minh chuyến hoặc ghế đã chọn. Hãy tải lại sơ đồ ghế.',
+      });
+      promotionInputRef.current?.focus();
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrent = true;
+    setPromotionQuoteState({
+      requestKey: promotionRequestKey,
+      status: 'loading',
+      message: 'Đang kiểm tra mã khuyến mãi…',
+    });
+
+    const timeout = setTimeout(async () => {
+      try {
+        const payload = {
+          tripId: quoteOutboundTripId,
+          seatIds: [...quoteOutboundSeatIds].sort((a, b) => a - b),
+          diemDonChuyenXeId: selectedOutboundPickupPointId ?? undefined,
+          diemTraChuyenXeId: selectedOutboundDropoffPointId ?? undefined,
+          promotionCode: activePromotionCode,
+          ...(!isAuthenticated ? { contactPhone: customerPhone.trim() } : {}),
+        };
+        const response = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.getBookingQuote(payload, token, controller.signal),
+            )
+          : await bookingsApi.getBookingQuote(payload, undefined, controller.signal);
+        if (!isCurrent || controller.signal.aborted) return;
+
+        const quote = response.data;
+        const amounts = [quote.originalTotal, quote.discountAmount, quote.finalTotal].map(Number);
+        if (
+          !quote.appliedPromotionCode ||
+          quote.appliedPromotionCode.toUpperCase() !== activePromotionCode ||
+          amounts.some((amount) => !Number.isFinite(amount) || amount < 0)
+        ) {
+          throw new Error('Máy chủ chưa xác nhận được mã khuyến mãi. Hãy kiểm tra lại mã.');
+        }
+
+        setPromotionQuoteState({
+          requestKey: promotionRequestKey,
+          status: 'valid',
+          message: `Mã ${quote.appliedPromotionCode} đã được áp dụng.`,
+          quote,
+        });
+      } catch (error) {
+        if (!isCurrent || controller.signal.aborted) return;
+        setPromotionQuoteState({
+          requestKey: promotionRequestKey,
+          status: 'invalid',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Không thể kiểm tra mã khuyến mãi. Vui lòng thử lại.',
+        });
+        promotionInputRef.current?.focus();
+      }
+    }, 250);
+
+    return () => {
+      isCurrent = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [promotionRequestKey]);
+
+  const rawRoundTripFare = calculateRoundTripFare({
+    outboundUnitFare,
+    outboundSeatCount: outboundSeats.length,
+    returnUnitFare,
+    returnSeatCount: returnSeats.length,
+  });
+
+  // Tính giảm giá trên tổng tiền vé cả 2 chiều:
+  // - Nếu voucher giảm theo %: tỷ lệ giảm = discountAmount chiều đi / originalTotal chiều đi.
+  //   Mức giảm khứ hồi = min(rawRoundTripFare * tỷ lệ %, giamToiDa nếu có, hoặc tỷ lệ tương ứng).
+  // - Nếu voucher giảm theo số tiền cố định: trừ trọn vẹn số tiền giảm đó vào tổng đơn.
+  const promotionDiscountAmount = (() => {
+    if (!promotionQuote || !promotionQuote.discountAmount) return 0;
+    const baseDiscount = Number(promotionQuote.discountAmount) || 0;
+    const baseOriginal = Number(promotionQuote.originalTotal) || 0;
+    if (baseDiscount <= 0 || baseOriginal <= 0 || rawRoundTripFare <= 0) return 0;
+
+    // Kiểm tra xem mã có phải giảm theo % không
+    const discountRatio = baseDiscount / baseOriginal;
+    const isPercentageDiscount = discountRatio > 0 && discountRatio < 1 && Math.abs(discountRatio * baseOriginal - baseDiscount) < 1;
+
+    if (isPercentageDiscount) {
+      // Giảm theo % trên tổng tiền 2 chiều
+      // Nếu có giảm tối đa, thì baseDiscount ở chiều đi có thể đã chạm trần (hoặc chưa chạm trần)
+      const calculatedDiscount = Math.round(rawRoundTripFare * discountRatio);
+      return Math.min(rawRoundTripFare, Math.max(baseDiscount, calculatedDiscount));
+    }
+
+    // Giảm số tiền cố định (hoặc đã chạm mức trần tối đa)
+    return Math.min(rawRoundTripFare, baseDiscount);
+  })();
+
+  const totalFare = Math.max(0, rawRoundTripFare - promotionDiscountAmount) + luggageFee;
   const departureDateLabel = departureDate
     ? departureDate.split('-').reverse().join('/')
     : outboundPost.createdAt;
@@ -1216,16 +1505,15 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   return (
     <div className="min-h-screen bg-[#F8FAF9] font-sans pb-12">
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-          <Link href="/" className="hover:text-brand">
-            Trang chủ
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <Link href="/posts" className="hover:text-brand">
-            Khứ hồi
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <span className="text-slate-900 font-bold">Đặt vé 2 chiều</span>
+        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#F05929] transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Quay lại
+          </button>
         </div>
       </div>
 
@@ -1379,6 +1667,128 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Mã khuyến mãi */}
+            <section
+              className="p-4 md:p-5 border-b border-slate-200"
+              aria-labelledby="booking-promotion-heading"
+            >
+              <h2
+                id="booking-promotion-heading"
+                className="text-base font-black text-slate-950 mb-3 flex items-center gap-2"
+              >
+                <Tag className="w-4 h-4 text-accent" />
+                Mã khuyến mãi
+              </h2>
+              <div className="max-w-2xl">
+                <label
+                  htmlFor="booking-promotion-code"
+                  className="block text-xs font-bold text-slate-700 mb-1.5"
+                >
+                  Nhập một mã cho đơn đặt vé khứ hồi
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    ref={promotionInputRef}
+                    id="booking-promotion-code"
+                    type="text"
+                    autoComplete="off"
+                    value={promotionInput}
+                    onChange={(event) => {
+                      const value = event.target.value.toUpperCase();
+                      setPromotionInput(value);
+                      if (activePromotionCode && value.trim() !== activePromotionCode) {
+                        setActivePromotionCode(null);
+                      }
+                    }}
+                    aria-invalid={promotionStatus === 'invalid'}
+                    aria-describedby="booking-promotion-feedback"
+                    className={`h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm font-bold uppercase tracking-wide outline-none focus:ring-2 focus:ring-accent/20 ${
+                      promotionStatus === 'invalid'
+                        ? 'border-red-500 focus:border-red-500'
+                        : promotionStatus === 'valid'
+                          ? 'border-emerald-500 focus:border-emerald-500'
+                          : 'border-slate-300 focus:border-accent'
+                    }`}
+                    placeholder="Ví dụ: VEXGO50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyPromotion}
+                    disabled={!promotionInput.trim() || promotionStatus === 'loading'}
+                    className="min-h-11 rounded-lg bg-accent px-5 text-sm font-black text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {promotionStatus === 'loading'
+                      ? 'Đang kiểm tra…'
+                      : activePromotionCode
+                        ? 'Kiểm tra lại'
+                        : 'Áp dụng'}
+                  </button>
+                  {(promotionInput || activePromotionCode) && (
+                    <button
+                      type="button"
+                      onClick={handleRemovePromotion}
+                      className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      Bỏ mã
+                    </button>
+                  )}
+                </div>
+                {promotionMessage && (
+                  <p
+                    id="booking-promotion-feedback"
+                    role={promotionStatus === 'invalid' ? 'alert' : 'status'}
+                    aria-live="polite"
+                    className={`mt-2 text-sm font-semibold flex items-center gap-1.5 ${
+                      promotionStatus === 'invalid'
+                        ? 'text-red-700'
+                        : promotionStatus === 'valid'
+                          ? 'text-emerald-700'
+                          : 'text-slate-600'
+                    }`}
+                  >
+                    {promotionStatus === 'valid' && (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    {promotionMessage}
+                  </p>
+                )}
+
+                {availablePromotions.length > 0 && (
+                  <div className="mt-3.5 pt-3.5 border-t border-dashed border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowPromoModal(true)}
+                      className="group flex w-full items-center justify-between rounded-xl border border-orange-200/90 bg-orange-50/50 p-3 hover:bg-orange-50 hover:border-orange-300 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-accent font-bold">
+                          <Ticket className="h-4 w-4" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                            Chọn mã ưu đãi có sẵn
+                            <span className="rounded-full bg-accent px-1.5 py-0.2 text-[10px] font-extrabold text-white">
+                              {availablePromotions.length} mã
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {activePromotionCode
+                              ? `Đang dùng mã: ${activePromotionCode}`
+                              : 'Xem tất cả mã giảm giá áp dụng cho chuyến xe này'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-xs font-bold text-accent group-hover:translate-x-0.5 transition-transform">
+                        <span>{activePromotionCode ? 'Đổi mã' : 'Chọn mã'}</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
 
             {/* Thông tin đón trả 2 chiều */}
             <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200">
@@ -1667,6 +2077,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   seat={`Ghế: ${outboundSeats.join(', ') || '-'}`}
                   passenger={customerName || 'Khách hàng'}
                   cargoCapacity={outboundCargoCapacity}
+                  tripId={Number(outboundPost.id)}
+                  onPackagesChange={setOutboundLuggagePackages}
                   onFeeChange={handleOutboundLuggageChange}
                 />
               </div>
@@ -1718,6 +2130,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     seat={`Ghế: ${returnSeats.join(', ') || '-'}`}
                     passenger={customerName || 'Khách hàng'}
                     cargoCapacity={returnCargoCapacity}
+                    tripId={Number(returnPost.id)}
+                    onPackagesChange={setReturnLuggagePackages}
                     onFeeChange={handleReturnLuggageChange}
                   />
                 )}
@@ -1985,30 +2399,25 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            {item.packageSize && (
+                              <span className="bg-accent/10 text-accent font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                Gói Size {item.packageSize}
+                              </span>
+                            )}
                             <span>
                               {item.weight > 0 ? (
-                                <strong className="text-slate-800">{Number(item.weight.toFixed(2))} kg</strong>
+                                <strong className="text-slate-800">Tối đa {Number(item.weight.toFixed(2))} kg</strong>
                               ) : (
-                                <span className="text-slate-600 font-normal">Chưa nhập khối lượng</span>
+                                <span className="text-slate-600 font-normal">Chưa chọn gói</span>
                               )}
                             </span>
                             {item.length && item.width && item.height ? (
-                              (() => {
-                                const vol = Number(((item.length * item.width * item.height) / 5000).toFixed(2));
-                                return (
-                                  <>
-                                    <span className="text-slate-300">•</span>
-                                    <span className="text-slate-500">
-                                      {item.length}×{item.width}×{item.height}cm
-                                    </span>
-                                    {vol > (item.weight || 0) && (
-                                      <span className="text-[10px] text-accent font-bold bg-accent/10 px-1.5 py-0.2 rounded">
-                                        (Tính cước: {vol}kg quy đổi)
-                                      </span>
-                                    )}
-                                  </>
-                                );
-                              })()
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-500">
+                                  ≤ {item.length}×{item.width}×{item.height}cm
+                                </span>
+                              </>
                             ) : null}
                           </div>
                         )}
@@ -2021,7 +2430,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </div>
 
                       {(() => {
-                        const itemFee = calculateLuggageFee([item]);
+                        const itemPackages = item.legTitle === 'Chuyến đi' ? outboundLuggagePackages : returnLuggagePackages;
+                        const itemFee = calculateLuggageFee([item], itemPackages);
                         return itemFee > 0 ? (
                           <span className="shrink-0 text-right text-xs font-bold text-red-600">
                             {itemFee.toLocaleString('vi-VN')}đ
@@ -2051,6 +2461,16 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <span>Giá vé lượt về</span>
                   <span>{returnFare.toLocaleString('vi-VN')}đ</span>
                 </div>
+                {promotionQuote && promotionDiscountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span className="font-semibold flex items-center gap-1">
+                      Giảm giá ({promotionQuote.appliedPromotionCode})
+                    </span>
+                    <strong className="font-bold">
+                      −{promotionDiscountAmount.toLocaleString('vi-VN')}đ
+                    </strong>
+                  </div>
+                )}
                 <LuggageSummary
                   fee={luggageFee}
                   totalWeight={luggageWeight}
@@ -2124,21 +2544,13 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           <span className="text-slate-500 font-medium mr-1.5">
                             {item.legTitle === 'Chuyến đi' ? 'Lượt đi:' : 'Lượt về:'}
                           </span>
-                          {isMoto || isBike ? `Phương tiện: ${item.type}` : `Kiện: ${item.type}`}
+                          {isMoto || isBike
+                            ? `Phương tiện: ${item.type}`
+                            : `Kiện: ${item.customTypeName?.trim() ? `${item.type} (${item.customTypeName.trim()})` : item.type}`}
                         </strong>
                         {item.quantity > 1 && (
                           <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
                             x{item.quantity}
-                          </span>
-                        )}
-                        {item.category === 'fragile' && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
-                            Dễ vỡ
-                          </span>
-                        )}
-                        {item.category === 'valuable' && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
-                            Giá trị cao
                           </span>
                         )}
                       </div>
@@ -2190,7 +2602,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     </div>
 
                     {(() => {
-                      const itemFee = calculateLuggageFee([item]);
+                      const itemPackages = item.legTitle === 'Chuyến đi' ? outboundLuggagePackages : returnLuggagePackages;
+                      const itemFee = calculateLuggageFee([item], itemPackages);
                       return itemFee > 0 ? (
                         <span className="font-extrabold text-red-600">
                           +{itemFee.toLocaleString('vi-VN')}đ
@@ -2405,6 +2818,19 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal chọn mã ưu đãi có sẵn */}
+      <PromotionSelectorModal
+        isOpen={showPromoModal}
+        onClose={() => setShowPromoModal(false)}
+        promotions={availablePromotions}
+        isLoading={loadingPromotions}
+        activeCode={activePromotionCode}
+        onSelectPromotion={(code) => {
+          handleApplyPromotion(code);
+        }}
+        onRemovePromotion={handleRemovePromotion}
+      />
     </div>
   );
 };

@@ -245,6 +245,76 @@ beforeEach(() => {
         },
       });
     }
+    if (/\/bus-companies\/trips\/(42|43)\/luggage-packages$/.test(pathname)) {
+      return response({
+        data: {
+          tripId: 42,
+          routeId: 1,
+          busCompanyId: 1,
+          busCompanyName: 'Nhà xe VexGo',
+          rates: {
+            packageS: 50000,
+            packageM: 80000,
+            packageL: 120000,
+            packageXL: 180000,
+            motorcycleWave: 180000,
+            motorcycleScooter: 220000,
+            motorcycleLarge: 250000,
+            bicycle: 80000,
+          },
+          packages: [
+            {
+              code: 'S',
+              name: 'Gói Kiện Nhỏ (Size S)',
+              shortName: 'Size S (≤ 5kg)',
+              weight: 5,
+              length: 40,
+              width: 25,
+              height: 25,
+              baseFee: 50000,
+              ruleText: 'Tối đa 5kg • Không quá 40×25×25cm',
+              examples: 'Balo du lịch, túi quà nhỏ, hộp carton nhỏ',
+            },
+            {
+              code: 'M',
+              name: 'Gói Tiêu Chuẩn (Size M)',
+              shortName: 'Size M (≤ 10kg)',
+              weight: 10,
+              length: 50,
+              width: 40,
+              height: 25,
+              baseFee: 80000,
+              ruleText: 'Tối đa 10kg • Không quá 50×40×25cm',
+              examples: 'Vali cỡ vừa (20–24 inch), thùng trái cây vừa',
+            },
+            {
+              code: 'L',
+              name: 'Gói Kiện Lớn (Size L)',
+              shortName: 'Size L (≤ 20kg)',
+              weight: 20,
+              length: 60,
+              width: 40,
+              height: 40,
+              baseFee: 120000,
+              ruleText: 'Tối đa 20kg • Không quá 60×40×40cm',
+              examples: 'Vali đại (28 inch), thùng xốp lớn, kiện hàng nặng',
+            },
+            {
+              code: 'XL',
+              name: 'Gói Cồng Kềnh (Size XL)',
+              shortName: 'Size XL (≤ 35kg)',
+              weight: 35,
+              length: 80,
+              width: 50,
+              height: 40,
+              baseFee: 180000,
+              ruleText: 'Tối đa 35kg • Không quá 80×50×40cm',
+              examples: 'Thùng hải sản/trái cây lớn, kiện hàng cồng kềnh',
+            },
+          ],
+        },
+      });
+    }
     if (/\/trips\/(42|43)\/cargo-capacity$/.test(pathname)) {
       return response({
         data: {
@@ -1191,12 +1261,15 @@ it('renders available promotions for the trip and allows selecting one with one 
     });
 
   render(<OneWayBooking post={post} tripSeats={tripSeats} />);
-  expect(await screen.findByText('Mã ưu đãi có sẵn (1):')).toBeTruthy();
-  expect(screen.getByText('SAVE20')).toBeTruthy();
+  const openModalBtn = await screen.findByText(/Chọn mã ưu đãi có sẵn/);
+  expect(openModalBtn).toBeTruthy();
+  fireEvent.click(openModalBtn);
+
+  expect(await screen.findByText('SAVE20')).toBeTruthy();
   expect(screen.getByText('Giảm 20% (tối đa 50.000đ)')).toBeTruthy();
 
   const applyButtons = screen.getAllByRole('button', { name: 'Áp dụng' });
-  // The first "Áp dụng" is the manual form button, the second is the coupon card button
+  // The first "Áp dụng" is the manual form button, the second is the coupon card button in modal
   const cardApplyButton = applyButtons[applyButtons.length - 1];
   fireEvent.click(cardApplyButton);
 

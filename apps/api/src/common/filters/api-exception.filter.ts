@@ -189,7 +189,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
         ? defaultErrorCode(statusCode)
         : (customErrorCode ?? defaultErrorCode(statusCode)),
       message:
-        isServerError || !customErrorCode || typeof responseMessage !== 'string'
+        isServerError || typeof responseMessage !== 'string'
           ? defaultErrorMessage(statusCode)
           : responseMessage,
     };

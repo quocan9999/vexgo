@@ -13,15 +13,11 @@ import {
   Eye,
   Copy,
   Check,
-  QrCode,
+  Trash2,
 } from 'lucide-react';
 import { ProfileSidebar } from '@/features/account/components/profile-sidebar';
 import { useAuthSession } from '@/features/auth/auth-session';
 import type { PaginationMeta } from '@/features/account/services/bookings.api';
-import {
-  createPaymentDraftFromShipment,
-  markPaymentDraftsTerminalByOrder,
-} from '@/features/booking/services/payment-draft';
 import {
   shipmentsApi,
   type CustomerShipmentListItem,
@@ -31,35 +27,6 @@ import {
 function formatShortWaybillCode(code: string): string {
   if (!code || code.length <= 22) return code;
   return `${code.slice(0, 13)}...${code.slice(-6)}`;
-}
-
-function canResumeShipmentPayment(
-  item: {
-    status: string;
-    paymentStatus: string;
-    paymentExpiresAt?: string;
-  },
-  nowMs: number = Date.now(),
-): boolean {
-  if (item.status === 'DA_HUY' || item.paymentStatus !== 'CHO_THANH_TOAN') {
-    return false;
-  }
-  if (!item.paymentExpiresAt) return true;
-  const expiresMs = Date.parse(item.paymentExpiresAt);
-  return !Number.isFinite(expiresMs) || expiresMs > nowMs;
-}
-
-function formatCountdown(
-  expiresAtIso: string | undefined,
-  nowMs: number,
-): string | null {
-  if (!expiresAtIso) return null;
-  const expiresMs = Date.parse(expiresAtIso);
-  if (!Number.isFinite(expiresMs)) return null;
-  const remainingSec = Math.max(0, Math.ceil((expiresMs - nowMs) / 1000));
-  const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
-  const ss = String(remainingSec % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
 }
 
 function formatCategoryDisplayName(name: string | null | undefined): string {
@@ -102,11 +69,9 @@ function formatPaymentStatusLabel(status: string) {
   switch (status) {
     case 'DA_THANH_TOAN':
     case 'THANH_CONG':
-      return 'Đã thanh toán';
+      return 'Đã thanh toán tại bến';
     case 'CHO_THANH_TOAN':
-      return 'Chờ thanh toán';
-    case 'HET_HAN':
-      return 'Hết hạn thanh toán';
+      return 'Thanh toán tại bến';
     case 'DA_HUY':
       return 'Đã hủy';
     default:
@@ -118,20 +83,20 @@ function renderPaymentStatusBadge(status: string) {
   const label = formatPaymentStatusLabel(status);
   if (status === 'DA_THANH_TOAN' || status === 'THANH_CONG') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 whitespace-nowrap">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
         {label}
       </span>
     );
   }
-  if (status === 'DA_HUY' || status === 'HET_HAN') {
+  if (status === 'DA_HUY') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-600 border border-rose-200 whitespace-nowrap">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
         {label}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-600 border border-amber-200 whitespace-nowrap">
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap">
       {label}
     </span>
   );
@@ -217,9 +182,12 @@ export default function CustomerShipmentsPage() {
   const [copiedWaybillCode, setCopiedWaybillCode] = useState<string | null>(
     null,
   );
-  const [resumingPaymentShipmentId, setResumingPaymentShipmentId] = useState<
-    number | null
-  >(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelReason, setCancelReason] = useState(
+    'Đặt nhầm thông tin người gửi/nhận',
+  );
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   const handleCopyWaybill = useCallback(
     (code: string, e?: React.MouseEvent) => {
@@ -233,48 +201,6 @@ export default function CustomerShipmentsPage() {
       }
     },
     [],
-  );
-
-  const handleResumeShipmentPayment = useCallback(
-    async (
-      shipmentId: number,
-      existingDetail?: ShipmentResponseData | null,
-    ) => {
-      setResumingPaymentShipmentId(shipmentId);
-      setShipmentsError('');
-      try {
-        let detail = existingDetail;
-        if (!detail || detail.shipmentId !== shipmentId) {
-          const res = await executeWithAuth((token) =>
-            shipmentsApi.getShipmentDetail(shipmentId, token),
-          );
-          detail = res?.data ?? null;
-        }
-        if (!detail) {
-          throw new Error('Không thể tải thông tin thanh toán của vận đơn.');
-        }
-        const draft = createPaymentDraftFromShipment(detail);
-        if (!draft) {
-          throw new Error(
-            'Vận đơn này chưa có thông tin thanh toán hợp lệ hoặc đã hết hạn.',
-          );
-        }
-        router.push(`/payment?draftId=${encodeURIComponent(draft.id)}`);
-      } catch (err: unknown) {
-        const msg =
-          err instanceof Error && err.message.trim()
-            ? err.message
-            : 'Không thể mở lại trang thanh toán cho vận đơn này.';
-        if (selectedShipmentDetail?.shipmentId === shipmentId) {
-          setShipmentDetailError(msg);
-        } else {
-          setShipmentsError(msg);
-        }
-      } finally {
-        setResumingPaymentShipmentId(null);
-      }
-    },
-    [executeWithAuth, router, selectedShipmentDetail?.shipmentId],
   );
 
   useEffect(() => {
@@ -355,6 +281,8 @@ export default function CustomerShipmentsPage() {
       setIsLoadingShipmentDetail(true);
       setShipmentDetailError('');
       setSelectedShipmentDetail(null);
+      setShowCancelConfirm(false);
+      setCancelError('');
       try {
         const res = await executeWithAuth((token) =>
           shipmentsApi.getShipmentDetail(shipmentId, token),
@@ -374,6 +302,60 @@ export default function CustomerShipmentsPage() {
     },
     [executeWithAuth],
   );
+
+  const handleCancelShipment = async () => {
+    if (!selectedShipmentDetail) return;
+    setIsCancelling(true);
+    setCancelError('');
+    try {
+      const res = await executeWithAuth((token) =>
+        shipmentsApi.cancelShipment(
+          {
+            waybillCode: selectedShipmentDetail.waybillCode,
+            phoneNumber: selectedShipmentDetail.sender.phoneNumber,
+            reason: cancelReason,
+          },
+          token,
+        ),
+      );
+      if (res?.data) {
+        setSelectedShipmentDetail((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'DA_HUY',
+                paymentStatus: 'DA_HUY',
+                timeline: [
+                  ...(prev.timeline || []),
+                  {
+                    id: Date.now(),
+                    status: 'DA_HUY',
+                    time: res.data.updatedAt,
+                    note: cancelReason,
+                  },
+                ],
+              }
+            : prev,
+        );
+        setShipments((prev) =>
+          prev.map((item) =>
+            item.waybillCode === selectedShipmentDetail.waybillCode
+              ? { ...item, status: 'DA_HUY', paymentStatus: 'DA_HUY' }
+              : item,
+          ),
+        );
+        setShowCancelConfirm(false);
+      }
+    } catch (err: unknown) {
+      setCancelError(
+        err instanceof Error && err.message.trim()
+          ? err.message
+          : 'Không thể hủy đơn gửi hàng.',
+      );
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const handleRetry = () => {
     setIsLoadingShipments(true);
@@ -395,40 +377,6 @@ export default function CustomerShipmentsPage() {
     if (newPage < 1 || newPage > shipmentsMeta.totalPages) return;
     setActiveShipmentQuery((prev) => ({ ...prev, page: newPage }));
   };
-
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const hasAnyPendingShipment = useMemo(
-    () =>
-      shipments.some(
-        (s) => s.status !== 'DA_HUY' && s.paymentStatus === 'CHO_THANH_TOAN',
-      ),
-    [shipments],
-  );
-
-  useEffect(() => {
-    if (!hasAnyPendingShipment) return;
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [hasAnyPendingShipment]);
-
-  const pendingPaymentShipments = useMemo(
-    () => shipments.filter((s) => canResumeShipmentPayment(s, nowMs)),
-    [shipments, nowMs],
-  );
-
-  useEffect(() => {
-    for (const s of shipments) {
-      if (!canResumeShipmentPayment(s, nowMs)) {
-        markPaymentDraftsTerminalByOrder(
-          { shipmentId: s.shipmentId, orderCode: s.orderCode },
-          s.paymentStatus === 'DA_THANH_TOAN' ||
-            s.paymentStatus === 'THANH_CONG'
-            ? 'paid'
-            : 'cancelled',
-        );
-      }
-    }
-  }, [shipments, nowMs]);
 
   const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSize = Number(e.target.value);
@@ -469,73 +417,6 @@ export default function CustomerShipmentsPage() {
                   Gửi hàng mới
                 </Link>
               </div>
-
-              {/* Banner nhắc vận đơn chờ thanh toán */}
-              {pendingPaymentShipments.length > 0 && (
-                <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50/90 p-4 shadow-2xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-full bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
-                        <Clock className="w-4 h-4" />
-                      </div>
-                      <div className="text-xs sm:text-sm">
-                        <div className="font-extrabold text-amber-950 flex flex-wrap items-center gap-2">
-                          <span>
-                            Bạn đang có {pendingPaymentShipments.length} đơn gửi
-                            hàng chờ thanh toán
-                          </span>
-                          {formatCountdown(
-                            pendingPaymentShipments[0].paymentExpiresAt,
-                            nowMs,
-                          ) && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900">
-                              Còn{' '}
-                              {formatCountdown(
-                                pendingPaymentShipments[0].paymentExpiresAt,
-                                nowMs,
-                              )}{' '}
-                              để thanh toán
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-amber-800 mt-1">
-                          Vận đơn{' '}
-                          <strong className="font-mono">
-                            {formatShortWaybillCode(
-                              pendingPaymentShipments[0].waybillCode,
-                            )}
-                          </strong>{' '}
-                          ({pendingPaymentShipments[0].trip.route}) — Tổng cước:{' '}
-                          <strong>
-                            {formatPrice(pendingPaymentShipments[0].totalFee)}
-                          </strong>
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={
-                        resumingPaymentShipmentId ===
-                        pendingPaymentShipments[0].shipmentId
-                      }
-                      onClick={() =>
-                        void handleResumeShipmentPayment(
-                          pendingPaymentShipments[0].shipmentId,
-                        )
-                      }
-                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover disabled:opacity-60 text-white text-xs font-extrabold transition-colors shadow-sm cursor-pointer shrink-0"
-                    >
-                      <QrCode className="w-4 h-4" />
-                      <span>
-                        {resumingPaymentShipmentId ===
-                        pendingPaymentShipments[0].shipmentId
-                          ? 'Đang mở QR...'
-                          : 'Tiếp tục thanh toán ngay'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Shipments Filter */}
               <form
@@ -663,16 +544,6 @@ export default function CustomerShipmentsPage() {
                       </tr>
                     ) : (
                       shipments.map((item, idx) => {
-                        const canPay = canResumeShipmentPayment(item, nowMs);
-                        const effectivePaymentStatus =
-                          item.paymentStatus === 'CHO_THANH_TOAN' && !canPay
-                            ? 'HET_HAN'
-                            : item.paymentStatus;
-                        const effectiveShipmentStatus =
-                          item.status !== 'DA_HUY' &&
-                          effectivePaymentStatus === 'HET_HAN'
-                            ? 'DA_HUY'
-                            : item.status;
                         const isCopied = copiedWaybillCode === item.waybillCode;
                         return (
                           <tr
@@ -751,39 +622,13 @@ export default function CustomerShipmentsPage() {
                               {formatPrice(item.totalFee)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
-                              {renderShipmentStatusBadge(
-                                effectiveShipmentStatus,
-                              )}
+                              {renderShipmentStatusBadge(item.status)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
-                              {renderPaymentStatusBadge(effectivePaymentStatus)}
+                              {renderPaymentStatusBadge(item.paymentStatus)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5">
-                                {canPay && (
-                                  <button
-                                    type="button"
-                                    disabled={
-                                      resumingPaymentShipmentId ===
-                                      item.shipmentId
-                                    }
-                                    onClick={() =>
-                                      void handleResumeShipmentPayment(
-                                        item.shipmentId,
-                                      )
-                                    }
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-60 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-                                    title="Mở lại mã QR để thanh toán cước gửi hàng"
-                                  >
-                                    <QrCode className="w-3.5 h-3.5" />
-                                    <span>
-                                      {resumingPaymentShipmentId ===
-                                      item.shipmentId
-                                        ? 'Đang mở...'
-                                        : 'Thanh toán'}
-                                    </span>
-                                  </button>
-                                )}
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -966,11 +811,7 @@ export default function CustomerShipmentsPage() {
                   <div className="flex items-center gap-2">
                     {renderShipmentStatusBadge(selectedShipmentDetail.status)}
                     {renderPaymentStatusBadge(
-                      selectedShipmentDetail.paymentStatus ===
-                        'CHO_THANH_TOAN' &&
-                        !canResumeShipmentPayment(selectedShipmentDetail, nowMs)
-                        ? 'HET_HAN'
-                        : selectedShipmentDetail.paymentStatus,
+                      selectedShipmentDetail.paymentStatus,
                     )}
                   </div>
                 </div>
@@ -1059,46 +900,17 @@ export default function CustomerShipmentsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       {selectedShipmentDetail.status !== 'DA_HUY' &&
                         renderPaymentStatusBadge(
-                          selectedShipmentDetail.paymentStatus ===
-                            'CHO_THANH_TOAN' &&
-                            !canResumeShipmentPayment(
-                              selectedShipmentDetail,
-                              nowMs,
-                            )
-                            ? 'HET_HAN'
-                            : selectedShipmentDetail.paymentStatus,
+                          selectedShipmentDetail.paymentStatus,
                         )}
                       <span className="text-base font-black text-accent">
                         {formatPrice(selectedShipmentDetail.pricing.totalFee)}
                       </span>
-                      {canResumeShipmentPayment(
-                        selectedShipmentDetail,
-                        nowMs,
-                      ) && (
-                        <button
-                          type="button"
-                          disabled={
-                            resumingPaymentShipmentId ===
-                            selectedShipmentDetail.shipmentId
-                          }
-                          onClick={() =>
-                            void handleResumeShipmentPayment(
-                              selectedShipmentDetail.shipmentId,
-                              selectedShipmentDetail,
-                            )
-                          }
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-60 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>
-                            {resumingPaymentShipmentId ===
-                            selectedShipmentDetail.shipmentId
-                              ? 'Đang mở QR...'
-                              : 'Thanh toán ngay'}
-                          </span>
-                        </button>
-                      )}
                     </div>
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-500 font-medium">
+                    {selectedShipmentDetail.freightPayer === 'NGUOI_NHAN'
+                      ? '• Người nhận thanh toán cước phí bằng tiền mặt khi đến nhận hàng tại bến.'
+                      : '• Người gửi thanh toán cước phí bằng tiền mặt tại quầy bến xe khi bàn giao kiện hàng.'}
                   </div>
                 </div>
 
@@ -1148,6 +960,83 @@ export default function CustomerShipmentsPage() {
                       </div>
                     </div>
                   )}
+
+                {/* Hủy đơn gửi hàng khi còn ở trạng thái Mới tạo */}
+                {selectedShipmentDetail.status === 'MOI_TAO' && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3.5 space-y-3">
+                    {!showCancelConfirm ? (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="text-xs text-slate-600">
+                          <strong className="text-slate-800">Bạn muốn hủy đơn gửi hàng?</strong>{' '}
+                          Đơn hàng đang ở trạng thái Mới tạo (chưa bàn giao tại bến) nên có thể hủy trực tuyến.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCancelError('');
+                            setShowCancelConfirm(true);
+                          }}
+                          className="px-3.5 py-2 rounded-lg border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hủy đơn gửi hàng</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <div className="text-xs font-bold text-slate-800">
+                          Chọn lý do hủy đơn gửi hàng:
+                        </div>
+                        <select
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:border-rose-500"
+                        >
+                          <option value="Đặt nhầm thông tin người gửi/nhận">
+                            Đặt nhầm thông tin người gửi/nhận
+                          </option>
+                          <option value="Thay đổi kế hoạch gửi hàng">
+                            Thay đổi kế hoạch gửi hàng
+                          </option>
+                          <option value="Muốn đổi nhà xe hoặc điểm gửi khác">
+                            Muốn đổi nhà xe hoặc điểm gửi khác
+                          </option>
+                        </select>
+                        {cancelError && (
+                          <div className="text-xs font-medium text-rose-600">
+                            {cancelError}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowCancelConfirm(false)}
+                            disabled={isCancelling}
+                            className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs cursor-pointer"
+                          >
+                            Quay lại
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelShipment}
+                            disabled={isCancelling}
+                            className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs cursor-pointer"
+                          >
+                            {isCancelling ? 'Đang hủy...' : 'Xác nhận hủy đơn'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(selectedShipmentDetail.status === 'DA_TIEP_NHAN' ||
+                  selectedShipmentDetail.status === 'DANG_VAN_CHUYEN') && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-xs text-slate-700">
+                    <strong>Lưu ý:</strong> Kiện hàng đã được tiếp nhận tại bến nên không thể hủy trực tuyến. Vui lòng liên hệ nhà xe{' '}
+                    <strong>{selectedShipmentDetail.trip.busCompany.name}</strong> tại điểm gửi nếu cần hỗ trợ.
+                  </div>
+                )}
               </div>
             ) : null}
           </div>

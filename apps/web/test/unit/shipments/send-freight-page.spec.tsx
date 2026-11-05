@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +17,7 @@ const api = vi.hoisted(() => ({
   getRoutePointsByRoute: vi.fn(),
   createShipment: vi.fn(),
   lookupShipment: vi.fn(),
+  cancelShipment: vi.fn(),
   routerPush: vi.fn(),
   auth: {
     isAuthenticated: false,
@@ -44,6 +46,7 @@ vi.mock('@/features/shipments/services/shipments.api', () => ({
     getRoutePointsByRoute: api.getRoutePointsByRoute,
     createShipment: api.createShipment,
     lookupShipment: api.lookupShipment,
+    cancelShipment: api.cancelShipment,
   },
 }));
 
@@ -177,6 +180,27 @@ afterEach(() => {
 });
 
 describe('independent shipment flow', () => {
+  it('does not show the ticket and shipment lookup switch in the hero banner', () => {
+    render(<SendFreightPage />);
+
+    const heading = screen.getByRole('heading', {
+      name: /Gửi hàng theo nhà xe/i,
+    });
+    const heroContent = heading.parentElement?.parentElement;
+
+    expect(heroContent).not.toBeNull();
+    expect(
+      within(heroContent as HTMLElement).queryByRole('link', {
+        name: 'Tra cứu vé xe',
+      }),
+    ).toBeNull();
+    expect(
+      within(heroContent as HTMLElement).queryByRole('button', {
+        name: 'Tra cứu vận đơn',
+      }),
+    ).toBeNull();
+  });
+
   it('shows the lowest reference fee without presenting it as the final quote', async () => {
     render(<SendFreightPage />);
 
@@ -251,5 +275,100 @@ describe('independent shipment flow', () => {
     });
     expect(await screen.findByText('Tạo đơn gửi hàng thành công!')).toBeTruthy();
     expect(screen.getByText('VG-VD-TEST-601')).toBeTruthy();
+  });
+
+  it('displays dynamic fragile and valuable surcharges configured for the selected carrier', async () => {
+    api.getOptions.mockResolvedValueOnce({
+      meta: { page: 1, pageSize: 8, totalItems: 1, totalPages: 1 },
+      data: [
+        {
+          routeId: 42,
+          busCompany: { id: 4, name: 'Nhà xe kiểm thử' },
+          route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
+          minimumEstimatedFee: 30_000,
+          surcharges: {
+            fragile: 30_000,
+            valuable: 70_000,
+          },
+        },
+      ],
+    });
+
+    render(<SendFreightPage />);
+
+    expect(
+      await screen.findByRole('option', {
+        name: 'Dễ vỡ (+30.000đ phụ phí)',
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('option', {
+        name: 'Giá trị cao (+70.000đ phụ phí)',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('allows customer to cancel a MOI_TAO shipment from the lookup tab', async () => {
+    api.searchParams = new URLSearchParams({ tab: 'lookup' });
+    api.lookupShipment.mockResolvedValueOnce({
+      data: {
+        waybillCode: 'VG-VD-CANCEL-101',
+        status: 'MOI_TAO',
+        freightPayer: 'NGUOI_GUI',
+        orderCode: 'ORDER-101',
+        amount: 65_000,
+        orderStatus: 'CHO_THANH_TOAN',
+        paymentStatus: 'DANG_XU_LY',
+        paymentMethod: 'TAI_BEN',
+        pickupPoint: { name: 'Bến gửi Đà Lạt', address: '01 Tô Hiến Thành' },
+        dropoffPoint: { name: 'Bến nhận TP.HCM', address: '292 Đinh Bộ Lĩnh' },
+        carrier: { name: 'Nhà xe kiểm thử' },
+        route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
+        scheduledDepartureAt: null,
+        estimatedArrivalAt: null,
+        packageCount: 1,
+        timeline: [{ status: 'MOI_TAO', time: '2026-10-20T01:00:00.000Z' }],
+      },
+    });
+    api.cancelShipment.mockResolvedValueOnce({
+      data: {
+        waybillCode: 'VG-VD-CANCEL-101',
+        status: 'DA_HUY',
+        updatedAt: '2026-10-20T02:00:00.000Z',
+        hasPaidBeforeCancel: false,
+        message: 'Hủy đơn gửi hàng thành công.',
+      },
+    });
+
+    render(<SendFreightPage />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText(/VD: FUTA-VD/i),
+      { target: { value: 'VG-VD-CANCEL-101' } },
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText('09xxxxxxxx'),
+      { target: { value: '0901234567' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Tra cứu vận đơn/i }));
+
+    expect(await screen.findByText('Hủy đơn gửi hàng')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Hủy đơn gửi hàng/i }));
+
+    expect(await screen.findByText('Xác nhận hủy đơn gửi hàng')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy đơn' }));
+
+    await waitFor(() =>
+      expect(api.cancelShipment).toHaveBeenCalledWith({
+        waybillCode: 'VG-VD-CANCEL-101',
+        phoneNumber: '0901234567',
+        reason: 'Đặt nhầm thông tin người gửi/nhận',
+      }),
+    );
+
+    expect(
+      await screen.findByText('Hủy đơn gửi hàng thành công.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Đã hủy')).toBeTruthy();
   });
 });

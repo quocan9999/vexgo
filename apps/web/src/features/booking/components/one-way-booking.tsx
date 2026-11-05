@@ -28,7 +28,7 @@ import type { ApiTrip, ApiTripStopPoint } from '@/features/trips/services/trips.
 import { AlertModal } from '@/components/ui/alert-modal';
 import { LuggageStep, calculateLuggageFee } from './luggage/luggage-step';
 import { LuggageSummary } from './luggage/luggage-summary';
-import type { ILuggageItem } from './luggage/luggage-item';
+import type { ILuggageItem, LuggageSizePackage } from './luggage/luggage-item';
 import {
   canPayForOneWayBooking,
   formatTripDateTime,
@@ -42,6 +42,7 @@ import {
 } from '../utils/cargo-weight';
 import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
+import { PromotionSelectorModal } from '@/features/promotions/components/promotion-selector-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
 import {
@@ -412,6 +413,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
 
   const [availablePromotions, setAvailablePromotions] = useState<AvailablePromotion[]>([]);
   const [loadingPromotions, setLoadingPromotions] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -446,6 +448,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   }, [post.id]);
 
   const [luggageFee, setLuggageFee] = useState(0);
+  const [luggagePackages, setLuggagePackages] = useState<LuggageSizePackage[]>([]);
 
   const [luggageWeight, setLuggageWeight] = useState(0);
   const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
@@ -916,7 +919,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 ? `Xe máy (${item.motorbikeType || 'Xe số'})`
                 : item.type === 'Xe đạp'
                   ? `Xe đạp (${item.bicycleType || 'Xe đạp thường'})`
-                  : item.type || 'Hành lý gửi kèm',
+                  : item.customTypeName?.trim()
+                    ? `${item.type}: ${item.customTypeName.trim()}`
+                    : item.type || 'Hành lý gửi kèm',
             type: item.type,
             quantity: item.quantity || 1,
             weight:
@@ -1164,6 +1169,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         bookingCode: booking.bookingCode,
         orderCode: booking.orderCode,
         status: booking.status,
+        paymentExpiresAt: booking.paymentExpiresAt,
       });
 
       setHoldExpiresAt(null);
@@ -1309,42 +1315,42 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
           <section className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 md:p-5 border-b border-slate-200">
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <h2 className="text-xl font-black text-slate-950">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    <h2 className="text-xl font-black text-slate-950 whitespace-nowrap">
                       Chọn ghế
                     </h2>
-                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">
                       {seatMap.length} chỗ
                     </span>
-                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">
                       Tối đa 5 ghế
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap">
                       {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
                     </span>
                     <button
                       type="button"
                       onClick={() => setShowVehicleInfoModal(true)}
-                      className="text-xs font-bold text-accent hover:underline cursor-pointer ml-2"
+                      className="text-xs font-bold text-accent hover:underline cursor-pointer ml-1 whitespace-nowrap"
                     >
                       Thông tin xe
                     </button>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-5 text-[11px] font-bold text-slate-600">
-                  <span className="inline-flex items-center gap-1.5">
-                    <SeatIcon className="w-4 h-5 fill-slate-200 stroke-slate-300" />{' '}
+                <div className="flex items-center gap-4 sm:gap-5 text-[11px] font-bold text-slate-600">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <SeatIcon className="w-4 h-5 fill-slate-200 stroke-slate-300 shrink-0" />{' '}
                     Đã bán
                   </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <SeatIcon className="w-4 h-5 fill-sky-100 stroke-sky-300" />{' '}
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <SeatIcon className="w-4 h-5 fill-sky-100 stroke-sky-300 shrink-0" />{' '}
                     Còn trống
                   </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <SeatIcon className="w-4 h-5 fill-[#F5A623] stroke-[#D98A12]" />{' '}
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <SeatIcon className="w-4 h-5 fill-[#F5A623] stroke-[#D98A12] shrink-0" />{' '}
                     Đang chọn
                   </span>
                 </div>
@@ -1593,87 +1599,36 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 )}
 
                 {availablePromotions.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-dashed border-slate-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <Ticket className="w-3.5 h-3.5 text-accent" />
-                        Mã ưu đãi có sẵn ({availablePromotions.length}):
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {availablePromotions.map((promo) => {
-                        const isCurrentActive = activePromotionCode === promo.code;
-                        const discountText =
-                          promo.discountType === 'PHAN_TRAM'
-                            ? `Giảm ${Number(promo.discountValue)}%${
-                                promo.maxDiscount
-                                  ? ` (tối đa ${Number(promo.maxDiscount).toLocaleString('vi-VN')}đ)`
-                                  : ''
-                              }`
-                            : `Giảm ${Number(promo.discountValue).toLocaleString('vi-VN')}đ`;
-
-                        return (
-                          <div
-                            key={promo.id}
-                            className={`relative flex flex-col justify-between p-3.5 rounded-lg border transition-all ${
-                              isCurrentActive
-                                ? 'border-accent bg-orange-50/60 shadow-sm ring-1 ring-accent/30'
-                                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
-                            }`}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-mono font-black text-xs text-accent bg-orange-100/80 px-2 py-0.5 rounded tracking-wider border border-orange-200">
-                                  {promo.code}
-                                </span>
-                                <span className="text-[11px] font-semibold text-slate-400">
-                                  HSD: {promo.endsOn}
-                                </span>
-                              </div>
-                              <h4 className="mt-2 text-xs font-bold text-slate-900 line-clamp-1">
-                                {promo.name}
-                              </h4>
-                              <p className="text-xs font-semibold text-accent mt-0.5">
-                                {discountText}
-                              </p>
-                              {promo.minimumTicketAmount &&
-                                Number(promo.minimumTicketAmount) > 0 && (
-                                  <p className="text-[11px] text-slate-500 mt-0.5">
-                                    Đơn tối thiểu:{' '}
-                                    {Number(
-                                      promo.minimumTicketAmount,
-                                    ).toLocaleString('vi-VN')}
-                                    đ
-                                  </p>
-                                )}
-                            </div>
-                            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                              <span className="text-[11px] text-slate-500">
-                                Còn {promo.remainingUses} lượt
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (isCurrentActive) {
-                                    handleRemovePromotion();
-                                  } else {
-                                    handleApplyPromotion(promo.code);
-                                  }
-                                }}
-                                disabled={promotionStatus === 'loading'}
-                                className={`px-3 py-1 text-xs font-black rounded transition-colors ${
-                                  isCurrentActive
-                                    ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                                    : 'bg-accent text-white hover:bg-accent-hover'
-                                }`}
-                              >
-                                {isCurrentActive ? 'Bỏ chọn' : 'Áp dụng'}
-                              </button>
-                            </div>
+                  <div className="mt-3.5 pt-3.5 border-t border-dashed border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowPromoModal(true)}
+                      className="group flex w-full items-center justify-between rounded-xl border border-orange-200/90 bg-orange-50/50 p-3 hover:bg-orange-50 hover:border-orange-300 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-accent font-bold">
+                          <Ticket className="h-4 w-4" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                            Chọn mã ưu đãi có sẵn
+                            <span className="rounded-full bg-accent px-1.5 py-0.2 text-[10px] font-extrabold text-white">
+                              {availablePromotions.length} mã
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {activePromotionCode
+                              ? `Đang dùng mã: ${activePromotionCode}`
+                              : 'Xem tất cả mã giảm giá áp dụng cho chuyến xe này'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-xs font-bold text-accent group-hover:translate-x-0.5 transition-transform">
+                        <span>{activePromotionCode ? 'Đổi mã' : 'Chọn mã'}</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </div>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1842,6 +1797,8 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               seat={selectedSeatText}
               passenger={customerName || 'Khách hàng'}
               cargoCapacity={cargoCapacity}
+              tripId={Number(post.id)}
+              onPackagesChange={setLuggagePackages}
               onFeeChange={handleLuggageChange}
             />
 
@@ -2099,21 +2056,11 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-slate-900 text-xs">
-                            Kiện {idx + 1}: {item.type}
+                            Kiện {idx + 1}: {item.customTypeName?.trim() ? `${item.type} (${item.customTypeName.trim()})` : item.type}
                           </span>
                           {item.quantity > 1 && (
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
                               x{item.quantity}
-                            </span>
-                          )}
-                          {item.category === 'fragile' && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
-                              Dễ vỡ
-                            </span>
-                          )}
-                          {item.category === 'valuable' && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
-                              Giá trị cao
                             </span>
                           )}
                         </div>
@@ -2136,30 +2083,25 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            {item.packageSize && (
+                              <span className="bg-accent/10 text-accent font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                Gói Size {item.packageSize}
+                              </span>
+                            )}
                             <span>
                               {item.weight > 0 ? (
-                                <strong className="text-slate-800">{Number((item.weight).toFixed(2))} kg</strong>
+                                <strong className="text-slate-800">Tối đa {Number((item.weight).toFixed(2))} kg</strong>
                               ) : (
-                                <span className="text-slate-600 font-normal">Chưa nhập khối lượng</span>
+                                <span className="text-slate-600 font-normal">Chưa chọn gói</span>
                               )}
                             </span>
                             {item.length && item.width && item.height ? (
-                              (() => {
-                                const vol = Number(((item.length * item.width * item.height) / 5000).toFixed(2));
-                                return (
-                                  <>
-                                    <span className="text-slate-300">•</span>
-                                    <span className="text-slate-500">
-                                      {item.length}×{item.width}×{item.height}cm
-                                    </span>
-                                    {vol > (item.weight || 0) && (
-                                      <span className="text-[10px] text-accent font-bold bg-accent/10 px-1.5 py-0.2 rounded">
-                                        (Tính cước: {vol}kg quy đổi)
-                                      </span>
-                                    )}
-                                  </>
-                                );
-                              })()
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-500">
+                                  ≤ {item.length}×{item.width}×{item.height}cm
+                                </span>
+                              </>
                             ) : null}
                           </div>
                         )}
@@ -2172,7 +2114,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       </div>
 
                       {(() => {
-                        const itemFee = calculateLuggageFee([item]);
+                        const itemFee = calculateLuggageFee([item], luggagePackages);
                         return itemFee > 0 ? (
                           <span className="shrink-0 text-right text-xs font-bold text-red-600">
                             {itemFee.toLocaleString('vi-VN')}đ
@@ -2415,7 +2357,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     </div>
 
                     {(() => {
-                      const itemFee = calculateLuggageFee([item]);
+                      const itemFee = calculateLuggageFee([item], luggagePackages);
                       return itemFee > 0 ? (
                         <div className="shrink-0 text-right text-xs font-bold text-red-600">
                           {itemFee.toLocaleString('vi-VN')}đ
@@ -2461,6 +2403,20 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             block: 'center',
           });
         }}
+      />
+
+      <PromotionSelectorModal
+        isOpen={showPromoModal}
+        onClose={() => setShowPromoModal(false)}
+        promotions={availablePromotions}
+        activeCode={activePromotionCode}
+        onSelectPromotion={(code) => {
+          handleApplyPromotion(code);
+        }}
+        onRemovePromotion={() => {
+          handleRemovePromotion();
+        }}
+        isLoading={promotionStatus === 'loading'}
       />
     </div>
   );

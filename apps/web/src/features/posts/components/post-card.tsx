@@ -70,7 +70,6 @@ export const PostCard: React.FC<PropertyCardProps> = ({
             <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border-[3px] sm:border-[3.5px] border-[#00674f] bg-white z-10 shrink-0" />
             <div className="flex-1 border-t-2 border-dotted border-slate-300 mx-1 flex flex-col items-center relative">
               <span className="bg-white px-2 text-[11px] sm:text-[13px] font-medium text-slate-500 absolute -top-4 whitespace-nowrap">03:30 h - 170Km</span>
-              <span className="bg-white px-2 text-[9px] sm:text-[11px] text-slate-400 absolute top-1 whitespace-nowrap">(Asian/Ho Chi Minh)</span>
             </div>
             <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#F05929] shrink-0 z-10" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>

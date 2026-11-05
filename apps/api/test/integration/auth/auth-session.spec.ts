@@ -100,7 +100,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       trangThai: 'HOAT_DONG',
       createdAt: NOW,
       updatedAt: NOW,
-      khachHang: { khachHangId: 12 },
+      khachHang: { khachHangId: 12, hoTen: 'Nguyễn Văn An' },
       taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'KHACH_HANG' } }],
       ...overrides,
     };

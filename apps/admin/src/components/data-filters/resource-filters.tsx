@@ -28,15 +28,17 @@ export function SearchInput({
   placeholder,
   value,
   onChange,
+  className,
 }: {
   label: string;
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
+  className?: string;
 }) {
   const id = useId();
   return (
-    <div className="min-w-0 flex-[2_1_260px]">
+    <div className={className ?? 'min-w-0 flex-[2_1_260px]'}>
       <label className="mb-2 block text-[13px] font-semibold" htmlFor={id}>
         {label}
       </label>
@@ -75,17 +77,19 @@ export function SelectFilter({
   value,
   options,
   onChange,
+  className,
 }: {
   label: string;
   allLabel?: string;
   value: string;
   options: FilterOption[];
   onChange: (value: string) => void;
+  className?: string;
 }) {
   const id = useId();
   const allValue = '__all_filters__';
   return (
-    <div className="min-w-0 flex-[1_1_130px] sm:flex-[1_1_180px]">
+    <div className={className ?? 'min-w-0 flex-[1_1_130px] sm:flex-[1_1_180px]'}>
       <label className="mb-2 block text-[13px] font-semibold" htmlFor={id}>
         {label}
       </label>

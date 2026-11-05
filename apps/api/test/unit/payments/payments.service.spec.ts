@@ -101,6 +101,7 @@ describe('PaymentsService', () => {
           donGiaoDichId: 200,
           trangThai: 'CHO_THANH_TOAN',
         }),
+        findMany: vi.fn().mockResolvedValue([]),
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
@@ -1019,6 +1020,53 @@ describe('PaymentsService', () => {
       const settle = vi.spyOn(service, 'confirmPaymentSuccess');
       const body = Buffer.from(JSON.stringify({ id: 12345, accountNumber: sepayAccountNumber, transactionDate: sepayTransactionDate, code: 'AGD29612020BAC', content: 'FUTAGD29612020BAC', transferType: 'in', transferAmount: 300000 }));
       await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({ response: { error: 'SEPAY_ORDER_NOT_FOUND' } });
+      expect(settle).not.toHaveBeenCalled();
+    });
+
+    it('settles all orders in a round-trip combo payment when transfer amount matches total', async () => {
+      const secret = 'sepay-hmac-test-secret';
+      setSepayConfig(secret, sepayAccountNumber);
+      const comboOrders = [
+        { donGiaoDichId: 201, comboCode: 'RT-COMBO-1234', tongTien: '560000', phieuDatVe: { phieuDatVeId: 301 } },
+        { donGiaoDichId: 202, comboCode: 'RT-COMBO-1234', tongTien: '200000', phieuDatVe: { phieuDatVeId: 302 } },
+      ];
+      prisma.donGiaoDich.findMany.mockResolvedValue(comboOrders);
+      prisma.thanhToan.findMany.mockResolvedValue([]);
+      prisma.thanhToan.findFirst.mockResolvedValue({ ...samplePayment, phuongThuc: 'SEPAY' });
+      const settle = vi.spyOn(service, 'confirmPaymentSuccess').mockResolvedValue({ success: true } as any);
+      const body = Buffer.from(JSON.stringify({
+        id: 77889, accountNumber: sepayAccountNumber, transactionDate: sepayTransactionDate, code: 'RT-COMBO-1234', content: 'RT-COMBO-1234 thanh toan', transferType: 'in', transferAmount: 760000,
+      }));
+      const res = await service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) });
+      expect(res).toEqual({ success: true, message: 'Thanh toán combo khứ hồi SePay thành công.' });
+      expect(settle).toHaveBeenCalledTimes(2);
+      expect(settle).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        provider: 'SEPAY',
+        amount: 560000,
+        providerTransactionId: '77889-1',
+      }));
+      expect(settle).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        provider: 'SEPAY',
+        amount: 200000,
+        providerTransactionId: '77889-2',
+      }));
+    });
+
+    it('rejects round-trip combo payment when transfer amount mismatches total', async () => {
+      const secret = 'sepay-hmac-test-secret';
+      setSepayConfig(secret, sepayAccountNumber);
+      const comboOrders = [
+        { donGiaoDichId: 201, comboCode: 'RT-COMBO-1234', tongTien: '560000', phieuDatVe: { phieuDatVeId: 301 } },
+        { donGiaoDichId: 202, comboCode: 'RT-COMBO-1234', tongTien: '200000', phieuDatVe: { phieuDatVeId: 302 } },
+      ];
+      prisma.donGiaoDich.findMany.mockResolvedValue(comboOrders);
+      const settle = vi.spyOn(service, 'confirmPaymentSuccess');
+      const body = Buffer.from(JSON.stringify({
+        id: 77889, accountNumber: sepayAccountNumber, transactionDate: sepayTransactionDate, code: 'RT-COMBO-1234', content: 'RT-COMBO-1234 thanh toan', transferType: 'in', transferAmount: 700000,
+      }));
+      await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({
+        response: { error: 'PAYMENT_AMOUNT_MISMATCH' },
+      });
       expect(settle).not.toHaveBeenCalled();
     });
 

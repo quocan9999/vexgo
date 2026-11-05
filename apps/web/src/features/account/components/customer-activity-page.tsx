@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Ticket, Star, QrCode, Clock } from 'lucide-react';
+import { Ticket, Star, QrCode, Clock, Trash2, Loader2 } from 'lucide-react';
 import { ProfileSidebar } from '@/features/account/components/profile-sidebar';
 import { useAuthSession } from '@/features/auth/auth-session';
 import {
@@ -17,6 +17,11 @@ import {
   markPaymentDraftsTerminalByOrder,
 } from '@/features/booking/services/payment-draft';
 import { ReviewDialog } from '@/features/tickets/components/review-dialog';
+import {
+  MyReviewModal,
+  type MyReviewData,
+} from '@/features/tickets/components/my-review-modal';
+import { reviewsApi } from '@/features/tickets/services/reviews.api';
 import { resolveCustomerActivityViewState } from '@/features/account/services/customer-activity-view-state';
 
 function canResumeBookingPayment(row: BookingItem, nowMs: number = Date.now()): boolean {
@@ -64,10 +69,17 @@ function formatPrice(amount: number): string {
 function renderStatusBadge(status: string | null) {
   if (!status) return null;
   const s = status.toUpperCase();
-  if (s === 'DA_THANH_TOAN' || s === 'THANH_CONG') {
+  if (s === 'DA_THANH_TOAN' || s === 'THANH_CONG' || s === 'HOAN_TAT') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 whitespace-nowrap">
         Đã thanh toán
+      </span>
+    );
+  }
+  if (s === 'HOAN_TIEN') {
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 whitespace-nowrap">
+        Đã hoàn tiền
       </span>
     );
   }
@@ -145,6 +157,34 @@ export default function CustomerActivityPage() {
     busBrand: string;
   } | null>(null);
   const [reviewedTripIds, setReviewedTripIds] = useState<number[]>([]);
+  const [customerReviews, setCustomerReviews] = useState<
+    Record<number, MyReviewData>
+  >({});
+  const [viewingReview, setViewingReview] = useState<MyReviewData | null>(null);
+  const [deleteConfirmTripId, setDeleteConfirmTripId] = useState<number | null>(
+    null,
+  );
+  const [isDeletingReview, setIsDeletingReview] = useState(false);
+
+  const handleConfirmDeleteReview = async () => {
+    if (!deleteConfirmTripId || !executeWithAuth) return;
+    setIsDeletingReview(true);
+    try {
+      await executeWithAuth((token) =>
+        reviewsApi.deleteTripReview(token, deleteConfirmTripId),
+      );
+      setReviewedTripIds((prev) =>
+        prev.filter((id) => id !== deleteConfirmTripId),
+      );
+      setDeleteConfirmTripId(null);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Không thể xóa đánh giá.';
+      alert(msg);
+    } finally {
+      setIsDeletingReview(false);
+    }
+  };
 
   useEffect(() => {
     if (
@@ -179,6 +219,34 @@ export default function CustomerActivityPage() {
           setBookings(res.data);
           setMeta(res.meta);
           setErrorMessage('');
+
+          executeWithAuth((token) => reviewsApi.getMyReviews(token))
+            .then((revRes) => {
+              if (!ignore && revRes?.data?.reviews) {
+                const ids = revRes.data.reviews
+                  .map((r) => r.tripId)
+                  .filter(Boolean);
+                setReviewedTripIds(ids);
+
+                const revMap: Record<number, MyReviewData> = {};
+                revRes.data.reviews.forEach((r) => {
+                  if (r.tripId) {
+                    revMap[r.tripId] = {
+                      id: r.id,
+                      tripId: r.tripId,
+                      rating: r.rating,
+                      comment: r.comment,
+                      createdAt: r.createdAt,
+                      routeName: r.routeName ?? undefined,
+                      date: r.tripDate ?? undefined,
+                      reply: r.reply || null,
+                    };
+                  }
+                });
+                setCustomerReviews(revMap);
+              }
+            })
+            .catch(() => {});
 
           if (!hasInitializedTab) {
             const hasUpcoming = res.data.some((b) => {
@@ -715,6 +783,13 @@ export default function CustomerActivityPage() {
                         const isReviewed =
                           row.tripId != null &&
                           reviewedTripIds.includes(row.tripId);
+                        const departureMs = row.departureTime
+                          ? Date.parse(row.departureTime)
+                          : 0;
+                        const isWithin7Days =
+                          departureMs > 0
+                            ? nowMs - departureMs <= 7 * 24 * 60 * 60 * 1000
+                            : true;
 
                         return (
                           <tr
@@ -800,11 +875,55 @@ export default function CustomerActivityPage() {
 
                                 {canReview &&
                                   (isReviewed ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
-                                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                                      <span>Đã đánh giá</span>
-                                    </span>
-                                  ) : (
+                                    <div className="inline-flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const existing =
+                                            customerReviews[row.tripId!];
+                                          setViewingReview({
+                                            id: existing?.id,
+                                            tripId: row.tripId!,
+                                            rating: existing?.rating || 5,
+                                            comment: existing?.comment ?? null,
+                                            createdAt: existing?.createdAt,
+                                            isEdited: existing?.isEdited,
+                                            isEditable: existing?.isEditable,
+                                            routeName:
+                                              row.route ||
+                                              existing?.routeName ||
+                                              'Chuyến xe đã đi',
+                                            busBrand:
+                                              row.busCompanyName || 'Nhà xe',
+                                            date: formatDeparture(
+                                              row.departureTime,
+                                            ),
+                                            reply: existing?.reply ?? null,
+                                          });
+                                        }}
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                                        title="Xem lại nhận xét, chỉnh sửa hoặc xóa đánh giá"
+                                      >
+                                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                        <span>
+                                          Xem đánh giá
+                                          {customerReviews[row.tripId!]?.rating
+                                            ? ` (${customerReviews[row.tripId!].rating}★)`
+                                            : ''}
+                                        </span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setDeleteConfirmTripId(row.tripId!)
+                                        }
+                                        className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer shadow-2xs"
+                                        title="Xóa đánh giá này để gửi lại"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : isWithin7Days ? (
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -820,11 +939,18 @@ export default function CustomerActivityPage() {
                                         })
                                       }
                                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-extrabold transition-colors shadow-2xs cursor-pointer"
-                                      title="Đánh giá chất lượng chuyến đi"
+                                      title="Đánh giá chất lượng chuyến đi (trong vòng 7 ngày)"
                                     >
                                       <Star className="w-3.5 h-3.5 fill-slate-900 text-slate-900" />
                                       <span>Đánh giá</span>
                                     </button>
+                                  ) : (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 text-slate-400 text-[11px] font-medium"
+                                      title="Chuyến xe đã kết thúc quá 7 ngày, đã hết thời hạn gửi đánh giá"
+                                    >
+                                      Hết hạn đánh giá
+                                    </span>
                                   ))}
                               </div>
                             </td>
@@ -921,9 +1047,110 @@ export default function CustomerActivityPage() {
                 ? prev
                 : [...prev, reviewTarget.tripId],
             );
+            executeWithAuth((token) => reviewsApi.getMyReviews(token))
+              .then((revRes) => {
+                if (revRes?.data?.reviews) {
+                  const revMap: Record<number, MyReviewData> = {};
+                  revRes.data.reviews.forEach((r) => {
+                    if (r.tripId) {
+                      revMap[r.tripId] = {
+                        id: r.id,
+                        tripId: r.tripId,
+                        rating: r.rating,
+                        comment: r.comment,
+                        createdAt: r.createdAt,
+                        routeName: r.routeName ?? undefined,
+                        date: r.tripDate ?? undefined,
+                        reply: r.reply || null,
+                      };
+                    }
+                  });
+                  setCustomerReviews(revMap);
+                }
+              })
+              .catch(() => {});
           }
         }}
       />
+
+      {/* Modal Xem lại & Chỉnh sửa / Xóa đánh giá */}
+      <MyReviewModal
+        isOpen={Boolean(viewingReview)}
+        onClose={() => setViewingReview(null)}
+        review={viewingReview}
+        onUpdated={(updated) => {
+          setCustomerReviews((prev) => ({
+            ...prev,
+            [updated.tripId]: {
+              ...prev[updated.tripId],
+              rating: updated.rating,
+              comment: updated.comment,
+            },
+          }));
+          if (viewingReview && viewingReview.tripId === updated.tripId) {
+            setViewingReview((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    rating: updated.rating,
+                    comment: updated.comment,
+                  }
+                : null,
+            );
+          }
+        }}
+        onDeleted={(tripId) => {
+          setReviewedTripIds((prev) => prev.filter((id) => id !== tripId));
+          setCustomerReviews((prev) => {
+            const next = { ...prev };
+            delete next[tripId];
+            return next;
+          });
+          setViewingReview(null);
+        }}
+      />
+
+      {/* Modal xác nhận xóa đánh giá */}
+      {deleteConfirmTripId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              Xóa đánh giá chuyến xe?
+            </h3>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+              Bạn có chắc chắn muốn xóa đánh giá của mình cho chuyến đi này không? Sau khi xóa, bạn có thể thực hiện đánh giá lại bất kỳ lúc nào.
+            </p>
+            <div className="flex items-center justify-end gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmTripId(null)}
+                disabled={isDeletingReview}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteReview}
+                disabled={isDeletingReview}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-sm font-semibold text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+              >
+                {isDeletingReview ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  <span>Xác nhận xóa</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

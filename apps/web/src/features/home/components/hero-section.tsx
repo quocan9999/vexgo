@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { AlertModal } from '@/components/ui/alert-modal';
 import { LocationPicker } from '@/features/locations/components/location-picker';
+import { BookingGuideModal } from '@/features/booking/components/booking-guide-modal';
+import { ShipmentGuideModal } from '@/features/shipments/components/shipment-guide-modal';
 
 export interface HeroSectionProps {
   activeSearchTab: 'BUY' | 'RENT';
@@ -67,6 +69,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     isOpen: boolean;
     title: string;
   }>({ isOpen: false, title: '' });
+  const [showBookingGuide, setShowBookingGuide] = useState(false);
+  const [showShipmentGuide, setShowShipmentGuide] = useState(false);
 
   const todayStr = useMemo(
     () =>
@@ -121,6 +125,33 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   };
 
   const handleSearchSubmit = (e?: React.MouseEvent) => {
+    if (!selectedProvince && !selectedDistrict) {
+      if (e) e.preventDefault();
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Vui lòng chọn điểm đi và điểm đến để tìm chuyến xe',
+      });
+      return;
+    }
+
+    if (!selectedProvince) {
+      if (e) e.preventDefault();
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Vui lòng chọn điểm đi để tiếp tục',
+      });
+      return;
+    }
+
+    if (!selectedDistrict) {
+      if (e) e.preventDefault();
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Vui lòng chọn điểm đến để tiếp tục',
+      });
+      return;
+    }
+
     if (selectedProvince && selectedDistrict && selectedProvince.trim().toLowerCase() === selectedDistrict.trim().toLowerCase()) {
       if (e) e.preventDefault();
       setReturnDateAlert({
@@ -376,12 +407,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               </div>
 
               <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <Link
-                  href="#"
-                  className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors"
+                <button
+                  type="button"
+                  onClick={() => setShowBookingGuide(true)}
+                  className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
                 >
                   Hướng dẫn đặt vé
-                </Link>
+                </button>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     type="button"
@@ -465,16 +497,54 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               </div>
 
               <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <Link
-                  href="#"
-                  className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors"
+                <button
+                  type="button"
+                  onClick={() => setShowShipmentGuide(true)}
+                  className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
                 >
                   Hướng dẫn gửi hàng
-                </Link>
+                </button>
                 <div>
                   <button
                     type="button"
                     onClick={(e) => {
+                      if (!selectedProvince && !selectedDistrict) {
+                        e.preventDefault();
+                        setReturnDateAlert({
+                          isOpen: true,
+                          title: 'Vui lòng chọn điểm gửi và điểm nhận hàng',
+                        });
+                        return;
+                      }
+                      if (!selectedProvince) {
+                        e.preventDefault();
+                        setReturnDateAlert({
+                          isOpen: true,
+                          title: 'Vui lòng chọn điểm gửi hàng để tiếp tục',
+                        });
+                        return;
+                      }
+                      if (!selectedDistrict) {
+                        e.preventDefault();
+                        setReturnDateAlert({
+                          isOpen: true,
+                          title: 'Vui lòng chọn điểm nhận hàng để tiếp tục',
+                        });
+                        return;
+                      }
+                      if (
+                        selectedProvince &&
+                        selectedDistrict &&
+                        selectedProvince.trim().toLowerCase() ===
+                          selectedDistrict.trim().toLowerCase()
+                      ) {
+                        e.preventDefault();
+                        setReturnDateAlert({
+                          isOpen: true,
+                          title: 'Điểm gửi và điểm nhận không được trùng nhau',
+                        });
+                        return;
+                      }
                       if (!freightDate || freightDate < todayStr) {
                         e.preventDefault();
                         setReturnDateAlert({
@@ -506,6 +576,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         variant="warning"
         confirmText="Đã hiểu"
         onClose={() => setReturnDateAlert({ isOpen: false, title: '' })}
+      />
+
+      <BookingGuideModal
+        isOpen={showBookingGuide}
+        onClose={() => setShowBookingGuide(false)}
+      />
+
+      <ShipmentGuideModal
+        isOpen={showShipmentGuide}
+        onClose={() => setShowShipmentGuide(false)}
       />
     </section>
   );

@@ -384,6 +384,14 @@ export class BookingsService {
       }
     }
 
+    // Chống phá hoại (Spam giữ chỗ): kiểm tra số điện thoại & tài khoản
+    if (typeof this.seatHoldsService?.assertNoSpamUnpaidBookings === 'function') {
+      await this.seatHoldsService.assertNoSpamUnpaidBookings(
+        dto.contact.phone,
+        customer?.khachHangId ?? null,
+      );
+    }
+
     const tripSeats = await this.prisma.gheChuyenXe.findMany({
       where: {
         chuyenXeId: trip.chuyenXeId,
@@ -703,6 +711,7 @@ export class BookingsService {
       const donGiaoDich = await tx.donGiaoDich.create({
         data: {
           maDonGiaoDich,
+          comboCode: dto.comboCode?.trim() || null,
           ngayTao: now,
           tongTien: totalOrderAmount,
           trangThai: 'CHO_THANH_TOAN',
@@ -1082,6 +1091,7 @@ export class BookingsService {
       bookingCode: txResult.phieuDatVe.maPhieuDatVe,
       orderId: txResult.donGiaoDich.donGiaoDichId,
       orderCode: txResult.donGiaoDich.maDonGiaoDich,
+      comboCode: txResult.donGiaoDich.comboCode ?? null,
       tripId: trip.chuyenXeId,
       status: txResult.phieuDatVe.trangThai,
       contact: {
@@ -1541,6 +1551,7 @@ export class BookingsService {
       weight: Number(h.khoiLuong),
       category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
       categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
+      note: h.moTa ?? null,
     }));
     const ticketSubtotal = (booking.ves ?? []).reduce(
       (sum: number, ticket: any) =>
@@ -1560,6 +1571,7 @@ export class BookingsService {
       bookingCode: booking.maPhieuDatVe,
       orderId: booking.donGiaoDichId,
       orderCode: booking.donGiaoDich?.maDonGiaoDich ?? null,
+      comboCode: booking.donGiaoDich?.comboCode ?? null,
       tripId: chuyenXe?.chuyenXeId ?? null,
       ticketCount: booking.ves?.length || booking.soLuongVeBanDau || 0,
       activeTicketCount: activeSeatNumbers.length,
@@ -1607,5 +1619,13 @@ export class BookingsService {
       createdAt: booking.createdAt.toISOString(),
       updatedAt: booking.updatedAt.toISOString(),
     };
+  }
+
+  async assertNoSpamUnpaidBookings(
+    phone?: string | null,
+    khachHangId?: number | null,
+    now = new Date(),
+  ): Promise<void> {
+    return this.seatHoldsService.assertNoSpamUnpaidBookings(phone, khachHangId, now);
   }
 }

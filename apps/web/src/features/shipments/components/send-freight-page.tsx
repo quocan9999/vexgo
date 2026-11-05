@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/preserve-manual-memoization, react-hooks/set-state-in-effect */
 'use client';
 
 import React, {
@@ -9,32 +10,39 @@ import React, {
   Suspense,
 } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
-  Package,
-  MapPin,
+  AlertCircle,
   ArrowRight,
-  User,
-  Users,
+  ArrowRightLeft,
+  Building2,
+  Check,
   CheckCircle,
   CheckCircle2,
-  Copy,
-  Clock,
-  Search,
-  AlertCircle,
-  Info,
-  Building2,
-  RotateCcw,
-  Plus,
-  ArrowRightLeft,
-  PackageCheck,
-  X,
-  Check,
   ChevronDown,
+  Clock,
+  Copy,
   Filter,
+  Info,
+  MapPin,
+  Package,
+  PackageCheck,
+  Phone,
+  Plus,
+  Receipt,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  Ticket,
   Trash2,
+  User,
+  Users,
+  Wallet,
+  X,
 } from 'lucide-react';
 import { LocationPicker } from '@/features/locations/components/location-picker';
 import { QRCodeSVG } from 'qrcode.react';
+import { ShipmentGuideModal } from './shipment-guide-modal';
 
 import {
   shipmentsApi,
@@ -89,6 +97,8 @@ function SendFreightContent() {
     searchParams.get('tab') === 'lookup' ? 'lookup' : 'create',
   );
   const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
+  const [showLookupGuideModal, setShowLookupGuideModal] =
+    useState<boolean>(false);
 
   // Tuyến & Chuyến
   const [origin, setOrigin] = useState<string>(
@@ -345,13 +355,72 @@ function SendFreightContent() {
   }, []);
 
   const availableCargoCategories = cargoCategories;
-  const quoteItems = useMemo(
+  const cargoItemsRef = useRef(cargoItems);
+  useEffect(() => {
+    cargoItemsRef.current = cargoItems;
+  }, [cargoItems]);
+
+  // Key xác định cước chỉ phụ thuộc vào tuyến, điểm bến, ngày, và thông số cước (loại hàng, trọng lượng, số lượng, kích thước, phụ phí).
+  // Tuyệt đối KHÔNG đưa tên kiện hàng (item.name) vào đây để tránh việc gõ tên làm nhảy cước liên tục.
+  const quotePricingKey = useMemo(
     () =>
-      cargoItems.map((item) => ({
-        name: item.name.trim(),
+      JSON.stringify([
+        selectedTripId,
+        senderPointId,
+        receiverPointId,
+        date,
+        cargoItems.map((item) => [
+          item.categoryId,
+          Number(item.quantity) || 1,
+          Number(item.weight) || 0,
+          item.length ? Number(item.length) : null,
+          item.width ? Number(item.width) : null,
+          item.height ? Number(item.height) : null,
+          item.serviceType,
+        ]),
+        hasFragile,
+        hasValuable,
+      ]),
+    [
+      selectedTripId,
+      senderPointId,
+      receiverPointId,
+      date,
+      cargoItems,
+      hasFragile,
+      hasValuable,
+    ],
+  );
+
+  const quote = quoteResult?.requestKey === quotePricingKey ? quoteResult : null;
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => {
+      if (!active) return;
+      setQuoteError(null);
+      const currentItems = cargoItemsRef.current;
+      const isInvalid =
+        !selectedTripId ||
+        !senderPointId ||
+        !receiverPointId ||
+        currentItems.some(
+          (item) =>
+            !item.categoryId || !(Number(item.weight) > 0) || !(Number(item.quantity) > 0),
+        );
+
+      if (isInvalid) {
+        setQuote(null);
+        setQuoteLoading(false);
+        return;
+      }
+
+      setQuoteLoading(true);
+      const itemsPayload = currentItems.map((item) => ({
+        name: item.name.trim() || 'Hàng hóa',
         loaiHangHoaId: item.categoryId,
-        quantity: Number(item.quantity),
-        weight: Number(item.weight),
+        quantity: Number(item.quantity) || 1,
+        weight: Number(item.weight) || 0,
         length: item.length ? Number(item.length) : undefined,
         width: item.width ? Number(item.width) : undefined,
         height: item.height ? Number(item.height) : undefined,
@@ -361,75 +430,47 @@ function SendFreightContent() {
             : item.serviceType === 'valuable'
               ? ('VALUABLE' as const)
               : ('NORMAL' as const),
-      })),
-    [cargoItems],
-  );
-  const quoteKey = JSON.stringify([
-    selectedTripId,
-    senderPointId,
-    receiverPointId,
-    date,
-    quoteItems,
-    hasFragile,
-    hasValuable,
-  ]);
-  const quote = quoteResult?.requestKey === quoteKey ? quoteResult : null;
-  useEffect(() => {
-    let active = true;
-    const timer = setTimeout(() => {
-      if (!active) return;
-      setQuote(null);
-      setQuoteError(null);
-      if (
-        !selectedTripId ||
-        !senderPointId ||
-        !receiverPointId ||
-        quoteItems.some(
-          (item) =>
-            !item.loaiHangHoaId || !(item.weight > 0) || !(item.quantity > 0),
-        )
-      ) {
-        setQuoteLoading(false);
-        return;
-      }
-      setQuoteLoading(true);
+      }));
+
       shipmentsApi
         .getQuote({
           routeId: selectedTripId,
           sendDate: date || undefined,
           senderPointId,
           receiverPointId,
-          items: quoteItems,
+          items: itemsPayload,
           isFragile: hasFragile,
           isValuable: hasValuable,
         })
         .then(({ data }) => {
-          if (active) setQuote({ ...data, requestKey: quoteKey });
+          if (active) setQuote({ ...data, requestKey: quotePricingKey });
         })
         .catch((error: unknown) => {
-          if (active)
+          if (active) {
+            setQuote(null);
             setQuoteError(
               error instanceof Error ? error.message : 'Không thể báo cước.',
             );
+          }
         })
         .finally(() => {
           if (active) setQuoteLoading(false);
         });
-    }, 0);
+    }, 150);
+
     return () => {
       active = false;
       clearTimeout(timer);
     };
   }, [
+    quotePricingKey,
+    quoteRetry,
     selectedTripId,
     senderPointId,
     receiverPointId,
     date,
-    quoteItems,
     hasFragile,
     hasValuable,
-    quoteRetry,
-    quoteKey,
   ]);
   const calculatedPricing = {
     totalWeight: cargoItems.reduce(
@@ -461,6 +502,19 @@ function SendFreightContent() {
   const [lookupResult, setLookupResult] =
     useState<PublicShipmentLookupData | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [cancelReason, setCancelReason] = useState<string>(
+    'Đặt nhầm thông tin người gửi/nhận',
+  );
+  const [customCancelReason, setCustomCancelReason] = useState<string>('');
+  const [isCancellingShipment, setIsCancellingShipment] =
+    useState<boolean>(false);
+  const [cancelShipmentError, setCancelShipmentError] = useState<string | null>(
+    null,
+  );
+  const [cancelShipmentSuccess, setCancelShipmentSuccess] = useState<
+    string | null
+  >(null);
 
   // Each search invalidates older requests, including manual refresh and clearing the route.
   const tripRequestId = useRef(0);
@@ -513,6 +567,17 @@ function SendFreightContent() {
   const selectedTrip = useMemo(() => {
     return trips.find((t) => t.routeId === selectedTripId) || null;
   }, [trips, selectedTripId]);
+
+  const fragileSurcharge =
+    quote?.surcharges?.fragile ??
+    quoteResult?.surcharges?.fragile ??
+    selectedTrip?.surcharges?.fragile ??
+    20_000;
+  const valuableSurcharge =
+    quote?.surcharges?.valuable ??
+    quoteResult?.surcharges?.valuable ??
+    selectedTrip?.surcharges?.valuable ??
+    50_000;
 
   useEffect(() => {
     let active = true;
@@ -861,16 +926,17 @@ function SendFreightContent() {
   };
 
   // Tra cứu vận đơn
-  const handleLookup = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeLookup = useCallback(async (code: string, phone: string) => {
     setLookupError(null);
     setLookupResult(null);
+    setCancelShipmentError(null);
+    setCancelShipmentSuccess(null);
 
-    if (!lookupCode.trim()) {
+    if (!code.trim()) {
       setLookupError('Vui lòng nhập mã vận đơn.');
       return;
     }
-    if (!lookupPhone.trim()) {
+    if (!phone.trim()) {
       setLookupError('Vui lòng nhập số điện thoại người gửi hoặc người nhận.');
       return;
     }
@@ -878,8 +944,8 @@ function SendFreightContent() {
     setIsLookingUp(true);
     try {
       const res = await shipmentsApi.lookupShipment({
-        waybillCode: lookupCode.trim(),
-        phoneNumber: lookupPhone.trim(),
+        waybillCode: code.trim(),
+        phoneNumber: phone.trim(),
       });
       setLookupResult(res.data);
     } catch (err: unknown) {
@@ -890,7 +956,64 @@ function SendFreightContent() {
     } finally {
       setIsLookingUp(false);
     }
+  }, []);
+
+  const handleConfirmCancelShipment = async () => {
+    if (!lookupResult) return;
+    const finalReason =
+      cancelReason === 'OTHER'
+        ? customCancelReason.trim() || 'Khách hàng chủ động hủy đơn trực tuyến'
+        : cancelReason;
+
+    setIsCancellingShipment(true);
+    setCancelShipmentError(null);
+    try {
+      const res = await shipmentsApi.cancelShipment({
+        waybillCode: lookupResult.waybillCode,
+        phoneNumber: lookupPhone.trim(),
+        reason: finalReason,
+      });
+      setLookupResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'DA_HUY',
+              orderStatus: 'DA_HUY',
+              timeline: [
+                ...(prev.timeline || []),
+                { status: 'DA_HUY', time: res.data.updatedAt },
+              ],
+            }
+          : prev,
+      );
+      setCancelShipmentSuccess(res.data.message);
+      setShowCancelModal(false);
+    } catch (err: unknown) {
+      setCancelShipmentError(
+        (err instanceof Error ? err.message : '') ||
+          'Không thể hủy đơn gửi hàng. Vui lòng thử lại.',
+      );
+    } finally {
+      setIsCancellingShipment(false);
+    }
   };
+
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeLookup(lookupCode, lookupPhone);
+  };
+
+  useEffect(() => {
+    const codeParam = searchParams.get('code');
+    const phoneParam = searchParams.get('phone');
+    if (
+      searchParams.get('tab') === 'lookup' &&
+      codeParam?.trim() &&
+      phoneParam?.trim()
+    ) {
+      void executeLookup(codeParam.trim(), phoneParam.trim());
+    }
+  }, [searchParams, executeLookup]);
 
   const copyToClipboard = (text: string) => {
     if (navigator.clipboard) {
@@ -933,49 +1056,51 @@ function SendFreightContent() {
       {/* ============================================================== */}
       {/* HERO BANNER SECTION */}
       {/* ============================================================== */}
-      <div className="bg-[#17223B] text-white pt-10 pb-16 px-4 sm:px-6 relative overflow-hidden">
+      <div className="bg-[#17223B] text-white pt-10 pb-16 px-4 sm:px-6 relative z-0 overflow-hidden">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
-              Gửi hàng theo nhà xe , <br className="hidden sm:inline" />
-              <span className="text-[#FF7D42]">nhanh – gọn – an toàn</span>
+              {activeTab === 'lookup' ? (
+                <>
+                  Tra cứu vận đơn , <br className="hidden sm:inline" />
+                  <span className="text-[#FF7D42]">hành trình bưu kiện</span>
+                </>
+              ) : (
+                <>
+                  Gửi hàng theo nhà xe , <br className="hidden sm:inline" />
+                  <span className="text-[#FF7D42]">nhanh – gọn – an toàn</span>
+                </>
+              )}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-              Giao nhận hàng trực tiếp tại bến xe và văn phòng nhà xe. Nhanh
-              chóng, tiết kiệm và an toàn.
+              {activeTab === 'lookup'
+                ? 'Theo dõi lộ trình di chuyển, vị trí bưu kiện và tình trạng giao nhận hàng hóa theo thời gian thực.'
+                : 'Giao nhận hàng trực tiếp tại bến xe và văn phòng nhà xe. Nhanh chóng, tiết kiệm và an toàn.'}
             </p>
           </div>
 
-          {/* Switch Tab */}
-          <div className="inline-flex p-1 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/10 self-start md:self-auto">
-            <button
-              onClick={() => {
-                setActiveTab('create');
-                setCreatedShipment(null);
-              }}
-              className={`px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all ${
-                activeTab === 'create'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-white/80 hover:text-white'
-              }`}
-            >
-              Tạo đơn gửi hàng
-            </button>
-            <button
-              onClick={() => setActiveTab('lookup')}
-              className={`px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all ${
-                activeTab === 'lookup'
-                  ? 'bg-white text-[#17223B] shadow-sm'
-                  : 'text-white/80 hover:text-white'
-              }`}
-            >
-              Tra cứu vận đơn
-            </button>
-          </div>
+          {activeTab === 'lookup' && (
+            <div className="inline-flex p-1 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/10 self-start md:self-auto shrink-0">
+              <Link
+                href="/tickets/lookup"
+                className="px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all text-white/80 hover:text-white flex items-center gap-2"
+              >
+                <Ticket className="w-4 h-4 text-[#60a5fa]" />
+                <span>Tra cứu vé xe</span>
+              </Link>
+              <Link
+                href="/send-freight?tab=lookup"
+                className="px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all bg-white text-[#17223B] shadow-sm flex items-center gap-2"
+              >
+                <Package className="w-4 h-4 text-orange-500" />
+                <span>Tra cứu vận đơn</span>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-8 relative z-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-8 relative">
         {/* ============================================================== */}
         {/* TAB 1: TẠO ĐƠN GỬI HÀNG */}
         {/* ============================================================== */}
@@ -1094,16 +1219,32 @@ function SendFreightContent() {
                   </div>
                 </div>
 
+                {/* Thông báo đã lưu vào tài khoản nếu đã đăng nhập */}
+                {isAuthenticated && (
+                  <div className="max-w-2xl mx-auto mt-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between gap-3 animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Đơn gửi hàng đã được tự động lưu vào tài khoản của bạn.</span>
+                    </div>
+                    <Link
+                      href="/account/shipments"
+                      className="font-bold text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
+                    >
+                      Đơn hàng của tôi →
+                    </Link>
+                  </div>
+                )}
+
                 {/* Nút hành động */}
-                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-xl mx-auto">
+                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 max-w-2xl mx-auto">
                   <button
                     onClick={() => {
                       setCreatedShipment(null);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className="w-full sm:w-auto px-6 py-3 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto px-5 py-3 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <RotateCcw className="w-4 h-4" /> Tạo đơn gửi hàng khác
+                    <RotateCcw className="w-4 h-4" /> Tạo đơn khác
                   </button>
 
                   <button
@@ -1111,11 +1252,25 @@ function SendFreightContent() {
                       setActiveTab('lookup');
                       setLookupCode(createdShipment.waybillCode);
                       setLookupPhone(createdShipment.sender.phoneNumber);
+                      void executeLookup(
+                        createdShipment.waybillCode,
+                        createdShipment.sender.phoneNumber,
+                      );
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className="w-full sm:w-auto px-6 py-3 bg-[#0060c4] hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto px-5 py-3 bg-[#0060c4] hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
-                    <Search className="w-4 h-4" /> Xem chi tiết vận đơn
+                    <Search className="w-4 h-4" /> Theo dõi hành trình ngay
                   </button>
+
+                  {isAuthenticated && (
+                    <Link
+                      href="/account/shipments"
+                      className="w-full sm:w-auto px-5 py-3 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Package className="w-4 h-4 text-emerald-600" /> Quản lý trong tài khoản
+                    </Link>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1202,7 +1357,7 @@ function SendFreightContent() {
                       <button
                         type="button"
                         onClick={() => setShowGuideModal(true)}
-                        className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline cursor-pointer text-left"
+                        className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
                       >
                         Hướng dẫn gửi hàng
                       </button>
@@ -2204,10 +2359,10 @@ function SendFreightContent() {
                                         Hàng thường
                                       </option>
                                       <option value="fragile">
-                                        Dễ vỡ (+20.000đ phụ phí)
+                                        Dễ vỡ (+{fragileSurcharge.toLocaleString('vi-VN')}đ phụ phí)
                                       </option>
                                       <option value="valuable">
-                                        Giá trị cao (+50.000đ phụ phí)
+                                        Giá trị cao (+{valuableSurcharge.toLocaleString('vi-VN')}đ phụ phí)
                                       </option>
                                     </select>
                                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -2221,13 +2376,13 @@ function SendFreightContent() {
                                   {item.serviceType === 'fragile' && (
                                     <p className="mt-1 text-[11px] text-amber-600 font-medium">
                                       Dán tem hàng dễ vỡ, xếp riêng chống va đập
-                                      (+20.000đ).
+                                      (+{fragileSurcharge.toLocaleString('vi-VN')}đ).
                                     </p>
                                   )}
                                   {item.serviceType === 'valuable' && (
                                     <p className="mt-1 text-[11px] text-emerald-600 font-medium">
                                       Niêm phong riêng, ưu tiên kiểm soát & bảo
-                                      hiểm (+50.000đ).
+                                      hiểm (+{valuableSurcharge.toLocaleString('vi-VN')}đ).
                                     </p>
                                   )}
                                 </label>
@@ -2260,15 +2415,6 @@ function SendFreightContent() {
                           );
                         })}
 
-                        {quoteLoading && <p role="status">Đang báo cước…</p>}
-                        {quoteError && (
-                          <button
-                            type="button"
-                            onClick={() => setQuoteRetry((value) => value + 1)}
-                          >
-                            Thử lại báo cước
-                          </button>
-                        )}
                         {calculatedPricing.rateExceededWarning && (
                           <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800 font-semibold">
                             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -2631,235 +2777,732 @@ function SendFreightContent() {
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isLookingUp}
-                  className="w-full h-11 bg-[#0060c4] text-white font-bold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-                >
-                  <Search className="w-4 h-4" />
-                  {isLookingUp ? 'Đang tra cứu...' : 'Tra cứu vận đơn'}
-                </button>
+                <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowLookupGuideModal(true)}
+                    className="text-sm font-bold text-[#f05123] hover:text-[#ea4a18] hover:underline transition-colors cursor-pointer text-left"
+                  >
+                    Hướng dẫn tra cứu đơn
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLookingUp}
+                    className="w-full sm:w-auto px-10 h-12 bg-[#f05123] hover:bg-[#ea4a18] active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-full transition-all shadow-md shadow-[#f05123]/25 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Search className="w-4 h-4 shrink-0" />
+                    <span>{isLookingUp ? 'Đang tra cứu...' : 'Tra cứu vận đơn'}</span>
+                  </button>
+                </div>
               </form>
             </div>
 
             {/* KẾT QUẢ TRA CỨU */}
-            {lookupResult && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5 animate-in fade-in duration-300">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase">
-                      Mã vận đơn
-                    </span>
-                    <div className="text-xl font-black text-[#0060c4]">
-                      {lookupResult.waybillCode}
-                    </div>
-                  </div>
-                  <div>
-                    <span
-                      className={`px-3 py-1 text-xs font-black rounded-full ${
-                        lookupResult.status === 'DA_GIAO'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : lookupResult.status === 'DANG_VAN_CHUYEN'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
-                      {lookupResult.status === 'MOI_TAO'
-                        ? 'Chờ mang hàng ra bến'
-                        : lookupResult.status === 'DA_TIEP_NHAN'
-                          ? 'Đã tiếp nhận tại bến'
-                          : lookupResult.status === 'DANG_VAN_CHUYEN'
-                            ? 'Đang vận chuyển'
-                            : lookupResult.status === 'DA_GIAO'
-                              ? 'Đã giao thành công'
-                              : lookupResult.status}
-                    </span>
-                  </div>
-                </div>
+            {lookupResult && (() => {
+              const currentShipment =
+                createdSuccessShipment &&
+                createdSuccessShipment.waybillCode === lookupResult.waybillCode
+                  ? createdSuccessShipment
+                  : null;
 
-                {/* Điểm giao & nhận */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div className="p-3 bg-slate-50 rounded-xl">
-                    <span className="font-bold text-slate-500 uppercase block mb-1">
-                      Điểm gửi
-                    </span>
-                    <div className="font-extrabold text-slate-900">
-                      {lookupResult.pickupPoint.name}
+              return (
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6 animate-in fade-in duration-300">
+                  {/* 1. Header Mã vận đơn & Trạng thái */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Mã vận đơn bưu kiện
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xl sm:text-2xl font-black font-mono text-[#0060c4]">
+                          {lookupResult.waybillCode}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(lookupResult.waybillCode)}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                          title="Sao chép mã vận đơn"
+                        >
+                          {copiedCode ? (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-slate-600 mt-0.5">
-                      {lookupResult.pickupPoint.address}
+                    <div>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-black rounded-full shadow-2xs ${
+                          lookupResult.status === 'DA_GIAO'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : lookupResult.status === 'DANG_VAN_CHUYEN'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : lookupResult.status === 'DA_TIEP_NHAN'
+                                ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                : lookupResult.status === 'DA_HUY'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  : 'bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}
+                      >
+                        {lookupResult.status === 'MOI_TAO' && (
+                          <Clock className="w-3.5 h-3.5 text-amber-700 animate-pulse" />
+                        )}
+                        {lookupResult.status === 'MOI_TAO'
+                          ? 'Chờ mang hàng ra bến'
+                          : lookupResult.status === 'DA_TIEP_NHAN'
+                            ? 'Đã tiếp nhận tại quầy bến xe'
+                            : lookupResult.status === 'DANG_VAN_CHUYEN'
+                              ? 'Đang trên xe vận chuyển'
+                              : lookupResult.status === 'DA_GIAO'
+                                ? 'Đã giao hàng thành công'
+                                : lookupResult.status === 'DA_HUY'
+                                  ? 'Đã hủy'
+                                  : lookupResult.status}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-50 rounded-xl">
-                    <span className="font-bold text-slate-500 uppercase block mb-1">
-                      Điểm nhận
-                    </span>
-                    <div className="font-extrabold text-slate-900">
-                      {lookupResult.dropoffPoint.name}
+                  {/* 2. Cảnh báo Hạn chót & Hướng dẫn mang hàng ra bến khi trạng thái MOI_TAO */}
+                  {lookupResult.status === 'MOI_TAO' && (
+                    <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-4 sm:p-5 text-xs text-amber-950 space-y-3 shadow-xs">
+                      <div className="flex items-center gap-2 font-extrabold text-amber-900 text-sm">
+                        <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+                        <span>Đơn hàng đang chờ mang ra bến gửi</span>
+                      </div>
+                      <div className="bg-white/90 rounded-xl p-3 border border-amber-200 space-y-1.5 text-slate-700">
+                        <p className="text-amber-900 font-medium">
+                          Hạn chót gửi hàng tại quầy:{' '}
+                          <strong className="text-amber-950 underline font-black">
+                            {lookupResult.dropoffDeadline
+                              ? `${formatIsoTime(lookupResult.dropoffDeadline)} ngày ${formatIsoDate(lookupResult.dropoffDeadline)}`
+                              : 'Trong vòng 72 giờ kể từ khi tạo đơn'}
+                          </strong>
+                        </p>
+                        <div className="font-bold text-slate-900 mt-2">
+                          Quy trình 3 bước gửi hàng tại bến:
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="font-black text-amber-700 shrink-0">1.</span>
+                          <span>
+                            Mang kiện hàng đến quầy bến xe:{' '}
+                            <strong className="text-slate-900">{lookupResult.pickupPoint.name}</strong>{' '}
+                            ({lookupResult.pickupPoint.address}).
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="font-black text-amber-700 shrink-0">2.</span>
+                          <span>
+                            Đọc mã vận đơn <strong className="font-mono text-[#0060c4]">{lookupResult.waybillCode}</strong> hoặc đưa mã QR bên dưới cho nhân viên bến xe.
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="font-black text-amber-700 shrink-0">3.</span>
+                          <span>
+                            Nhân viên cân đo thực tế, dán tem lên kiện hàng và{' '}
+                            <strong className="text-slate-900">
+                              {lookupResult.freightPayer === 'NGUOI_NHAN'
+                                ? 'tiếp nhận (Người nhận sẽ thanh toán tiền mặt khi lấy hàng tại bến đích)'
+                                : 'thu tiền cước mặt tại quầy'}
+                            </strong>.
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-slate-600 mt-0.5">
-                      {lookupResult.dropoffPoint.address}
+                  )}
+
+                  {/* 3. Mã QR Vận Đơn cho nhân viên quét nhanh */}
+                  <div className="flex flex-col items-center justify-center p-5 bg-slate-50/80 rounded-2xl border border-slate-200 text-center">
+                    <div className="p-3 bg-white rounded-2xl shadow-xs border border-slate-200 mb-2">
+                      <QRCodeSVG
+                        value={lookupResult.waybillCode}
+                        size={144}
+                        level="M"
+                        role="img"
+                        aria-label={`Mã QR vận đơn ${lookupResult.waybillCode}`}
+                        className="w-36 h-36"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-700 font-bold mt-1">
+                      Mã QR Vận Đơn
+                    </span>
+                    <span className="text-[11px] text-slate-500 max-w-xs mt-0.5">
+                      Đưa mã QR này cho nhân viên nhà xe tại quầy bến để quét tra cứu và tiếp nhận kiện hàng nhanh chóng
+                    </span>
+                  </div>
+
+                  {/* 4. Khung Thông Tin Cước Phí & Thanh Toán Tại Bến */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5 space-y-3.5">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wide">
+                        <Receipt className="w-4 h-4 text-[#0060c4]" />
+                        <span>Thông tin cước phí & thanh toán</span>
+                      </div>
+                      {lookupResult.orderCode && (
+                        <span className="text-[11px] font-mono text-slate-500">
+                          Mã giao dịch: <strong>{lookupResult.orderCode}</strong>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                        <span className="text-slate-500 font-semibold block">
+                          Tổng cước vận chuyển:
+                        </span>
+                        <div className="text-2xl font-black text-rose-600">
+                          {Number(lookupResult.amount ?? 0).toLocaleString('vi-VN')} đ
+                        </div>
+                        {currentShipment && (
+                          <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
+                            <div className="flex justify-between">
+                              <span>Cước chính:</span>
+                              <span className="font-semibold text-slate-800">
+                                {currentShipment.pricing.baseFee.toLocaleString('vi-VN')} đ
+                              </span>
+                            </div>
+                            {currentShipment.pricing.serviceFee > 0 && (
+                              <div className="flex justify-between">
+                                <span>Phụ phí bảo quản:</span>
+                                <span className="font-semibold text-slate-800">
+                                  {currentShipment.pricing.serviceFee.toLocaleString('vi-VN')} đ
+                                </span>
+                              </div>
+                            )}
+                            {currentShipment.pricing.discount > 0 && (
+                              <div className="flex justify-between text-emerald-600">
+                                <span>Khuyến mại:</span>
+                                <span className="font-semibold">
+                                  -{currentShipment.pricing.discount.toLocaleString('vi-VN')} đ
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                        <span className="text-slate-500 font-semibold block">
+                          Hình thức thanh toán cước:
+                        </span>
+                        <div>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black ${
+                              lookupResult.freightPayer === 'NGUOI_NHAN'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-amber-100 text-amber-900'
+                            }`}
+                          >
+                            {lookupResult.freightPayer === 'NGUOI_NHAN'
+                              ? 'Người nhận thanh toán khi lấy hàng'
+                              : 'Người gửi thanh toán tại bến gửi'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-relaxed">
+                          {lookupResult.freightPayer === 'NGUOI_NHAN'
+                            ? '• Người nhận sẽ thanh toán tiền mặt tại quầy bến xe khi đến nhận kiện hàng.'
+                            : '• Người gửi thanh toán tiền mặt tại quầy giao dịch bến xe khi mang hàng ra gửi.'}
+                        </p>
+                        <div className="pt-1">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-black ${
+                              ['DA_THANH_TOAN', 'THANH_CONG'].includes(
+                                lookupResult.paymentStatus ?? '',
+                              )
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-50 text-amber-800 border border-amber-200'
+                            }`}
+                          >
+                            {['DA_THANH_TOAN', 'THANH_CONG'].includes(
+                              lookupResult.paymentStatus ?? '',
+                            )
+                              ? 'Đã thanh toán tại bến'
+                              : 'Chưa thanh toán (Thanh toán tiền mặt tại quầy bến xe)'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Chuyến xe */}
-                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 text-xs">
-                  <div>
-                    <span className="text-slate-500">
+                  {/* 5. Điểm Gửi & Điểm Nhận */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                      <span className="font-bold text-slate-500 uppercase block mb-1">
+                        Điểm gửi hàng
+                      </span>
+                      <div className="font-extrabold text-slate-900 text-sm">
+                        {lookupResult.pickupPoint.name}
+                      </div>
+                      <div className="text-slate-600 mt-1 leading-relaxed">
+                        {lookupResult.pickupPoint.address}
+                      </div>
+                      {currentShipment && (
+                        <div className="mt-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700">
+                          <span className="font-bold">Người gửi: </span>
+                          <span>{currentShipment.sender.fullName} ({currentShipment.sender.phoneNumber})</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                      <span className="font-bold text-slate-500 uppercase block mb-1">
+                        Điểm nhận hàng
+                      </span>
+                      <div className="font-extrabold text-slate-900 text-sm">
+                        {lookupResult.dropoffPoint.name}
+                      </div>
+                      <div className="text-slate-600 mt-1 leading-relaxed">
+                        {lookupResult.dropoffPoint.address}
+                      </div>
+                      {currentShipment && (
+                        <div className="mt-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700">
+                          <span className="font-bold">Người nhận: </span>
+                          <span>{currentShipment.receiver.fullName} ({currentShipment.receiver.phoneNumber})</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 6. Chuyến xe vận chuyển */}
+                  <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-100 text-xs">
+                    <span className="text-slate-500 font-semibold block mb-0.5">
                       Chuyến xe vận chuyển:
                     </span>
-                    <div className="font-bold text-slate-900">
-                      {lookupResult.carrier.name} • {lookupResult.route.origin}{' '}
-                      → {lookupResult.route.destination}
+                    <div className="font-extrabold text-slate-900 text-sm">
+                      {lookupResult.carrier.name} • {lookupResult.route.origin} → {lookupResult.route.destination}
                     </div>
-                    <div className="text-slate-500 mt-0.5">
-                      Khởi hành:{' '}
-                      {formatIsoTime(lookupResult.scheduledDepartureAt)} ngày{' '}
-                      {formatIsoDate(lookupResult.scheduledDepartureAt)}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-1.5 text-slate-600">
+                      <div>
+                        Khởi hành:{' '}
+                        <strong>
+                          {formatIsoTime(lookupResult.scheduledDepartureAt)} ngày{' '}
+                          {formatIsoDate(lookupResult.scheduledDepartureAt)}
+                        </strong>
+                      </div>
+                      {lookupResult.estimatedArrivalAt && (
+                        <div>
+                          Dự kiến đến:{' '}
+                          <strong>
+                            {formatIsoTime(lookupResult.estimatedArrivalAt)} ngày{' '}
+                            {formatIsoDate(lookupResult.estimatedArrivalAt)}
+                          </strong>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  {lookupResult.estimatedArrivalAt && (
-                    <div className="mt-1 text-slate-500">
-                      Dự kiến đến:{' '}
-                      {formatIsoTime(lookupResult.estimatedArrivalAt)} ngày{' '}
-                      {formatIsoDate(lookupResult.estimatedArrivalAt)}
+
+                  {/* 7. Chi tiết Kiện hàng */}
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 uppercase">
+                        Thông tin kiện hàng
+                      </span>
+                      <span className="font-extrabold text-slate-900">
+                        {lookupResult.packageCount} kiện
+                      </span>
+                    </div>
+
+                    {currentShipment && currentShipment.items.length > 0 && (
+                      <div className="divide-y divide-slate-200/80 pt-1">
+                        {currentShipment.items.map((item, idx) => (
+                          <div key={item.id ?? idx} className="py-2 flex items-center justify-between text-xs">
+                            <div>
+                              <span className="font-bold text-slate-800">{item.name}</span>{' '}
+                              <span className="text-slate-500">({item.category})</span>
+                              {item.note && (
+                                <span className="block text-[11px] text-slate-400">Ghi chú: {item.note}</span>
+                              )}
+                            </div>
+                            <div className="text-right font-semibold text-slate-700">
+                              {item.quantity} kiện · {item.weight} kg
+                              {item.dimensions ? ` (${item.dimensions})` : ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {lookupResult.bookingPromotionCode && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-bold text-slate-700">
+                          Mã khuyến mãi tham chiếu từ đơn vé
+                        </span>
+                        <strong className="font-mono text-emerald-800">
+                          {lookupResult.bookingPromotionCode}
+                        </strong>
+                      </div>
+                      <p className="mt-1 text-slate-600">
+                        Mã chỉ giảm tiền vé của đơn đặt chỗ; không giảm cước gửi hàng.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 8. Timeline lịch sử hành trình */}
+                  {lookupResult.timeline && lookupResult.timeline.length > 0 && (
+                    <div>
+                      <span className="text-xs font-bold text-slate-500 uppercase block mb-2">
+                        Lịch sử xử lý:
+                      </span>
+                      <div className="space-y-2 border-l-2 border-slate-200 ml-2 pl-3">
+                        {lookupResult.timeline.map((log) => (
+                          <div
+                            key={`${log.status}-${log.time}`}
+                            className="text-xs"
+                          >
+                            <span className="font-bold text-slate-800">
+                              {log.status === 'MOI_TAO'
+                                ? 'Tạo đơn gửi hàng'
+                                : log.status === 'DA_TIEP_NHAN'
+                                  ? 'Tiếp nhận hàng tại quầy bến xe'
+                                  : log.status === 'DANG_VAN_CHUYEN'
+                                    ? 'Xe đang lăn bánh chở hàng'
+                                    : log.status === 'DA_GIAO'
+                                      ? 'Đã trả hàng cho người nhận'
+                                      : log.status === 'DA_HUY'
+                                        ? 'Đã hủy đơn gửi hàng'
+                                        : log.status}
+                            </span>
+                            <span className="text-slate-400 ml-2">
+                              ({formatIsoTime(log.time)} {formatIsoDate(log.time)}
+                              )
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 9. Khu vực Hủy đơn gửi hàng / Thông báo hỗ trợ */}
+                  {cancelShipmentSuccess && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs sm:text-sm text-emerald-900 flex items-start gap-2.5">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">{cancelShipmentSuccess}</p>
+                        <p className="text-xs text-emerald-700 mt-0.5">
+                          Mã vận đơn <strong>{lookupResult.waybillCode}</strong> đã chuyển sang trạng thái Đã hủy.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {lookupResult.status === 'MOI_TAO' && (
+                    <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="text-xs text-slate-500">
+                        <strong className="text-slate-700">Bạn muốn hủy đơn gửi hàng?</strong>{' '}
+                        Có thể hủy trực tuyến miễn phí khi chưa mang hàng ra bến xe.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCancelShipmentError(null);
+                          setShowCancelModal(true);
+                        }}
+                        className="px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Hủy đơn gửi hàng</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {(lookupResult.status === 'DA_TIEP_NHAN' ||
+                    lookupResult.status === 'DANG_VAN_CHUYEN') && (
+                    <div className="rounded-xl border border-blue-200/80 bg-blue-50/60 p-3.5 text-xs text-slate-700 flex items-start gap-2.5">
+                      <Info className="w-4 h-4 text-[#0060c4] shrink-0 mt-0.5" />
+                      <div className="leading-relaxed">
+                        <strong className="text-slate-900">Hàng hóa đã được tiếp nhận tại bến:</strong>{' '}
+                        Đơn hàng không thể hủy trực tuyến sau khi đã bàn giao kiện hàng. Nếu cần hỗ trợ hoặc thay đổi thông tin, quý khách vui lòng liên hệ trực tiếp nhà xe{' '}
+                        <strong className="text-[#0060c4]">{lookupResult.carrier.name}</strong> tại điểm gửi{' '}
+                        <strong>{lookupResult.pickupPoint.name}</strong>.
+                      </div>
+                    </div>
+                  )}
+
+                  {lookupResult.status === 'DA_HUY' && !cancelShipmentSuccess && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-900 flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Đơn gửi hàng này đã bị hủy.</strong> Mã vận đơn không còn hiệu lực tiếp nhận tại quầy bến xe. Quý khách có thể tạo đơn gửi hàng mới nếu có nhu cầu.
+                      </div>
                     </div>
                   )}
                 </div>
-
-                <div className="text-xs text-slate-600">
-                  Số kiện hàng:{' '}
-                  <strong className="text-slate-900">
-                    {lookupResult.packageCount} kiện
-                  </strong>
-                </div>
-
-                {lookupResult.bookingPromotionCode && (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-bold text-slate-700">
-                        Mã khuyến mãi tham chiếu từ đơn vé
-                      </span>
-                      <strong className="font-mono text-emerald-800">
-                        {lookupResult.bookingPromotionCode}
-                      </strong>
-                    </div>
-                    <p className="mt-1 text-slate-600">
-                      Mã chỉ giảm tiền vé của đơn đặt chỗ; không giảm cước gửi
-                      hàng.
-                    </p>
-                  </div>
-                )}
-
-                {/* Timeline */}
-                {lookupResult.timeline && lookupResult.timeline.length > 0 && (
-                  <div>
-                    <span className="text-xs font-bold text-slate-500 uppercase block mb-2">
-                      Lịch sử xử lý:
-                    </span>
-                    <div className="space-y-2 border-l-2 border-slate-200 ml-2 pl-3">
-                      {lookupResult.timeline.map((log) => (
-                        <div
-                          key={`${log.status}-${log.time}`}
-                          className="text-xs"
-                        >
-                          <span className="font-bold text-slate-800">
-                            {log.status === 'MOI_TAO'
-                              ? 'Tạo đơn gửi hàng'
-                              : log.status === 'DA_TIEP_NHAN'
-                                ? 'Tiếp nhận hàng tại quầy bến xe'
-                                : log.status === 'DANG_VAN_CHUYEN'
-                                  ? 'Xe đang lăn bánh chở hàng'
-                                  : log.status === 'DA_GIAO'
-                                    ? 'Đã trả hàng cho người nhận'
-                                    : log.status}
-                          </span>
-                          <span className="text-slate-400 ml-2">
-                            ({formatIsoTime(log.time)} {formatIsoDate(log.time)}
-                            )
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
-        {/* Modal Hướng dẫn gửi hàng */}
-        {showGuideModal && (
-          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-4 sm:pt-6 pb-6 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => setShowGuideModal(false)}
-                className="absolute right-4 top-4 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
-                <PackageCheck className="w-5 h-5 text-brand" />
-                Hướng dẫn gửi hàng liên tỉnh
-              </h3>
-              <div className="space-y-3.5 text-sm text-slate-600">
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
-                    1
-                  </span>
-                  <div>
-                    <strong className="text-slate-900 block">
-                      Chọn tuyến & nhà xe:
-                    </strong>
-                    Chọn nơi gửi, nơi nhận và ngày gửi phù hợp. Chọn nhà xe vận
-                    chuyển trong danh sách.
-                  </div>
+        {/* Modal Xác nhận Hủy đơn gửi hàng */}
+        {showCancelModal && lookupResult && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-rose-600">
+                  <Trash2 className="w-5 h-5" />
+                  <h3 className="text-base font-black text-slate-900">
+                    Xác nhận hủy đơn gửi hàng
+                  </h3>
                 </div>
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
-                    2
-                  </span>
-                  <div>
-                    <strong className="text-slate-900 block">
-                      Nhập thông tin người gửi & nhận:
-                    </strong>
-                    Điền chính xác họ tên và số điện thoại để nhà xe liên hệ khi
-                    nhận/giao hàng.
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
-                    3
-                  </span>
-                  <div>
-                    <strong className="text-slate-900 block">
-                      Khai báo kiện hàng & dịch vụ:
-                    </strong>
-                    Chọn loại hàng, trọng lượng và tùy chọn hàng dễ vỡ / giá trị
-                    cao nếu cần bảo hiểm.
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
-                    4
-                  </span>
-                  <div>
-                    <strong className="text-slate-900 block">
-                      Tạo vận đơn & thanh toán:
-                    </strong>
-                    Kiểm tra dự tính cước phí và nhấn Tạo mã vận đơn để chuyển
-                    sang bước thanh toán.
-                  </div>
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setShowGuideModal(false)}
-                  className="px-5 py-2.5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand/90 transition-colors cursor-pointer"
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={isCancellingShipment}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="text-xs sm:text-sm text-slate-600 space-y-2">
+                <p>
+                  Bạn đang yêu cầu hủy mã vận đơn{' '}
+                  <strong className="font-mono text-[#0060c4]">
+                    {lookupResult.waybillCode}
+                  </strong>{' '}
+                  ({lookupResult.route.origin} → {lookupResult.route.destination}).
+                </p>
+                <p className="text-xs text-slate-500">
+                  Lưu ý: Sau khi hủy, mã vận đơn này sẽ không còn hiệu lực để mang hàng ra bến gửi.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase">
+                  Lý do hủy đơn:
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    'Đặt nhầm thông tin người gửi/nhận',
+                    'Thay đổi kế hoạch gửi hàng',
+                    'Muốn đổi nhà xe hoặc điểm gửi khác',
+                    'OTHER',
+                  ].map((option) => (
+                    <label
+                      key={option}
+                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs sm:text-sm cursor-pointer transition-colors ${
+                        cancelReason === option
+                          ? 'border-rose-400 bg-rose-50/60 font-bold text-slate-900'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="cancelShipmentReason"
+                        value={option}
+                        checked={cancelReason === option}
+                        onChange={() => setCancelReason(option)}
+                        className="accent-rose-600"
+                      />
+                      <span>
+                        {option === 'OTHER' ? 'Lý do khác' : option}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {cancelReason === 'OTHER' && (
+                  <input
+                    type="text"
+                    value={customCancelReason}
+                    onChange={(e) => setCustomCancelReason(e.target.value)}
+                    placeholder="Nhập lý do hủy đơn..."
+                    maxLength={200}
+                    className="w-full mt-2 px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
+                  />
+                )}
+              </div>
+
+              {cancelShipmentError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{cancelShipmentError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={isCancellingShipment}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCancelShipment}
+                  disabled={isCancellingShipment}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                >
+                  {isCancellingShipment ? 'Đang hủy đơn...' : 'Xác nhận hủy đơn'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Hướng dẫn gửi hàng đồng bộ */}
+        <ShipmentGuideModal
+          isOpen={showGuideModal}
+          onClose={() => setShowGuideModal(false)}
+        />
+
+        {/* Modal Hướng dẫn tra cứu vận đơn */}
+        {showLookupGuideModal && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={() => setShowLookupGuideModal(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shipment-lookup-guide-title"
+          >
+            <div
+              className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-orange-50/70 via-white to-amber-50/50">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f05123] text-white shadow-xs">
+                    <Package className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2
+                      id="shipment-lookup-guide-title"
+                      className="text-base sm:text-lg font-black text-slate-900 tracking-tight"
+                    >
+                      Hướng dẫn tra cứu đơn gửi hàng
+                    </h2>
+                    <p className="text-xs text-slate-500 font-medium">
+                      4 bước theo dõi hành trình bưu kiện và trạng thái giao nhận trên VexGo
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLookupGuideModal(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer"
+                  aria-label="Đóng"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="overflow-y-auto p-5 sm:p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {[
+                    {
+                      step: '1',
+                      icon: Receipt,
+                      title: 'Chuẩn bị Mã vận đơn & SĐT',
+                      desc: 'Lấy Mã vận đơn (VD: FUTA-VD-... được cấp khi tạo đơn gửi hàng) và Số điện thoại người gửi hoặc người nhận.',
+                      tag: 'Thông tin xác thực',
+                      bg: 'bg-blue-50 text-blue-600 border-blue-200',
+                    },
+                    {
+                      step: '2',
+                      icon: Search,
+                      title: 'Nhập thông tin tra cứu',
+                      desc: 'Điền chính xác Mã vận đơn và Số điện thoại người gửi hoặc người nhận vào biểu mẫu, sau đó nhấn "Tra cứu vận đơn".',
+                      tag: 'Tra cứu tức thì',
+                      bg: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+                    },
+                    {
+                      step: '3',
+                      icon: MapPin,
+                      title: 'Theo dõi lộ trình & Bến nhận',
+                      desc: 'Xem trạng thái xử lý kiện hàng (Mới tạo, Đã nhận hàng, Đang vận chuyển, Đã đến bến nhận, Đã giao hàng), thông tin chuyến xe và cước phí.',
+                      tag: 'Cập nhật thời gian thực',
+                      bg: 'bg-amber-50 text-amber-700 border-amber-200',
+                    },
+                    {
+                      step: '4',
+                      icon: RotateCcw,
+                      title: 'Quản lý & Hủy đơn trực tuyến',
+                      desc: 'Khi đơn gửi hàng đang ở trạng thái Mới tạo (chưa bàn giao kiện hàng tại quầy nhà xe), bạn có thể hủy đơn trực tiếp trên màn hình tra cứu.',
+                      tag: 'Tiện ích trực tuyến',
+                      bg: 'bg-rose-50 text-rose-600 border-rose-200',
+                    },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div
+                        key={item.step}
+                        className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 transition-all hover:bg-white hover:border-[#f05123]/40 hover:shadow-xs flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f05123] text-white text-xs font-black shadow-2xs">
+                                {item.step}
+                              </span>
+                              <h3 className="font-extrabold text-slate-900 text-sm">
+                                {item.title}
+                              </h3>
+                            </div>
+                            <div className={`p-1.5 rounded-lg ${item.bg} shrink-0`}>
+                              <Icon className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <p className="text-xs leading-relaxed text-slate-600 font-medium">
+                            {item.desc}
+                          </p>
+                        </div>
+                        <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                            {item.tag}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                            ✓ Trực tuyến
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-4">
+                  <h4 className="text-xs font-black text-[#0060c4] uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                    <ShieldCheck className="w-4 h-4 text-[#0060c4]" />
+                    Lưu ý khi gửi & nhận hàng tại nhà xe
+                  </h4>
+                  <ul className="text-xs text-slate-700 space-y-1.5 font-medium">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-[#f05123] font-bold">•</span>
+                      <span>
+                        Cả <strong>người gửi</strong> và <strong>người nhận</strong> đều có thể dùng số điện thoại của mình kèm Mã vận đơn để tra cứu trạng thái kiện hàng.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-[#f05123] font-bold">•</span>
+                      <span>
+                        Sau khi tạo mã vận đơn trực tuyến, quý khách vui lòng mang hàng ra bưu cục/bến xe đã chọn trong vòng <strong>72 giờ</strong> để nhân viên xác nhận.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-[#f05123] font-bold">•</span>
+                      <span>
+                        Khi kiện hàng chuyển sang trạng thái <strong>Đã đến bến nhận</strong>, người nhận vui lòng mang theo giấy tờ tùy thân (CCCD) và đọc mã vận đơn để nhận hàng.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                  <Phone className="w-4 h-4 text-[#f05123]" />
+                  <span>
+                    Tổng đài CSKH 24/7: <strong className="text-slate-900">1900 6067</strong>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLookupGuideModal(false)}
+                  className="px-5 py-2 rounded-xl bg-[#f05123] hover:bg-[#d8441a] text-white font-extrabold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
                 >
                   Đã hiểu
                 </button>
@@ -2870,8 +3513,8 @@ function SendFreightContent() {
 
         {/* Modal Thông Báo Thiếu Thông Tin */}
         {missingFieldsModal && (
-          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-4 sm:pt-6 pb-6 animate-in fade-in duration-200">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black/60 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => setMissingFieldsModal(false)}
@@ -2916,8 +3559,8 @@ function SendFreightContent() {
 
         {/* Modal Thành Công Tạo Vận Đơn Thu Cước Tại Bến */}
         {createdSuccessShipment && (
-          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-3 sm:pt-4 pb-6 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black/60 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => setCreatedSuccessShipment(null)}

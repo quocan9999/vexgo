@@ -7,6 +7,8 @@ import { LocationPicker } from '@/features/locations/components/location-picker'
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, ArrowRightLeft, Bus, CalendarDays, MapPin, PackageCheck, Search, Users } from 'lucide-react';
+import { BookingGuideModal } from '@/features/booking/components/booking-guide-modal';
+import { ShipmentGuideModal } from '@/features/shipments/components/shipment-guide-modal';
 
 export const PostSearchForm: React.FC = () => {
   const searchParams = useSearchParams();
@@ -23,6 +25,8 @@ export const PostSearchForm: React.FC = () => {
   const [selectedPrice, setSelectedPrice] = useState(searchParams?.get('price') || todayStr); 
   const [returnDate, setReturnDate] = useState(searchParams?.get('returnDate') || '');
   const [ticketCount, setTicketCount] = useState(Number(searchParams?.get('tickets')) || 1);
+  const [showBookingGuide, setShowBookingGuide] = useState(false);
+  const [showShipmentGuide, setShowShipmentGuide] = useState(false);
 
   // Freight states
   const [freightDate, setFreightDate] = useState(todayStr);
@@ -200,9 +204,13 @@ export const PostSearchForm: React.FC = () => {
           </div>
 
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <Link href="#" className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => setShowBookingGuide(true)}
+              className="text-sm font-bold text-accent hover:text-accent-hover hover:underline cursor-pointer text-left"
+            >
               Hướng dẫn đặt vé
-            </Link>
+            </button>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
                 href={`/posts?needType=${activeSearchTab}&tripType=${tripType}&province=${selectedProvince}&district=${selectedDistrict}&type=${selectedType}&price=${selectedPrice}&returnDate=${returnDate}&tickets=${ticketCount}`}
@@ -293,9 +301,13 @@ export const PostSearchForm: React.FC = () => {
 
           {/* Row 2 */}
           <div className="flex flex-col md:flex-row gap-3 items-end justify-between">
-            <Link href="#" className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => setShowShipmentGuide(true)}
+              className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
+            >
               Hướng dẫn gửi hàng
-            </Link>
+            </button>
             <div>
               <Link
                 href={`/send-freight?origin=${selectedProvince}&destination=${selectedDistrict}&date=${freightDate}&type=${freightType}&weight=${freightWeight}`}
@@ -313,6 +325,14 @@ export const PostSearchForm: React.FC = () => {
           </div>
         </div>
       )}
+      <BookingGuideModal
+        isOpen={showBookingGuide}
+        onClose={() => setShowBookingGuide(false)}
+      />
+      <ShipmentGuideModal
+        isOpen={showShipmentGuide}
+        onClose={() => setShowShipmentGuide(false)}
+      />
     </div>
   );
 };

@@ -1172,6 +1172,153 @@ describe('ShipmentsService', () => {
     });
   });
 
+  describe('cancelCustomerShipment', () => {
+    it('cancels a MOI_TAO shipment atomically and records cancellation history', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        phieuGuiHangId: 50,
+        donGiaoDichId: 200,
+        soDienThoaiNguoiNhan: '0907654321',
+        donGiaoDich: {
+          soDienThoaiKhachHang: '0901234567',
+        },
+      });
+
+      const txMock = {
+        $queryRaw: vi.fn().mockResolvedValue([{ donGiaoDichId: 200 }]),
+        phieuGuiHang: {
+          findUnique: vi.fn().mockResolvedValue({
+            phieuGuiHangId: 50,
+            maVanDon: 'FUTA-VD-050',
+            trangThai: 'MOI_TAO',
+            donGiaoDich: {
+              donGiaoDichId: 200,
+              trangThai: 'CHO_THANH_TOAN',
+              phieuDatVe: null,
+              thanhToans: [{ loaiGiaoDich: 'THANH_TOAN', trangThai: 'DANG_XU_LY' }],
+            },
+          }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        donGiaoDich: {
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        thanhToan: {
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        lichSuTrangThaiPhieuGuiHang: {
+          create: vi.fn().mockResolvedValue({ lichSuTrangThaiId: 1 }),
+        },
+      };
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+
+      const result = await service.cancelCustomerShipment({
+        waybillCode: 'futa-vd-050',
+        phoneNumber: '0901234567',
+        reason: 'Đặt nhầm thông tin người nhận',
+      });
+
+      expect(result).toEqual({
+        waybillCode: 'FUTA-VD-050',
+        status: 'DA_HUY',
+        updatedAt: expect.any(String),
+        hasPaidBeforeCancel: false,
+        message: 'Hủy đơn gửi hàng thành công.',
+      });
+      expect(txMock.phieuGuiHang.updateMany).toHaveBeenCalledWith({
+        where: { phieuGuiHangId: 50, trangThai: 'MOI_TAO' },
+        data: { trangThai: 'DA_HUY', updatedAt: expect.any(Date) },
+      });
+      expect(txMock.lichSuTrangThaiPhieuGuiHang.create).toHaveBeenCalledWith({
+        data: {
+          phieuGuiHangId: 50,
+          trangThai: 'DA_HUY',
+          thoiGian: expect.any(Date),
+          taiKhoanId: null,
+          ghiChu: 'Đặt nhầm thông tin người nhận',
+        },
+      });
+    });
+
+    it('rejects online cancellation when shipment has already been accepted (DA_TIEP_NHAN)', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        phieuGuiHangId: 51,
+        donGiaoDichId: 201,
+        soDienThoaiNguoiNhan: '0907654321',
+        donGiaoDich: {
+          soDienThoaiKhachHang: '0901234567',
+        },
+      });
+
+      const txMock = {
+        $queryRaw: vi.fn().mockResolvedValue([{ donGiaoDichId: 201 }]),
+        phieuGuiHang: {
+          findUnique: vi.fn().mockResolvedValue({
+            phieuGuiHangId: 51,
+            maVanDon: 'FUTA-VD-051',
+            trangThai: 'DA_TIEP_NHAN',
+            donGiaoDich: {
+              donGiaoDichId: 201,
+              trangThai: 'DA_THANH_TOAN',
+              phieuDatVe: null,
+              thanhToans: [],
+            },
+          }),
+          updateMany: vi.fn(),
+        },
+      };
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+
+      await expect(
+        service.cancelCustomerShipment({
+          waybillCode: 'FUTA-VD-051',
+          phoneNumber: '0901234567',
+        }),
+      ).rejects.toMatchObject({
+        response: { error: 'SHIPMENT_CANNOT_BE_CANCELLED_ONLINE' },
+      });
+      expect(txMock.phieuGuiHang.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects online cancellation when shipment is already cancelled (DA_HUY)', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        phieuGuiHangId: 52,
+        donGiaoDichId: 202,
+        soDienThoaiNguoiNhan: '0907654321',
+        donGiaoDich: {
+          soDienThoaiKhachHang: '0901234567',
+        },
+      });
+
+      const txMock = {
+        $queryRaw: vi.fn().mockResolvedValue([{ donGiaoDichId: 202 }]),
+        phieuGuiHang: {
+          findUnique: vi.fn().mockResolvedValue({
+            phieuGuiHangId: 52,
+            maVanDon: 'FUTA-VD-052',
+            trangThai: 'DA_HUY',
+            donGiaoDich: {
+              donGiaoDichId: 202,
+              trangThai: 'DA_HUY',
+              phieuDatVe: null,
+              thanhToans: [],
+            },
+          }),
+          updateMany: vi.fn(),
+        },
+      };
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+
+      await expect(
+        service.cancelCustomerShipment({
+          waybillCode: 'FUTA-VD-052',
+          phoneNumber: '0901234567',
+        }),
+      ).rejects.toMatchObject({
+        response: { error: 'SHIPMENT_ALREADY_CANCELLED' },
+      });
+    });
+  });
+
   describe('getRoutePoints', () => {
     it('returns only active route points owned by the trip company and matching each role', async () => {
       prismaMock.chuyenXe.findUnique.mockResolvedValue({

@@ -86,11 +86,69 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (service === 'shipment') {
+      if (!origin && !destination) {
+        setAlertConfig({
+          isOpen: true,
+          title: 'Vui lòng chọn điểm gửi và điểm nhận hàng',
+        });
+        return;
+      }
+      if (!origin) {
+        setAlertConfig({
+          isOpen: true,
+          title: 'Vui lòng chọn điểm gửi hàng để tiếp tục',
+        });
+        return;
+      }
+      if (!destination) {
+        setAlertConfig({
+          isOpen: true,
+          title: 'Vui lòng chọn điểm nhận hàng để tiếp tục',
+        });
+        return;
+      }
+      if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
+        setAlertConfig({
+          isOpen: true,
+          title: 'Điểm gửi và điểm nhận không được trùng nhau',
+        });
+        return;
+      }
       router.push(
         `/shipments/new?${new URLSearchParams({ from: origin, to: destination, date }).toString()}`,
       );
       return;
     }
+
+    if (!origin && !destination) {
+      setAlertConfig({
+        isOpen: true,
+        title: 'Vui lòng chọn điểm đi và điểm đến để tìm chuyến xe',
+      });
+      return;
+    }
+    if (!origin) {
+      setAlertConfig({
+        isOpen: true,
+        title: 'Vui lòng chọn điểm đi để tiếp tục',
+      });
+      return;
+    }
+    if (!destination) {
+      setAlertConfig({
+        isOpen: true,
+        title: 'Vui lòng chọn điểm đến để tiếp tục',
+      });
+      return;
+    }
+    if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
+      setAlertConfig({
+        isOpen: true,
+        title: 'Điểm đi và điểm đến không được trùng nhau',
+      });
+      return;
+    }
+
     if (!date || date < todayStr) {
       setAlertConfig({
         isOpen: true,

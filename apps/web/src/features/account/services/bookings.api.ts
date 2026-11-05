@@ -31,6 +31,7 @@ export type BookingItem = {
     weight?: number;
     category?: string;
     categoryName?: string;
+    note?: string | null;
   }>;
   passenger?: {
     fullName: string | null;
@@ -80,6 +81,7 @@ export type BookingResponseData = {
   seatIds?: number[];
   bookingCode?: string;
   orderCode?: string | null;
+  comboCode?: string | null;
   orderId?: number;
   totalAmount?: number | string;
   shippingFee?: number | string;
@@ -104,6 +106,7 @@ export type BookingResponseData = {
     weight?: number;
     category?: string;
     categoryName?: string;
+    note?: string | null;
   }>;
   legs?: Array<{
     route?: string;
@@ -178,6 +181,7 @@ export type CreateBookingPayload = {
     bicycleType?: string;
     licensePlate?: string;
   }>;
+  comboCode?: string;
 };
 
 export type CreatedBookingData = BookingResponseData & {
@@ -319,8 +323,15 @@ export const bookingsApi = {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
+      const message =
+        Array.isArray(error.details) && error.details.length > 0
+          ? error.details
+              .map((d: { message?: string }) => d.message)
+              .filter(Boolean)
+              .join('; ')
+          : error.message || 'Tạo đơn đặt vé thất bại';
       throw new ApiError(
-        error.message || 'Tạo đơn đặt vé thất bại',
+        message,
         res.status,
         error.error,
       );
