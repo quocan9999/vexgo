@@ -1398,7 +1398,6 @@ it('supports round-trip payment with leg switching and redirects when both legs 
   render(<PaymentPage />);
   await flushPromises();
 
-  expect(screen.getByText('Gom thanh toán 2 chặng (1 mã QR duy nhất)')).toBeTruthy();
   expect(screen.getByText('Tổng thanh toán vé khứ hồi')).toBeTruthy();
 
   b0.status = 'DA_THANH_TOAN';

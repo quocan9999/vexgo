@@ -1201,29 +1201,6 @@ function PaymentContent() {
 
           {/* Cột 2: QR Code & Thông tin chuyển khoản */}
           <div className="flex-1 flex flex-col items-center">
-            {isRoundTripBooking && bookingDraft && (
-              <div className="w-full max-w-[520px] mb-6">
-                <div className="w-full py-3.5 px-4 rounded-2xl border border-brand bg-brand/5 ring-1 ring-brand/20 shadow-xs">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-black uppercase text-accent flex items-center gap-1.5">
-                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      Gom thanh toán 2 chặng (1 mã QR duy nhất)
-                    </span>
-                    <span className="text-[11px] font-bold text-brand bg-brand/10 px-2.5 py-0.5 rounded-full">
-                      Khuyên dùng
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">
-                      Thanh toán chung cả Lượt đi &amp; Lượt về
-                    </span>
-                    <span className="text-sm font-black text-red-600">
-                      {bookingDraft.totalFare.toLocaleString('vi-VN')}đ
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
             <p className="text-sm font-semibold text-slate-500 mb-1">
               {isRoundTripBooking
                 ? 'Tổng thanh toán vé khứ hồi'
