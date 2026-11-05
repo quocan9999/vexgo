@@ -117,9 +117,22 @@ describe('AdminAccountsService', () => {
       true,
     );
     expect(storedPassword).not.toBe(createInput.password);
-    expect(tx.taiKhoan.create.mock.calls[0][0].data.email).toBe(
-      'admin@example.com',
-    );
+    expect(tx.taiKhoan.findUnique).toHaveBeenCalledWith({
+      where: {
+        soDienThoai_loaiTaiKhoan: {
+          soDienThoai: createInput.phoneNumber,
+          loaiTaiKhoan: 'QUAN_TRI',
+        },
+      },
+      select: { taiKhoanId: true },
+    });
+    expect(tx.taiKhoan.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        loaiTaiKhoan: 'QUAN_TRI',
+        email: 'admin@example.com',
+      }),
+      select: { taiKhoanId: true },
+    });
     expect(tx.nhanVien.create).toHaveBeenCalledWith({
       data: {
         maNhanVien: createInput.employeeCode,

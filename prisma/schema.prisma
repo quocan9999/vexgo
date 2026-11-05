@@ -189,9 +189,10 @@ model BangGia {
 
 model TaiKhoan {
   taiKhoanId                   Int                           @id @default(autoincrement()) @db.Int
-  soDienThoai                  String                        @unique @db.VarChar(16)
+  soDienThoai                  String                        @db.VarChar(16)
   matKhau                      String                        @db.VarChar(255)
-  email                        String?                       @unique(map: "TaiKhoan_email_key") @db.VarChar(150)
+  email                        String?                       @db.VarChar(150)
+  loaiTaiKhoan                 LoaiTaiKhoan                  @default(KHACH_HANG)
   daXacThucSoDienThoai         Boolean
   trangThai                    TrangThaiTaiKhoan             @default(HOAT_DONG)
   khoaDenNgay                  DateTime?                     @db.Date
@@ -208,6 +209,9 @@ model TaiKhoan {
   tinNhanHoTros                TinNhanHoTro[]
   phanChuyenGuiHangs           LichSuPhanChuyenGuiHang[]
   taiNguyenMediaDaTao          TaiNguyenMedia[]
+
+  @@unique([soDienThoai, loaiTaiKhoan], map: "TaiKhoan_soDienThoai_loaiTaiKhoan_key")
+  @@unique([email, loaiTaiKhoan], map: "TaiKhoan_email_loaiTaiKhoan_key")
 }
 
 // Registry for server-owned Cloudinary assets. Phase 1 exposes public vehicle images only.
@@ -852,6 +856,11 @@ enum TrangThaiTaiKhoan {
   HOAT_DONG
   TAM_KHOA
   BI_KHOA
+}
+
+enum LoaiTaiKhoan {
+  KHACH_HANG
+  QUAN_TRI
 }
 
 enum TrangThaiDiemGiaoNhanHang {

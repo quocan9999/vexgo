@@ -237,11 +237,92 @@ Content-Type: application/json
 ```json
 {
   "phoneNumber": "+84901234567",
-  "password": "VexGo@123"
+  "password": "VexGo@123",
+  "accountType": "KHACH_HANG"
 }
 ```
 
+> **Lưu ý**: `accountType` là bắt buộc: `"KHACH_HANG"` cho Customer Web hoặc `"QUAN_TRI"` cho Admin Web. Tài khoản được cô lập theo `loaiTaiKhoan` với composite unique constraint trên `[soDienThoai, loaiTaiKhoan]` và `[email, loaiTaiKhoan]`. Một số điện thoại có thể vừa có tài khoản Khách hàng vừa có tài khoản Quản trị hoàn toàn độc lập.
+
 Response `200` có cùng cấu trúc token như đăng ký.
+
+### 4.1. Quên mật khẩu - Bước 1: Yêu cầu OTP
+
+```http
+POST {{baseUrl}}/auth/forgot-password/request-otp
+Content-Type: application/json
+```
+
+```json
+{
+  "phoneNumber": "+84901234567"
+}
+```
+
+Response `201`:
+
+```json
+{
+  "data": {
+    "challengeId": "uuid-forgot-password-challenge",
+    "expiresAt": "2026-11-05T12:05:00.000Z",
+    "resendAfter": "2026-11-05T12:01:00.000Z"
+  }
+}
+```
+
+### 4.2. Quên mật khẩu - Bước 2: Xác thực OTP
+
+```http
+POST {{baseUrl}}/auth/forgot-password/verify-otp
+Content-Type: application/json
+```
+
+```json
+{
+  "phoneNumber": "+84901234567",
+  "challengeId": "uuid-forgot-password-challenge",
+  "otp": "123456"
+}
+```
+
+Response `201`:
+
+```json
+{
+  "data": {
+    "otpProof": "opaque-one-time-proof",
+    "expiresAt": "2026-11-05T12:15:00.000Z"
+  }
+}
+```
+
+### 4.3. Quên mật khẩu - Bước 3: Đặt lại mật khẩu mới
+
+```http
+POST {{baseUrl}}/auth/forgot-password/reset
+Content-Type: application/json
+```
+
+```json
+{
+  "phoneNumber": "+84901234567",
+  "otpProof": "opaque-one-time-proof",
+  "newPassword": "NewPassword@123"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "data": {
+    "success": true
+  }
+}
+```
+
+> **Thu hồi phiên**: Khi đặt lại mật khẩu thành công qua Forgot Password, toàn bộ phiên đăng nhập đang hoạt động (`PhienDangNhap`) của tài khoản sẽ bị thu hồi ngay lập tức (`daThuHoi = true`). Khi đổi mật khẩu chủ động qua `POST /api/v1/auth/change-password`, toàn bộ các phiên *khác* bị thu hồi, phiên hiện tại (`currentSessionId`) được giữ lại.
 
 ### 5. Lấy hồ sơ hiện tại
 
@@ -348,6 +429,9 @@ Frontend gọi các URL như `${NEXT_PUBLIC_API_BASE_URL}/auth/login` và `${NEX
 | 401 | `REFRESH_TOKEN_INVALID` | Refresh token sai/hết hạn/đã rotate |
 | 403 | `ACCOUNT_INACTIVE` | Tài khoản bị khóa hoặc không hoạt động |
 | 403 | `CUSTOMER_ROLE_REQUIRED` | Tài khoản không có quyền khách hàng |
+| 404 | `FORGOT_PASSWORD_ACCOUNT_NOT_FOUND` | Không tìm thấy tài khoản khách hàng với số điện thoại này |
+| 403 | `FORGOT_PASSWORD_ACCOUNT_INACTIVE` | Tài khoản đang bị khóa hoặc không hoạt động |
+| 400 | `FORGOT_PASSWORD_PROOF_MISMATCH` | Proof xác thực không đúng số điện thoại |
 | 404 | `CUSTOMER_PROFILE_NOT_FOUND` | Không có hồ sơ khách hàng tương ứng |
 
 Lỗi luôn theo envelope:

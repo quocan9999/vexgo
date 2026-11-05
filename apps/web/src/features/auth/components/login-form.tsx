@@ -1,7 +1,8 @@
 /* eslint-disable */
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,13 @@ import { sanitizeLoginRedirect } from '../services/login-redirect';
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn } = useAuthSession();
+  const { signIn, isAuthenticated, isHydrated } = useAuthSession();
+  const nextParam = searchParams.get('next') || searchParams.get('redirect');
+  const nextUrl = sanitizeLoginRedirect(nextParam);
+  const forgotPasswordHref = nextParam
+    ? `/forgot-password?next=${encodeURIComponent(nextParam)}`
+    : '/forgot-password';
+
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +28,12 @@ export function LoginForm() {
   const [errorMsg, setErrorMsg] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  useEffect(() => {
+    if (isHydrated && isAuthenticated) {
+      router.replace(nextUrl);
+    }
+  }, [isHydrated, isAuthenticated, nextUrl, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,12 +133,12 @@ export function LoginForm() {
           }
         />
         <div className="flex items-center justify-end mt-2">
-          <a
-            href="#"
+          <Link
+            href={forgotPasswordHref}
             className="text-sm font-semibold text-emerald-600 hover:text-emerald-900 transition-colors"
           >
             Quên mật khẩu?
-          </a>
+          </Link>
         </div>
       </div>
 

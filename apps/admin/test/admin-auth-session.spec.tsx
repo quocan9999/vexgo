@@ -84,6 +84,7 @@ describe('Admin cookie session and API client', () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       identifier,
       password: 'password-123',
+      accountType: 'QUAN_TRI',
     });
     expect(init?.credentials).toBe('include');
     expect(new Headers(init?.headers).get('x-refresh-token-transport')).toBe('cookie');

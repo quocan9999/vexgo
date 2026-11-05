@@ -343,15 +343,16 @@ async function seedAccounts(db, operators, roles) {
   const superAccount = await upsertBy(
     db,
     'TaiKhoan',
-    { soDienThoai: '+84900000000' },
+    { soDienThoai_loaiTaiKhoan: { soDienThoai: '+84900000000', loaiTaiKhoan: 'QUAN_TRI' } },
     {
       soDienThoai: '+84900000000',
       matKhau: hash,
       email: 'superadmin@vexgo.test',
+      loaiTaiKhoan: 'QUAN_TRI',
       daXacThucSoDienThoai: true,
       trangThai: 'HOAT_DONG',
     },
-    { matKhau: hash, email: 'superadmin@vexgo.test', trangThai: 'HOAT_DONG' },
+    { matKhau: hash, email: 'superadmin@vexgo.test', loaiTaiKhoan: 'QUAN_TRI', trangThai: 'HOAT_DONG' },
   );
   const superEmployeeCode = deterministicUuid('NV', 'SYSTEM', 0);
   const superEmployee = await upsertBy(
@@ -424,17 +425,19 @@ async function seedAccounts(db, operators, roles) {
       const account = await upsertBy(
         db,
         'TaiKhoan',
-        { soDienThoai: phone },
+        { soDienThoai_loaiTaiKhoan: { soDienThoai: phone, loaiTaiKhoan: 'QUAN_TRI' } },
         {
           soDienThoai: phone,
           matKhau: hash,
           email: employeeEmail,
+          loaiTaiKhoan: 'QUAN_TRI',
           daXacThucSoDienThoai: !isFormer,
           trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
         },
         {
           matKhau: hash,
           email: employeeEmail,
+          loaiTaiKhoan: 'QUAN_TRI',
           trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
         },
       );
@@ -484,12 +487,13 @@ async function seedAccounts(db, operators, roles) {
       soDienThoai: phone,
       matKhau: hash,
       email: `kh${pad(index + 1, 6)}@vexgo.test`,
+      loaiTaiKhoan: 'KHACH_HANG',
       daXacThucSoDienThoai: index !== 19,
       trangThai: index === 18 ? 'TAM_KHOA' : 'HOAT_DONG',
     };
     const account = existingCustomer
       ? await db.taiKhoan.update({ where: byId('TaiKhoan', existingCustomer.taiKhoanId), data: accountData })
-      : await upsertBy(db, 'TaiKhoan', { soDienThoai: phone }, accountData, { matKhau: accountData.matKhau, email: accountData.email, daXacThucSoDienThoai: accountData.daXacThucSoDienThoai, trangThai: accountData.trangThai });
+      : await upsertBy(db, 'TaiKhoan', { soDienThoai_loaiTaiKhoan: { soDienThoai: phone, loaiTaiKhoan: 'KHACH_HANG' } }, accountData, { matKhau: accountData.matKhau, email: accountData.email, loaiTaiKhoan: 'KHACH_HANG', daXacThucSoDienThoai: accountData.daXacThucSoDienThoai, trangThai: accountData.trangThai });
     count('TaiKhoan', existingCustomer ? 'update' : 'upsert');
     const customer = await upsertBy(
       db,
