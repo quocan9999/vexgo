@@ -128,8 +128,13 @@ export class AccessTokenGuard implements CanActivate {
 
     const roleAssignments = session.taiKhoan.taiKhoanVaiTros;
     const roles = roleAssignments.map(({ vaiTro }) => vaiTro.tenVaiTro);
-    const nhanVienId = session.taiKhoan.nhanVien?.nhanVienId ?? null;
-    const nhaXeId = session.taiKhoan.nhanVien?.nhaXeId ?? null;
+    const isTenantStaff = session.taiKhoan.nhanVien?.nhaXeId != null;
+    const nhanVienId = isTenantStaff
+      ? session.taiKhoan.nhanVien?.nhanVienId ?? null
+      : null;
+    const nhaXeId = isTenantStaff
+      ? session.taiKhoan.nhanVien?.nhaXeId ?? null
+      : null;
     const effectiveAssignments = await this.permissionLoader.load(
       roleAssignments.map(({ vaiTro }) => ({
         roleId: vaiTro.vaiTroId,
