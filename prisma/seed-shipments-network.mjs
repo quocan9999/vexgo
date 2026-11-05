@@ -333,27 +333,42 @@ export async function runSeedShipmentsNetwork() {
     });
 
     console.log(`   - Có ${activeRoutes.length} tuyến xe đủ điều kiện vận chuyển bưu cục.`);
+    const existingTripSlots = new Set(
+      (
+        await prisma.chuyenXe.findMany({
+          select: { tuyenXeId: true, ngayKhoiHanh: true, gioKhoiHanh: true },
+        })
+      ).map(
+        (t) => `${t.tuyenXeId}_${t.ngayKhoiHanh.toISOString()}_${t.gioKhoiHanh.toISOString()}`,
+      ),
+    );
     const tripsToCreate = [];
 
     for (let d = new Date(startDateTrip); d <= endDateTrip; d.setUTCDate(d.getUTCDate() + 1)) {
       const year = d.getUTCFullYear();
       const month = String(d.getUTCMonth() + 1).padStart(2, '0');
       const day = String(d.getUTCDate()).padStart(2, '0');
+      const dayNum = d.getUTCDate();
       const ymd = `${year}${month}${day}`;
       const tripDate = new Date(Date.UTC(year, d.getUTCMonth(), d.getUTCDate()));
 
-      for (const route of activeRoutes) {
+      for (let rIdx = 0; rIdx < activeRoutes.length; rIdx++) {
+        const route = activeRoutes[rIdx];
         const vehicles = vehiclesByOp.get(route.nhaXeId) || [];
         if (vehicles.length === 0) continue;
 
         for (let i = 0; i < departureHours.length; i++) {
           const hour = departureHours[i];
           const hourStr = String(hour).padStart(2, '0') + '00';
-          const vehicle = vehicles[i % vehicles.length];
+          const vehicle = vehicles[(dayNum + rIdx * 2 + i) % vehicles.length];
           const rawHash = crypto.createHash('md5').update(`CX:${route.nhaXe.maNhaXe}:${ymd}:${route.tuyenXeId}:${hourStr}`).digest('hex');
           const maChuyenXe = `${rawHash.slice(0, 12)}4${rawHash.slice(13, 16)}a${rawHash.slice(17, 32)}`;
 
           const departureTime = new Date(Date.UTC(1970, 0, 1, hour, 0, 0));
+          const slotKey = `${route.tuyenXeId}_${tripDate.toISOString()}_${departureTime.toISOString()}`;
+          if (existingTripSlots.has(slotKey)) continue;
+          existingTripSlots.add(slotKey);
+
           const durationMin = route.thoiGianChayPhut || 240;
           const arrivalTime = new Date(departureTime.getTime() + durationMin * 60000);
 
