@@ -1,14 +1,17 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
-import fs from 'fs';
+import fs from 'node:fs';
+import path from 'node:path';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 
 function databaseConfig() {
   const raw = process.env.DATABASE_URL ?? process.env.MIGRATION_URL;
-  if (!raw) throw new Error('MIGRATION_URL or DATABASE_URL is required for seed');
+  if (!raw)
+    throw new Error('MIGRATION_URL or DATABASE_URL is required for seed');
   const url = new URL(raw);
-  if (url.protocol !== 'mysql:') throw new Error('Seed URL must use mysql: protocol');
+  if (url.protocol !== 'mysql:')
+    throw new Error('Seed URL must use mysql: protocol');
   return {
     host: url.hostname,
     port: Number(url.port || 3306),
@@ -19,10 +22,15 @@ function databaseConfig() {
   };
 }
 
-const prisma = new PrismaClient({ adapter: new PrismaMariaDb(databaseConfig()) });
+const prisma = new PrismaClient({
+  adapter: new PrismaMariaDb(databaseConfig()),
+});
 
 function deterministicUuid(...parts) {
-  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  const hash = crypto
+    .createHash('md5')
+    .update(parts.map(String).join(':'))
+    .digest('hex');
   return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
 }
 
@@ -38,21 +46,29 @@ function removeVietnameseTones(str) {
 }
 
 async function main() {
-  console.log('--- Bắt đầu nạp DanhMucDiaDiem, BangSapNhapDiaDiem và DiemDonTra ---');
+  console.log(
+    '--- Bắt đầu nạp DanhMucDiaDiem, BangSapNhapDiaDiem và DiemDonTra ---',
+  );
 
-  const clusters = JSON.parse(fs.readFileSync('docs/features/tinh_thanh/tinh-sap-nhap.json', 'utf8'));
-  const v1 = JSON.parse(fs.readFileSync('docs/features/tinh_thanh/provinces-v1.json', 'utf8'));
-  const v2 = JSON.parse(fs.readFileSync('docs/features/tinh_thanh/provinces-v2.json', 'utf8'));
+  const clusters = JSON.parse(
+    fs.readFileSync(path.resolve('prisma/data/tinh-sap-nhap.json'), 'utf8'),
+  );
+  const v1 = JSON.parse(
+    fs.readFileSync(path.resolve('prisma/data/provinces-v1.json'), 'utf8'),
+  );
+  const v2 = JSON.parse(
+    fs.readFileSync(path.resolve('prisma/data/provinces-v2.json'), 'utf8'),
+  );
 
   // 1. Seed 34 Tỉnh mới (laDiaDanhCu = false)
   const popularNewCodes = new Set([1, 79, 48, 92, 68]);
   console.log(`Đang nạp ${v2.length} tỉnh thành mới (sau sáp nhập)...`);
   for (const p2 of v2) {
-    const cluster = clusters.find(c => c.newProvinceCode === p2.code);
+    const cluster = clusters.find((c) => c.newProvinceCode === p2.code);
     let chuThichSapNhap = null;
     if (cluster && cluster.oldProvinces.length > 1) {
       const oldNames = cluster.oldProvinces
-        .map(o => o.name.replace(/^(Tỉnh|Thành phố)\s+/i, '').trim())
+        .map((o) => o.name.replace(/^(Tỉnh|Thành phố)\s+/i, '').trim())
         .join(', ');
       chuThichSapNhap = `Sáp nhập từ ${oldNames}`;
     }
@@ -154,19 +170,27 @@ async function main() {
     { code: 643, expectedParentCode: 66, popular: true }, // TP. Buôn Ma Thuột -> Đắk Lắk (66)
   ];
 
-  console.log(`Đang nạp ${keyDistricts.length} quận/huyện/thị xã (có liên kết diaDiemChaId)...`);
+  console.log(
+    `Đang nạp ${keyDistricts.length} quận/huyện/thị xã (có liên kết diaDiemChaId)...`,
+  );
   for (const item of keyDistricts) {
     const foundDist = allDistrictsMap.get(item.code);
     if (!foundDist) {
-      throw new Error(`LỖI SEED: Không tìm thấy quận/huyện code=${item.code} trong docs/features/tinh_thanh/provinces-v1.json`);
+      throw new Error(
+        `LỖI SEED: Không tìm thấy quận/huyện code=${item.code} trong prisma/data/provinces-v1.json`,
+      );
     }
     if (foundDist.parentProvinceCode !== item.expectedParentCode) {
-      throw new Error(`LỖI SEED: Quận/huyện code=${item.code} (${foundDist.name}) thuộc tỉnh code=${foundDist.parentProvinceCode}, không khớp với tỉnh cha mong đợi ${item.expectedParentCode}`);
+      throw new Error(
+        `LỖI SEED: Quận/huyện code=${item.code} (${foundDist.name}) thuộc tỉnh code=${foundDist.parentProvinceCode}, không khớp với tỉnh cha mong đợi ${item.expectedParentCode}`,
+      );
     }
 
     const diaDiemChaId = oldMap.get(item.expectedParentCode);
     if (!diaDiemChaId) {
-      throw new Error(`LỖI SEED: Không tìm thấy diaDiemId của tỉnh cha code=${item.expectedParentCode} trong DanhMucDiaDiem`);
+      throw new Error(
+        `LỖI SEED: Không tìm thấy diaDiemId của tỉnh cha code=${item.expectedParentCode} trong DanhMucDiaDiem`,
+      );
     }
 
     await prisma.danhMucDiaDiem.upsert({
@@ -232,13 +256,18 @@ async function main() {
   console.log(`Đã nạp ${mapCount} liên kết ánh xạ sáp nhập.`);
 
   // 5. Seed Bến bãi / Điểm đón trả thuộc Nhà xe (DiemDonTra)
-  const nhaXes = await prisma.nhaXe.findMany({ take: 3, orderBy: { nhaXeId: 'asc' } });
+  const nhaXes = await prisma.nhaXe.findMany({
+    take: 3,
+    orderBy: { nhaXeId: 'asc' },
+  });
   if (nhaXes.length === 0) {
-    console.warn('CẢNH BÁO: Không tìm thấy bất kỳ nhà xe (NhaXe) nào trong cơ sở dữ liệu để tạo DiemDonTra mẫu!');
+    console.warn(
+      'CẢNH BÁO: Không tìm thấy bất kỳ nhà xe (NhaXe) nào trong cơ sở dữ liệu để tạo DiemDonTra mẫu!',
+    );
   } else {
-    const futa = nhaXes.find(nx => nx.maNhaXe === 'FUTA') ?? nhaXes[0];
-    const hm = nhaXes.find(nx => nx.maNhaXe === 'HM') ?? futa;
-    const tb = nhaXes.find(nx => nx.maNhaXe === 'TB') ?? futa;
+    const futa = nhaXes.find((nx) => nx.maNhaXe === 'FUTA') ?? nhaXes[0];
+    const hm = nhaXes.find((nx) => nx.maNhaXe === 'HM') ?? futa;
+    const tb = nhaXes.find((nx) => nx.maNhaXe === 'TB') ?? futa;
 
     // Helper: Tự suy ra diaDiemMoiId từ diaDiemCuId thông qua BangSapNhapDiaDiem
     async function getNewLocationId(diaDiemCuId) {
@@ -261,7 +290,8 @@ async function main() {
         maDiem: 'BX-MD-MOI',
         tenDiem: 'Bến xe Miền Đông mới',
         loaiDiem: 'BEN_XE',
-        diaChi: '501 Hoàng Hữu Nam, Phường Long Bình, TP. Thủ Đức, TP. Hồ Chí Minh',
+        diaChi:
+          '501 Hoàng Hữu Nam, Phường Long Bình, TP. Thủ Đức, TP. Hồ Chí Minh',
         diaDiemCuId: tphcmCuId,
         viDo: 10.8756,
         kinhDo: 106.8222,
@@ -272,7 +302,8 @@ async function main() {
         maDiem: 'BX-MT',
         tenDiem: 'Bến xe Miền Tây',
         loaiDiem: 'BEN_XE',
-        diaChi: '395 Kinh Dương Vương, Phường An Lạc, Quận Bình Tân, TP. Hồ Chí Minh',
+        diaChi:
+          '395 Kinh Dương Vương, Phường An Lạc, Quận Bình Tân, TP. Hồ Chí Minh',
         diaDiemCuId: tphcmCuId,
         viDo: 10.7412,
         kinhDo: 106.6186,
@@ -283,7 +314,8 @@ async function main() {
         maDiem: 'BX-VT',
         tenDiem: 'Bến xe Vũng Tàu',
         loaiDiem: 'BEN_XE',
-        diaChi: '192 Nam Kỳ Khởi Nghĩa, Phường 3, TP. Vũng Tàu, Bà Rịa - Vũng Tàu',
+        diaChi:
+          '192 Nam Kỳ Khởi Nghĩa, Phường 3, TP. Vũng Tàu, Bà Rịa - Vũng Tàu',
         diaDiemCuId: vungTauCuId,
         viDo: 10.3541,
         kinhDo: 107.0852,
@@ -358,12 +390,16 @@ async function main() {
       },
     ];
 
-    console.log('Đang nạp bến bãi & văn phòng (tự động suy ra diaDiemMoiId từ BangSapNhapDiaDiem)...');
+    console.log(
+      'Đang nạp bến bãi & văn phòng (tự động suy ra diaDiemMoiId từ BangSapNhapDiaDiem)...',
+    );
     for (const station of sampleStations) {
       if (!station.diaDiemCuId) continue;
       const diaDiemMoiId = await getNewLocationId(station.diaDiemCuId);
       if (!diaDiemMoiId) {
-        console.warn(`Không thể suy ra diaDiemMoiId cho diaDiemCuId=${station.diaDiemCuId}`);
+        console.warn(
+          `Không thể suy ra diaDiemMoiId cho diaDiemCuId=${station.diaDiemCuId}`,
+        );
         continue;
       }
 
