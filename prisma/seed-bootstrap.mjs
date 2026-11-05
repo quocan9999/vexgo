@@ -47,8 +47,11 @@ runStep('4. Chuyến xe & Ghế Tháng 11 & Tháng 12/2026 (seed-trips-nov-2026.
 // 5. Seed chuyến xe Tháng 10 & Doanh thu/Giao dịch hoàn tất
 runStep('5. Chuyến xe & Doanh thu Tháng 10/2026 (seed-october-revenue.mjs)', node, ['scripts/seed-october-revenue.mjs']);
 
-// 6. Tự động kiểm chứng toàn bộ 14 bảng nghiệp vụ
-runStep('6. Kiểm chứng chuẩn UUID v4 toàn bộ 14 bảng dữ liệu (verify-uuid4-all.mjs)', node, ['scripts/verify-uuid4-all.mjs']);
+// 6. Đồng bộ sơ đồ ghế thực tế cho 100% chuyến xe (FUTA, Thành Bưởi, Hoa Mai)
+runStep('6. Đồng bộ sơ đồ ghế thực tế 100% chuyến xe (sync-all-trip-seats.mjs)', node, ['prisma/sync-all-trip-seats.mjs']);
+
+// 7. Tự động kiểm chứng toàn bộ 14 bảng nghiệp vụ
+runStep('7. Kiểm chứng chuẩn UUID v4 toàn bộ 14 bảng dữ liệu (verify-uuid4-all.mjs)', node, ['scripts/verify-uuid4-all.mjs']);
 
 const totalDuration = ((Date.now() - pipelineStart) / 1000).toFixed(1);
 console.log(`\n===============================================================`);
