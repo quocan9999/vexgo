@@ -119,8 +119,6 @@ export function TripReviewsModal({
     };
   }, [isOpen, busCompanyId, tripId]);
 
-  if (!isOpen) return null;
-
   // Đếm số lượng đánh giá có bình luận bằng chữ
   const hasCommentCount = useMemo(
     () =>
@@ -161,6 +159,9 @@ export function TripReviewsModal({
       }
     });
   }, [reviews, selectedStar, onlyWithComment, sortBy]);
+
+  // Early return phải đặt sau toàn bộ hooks để giữ thứ tự hook ổn định giữa các lần render.
+  if (!isOpen) return null;
 
   // Đếm theo sao
   const starCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
