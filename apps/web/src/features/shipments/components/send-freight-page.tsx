@@ -1053,7 +1053,7 @@ function SendFreightContent() {
       {/* ============================================================== */}
       {/* HERO BANNER SECTION */}
       {/* ============================================================== */}
-      <div className="bg-[#17223B] text-white pt-10 pb-16 px-4 sm:px-6 relative overflow-hidden">
+      <div className="bg-[#17223B] text-white pt-10 pb-16 px-4 sm:px-6 relative z-0 overflow-hidden">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
@@ -1097,7 +1097,7 @@ function SendFreightContent() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-8 relative z-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-8 relative">
         {/* ============================================================== */}
         {/* TAB 1: TẠO ĐƠN GỬI HÀNG */}
         {/* ============================================================== */}
@@ -3348,7 +3348,7 @@ function SendFreightContent() {
         {/* Modal Hướng dẫn tra cứu vận đơn */}
         {showLookupGuideModal && (
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
             onClick={() => setShowLookupGuideModal(false)}
             role="dialog"
             aria-modal="true"
@@ -3510,8 +3510,8 @@ function SendFreightContent() {
 
         {/* Modal Thông Báo Thiếu Thông Tin */}
         {missingFieldsModal && (
-          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-4 sm:pt-6 pb-6 animate-in fade-in duration-200">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black/60 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => setMissingFieldsModal(false)}
@@ -3556,8 +3556,8 @@ function SendFreightContent() {
 
         {/* Modal Thành Công Tạo Vận Đơn Thu Cước Tại Bến */}
         {createdSuccessShipment && (
-          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-3 sm:pt-4 pb-6 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black/60 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => setCreatedSuccessShipment(null)}

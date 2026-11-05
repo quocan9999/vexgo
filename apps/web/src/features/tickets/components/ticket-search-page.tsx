@@ -38,6 +38,8 @@ import { checkTicketCancelEligibility } from '@/features/tickets/services/cancel
 import { saveCancelSession } from '@/features/tickets/services/cancel-session';
 import { ReviewDialog } from '@/features/tickets/components/review-dialog';
 import { useAuthSession } from '@/features/auth/auth-session';
+import { QRCodeSVG } from 'qrcode.react';
+import { PAYMENT_DRAFT_STORAGE_PREFIX } from '@/features/booking/services/payment-draft';
 
 const VIETNAM_PHONE_REGEX = /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
 
@@ -556,109 +558,146 @@ function TicketSearchForm() {
             <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-[#F4F7F9] border-l border-slate-200"></div>
           </div>
 
-          {/* Details Grid (4 Cards) */}
-          <div className="px-6 sm:px-8 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            
-            {/* Box 1: Seat Info */}
-            <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Chỗ ngồi / Vị trí
-              </span>
-              <p className="text-xl font-black text-[#0060c4]">
-                Ghế {ticket.seatNumber || 'N/A'}
-              </p>
-              <p className="text-xs font-medium text-slate-600 mt-1">
-                Vị trí: <strong className="font-semibold text-slate-800">{ticket.seatPosition || 'Ghế tiêu chuẩn'}</strong>
-              </p>
-            </div>
-
-            {/* Box 2: Price */}
-            <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Giá vé
-              </span>
-              <p className="text-xl font-black text-[#f05123]">
-                {formatCurrency(ticket.price)}
-              </p>
-              <p className="text-xs text-slate-500 font-medium mt-1">
-                Đã bao gồm VAT & bảo hiểm hành khách
-              </p>
-            </div>
-
-            {/* Box 3: Pickup & Dropoff */}
-            <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90 space-y-2">
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                  Điểm đón
+          {/* Details Grid + Boarding QR Code */}
+          <div className="px-6 sm:px-8 py-5 flex flex-col lg:flex-row gap-5">
+            {/* Left: Details Grid (4 Cards) */}
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              {/* Box 1: Seat Info */}
+              <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Chỗ ngồi / Vị trí
                 </span>
-                <p className="font-bold text-slate-800 flex items-start gap-1.5 leading-snug">
-                  <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>{ticket.pickup || ticket.origin || 'Theo thông báo của nhà xe'}</span>
+                <p className="text-xl font-black text-[#0060c4]">
+                  Ghế {ticket.seatNumber || 'N/A'}
+                </p>
+                <p className="text-xs font-medium text-slate-600 mt-1">
+                  Vị trí: <strong className="font-semibold text-slate-800">{ticket.seatPosition || 'Ghế tiêu chuẩn'}</strong>
                 </p>
               </div>
-              <div className="pt-2 border-t border-slate-200/60">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                  Điểm trả
-                </span>
-                <p className="font-bold text-slate-800 flex items-start gap-1.5 leading-snug">
-                  <MapPin className="w-4 h-4 text-[#f05123] shrink-0 mt-0.5" />
-                  <span>{ticket.dropoff || ticket.destination || 'Theo lộ trình'}</span>
-                </p>
-              </div>
-            </div>
 
-            {/* Box 4: Passenger & Payment */}
-            <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90 space-y-2">
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                  Hành khách
+              {/* Box 2: Price */}
+              <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Giá vé
                 </span>
-                <p className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-slate-400" />
-                  <span>{ticket.passengerName || 'Chưa cập nhật'}</span>
+                <p className="text-xl font-black text-[#f05123]">
+                  {formatCurrency(ticket.price)}
                 </p>
-                <p className="text-xs text-slate-500 font-medium pl-5.5 mt-0.5">
-                  SĐT: {formatPhoneDisplay(ticket.passengerPhone || phone)}
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Đã bao gồm VAT & bảo hiểm hành khách
                 </p>
               </div>
-              <div className="pt-2 border-t border-slate-200/60">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                  Thanh toán
-                </span>
-                <div className="flex items-center gap-1.5 font-bold">
-                  <CreditCard className="w-4 h-4 text-slate-400" />
-                  <span className={payment.isPaid ? 'text-emerald-700' : 'text-amber-700'}>
-                    {payment.label}
+
+              {/* Box 3: Pickup & Dropoff */}
+              <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90 space-y-2">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Điểm đón
                   </span>
-                  <span className="text-slate-400 font-normal">({mapPaymentMethod(ticket.paymentMethod)})</span>
-                </div>
-                {ticket.bookingCode && (
-                  <p className="text-[11px] text-slate-400 font-medium pl-5.5 mt-0.5 font-mono">
-                    Đơn: {ticket.bookingCode}
+                  <p className="font-bold text-slate-800 flex items-start gap-1.5 leading-snug">
+                    <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>{ticket.pickup || ticket.origin || 'Theo thông báo của nhà xe'}</span>
                   </p>
-                )}
-                {ticket.promotionCode && (
-                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-xs">
-                    <div className="flex flex-wrap justify-between gap-2">
-                      <span className="text-slate-600">Mã khuyến mãi của đơn</span>
-                      <strong className="font-mono text-emerald-800">
-                        {ticket.promotionCode}
-                      </strong>
-                    </div>
-                    {typeof ticket.discountAmount === 'number' && (
-                      <div className="mt-1 flex flex-wrap justify-between gap-2">
-                        <span className="text-slate-600">Giảm giá của toàn đơn</span>
-                        <strong className="text-emerald-700">
-                          −{formatCurrency(ticket.discountAmount)}
+                </div>
+                <div className="pt-2 border-t border-slate-200/60">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Điểm trả
+                  </span>
+                  <p className="font-bold text-slate-800 flex items-start gap-1.5 leading-snug">
+                    <MapPin className="w-4 h-4 text-[#f05123] shrink-0 mt-0.5" />
+                    <span>{ticket.dropoff || ticket.destination || 'Theo lộ trình'}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Box 4: Passenger & Payment */}
+              <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-100/90 space-y-2">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Hành khách
+                  </span>
+                  <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-slate-400" />
+                    <span>{ticket.passengerName || 'Chưa cập nhật'}</span>
+                  </p>
+                  <p className="text-xs text-slate-500 font-medium pl-5.5 mt-0.5">
+                    SĐT: {formatPhoneDisplay(ticket.passengerPhone || phone)}
+                  </p>
+                </div>
+                <div className="pt-2 border-t border-slate-200/60">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Thanh toán
+                  </span>
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <CreditCard className="w-4 h-4 text-slate-400" />
+                    <span className={payment.isPaid ? 'text-emerald-700' : 'text-amber-700'}>
+                      {payment.label}
+                    </span>
+                    <span className="text-slate-400 font-normal">({mapPaymentMethod(ticket.paymentMethod)})</span>
+                  </div>
+                  {ticket.bookingCode && (
+                    <p className="text-[11px] text-slate-400 font-medium pl-5.5 mt-0.5 font-mono">
+                      Đơn: {ticket.bookingCode}
+                    </p>
+                  )}
+                  {ticket.promotionCode && (
+                    <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-xs">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-slate-600">Mã khuyến mãi của đơn</span>
+                        <strong className="font-mono text-emerald-800">
+                          {ticket.promotionCode}
                         </strong>
                       </div>
-                    )}
-                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                      Mức giảm được ghi một lần ở cấp đơn; không lặp lại mức giảm trên từng vé.
-                    </p>
+                      {typeof ticket.discountAmount === 'number' && (
+                        <div className="mt-1 flex flex-wrap justify-between gap-2">
+                          <span className="text-slate-600">Giảm giá của toàn đơn</span>
+                          <strong className="text-emerald-700">
+                            −{formatCurrency(ticket.discountAmount)}
+                          </strong>
+                        </div>
+                      )}
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                        Mức giảm được ghi một lần ở cấp đơn; không lặp lại mức giảm trên từng vé.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Boarding QR Code Stub */}
+            <div className="lg:w-60 shrink-0 p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-blue-50/40 border border-slate-200/90 flex flex-col items-center justify-center text-center">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100/80 text-[#0060c4] text-[11px] font-extrabold uppercase tracking-wider mb-3">
+                <QrCode className="w-3.5 h-3.5" />
+                Mã QR lên xe
+              </div>
+              <div className="relative p-3 bg-white rounded-2xl border border-slate-200 shadow-xs">
+                <div className={isCancelled ? 'opacity-20 grayscale' : ''}>
+                  <QRCodeSVG
+                    value={`https://vexgo.vn/tra-cuu-ve?code=${encodeURIComponent(ticket.ticketCode)}`}
+                    size={140}
+                    level="M"
+                    role="img"
+                    aria-label={`Mã QR vé ${ticket.ticketCode}`}
+                    className="w-36 h-36"
+                  />
+                </div>
+                {isCancelled && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="px-3 py-1 rounded-md bg-rose-600 text-white text-xs font-black uppercase tracking-wider rotate-[-12deg] shadow-lg">
+                      ĐÃ HỦY
+                    </span>
                   </div>
                 )}
               </div>
+              <p className="text-xs font-black text-slate-900 mt-3 font-mono">
+                Ghế {ticket.seatNumber || 'N/A'} • {ticket.ticketCode}
+              </p>
+              <span className="text-[11px] text-slate-500 font-medium leading-relaxed mt-1 block">
+                {isCancelled
+                  ? 'Vé đã hủy, mã QR không còn hiệu lực lên xe'
+                  : 'Xuất trình mã QR này cho nhân viên nhà xe quét khi lên xe'}
+              </span>
             </div>
           </div>
 
@@ -930,7 +969,25 @@ function TicketSearchForm() {
               </button>
 
               <Link
-                href={`/invoice/${encodeURIComponent(ticket.ticketCode)}`}
+                href={`/invoice/${ticket.bookingId ? ticket.bookingId : encodeURIComponent(ticket.ticketCode)}`}
+                onClick={() => {
+                  try {
+                    if (typeof sessionStorage !== 'undefined' && ticket.bookingId && ticket.bookingCode) {
+                      sessionStorage.setItem(
+                        `${PAYMENT_DRAFT_STORAGE_PREFIX}lookup-${ticket.bookingId}`,
+                        JSON.stringify({
+                          bookingId: ticket.bookingId,
+                          bookingCode: ticket.bookingCode,
+                          passenger: {
+                            phoneNumber: ticket.passengerPhone || phone.trim(),
+                          },
+                        }),
+                      );
+                    }
+                  } catch {
+                    // Ignore storage errors
+                  }
+                }}
                 className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#0060c4] hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-sm transition-all shadow-md shadow-[#0060c4]/25 cursor-pointer"
               >
                 <FileText className="w-4 h-4" />
@@ -968,7 +1025,7 @@ function TicketSearchForm() {
       {/* Ticket Lookup Guide Modal */}
       {showLookupGuide && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
           onClick={() => setShowLookupGuide(false)}
           role="dialog"
           aria-modal="true"
@@ -1135,7 +1192,7 @@ export const TicketSearchPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F4F6F8] font-sans pb-24">
       {/* HERO BANNER SECTION */}
-      <div className="bg-[#17223B] text-white pt-10 pb-20 px-4 sm:px-6 relative overflow-hidden">
+      <div className="bg-[#17223B] text-white pt-10 pb-20 px-4 sm:px-6 relative z-0 overflow-hidden">
         {/* Glow ambient background effects */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -1172,7 +1229,7 @@ export const TicketSearchPage: React.FC = () => {
       </div>
 
       {/* Floating Card Container */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 -mt-10 relative z-20 flex flex-col items-center">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 -mt-10 relative flex flex-col items-center">
         <Suspense fallback={<div className="text-slate-400 text-sm">Đang tải...</div>}>
           <TicketSearchForm />
         </Suspense>

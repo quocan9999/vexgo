@@ -119,5 +119,8 @@ describe('ticket lookup promotion snapshot', () => {
     expect(screen.getByText(/2x Vali cỡ lớn/i)).toBeTruthy();
     expect(screen.getByText(/Màu đen/i)).toBeTruthy();
     expect(screen.getByText(/Kiện hành lý ký gửi hầm xe:/i)).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Mã QR vé VE-501' })).toBeTruthy();
+    const eticketLink = screen.getByRole('link', { name: /Xem vé điện tử/i });
+    expect(eticketLink.getAttribute('href')).toBe('/invoice/41');
   });
 });
