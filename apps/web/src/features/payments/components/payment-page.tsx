@@ -270,21 +270,7 @@ function PaymentContent() {
         ? `booking:${bookingDraft.bookingId}:${bookingDraft.bookingCode}:${bookingDraft.passenger.phoneNumber}`
         : null;
 
-  const [selectedLegIndex, setSelectedLegIndex] = useState<number | 'all'>(() => {
-    if (typeof window === 'undefined' || !draftId) return 'all';
-    try {
-      const raw = sessionStorage.getItem(`${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.tripType === 'round-trip' && !parsed.comboCode) {
-          return 0;
-        }
-      }
-    } catch {
-      // Ignore
-    }
-    return 'all';
-  });
+  const [selectedLegIndex, setSelectedLegIndex] = useState<number | 'all'>('all');
   const [legSnapshots, setLegSnapshots] = useState<[PaymentReadSnapshot | null, PaymentReadSnapshot | null]>([null, null]);
   const [clockTick, setClockTick] = useState(0);
   const [paymentReadSnapshot, setPaymentReadSnapshot] =
@@ -1216,16 +1202,8 @@ function PaymentContent() {
           {/* Cột 2: QR Code & Thông tin chuyển khoản */}
           <div className="flex-1 flex flex-col items-center">
             {isRoundTripBooking && bookingDraft && (
-              <div className="w-full max-w-[520px] mb-6 space-y-2.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedLegIndex('all')}
-                  className={`w-full py-3 px-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                    selectedLegIndex === 'all'
-                      ? 'border-brand bg-brand/5 ring-2 ring-brand/20 shadow-sm'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
+              <div className="w-full max-w-[520px] mb-6">
+                <div className="w-full py-3.5 px-4 rounded-2xl border border-brand bg-brand/5 ring-1 ring-brand/20 shadow-xs">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-black uppercase text-accent flex items-center gap-1.5">
                       <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1243,70 +1221,20 @@ function PaymentContent() {
                       {bookingDraft.totalFare.toLocaleString('vi-VN')}đ
                     </span>
                   </div>
-                </button>
-
-                <div className="flex items-center justify-center gap-3">
-                  {bookingDraft.legs.map((leg, idx) => {
-                    const isSelected = selectedLegIndex === idx;
-                    const snap = legSnapshots[idx];
-                    const isPaid = snap?.terminalStatus === 'paid';
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setSelectedLegIndex(idx)}
-                        className={`flex-1 py-2.5 px-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? 'border-brand bg-brand/5 ring-2 ring-brand/20 shadow-sm'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-black uppercase text-accent">
-                            {idx === 0 ? 'Chặng 1: Lượt đi' : 'Chặng 2: Lượt về'}
-                          </span>
-                          {isPaid ? (
-                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                              ✓ Đã thanh toán
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">
-                              Chờ thanh toán
-                            </span>
-                          )}
-                        </div>
-                        <div className="font-semibold text-slate-800 text-xs truncate">
-                          {leg.route}
-                        </div>
-                        <div className="text-xs font-black text-slate-700 mt-0.5">
-                          {leg.subtotal.toLocaleString('vi-VN')}đ
-                        </div>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             )}
             <p className="text-sm font-semibold text-slate-500 mb-1">
               {isRoundTripBooking
-                ? selectedLegIndex === 'all'
-                  ? 'Tổng thanh toán vé khứ hồi'
-                  : selectedLegIndex === 0
-                    ? 'Thanh toán Chặng 1 (Lượt đi)'
-                    : 'Thanh toán Chặng 2 (Lượt về)'
+                ? 'Tổng thanh toán vé khứ hồi'
                 : 'Tổng thanh toán'}
             </p>
             <h1 className="text-5xl font-bold text-red-600 mb-2 tracking-tight">
               {totalFareText}
             </h1>
-            {isRoundTripBooking && selectedLegIndex === 'all' && (
+            {isRoundTripBooking && (
               <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3.5 py-1 rounded-full mb-6 text-center">
                 ✓ Quét 1 lần duy nhất để hoàn tất thanh toán cả 2 chặng
-              </p>
-            )}
-            {isRoundTripBooking && selectedLegIndex !== 'all' && (
-              <p className="text-xs font-semibold text-slate-500 mb-6">
-                Tổng 2 chặng: <strong className="text-slate-700">{bookingDraft?.totalFare.toLocaleString('vi-VN')}đ</strong>
               </p>
             )}
 
@@ -1328,25 +1256,8 @@ function PaymentContent() {
                         <CheckCircle2 className="w-8 h-8" />
                       </div>
                       <p className="text-base font-bold text-emerald-800">
-                        {selectedLegIndex === 0 ? 'Chặng 1 (Lượt đi)' : 'Chặng 2 (Lượt về)'} đã được thanh toán thành công!
+                        Vé khứ hồi (cả 2 chặng) đã được thanh toán thành công!
                       </p>
-                      {selectedLegIndex === 0 && legSnapshots[1]?.terminalStatus !== 'paid' ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLegIndex(1)}
-                          className="mt-2 h-10 px-5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
-                        >
-                          Chuyển sang Chặng 2 (Lượt về) để thanh toán
-                        </button>
-                      ) : selectedLegIndex === 1 && legSnapshots[0]?.terminalStatus !== 'paid' ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLegIndex(0)}
-                          className="mt-2 h-10 px-5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
-                        >
-                          Chuyển sang Chặng 1 (Lượt đi) để thanh toán
-                        </button>
-                      ) : null}
                     </div>
                   ) : paymentTerminalStatus === 'paid' && shipmentDraft ? (
                     <div className="flex flex-col items-center gap-3.5 py-5 px-4 text-center w-full">

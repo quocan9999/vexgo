@@ -1398,11 +1398,8 @@ it('supports round-trip payment with leg switching and redirects when both legs 
   render(<PaymentPage />);
   await flushPromises();
 
-  expect(screen.getByText('Chặng 1: Lượt đi')).toBeTruthy();
-  expect(screen.getByText('Chặng 2: Lượt về')).toBeTruthy();
-
-  fireEvent.click(screen.getByText('Chặng 2: Lượt về'));
-  expect(screen.getByText(/Thanh toán Chặng 2 \(Lượt về\)/i)).toBeTruthy();
+  expect(screen.getByText('Gom thanh toán 2 chặng (1 mã QR duy nhất)')).toBeTruthy();
+  expect(screen.getByText('Tổng thanh toán vé khứ hồi')).toBeTruthy();
 
   b0.status = 'DA_THANH_TOAN';
   b0.paymentStatus = 'DA_THANH_TOAN';
