@@ -304,7 +304,7 @@ export const PostSearchForm: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowShipmentGuide(true)}
-              className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline cursor-pointer text-left"
+              className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
             >
               Hướng dẫn gửi hàng
             </button>

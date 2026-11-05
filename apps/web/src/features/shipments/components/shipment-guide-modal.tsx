@@ -75,9 +75,9 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50/70 via-white to-sky-50/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-orange-50/70 via-white to-amber-50/50">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-xs">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f05123] text-white shadow-xs">
               <Package className="h-5 w-5" />
             </div>
             <div>
@@ -170,7 +170,7 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
                 </span>
               </li>
               <li className="flex items-start gap-1.5">
-                <span className="text-[#2563EB] font-bold">•</span>
+                <span className="text-[#f05123] font-bold">•</span>
                 <span>
                   Khách hàng và người nhận có thể theo dõi hành trình giao nhận 24/7 trực tiếp trên VexGo qua tính năng <strong>Tra cứu gửi hàng</strong>.
                 </span>
@@ -182,13 +182,13 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-            <Headphones className="w-4 h-4 text-[#2563EB]" />
+            <Headphones className="w-4 h-4 text-[#f05123]" />
             <span>Tổng đài CSKH 24/7: <strong className="text-slate-900">1900 6067</strong></span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-extrabold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
+            className="px-5 py-2 rounded-xl bg-[#f05123] hover:bg-[#d8441a] text-white font-extrabold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
           >
             Đã hiểu
           </button>
