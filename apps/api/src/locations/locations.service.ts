@@ -119,6 +119,9 @@ export class LocationsService {
           bangSapNhapMoi: {
             include: { diaDiemCu: true },
           },
+          bangSapNhapCu: {
+            include: { diaDiemMoi: true },
+          },
           diaDiemCha: true,
         },
         orderBy: [{ thuTuHienThi: 'desc' }, { tenDiaDiem: 'asc' }],
@@ -171,6 +174,15 @@ export class LocationsService {
             ? stripLocationPrefix(loc.diaDiemCha.tenDiaDiem, false)
             : null;
 
+        const mergedToName =
+          isLegacy && (loc as any).bangSapNhapCu && (loc as any).bangSapNhapCu.length > 0
+            ? (loc as any).bangSapNhapCu[0].diaDiemMoi?.tenDiaDiem
+            : undefined;
+
+        const mergedNote =
+          loc.chuThichSapNhap ??
+          (mergedToName ? `Sáp nhập vào ${stripLocationPrefix(mergedToName, false)}` : null);
+
         result.push({
           id,
           name: cleanName,
@@ -189,7 +201,7 @@ export class LocationsService {
           province: loc.capDiaDiem === 'QUAN_HUYEN' ? parentProvinceName : null,
           parentName: loc.capDiaDiem === 'QUAN_HUYEN' ? (parentProvinceName ?? undefined) : undefined,
           isLegacy,
-          mergedFromText: loc.chuThichSapNhap,
+          mergedFromText: mergedNote,
           legacyNames,
           popular: loc.noiBat,
           diaDiemId: loc.diaDiemId,

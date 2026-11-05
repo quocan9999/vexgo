@@ -145,7 +145,7 @@ export function SearchableCombobox({
           <span className="flex items-center gap-1.5 font-semibold leading-snug">
             <span>{item.label}</span>
             {item.badge && (
-              <span className="inline-flex items-center rounded border border-border/70 bg-muted px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
+              <span className="inline-flex items-center rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shrink-0">
                 {item.badge}
               </span>
             )}

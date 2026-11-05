@@ -2,7 +2,7 @@
 
 import { Building2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/status-badge';
+import { Badge, LegacyBadge } from '@/components/ui/status-badge';
 import {
   Table,
   TableBody,
@@ -91,9 +91,7 @@ export function StationListTable({
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-1.5 font-medium text-foreground">
                       <span>{st.diaDiemCu?.tenDiaDiem ?? '—'}</span>
-                      <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 py-0">
-                        CŨ
-                      </Badge>
+                      <LegacyBadge />
                     </div>
                     {st.diaDiemMoi && (
                       <span className="text-xs text-muted-foreground">
@@ -138,11 +136,12 @@ export function StationListTable({
               </ResourceStatusBadge>
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p>
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <strong className="text-foreground">Khu vực:</strong>{' '}
-                {st.diaDiemCu?.tenDiaDiem ?? '—'} [CŨ]{' '}
-                {st.diaDiemMoi ? `➔ ${st.diaDiemMoi.tenDiaDiem}` : ''}
-              </p>
+                <span>{st.diaDiemCu?.tenDiaDiem ?? '—'}</span>
+                <LegacyBadge />
+                {st.diaDiemMoi && <span>➔ {st.diaDiemMoi.tenDiaDiem}</span>}
+              </div>
               <p className="line-clamp-2">
                 <strong className="text-foreground">Địa chỉ:</strong> {st.diaChi}
               </p>

@@ -44,13 +44,26 @@ export function LocationPicker({
     getLocations()
       .then((locations) => {
         if (!active) return;
+        const sorted = [...locations].sort((a, b) => {
+          if (a.kind === 'province' && b.kind === 'province') {
+            const aLegacy = Boolean(a.isLegacy);
+            const bLegacy = Boolean(b.isLegacy);
+            if (aLegacy !== bLegacy) {
+              return aLegacy ? 1 : -1;
+            }
+          }
+          return a.name.localeCompare(b.name, 'vi');
+        });
+
         setOptions(
-          locations.map((location) => ({
+          sorted.map((location) => ({
             id: location.id,
             value: location.value,
             label: location.name,
             keywords: location.aliases.join(' '),
+            badge: location.isLegacy ? 'CŨ' : undefined,
             description:
+              location.mergedFromText ??
               location.address ??
               (location.province ? `Thuộc ${location.province}` : undefined),
             group:

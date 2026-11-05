@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/status-badge';
+import { Badge, LegacyBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/action-button';
 import { getLocations, type LocationOption } from '@/features/locations/services/location-service';
 import { createStation, updateStation, getStations, StationApiError } from '../services/station-service';
@@ -256,9 +256,7 @@ export function StationFormDialog({
                     return (
                       <span className="flex items-center gap-1.5">
                         <span>{matchedName}</span>
-                        <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 py-0">
-                          CŨ
-                        </Badge>
+                        <LegacyBadge />
                       </span>
                     );
                   })()}
@@ -269,9 +267,7 @@ export function StationFormDialog({
                   <SelectItem key={loc.id} value={String(loc.diaDiemId)}>
                     <span className="flex items-center gap-1.5">
                       <span>{loc.name}</span>
-                      <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 py-0">
-                        CŨ
-                      </Badge>
+                      <LegacyBadge />
                     </span>
                   </SelectItem>
                 ))}
