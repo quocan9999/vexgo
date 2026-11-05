@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { cleanup } from '@testing-library/react';
 import { renderPortalMarkup } from './canonical-test-helpers';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TripSeatsManagement,
   TripSeatStatusBadge,
@@ -131,6 +132,11 @@ const mockSeatsResponse: TripSeatsResponse = {
 
 beforeEach(() => {
   setEmployeeAdminTestSession(['trip:read']);
+  vi.restoreAllMocks();
+});
+
+afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 

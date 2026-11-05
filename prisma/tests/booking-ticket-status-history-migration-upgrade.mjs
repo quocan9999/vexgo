@@ -193,17 +193,18 @@ async function scalar(prisma, sql) {
   return Number(rows[0]?.value ?? 0);
 }
 
-async function createAccount(prisma, phone) {
-  const account = await prisma.taiKhoan.create({
-    data: {
-      soDienThoai: phone,
-      matKhau: 'history-migration-fixture-password-hash',
-      daXacThucSoDienThoai: true,
-      trangThai: 'HOAT_DONG',
-    },
-    select: { taiKhoanId: true },
-  });
-  return account.taiKhoanId;
+async function createAccount(prisma, phone, hoTen = 'History fixture user') {
+  // This fixture intentionally uses the schema before the auth profile separation and composite unique migrations.
+  // The generated client reflects today's schema and would insert newer defaults/columns.
+  await prisma.$executeRaw`
+    INSERT INTO TaiKhoan (hoTen, soDienThoai, matKhau, daXacThucSoDienThoai, trangThai)
+    VALUES (${hoTen}, ${phone}, 'history-migration-fixture-password-hash', 1, 'HOAT_DONG')
+  `;
+  const rows = await prisma.$queryRaw`
+    SELECT taiKhoanId FROM TaiKhoan WHERE soDienThoai = ${phone}
+  `;
+  assert(rows.length === 1, `Could not load account for ${phone}.`);
+  return Number(rows[0].taiKhoanId);
 }
 
 async function seedPreMigrationCohort(prisma) {
@@ -216,10 +217,15 @@ async function seedPreMigrationCohort(prisma) {
   });
   const customerAccountId = await createAccount(prisma, customerPhone);
   const staffAccountId = await createAccount(prisma, staffPhone);
-  const khachHang = await prisma.khachHang.create({
-    data: { maKhachHang: `HIST-KH-${suffix}`, hoTen: `History customer ${suffix}`, taiKhoanId: customerAccountId },
-    select: { khachHangId: true },
-  });
+  await prisma.$executeRaw`
+    INSERT INTO KhachHang (maKhachHang, taiKhoanId)
+    VALUES (${`HIST-KH-${suffix}`}, ${customerAccountId})
+  `;
+  const khachHangRows = await prisma.$queryRaw`
+    SELECT khachHangId FROM KhachHang WHERE maKhachHang = ${`HIST-KH-${suffix}`}
+  `;
+  assert(khachHangRows.length === 1, `Could not load customer for HIST-KH-${suffix}.`);
+  const khachHang = { khachHangId: Number(khachHangRows[0].khachHangId) };
   const loaiXe = await prisma.loaiXe.create({
     data: { nhaXeId: nhaXe.nhaXeId, tenLoai: `History coach ${suffix}` },
     select: { loaiXeId: true },
@@ -478,10 +484,11 @@ async function addValidTransitionsAndRunVerifier(prisma, adminUrl, database) {
     take: 2,
     select: { veId: true },
   });
-  const staff = await prisma.taiKhoan.findFirstOrThrow({
-    where: { soDienThoai: { startsWith: '8' } },
-    select: { taiKhoanId: true },
-  });
+  const staffRows = await prisma.$queryRaw`
+    SELECT taiKhoanId FROM TaiKhoan WHERE soDienThoai LIKE '8%' LIMIT 1
+  `;
+  assert(staffRows.length === 1, 'Could not find staff account.');
+  const staff = { taiKhoanId: Number(staffRows[0].taiKhoanId) };
   const [operationRow] = await prisma.$queryRaw`SELECT UUID() AS maThaoTac`;
   const operationId = operationRow.maThaoTac;
   assert(UUID_V1_PATTERN.test(operationId), 'MySQL UUID() did not produce a UUID v1 operation ID.');

@@ -1200,7 +1200,7 @@ export const TicketSearchPage: React.FC = () => {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
-              Tra cứu thông tin vé xe , <br className="hidden sm:inline" />
+              Tra cứu thông tin đặt vé xe, <br className="hidden sm:inline" />
               <span className="text-[#FF7D42]">nhanh chóng – chuẩn xác</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
