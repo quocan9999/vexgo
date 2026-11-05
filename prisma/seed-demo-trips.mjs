@@ -1,8 +1,14 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+
+function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
 
 function databaseConfig() {
   const raw = process.env.DATABASE_URL ?? process.env.MIGRATION_URL;
@@ -75,10 +81,14 @@ export async function runSeedDemoTrips() {
 
     const transferPointsToCreate = [];
 
+    const tcFutaQ5Code = deterministicUuid('DDT-DEMO', 'FUTA-TC-QUAN-5');
+    const tcFutaHxCode = deterministicUuid('DDT-DEMO', 'FUTA-TC-HANG-XANH');
+    const tcHmSbCode = deterministicUuid('DDT-DEMO', 'HM-TC-SAN-BAY');
+
     if (futaWestStation) {
       transferPointsToCreate.push({
         nhaXeId: futa.nhaXeId,
-        maDiem: 'FUTA-TC-QUAN-5',
+        maDiem: tcFutaQ5Code,
         tenDiem: 'Điểm đón trung chuyển Quận 5 (Demo)',
         loaiDiem: 'TRUNG_CHUYEN',
         diaChi: '128 Nguyễn Trãi, Phường 3, Quận 5, TP. Hồ Chí Minh',
@@ -89,7 +99,7 @@ export async function runSeedDemoTrips() {
       });
       transferPointsToCreate.push({
         nhaXeId: futa.nhaXeId,
-        maDiem: 'FUTA-TC-HANG-XANH',
+        maDiem: tcFutaHxCode,
         tenDiem: 'Điểm đón trung chuyển Hàng Xanh (Demo)',
         loaiDiem: 'TRUNG_CHUYEN',
         diaChi: '486 Điện Biên Phủ, Phường 21, Bình Thạnh, TP. Hồ Chí Minh',
@@ -103,7 +113,7 @@ export async function runSeedDemoTrips() {
     if (hmSgStation) {
       transferPointsToCreate.push({
         nhaXeId: hm.nhaXeId,
-        maDiem: 'HM-TC-SAN-BAY',
+        maDiem: tcHmSbCode,
         tenDiem: 'Điểm đón trung chuyển Sân Bay Tân Sơn Nhất (Demo)',
         loaiDiem: 'TRUNG_CHUYEN',
         diaChi: 'Cột B1 Ga Quốc Nội, Sân Bay Tân Sơn Nhất, Quận Tân Bình, TP. Hồ Chí Minh',
@@ -150,14 +160,14 @@ export async function runSeedDemoTrips() {
       {
         nhaXe: futa,
         templateName: 'Sài Gòn - Cần Thơ / Tiền Giang',
-        maTuyenXe: 'DEMO-FUTA-SG-CT',
+        maTuyenXe: deterministicUuid('TX-DEMO', 'DEMO-FUTA-SG-CT'),
         tenTuyen: 'TP. Hồ Chí Minh - Cần Thơ (Có trung chuyển & giờ đón trả)',
         diemDi: 'Thành phố Hồ Chí Minh',
         diemDen: 'Cần Thơ',
         thoiGianChayPhut: 210,
         extraStops: [
           {
-            maDiem: 'FUTA-TC-QUAN-5',
+            maDiem: tcFutaQ5Code,
             loaiDiem: 'DON',
             phutLech: -90,
             phuPhi: 15000,
@@ -170,7 +180,7 @@ export async function runSeedDemoTrips() {
       {
         nhaXe: futa,
         templateName: 'Cần Thơ - Sài Gòn',
-        maTuyenXe: 'DEMO-FUTA-CT-SG',
+        maTuyenXe: deterministicUuid('TX-DEMO', 'DEMO-FUTA-CT-SG'),
         tenTuyen: 'Cần Thơ - TP. Hồ Chí Minh',
         diemDi: 'Cần Thơ',
         diemDen: 'Thành phố Hồ Chí Minh',
@@ -180,7 +190,7 @@ export async function runSeedDemoTrips() {
       {
         nhaXe: futa,
         templateName: 'Sài Gòn - Vũng Tàu',
-        maTuyenXe: 'DEMO-FUTA-SG-VT',
+        maTuyenXe: deterministicUuid('TX-DEMO', 'DEMO-FUTA-SG-VT'),
         tenTuyen: 'TP. Hồ Chí Minh - Bà Rịa - Vũng Tàu',
         diemDi: 'Thành phố Hồ Chí Minh',
         diemDen: 'Bà Rịa - Vũng Tàu',
@@ -190,14 +200,14 @@ export async function runSeedDemoTrips() {
       {
         nhaXe: hm,
         templateName: 'Sài Gòn - Vũng Tàu',
-        maTuyenXe: 'DEMO-HM-SG-VT',
+        maTuyenXe: deterministicUuid('TX-DEMO', 'DEMO-HM-SG-VT'),
         tenTuyen: 'TP. Hồ Chí Minh - Bà Rịa - Vũng Tàu (Hoa Mai VIP)',
         diemDi: 'Thành phố Hồ Chí Minh',
         diemDen: 'Bà Rịa - Vũng Tàu',
         thoiGianChayPhut: 150,
         extraStops: [
           {
-            maDiem: 'HM-TC-SAN-BAY',
+            maDiem: tcHmSbCode,
             loaiDiem: 'DON',
             phutLech: -45,
             phuPhi: 20000,
@@ -289,17 +299,22 @@ export async function runSeedDemoTrips() {
       });
       const stationMap = new Map(dbStations.map((s) => [s.maDiem, s]));
 
+      const seenStopRole = new Set();
       const validStopEntries = [];
       for (const stop of allStopsRaw) {
         const st = stationMap.get(stop.maDiem);
         if (!st) continue;
+        const role = st.loaiDiem === 'TRAM_NGHI' ? 'NGHI' : stop.loaiDiem;
+        const roleKey = `${st.diemDonTraId}_${role}`;
+        if (seenStopRole.has(roleKey)) continue;
+        seenStopRole.add(roleKey);
         validStopEntries.push({
           diemDonTraId: st.diemDonTraId,
-          loaiDiem: stop.loaiDiem,
+          loaiDiem: role,
           phutLech: stop.phutLech ?? 0,
           phuPhi: stop.phuPhi ?? 0,
           phutCoMatTruoc: stop.phutCoMatTruoc ?? 15,
-          nhanKhach: stop.nhanKhach ?? true,
+          nhanKhach: role === 'NGHI' ? false : (stop.nhanKhach ?? true),
           ghiChu: stop.ghiChu ?? null,
         });
       }
@@ -369,7 +384,13 @@ export async function runSeedDemoTrips() {
           const hour = departureHours[i];
           const vehicle = vehicles[(dayOffset + i) % vehicles.length];
           const hourStr = String(hour).padStart(2, '0') + '00';
-          const maChuyenXe = `${item.spec.nhaXe.maNhaXe}-CX-${ymd}-${item.route.maTuyenXe.replace('DEMO-', '')}-${hourStr}`;
+          const maChuyenXe = deterministicUuid(
+            'CX-DEMO',
+            item.spec.nhaXe.maNhaXe,
+            ymd,
+            item.route.maTuyenXe,
+            hourStr,
+          );
 
           const departureTime = new Date(Date.UTC(1970, 0, 1, hour, 0, 0));
           const arrivalMinutes = item.route.thoiGianChayPhut || 180;

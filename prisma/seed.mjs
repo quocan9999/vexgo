@@ -8,6 +8,7 @@ import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { ensureDemoPayment } from './demo-revenue.mjs';
 import { runSeedShipmentsNetwork } from './seed-shipments-network.mjs';
+import { getVehicleSeatLayout } from './lib/seat-layouts.mjs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import {
@@ -538,30 +539,93 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
         { bienSoXe: plate, trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[definition.code][config.type].loaiXeId },
         { trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[definition.code][config.type].loaiXeId },
       );
-      const seats = [];
-      const halfSeats = Math.ceil(config.seats / 2);
-      for (let seatIndex = 0; seatIndex < config.seats; seatIndex += 1) {
-        let code;
-        let viTri;
-        if (config.type === 'GIƯỜNG NẰM') {
-          const isUpper = seatIndex >= halfSeats;
-          const section = isUpper ? 'B' : 'A';
-          const seatNum = isUpper ? seatIndex - halfSeats + 1 : seatIndex + 1;
-          code = `${section}${pad(seatNum, 2)}`;
-          viTri = isUpper ? 'Tầng trên' : 'Tầng dưới';
-        } else {
-          code = `A${pad(seatIndex + 1, 2)}`;
-          viTri = seatIndex % 4 < 2 ? 'Dãy trái' : 'Dãy phải';
+      const targetLayout = getVehicleSeatLayout(definition.code, config.type, config.seats);
+      const existingSeats = await db.ghe.findMany({
+        where: { xeId: vehicle.xeId },
+        orderBy: { gheId: 'asc' },
+      });
+
+      const needsRename = existingSeats.length > 0 && (
+        existingSeats.length !== targetLayout.length ||
+        existingSeats.some((g, i) => targetLayout[i] && g.tenGhe !== targetLayout[i].tenGhe)
+      );
+      if (needsRename) {
+        for (const g of existingSeats) {
+          await db.ghe.update({
+            where: { gheId: g.gheId },
+            data: { tenGhe: `TMP_${g.gheId}`, toaDoX: null, toaDoY: null },
+          });
         }
-        const seat = await findOrCreate(
-          db,
-          'Ghe',
-          { xeId: vehicle.xeId, tenGhe: code },
-          { maGhe: deterministicUuid('GHE', vehicle.bienSoXe, code), tenGhe: code, viTri, xeId: vehicle.xeId },
-          { viTri },
-        );
-        seats.push(seat);
       }
+
+      const seats = [];
+      const updateCount = Math.min(existingSeats.length, targetLayout.length);
+      for (let i = 0; i < updateCount; i++) {
+        const spec = targetLayout[i];
+        const updated = await db.ghe.update({
+          where: { gheId: existingSeats[i].gheId },
+          data: {
+            tenGhe: spec.tenGhe,
+            viTri: spec.viTri,
+            tang: spec.tang,
+            toaDoX: spec.toaDoX,
+            toaDoY: spec.toaDoY,
+          },
+        });
+        seats.push(updated);
+      }
+
+      for (let i = existingSeats.length; i < targetLayout.length; i++) {
+        const spec = targetLayout[i];
+        const created = await db.ghe.create({
+          data: {
+            maGhe: deterministicUuid('GHE', vehicle.bienSoXe, spec.tenGhe),
+            tenGhe: spec.tenGhe,
+            viTri: spec.viTri,
+            tang: spec.tang,
+            toaDoX: spec.toaDoX,
+            toaDoY: spec.toaDoY,
+            xeId: vehicle.xeId,
+          },
+        });
+        seats.push(created);
+      }
+
+      if (existingSeats.length > targetLayout.length) {
+        const primaryGheIds = existingSeats.slice(0, targetLayout.length).map((g) => g.gheId);
+        for (let i = targetLayout.length; i < existingSeats.length; i++) {
+          const extraGhe = existingSeats[i];
+          const tickets = await db.ve.findMany({
+            where: { gheChuyenXe: { gheId: extraGhe.gheId } },
+            include: { gheChuyenXe: true },
+          });
+
+          for (const ticket of tickets) {
+            const tripId = ticket.gheChuyenXe.chuyenXeId;
+            const replacementGheChuyenXe = await db.gheChuyenXe.findFirst({
+              where: {
+                chuyenXeId: tripId,
+                gheId: { in: primaryGheIds },
+                trangThai: 'TRONG',
+              },
+            });
+            if (replacementGheChuyenXe) {
+              await db.ve.update({
+                where: { veId: ticket.veId },
+                data: { gheChuyenXeId: replacementGheChuyenXe.gheChuyenXeId },
+              });
+              await db.gheChuyenXe.update({
+                where: { gheChuyenXeId: replacementGheChuyenXe.gheChuyenXeId },
+                data: { trangThai: ticket.gheChuyenXe.trangThai },
+              });
+            }
+          }
+
+          await db.gheChuyenXe.deleteMany({ where: { gheId: extraGhe.gheId } });
+          await db.ghe.delete({ where: { gheId: extraGhe.gheId } });
+        }
+      }
+
       vehicles[definition.code].push({ ...vehicle, seats, type: config.type });
     }
 
@@ -606,8 +670,20 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
               db,
               'GheChuyenXe',
               { chuyenXeId_gheId: { chuyenXeId: trip.chuyenXeId, gheId: seat.gheId } },
-              { trangThai: 'TRONG', chuyenXeId: trip.chuyenXeId, gheId: seat.gheId },
-              { trangThai: 'TRONG' },
+              {
+                trangThai: 'TRONG',
+                chuyenXeId: trip.chuyenXeId,
+                gheId: seat.gheId,
+                tang: seat.tang,
+                toaDoX: seat.toaDoX,
+                toaDoY: seat.toaDoY,
+              },
+              {
+                trangThai: 'TRONG',
+                tang: seat.tang,
+                toaDoX: seat.toaDoX,
+                toaDoY: seat.toaDoY,
+              },
             );
             tripSeats.push(tripSeat);
           }
@@ -1385,8 +1461,20 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
         db,
         'GheChuyenXe',
         { chuyenXeId_gheId: { chuyenXeId: trip.chuyenXeId, gheId: seat.gheId } },
-        { trangThai: 'TRONG', chuyenXeId: trip.chuyenXeId, gheId: seat.gheId },
-        { trangThai: 'TRONG' },
+        {
+          trangThai: 'TRONG',
+          chuyenXeId: trip.chuyenXeId,
+          gheId: seat.gheId,
+          tang: seat.tang,
+          toaDoX: seat.toaDoX,
+          toaDoY: seat.toaDoY,
+        },
+        {
+          trangThai: 'TRONG',
+          tang: seat.tang,
+          toaDoX: seat.toaDoX,
+          toaDoY: seat.toaDoY,
+        },
       );
     }
   }
