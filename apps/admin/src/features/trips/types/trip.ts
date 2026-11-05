@@ -79,6 +79,10 @@ export type TripListQuery = {
   departureDate?: string;
   fromDepartureDate?: string;
   toDepartureDate?: string;
+  origin?: string;
+  destination?: string;
+  timeRange?: string;
+  departureTime?: string;
 };
 
 export type PaginatedTrips = {

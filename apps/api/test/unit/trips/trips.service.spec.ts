@@ -613,6 +613,96 @@ describe('TripsService findAll (Feature 05)', () => {
       }),
     );
   });
+
+  it('filters by origin and destination in findAll', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+    prisma.chuyenXe.count = vi.fn().mockResolvedValue(0);
+
+    await service.findAll(
+      {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureDate',
+        sortDirection: 'asc',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+      },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          nhaXeId: 3,
+          tuyenXe: {
+            is: {
+              diemDi: { contains: 'TP.HCM' },
+              diemDen: { contains: 'Đà Lạt' },
+            },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('filters by timeRange in findAll', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+    prisma.chuyenXe.count = vi.fn().mockResolvedValue(0);
+
+    await service.findAll(
+      {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureDate',
+        sortDirection: 'asc',
+        timeRange: 'morning',
+      },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          nhaXeId: 3,
+          gioKhoiHanh: {
+            gte: new Date('1970-01-01T06:00:00.000Z'),
+            lt: new Date('1970-01-01T12:00:00.000Z'),
+          },
+        }),
+      }),
+    );
+  });
+
+  it('filters by departureTime in findAll', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+    prisma.chuyenXe.count = vi.fn().mockResolvedValue(0);
+
+    await service.findAll(
+      {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureDate',
+        sortDirection: 'asc',
+        departureTime: '08:30',
+      },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          nhaXeId: 3,
+          gioKhoiHanh: {
+            gte: new Date('1970-01-01T08:30:00.000Z'),
+            lte: new Date('1970-01-01T08:30:59.999Z'),
+          },
+        }),
+      }),
+    );
+  });
 });
 
 describe('TripsService findOne (Feature 05)', () => {

@@ -19,6 +19,8 @@ export function LocationPicker({
   excludeValue,
   placeholder = 'Chọn địa điểm',
   allowCustom = true,
+  required = false,
+  className,
 }: {
   id: string;
   value: string;
@@ -29,6 +31,8 @@ export function LocationPicker({
   excludeValue?: string;
   placeholder?: string;
   allowCustom?: boolean;
+  required?: boolean;
+  className?: string;
 }) {
   const [options, setOptions] = useState<SearchableOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +77,7 @@ export function LocationPicker({
   }, [attempt]);
 
   return (
-    <div className="space-y-2">
+    <div className={className}>
       <SearchableCombobox
         id={id}
         value={value}
@@ -82,7 +86,7 @@ export function LocationPicker({
         disabled={disabled}
         aria-invalid={invalid}
         aria-describedby={describedBy}
-        aria-required="true"
+        aria-required={required ? 'true' : undefined}
         loading={loading}
         placeholder={placeholder}
         icon={<MapPin />}
@@ -90,7 +94,7 @@ export function LocationPicker({
         allowCustom={allowCustom}
       />
       {error && (
-        <div role="alert" className="text-xs text-destructive">
+        <div role="alert" className="mt-2 text-xs text-destructive">
           {error}{' '}
           <Button
             variant="link"

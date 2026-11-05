@@ -195,6 +195,18 @@ export async function getTrips(
   if (query.toDepartureDate) {
     params.set('toDepartureDate', query.toDepartureDate);
   }
+  if (query.origin) {
+    params.set('origin', query.origin);
+  }
+  if (query.destination) {
+    params.set('destination', query.destination);
+  }
+  if (query.timeRange) {
+    params.set('timeRange', query.timeRange);
+  }
+  if (query.departureTime) {
+    params.set('departureTime', query.departureTime);
+  }
 
   const body = await readResponse(
     await adminApiFetch(
