@@ -32,11 +32,11 @@ Authority: current user scope and repository security/API rules → this design 
 
 ## Typography
 
-- Font family: Inter through `--font-sans`, configured in the Admin root layout.
+- Font family: Plus Jakarta Sans with Inter fallback through `--font-sans`, configured in the Admin root layout.
 - Use JetBrains Mono through `--admin-font-mono` for visible, exact identifiers users copy or compare:
   - resource codes and visible IDs, including employee/customer/account IDs, vehicle type IDs, and citizen ID numbers;
   - ticket/booking/waybill references, vehicle plates, seat codes, and permission keys.
-- Keep names, contact details, labels, dates, amounts, and explanatory text in Inter.
+- Keep names, contact details, labels, dates, amounts, and explanatory text in Plus Jakarta Sans / Inter.
 - Apply the semantic roles below across Admin. Table body text defaults to 13px.
 - Primary line-height ratios are `1.2`, `1.35`, and `1.5`; role-specific ratios in the table keep section, helper, and compact table text aligned with the proposal.
 - Use weight primitives 400, 500, 600, and 700. Prefer the role weight token when applying a semantic type role.
@@ -156,26 +156,26 @@ The following values are the light-theme target for the pilot, not a claim that 
 
 | Role / shadcn semantic name              | Target                            | Existing Admin alias / migration action                                             |
 | ---------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
-| `background`                             | `#f6f8fb` canvas                  | `--admin-canvas`; keep app canvas separate from cards                               |
-| `foreground`                             | `#17243b`                         | `--admin-ink`                                                                       |
-| `card`, `popover`                        | `#ffffff`                         | `--admin-surface` becomes a surface alias, not canvas                               |
-| `card-foreground`, `popover-foreground`  | `#1c2e48`                         | `--admin-text-strong`                                                               |
-| `primary` / `primary-foreground`         | `#1e40af` / `#ffffff`             | `--admin-blue`; hover `#18368f`                                                     |
-| `secondary` / `secondary-foreground`     | `#ffffff` / `#1c2e48`             | Secondary/outline actions keep a visible border                                     |
-| `muted` / `muted-foreground`             | `#f1f5f9` / `#5d6d84`             | Muted surface and readable secondary copy                                           |
-| `accent` / `accent-foreground`           | `#eff5ff` / `#1e40af`             | `--admin-blue-soft`; hover/selection                                                |
-| `border`                                 | `#e4e9f1`                         | `--admin-border`, separators                                                        |
-| `input`                                  | `#738096`                         | Visible interactive boundary; distinct from decorative separators                   |
-| `ring`                                   | `#1e40af`                         | 2px visible focus indicator with 2px offset where layout allows                     |
-| `destructive` / `destructive-foreground` | `#a63732` / `#ffffff`             | `--admin-danger`                                                                    |
-| `sidebar` / `sidebar-foreground`         | `#14233d` / `#e2e8f0`             | `--admin-navy`                                                                      |
-| `sidebar-accent` / foreground            | `#263f64` / `#ffffff`             | Active item also has marker/`aria-current`                                          |
-| `sidebar-primary` / foreground           | `#1e40af` / `#ffffff`             | Brand/action accent                                                                 |
-| `sidebar-border` / `sidebar-ring`        | `#334155` / `#93c5fd`             | Divider and focus on dark surface                                                   |
-| `chart-1`                                | `#1e40af`                         | Revenue series; distinguish series with labels/line styles as needed                |
-| Success foreground / soft / border       | `#166534` / `#f0f8f3` / `#d3eadc` | Explicit success tokens; do not reuse a low-contrast decorative green as small text |
-| Warning foreground / soft / border       | `#92400e` / `#fffbeb` / `#fde68a` | Explicit warning tokens                                                             |
-| Danger foreground / soft / border        | `#a63732` / `#fef2f2` / `#fecaca` | Error/critical state                                                                |
+| `background`                             | `#f8fafc` canvas                  | `--admin-canvas`; Slate-50 canvas separate from cards                               |
+| `foreground`                             | `#0f172a`                         | `--admin-ink`; Slate-900 high contrast text                                        |
+| `card`, `popover`                        | `#ffffff`                         | `--admin-surface` surface alias, with `--admin-shadow-sm` elevation                 |
+| `card-foreground`, `popover-foreground`  | `#1e293b`                         | `--admin-text-strong`                                                               |
+| `primary` / `primary-foreground`         | `#2563eb` / `#ffffff`             | `--admin-blue` Sapphire Blue; hover `#1d4ed8`, active `#1e40af`                     |
+| `secondary` / `secondary-foreground`     | `#ffffff` / `#1e293b`             | Secondary/outline actions keep visible border and soft shadow                       |
+| `muted` / `muted-foreground`             | `#f1f5f9` / `#64748b`             | Muted surface and readable secondary copy                                           |
+| `accent` / `accent-foreground`           | `#eff6ff` / `#2563eb`             | `--admin-blue-soft`; hover/selection                                                |
+| `border`                                 | `#e2e8f0`                         | `--admin-border`, separators                                                        |
+| `input`                                  | `#cbd5e1`                         | Visible interactive boundary; distinct from decorative separators                   |
+| `ring`                                   | `#2563eb`                         | 2px visible focus indicator with 2px offset where layout allows                     |
+| `destructive` / `destructive-foreground` | `#dc2626` / `#ffffff`             | `--admin-danger`                                                                    |
+| `sidebar` / `sidebar-foreground`         | `#0f172a` / `#94a3b8`             | `--admin-navy` Deep Slate luxury enterprise background                              |
+| `sidebar-accent` / foreground            | `#1e293b` / `#ffffff`             | Active item marker `#3b82f6` with soft glow / `aria-current`                        |
+| `sidebar-primary` / foreground           | `#2563eb` / `#ffffff`             | Brand/action accent                                                                 |
+| `sidebar-border` / `sidebar-ring`        | `#1e293b` / `#3b82f6`             | Divider and focus on dark surface                                                   |
+| `chart-1`                                | `#2563eb`                         | Revenue series; distinguish series with labels/line styles as needed                |
+| Success foreground / soft / border       | `#059669` / `#ecfdf5` / `#a7f3d0` | Explicit success tokens (Emerald 600)                                               |
+| Warning foreground / soft / border       | `#d97706` / `#fffbeb` / `#fde68a` | Explicit warning tokens (Amber 600)                                                 |
+| Danger foreground / soft / border        | `#dc2626` / `#fef2f2` / `#fecaca` | Error/critical state (Red 600)                                                      |
 | Neutral foreground / soft / border       | `#475569` / `#f1f5f9` / `#cbd5e1` | Neutral state, not every unrecognized domain enum                                   |
 
 Unneeded chart colors are added when a real chart needs multiple series, rather than inventing data or categories. Unknown CSS names such as `--admin-text-default` must be resolved by intended role; do not introduce an alias merely to silence an undefined-variable search.

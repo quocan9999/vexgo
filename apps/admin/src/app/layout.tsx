@@ -2,13 +2,18 @@ import type { Metadata } from 'next';
 import './globals.css';
 import '@/styles/admin-components.css';
 import '@/features/admin-auth/admin-auth.css';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/sonner';
 
-const inter = Inter({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin', 'vietnamese'],
   variable: '--font-sans',
+  weight: ['400', '500', '600', '700', '800'],
+});
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-inter',
 });
 const jetBrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -26,10 +31,10 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     // Limit suppression to html attributes; descendants still report mismatches.
     <html
       lang="vi"
-      className={cn('font-sans', inter.variable, jetBrainsMono.variable)}
+      className={cn('font-sans admin-ui', plusJakartaSans.variable, inter.variable, jetBrainsMono.variable)}
       suppressHydrationWarning
     >
-      <body>
+      <body className="admin-ui min-h-screen bg-background text-foreground antialiased">
         {children}
         <Toaster />
       </body>

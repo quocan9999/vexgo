@@ -7,6 +7,10 @@
 
 .admin-ui [data-slot='button'] {
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+.admin-ui [data-slot='button']:active:not(:disabled) {
+  transform: scale(0.98);
 }
 .admin-ui [data-slot='button']:disabled {
   cursor: not-allowed;
@@ -17,9 +21,18 @@
 .admin-ui [data-slot='input'],
 .admin-ui [data-slot='select-trigger'] {
   background-color: var(--card);
+  border-color: var(--border);
+  border-radius: var(--admin-radius-control);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.admin-ui [data-slot='input']:focus-visible,
+.admin-ui [data-slot='select-trigger']:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 .admin-ui [data-slot='sheet-content'] {
   overflow: hidden;
+  box-shadow: var(--admin-shadow-xl);
 }
 .admin-ui [data-slot='table-cell'],
 .admin-ui [data-slot='table-head'] {
@@ -30,13 +43,24 @@
 }
 .admin-ui [data-slot='table-head'] {
   font-weight: 600;
+  background-color: var(--admin-canvas);
+  color: var(--admin-text-strong);
+  letter-spacing: 0.02em;
+}
+.admin-ui [data-slot='table-row'] {
+  transition: background-color 0.15s ease;
 }
 .admin-ui [data-slot='table-row']:hover {
-  background: var(--accent);
+  background: var(--admin-blue-soft);
 }
 .admin-ui [data-slot='card'] {
   border: 1px solid var(--border);
-  box-shadow: 0 2px 5px rgb(21 40 75 / 3%);
+  box-shadow: var(--admin-shadow-sm);
+  background-color: var(--card);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.admin-ui [data-slot='card']:hover {
+  box-shadow: var(--admin-shadow-md);
 }
 
 @media (prefers-reduced-motion: reduce) {

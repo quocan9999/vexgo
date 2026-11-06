@@ -17,6 +17,7 @@ vi.mock('next/font/google', () => ({
     fontConfig.inter = options;
     return { variable: 'inter-test-variable' };
   },
+  Plus_Jakarta_Sans: () => ({ variable: 'plus-jakarta-test-variable' }),
   JetBrains_Mono: () => ({ variable: 'mono-test-variable' }),
 }));
 
