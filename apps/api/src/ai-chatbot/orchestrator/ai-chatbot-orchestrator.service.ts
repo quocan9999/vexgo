@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
+import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   HybridRetrievalService,
@@ -16,6 +17,7 @@ export interface ChatbotRequest {
   sessionToken?: string;
   nhaXeId?: number;
   khachHangId?: number;
+  taiKhoanId?: number;
 }
 
 export interface CitationItem {
@@ -158,6 +160,19 @@ ${userQuery}
     // 1. Quản lý phiên hội thoại AI (Session)
     const sessionToken = request.sessionToken?.trim() || crypto.randomUUID();
     let sessionId: number | undefined;
+    let resolvedKhachHangId = request.khachHangId;
+
+    if (!resolvedKhachHangId && request.taiKhoanId && this.prisma.khachHang) {
+      try {
+        const customer = await this.prisma.khachHang.findUnique({
+          where: { taiKhoanId: request.taiKhoanId },
+          select: { khachHangId: true },
+        });
+        resolvedKhachHangId = customer?.khachHangId;
+      } catch {
+        // ignore
+      }
+    }
 
     if (this.prisma.aiChatSession) {
       try {
@@ -171,7 +186,7 @@ ${userQuery}
           const created = await this.prisma.aiChatSession.create({
             data: {
               sessionToken,
-              khachHangId: request.khachHangId ?? null,
+              khachHangId: resolvedKhachHangId ?? null,
               status: 'ACTIVE',
             },
           });

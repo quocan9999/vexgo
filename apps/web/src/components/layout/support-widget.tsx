@@ -1,39 +1,76 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import {
-  MessageCircle,
   X,
   Send,
   Bot,
   User,
   Minimize2,
   Headphones,
+  BookOpen,
+  Calendar,
+  Clock,
+  Bus,
+  ArrowRight,
+  AlertCircle,
+  ChevronDown,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { CustomerSupportChat } from '@/features/support-chat/components/customer-support-chat';
-
-interface Message {
-  id: number;
-  text: string;
-  sender: 'bot' | 'user';
-  time: string;
-}
+import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
+import type {
+  AiChatMessageItem,
+  CitationItem,
+  TripSearchResultItem,
+  AiSuggestionItem,
+} from '@/features/ai-chatbot/types/ai-chatbot.types';
 
 export const SupportWidget: React.FC = () => {
   // Quản lý trạng thái mở/đóng độc lập cho 2 nút nổi (F-02)
   const [isBotOpen, setIsBotOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
 
-  const [messages, setMessages] = useState<Message[]>([
+  const [sessionToken, setSessionToken] = useState<string>('');
+  const [messages, setMessages] = useState<AiChatMessageItem[]>([
     {
-      id: 1,
-      text: 'Xin chào! Tôi là trợ lý ảo VexGo. Tôi có thể giúp gì cho bạn hôm nay?',
+      id: 'welcome',
+      text: 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, thông tin bưu kiện và giải đáp các chính sách của VexGo.',
       sender: 'bot',
-      time: '10:00',
+      time: 'Vừa xong',
     },
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<AiSuggestionItem[]>([]);
+  const [expandedCitationId, setExpandedCitationId] = useState<string | number | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Khởi tạo sessionToken từ sessionStorage khi client load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('vexgo_ai_session_token');
+      if (stored) {
+        setSessionToken(stored);
+      } else {
+        const newSession = crypto.randomUUID();
+        sessionStorage.setItem('vexgo_ai_session_token', newSession);
+        setSessionToken(newSession);
+      }
+    }
+  }, []);
+
+  // Tải các gợi ý câu hỏi mặc định
+  useEffect(() => {
+    aiChatbotService.getSuggestions().then((res) => {
+      if (res && res.length > 0) {
+        setSuggestions(res);
+      }
+    });
+  }, []);
 
   const scrollToBottom = () => {
     if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
@@ -45,7 +82,7 @@ export const SupportWidget: React.FC = () => {
     if (isBotOpen) {
       scrollToBottom();
     }
-  }, [messages, isBotOpen]);
+  }, [messages, isBotOpen, isLoading]);
 
   const handleToggleBot = () => {
     setIsBotOpen((prev) => {
@@ -63,49 +100,72 @@ export const SupportWidget: React.FC = () => {
     });
   };
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async (textToSend?: string) => {
+    const text = (textToSend || inputValue).trim();
+    if (!text || isLoading) return;
 
-    const newUserMsg: Message = {
-      id: Date.now(),
-      text: inputValue,
+    const userMessage: AiChatMessageItem = {
+      id: Date.now().toString(),
+      text,
       sender: 'user',
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
     };
 
-    setMessages((prev) => [...prev, newUserMsg]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
+    setIsLoading(true);
 
-    // Phản hồi tự động của Trợ lý AI
-    setTimeout(() => {
-      let botReply =
-        'Xin lỗi, tôi chưa hiểu ý bạn. Bạn có muốn kết nối với nhân viên CSKH của nhà xe không?';
+    try {
+      const res = await aiChatbotService.sendMessage({
+        message: text,
+        sessionToken,
+      });
 
-      const lowerInput = newUserMsg.text.toLowerCase();
-      if (lowerInput.includes('hủy vé') || lowerInput.includes('hoàn tiền')) {
-        botReply =
-          'Bạn có thể hủy vé trực tiếp trong phần "Vé và đơn hàng" nếu vé của bạn thỏa mãn điều kiện hủy. Tiền sẽ được hoàn tự động về tài khoản thanh toán ban đầu.';
-      } else if (
-        lowerInput.includes('thanh toán') ||
-        lowerInput.includes('momo') ||
-        lowerInput.includes('vnpay')
-      ) {
-        botReply =
-          'Chúng tôi hỗ trợ thanh toán qua MoMo, VNPAY, ZaloPay và thẻ ngân hàng. Nếu thanh toán lỗi, hệ thống sẽ tự động hoàn tiền sau 24h làm việc.';
-      } else if (lowerInput.includes('chào')) {
-        botReply = 'Chào bạn! Bạn cần tư vấn về tuyến đường hay liên hệ nhà xe nào ạ?';
+      if (res.sessionToken && res.sessionToken !== sessionToken) {
+        setSessionToken(res.sessionToken);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('vexgo_ai_session_token', res.sessionToken);
+        }
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          text: botReply,
-          sender: 'bot',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    }, 1000);
+      const botMessage: AiChatMessageItem = {
+        id: (Date.now() + 1).toString(),
+        text: res.reply,
+        sender: 'bot',
+        time: new Date().toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        citations: res.citations,
+        suggestedTrips: res.suggestedTrips,
+        requiresHumanHandoff: res.requiresHumanHandoff,
+        handoffReason: res.handoffReason,
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+    } catch {
+      const errorMessage: AiChatMessageItem = {
+        id: (Date.now() + 1).toString(),
+        text: 'Xin lỗi, hiện tại kết nối đến hệ thống AI đang gặp gián đoạn. Bạn có thể thử lại hoặc bấm nút dưới đây để kết nối trực tiếp với nhân viên hỗ trợ nhé!',
+        sender: 'bot',
+        time: new Date().toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        requiresHumanHandoff: true,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConnectHuman = () => {
+    setIsBotOpen(false);
+    setIsStaffOpen(true);
   };
 
   return (
@@ -193,22 +253,27 @@ export const SupportWidget: React.FC = () => {
       )}
 
       {/* ============================================================== */}
-      {/* 4. CỬA SỔ TRỢ LÝ AI ĐỘC LẬP (F-02)                              */}
+      {/* 4. CỬA SỔ TRỢ LÝ AI NÂNG CẤP HYBRID RAG & TOOL CALLING          */}
       {/* ============================================================== */}
       {isBotOpen && (
         <div
           data-testid="ai-bot-window"
-          className="fixed bottom-6 right-6 w-[380px] h-[560px] max-h-[85vh] max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden border border-slate-200 animate-in slide-in-from-bottom-5 fade-in duration-200"
+          className="fixed bottom-6 right-6 w-[420px] h-[640px] max-h-[90vh] max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden border border-slate-200 animate-in slide-in-from-bottom-5 fade-in duration-200"
         >
           {/* Header AI Bot */}
-          <div className="bg-emerald-600 px-4 py-3 text-white flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                <Bot className="w-5 h-5 text-white" />
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-3 text-white flex items-center justify-between shrink-0 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
+                <Sparkles className="w-4 h-4 text-emerald-200" />
               </div>
               <div>
-                <h3 className="font-bold text-xs">Trợ lý ảo VexGo</h3>
-                <p className="text-[10px] text-white/80">Tự động trả lời thắc mắc 24/7</p>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-bold text-xs tracking-tight">Trợ lý ảo VexGo AI</h3>
+                  <span className="text-[9px] bg-emerald-500/50 px-1.5 py-0.5 rounded-full font-medium border border-emerald-400/40">
+                    RAG 24/7
+                  </span>
+                </div>
+                <p className="text-[10px] text-white/80">Tra cứu chuyến đi & chính sách thông minh</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -232,7 +297,7 @@ export const SupportWidget: React.FC = () => {
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4">
             <div className="text-center">
-              <span className="text-[10px] font-semibold text-slate-400 bg-slate-200/50 px-2 py-1 rounded-full">
+              <span className="text-[10px] font-semibold text-slate-400 bg-slate-200/50 px-2.5 py-1 rounded-full">
                 Hôm nay
               </span>
             </div>
@@ -243,77 +308,213 @@ export const SupportWidget: React.FC = () => {
                 className={`flex gap-2.5 ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}
               >
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                    msg.sender === 'user' ? 'bg-slate-200' : 'bg-emerald-100 text-emerald-700'
+                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-xs ${
+                    msg.sender === 'user'
+                      ? 'bg-slate-200 text-slate-700'
+                      : 'bg-emerald-100 text-emerald-700'
                   }`}
                 >
                   {msg.sender === 'user' ? (
-                    <User className="w-3.5 h-3.5 text-slate-600" />
+                    <User className="w-3.5 h-3.5" />
                   ) : (
                     <Bot className="w-3.5 h-3.5" />
                   )}
                 </div>
+
                 <div
-                  className={`flex flex-col gap-1 max-w-[70%] ${
+                  className={`flex flex-col gap-1.5 max-w-[85%] ${
                     msg.sender === 'user' ? 'items-end' : 'items-start'
                   }`}
                 >
+                  {/* Bong bóng nội dung chính */}
                   <div
-                    className={`p-3 rounded-2xl text-xs shadow-sm leading-relaxed ${
+                    className={`p-3 rounded-2xl text-xs shadow-xs leading-relaxed whitespace-pre-wrap ${
                       msg.sender === 'user'
-                        ? 'bg-emerald-600 text-white rounded-tr-sm'
-                        : 'bg-white border border-slate-100 text-slate-700 rounded-tl-sm'
+                        ? 'bg-emerald-600 text-white rounded-tr-xs font-medium'
+                        : 'bg-white border border-slate-200/80 text-slate-800 rounded-tl-xs'
                     }`}
                   >
                     {msg.text}
                   </div>
-                  <span className="text-[10px] text-slate-400 font-medium">{msg.time}</span>
+
+                  {/* 1. HIỂN THỊ DANH SÁCH THẺ CHUYẾN XE GỢI Ý (SUGGESTED TRIPS) */}
+                  {msg.suggestedTrips && msg.suggestedTrips.length > 0 && (
+                    <div className="w-full space-y-2 mt-1">
+                      <div className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5">
+                        <Bus className="w-3.5 h-3.5 text-emerald-600" />
+                        Chuyến xe gợi ý:
+                      </div>
+                      {msg.suggestedTrips.map((trip) => (
+                        <div
+                          key={trip.tripId}
+                          className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs hover:border-emerald-500 hover:shadow-sm transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-800 text-xs">
+                              {trip.operator}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                              Còn {trip.availableSeats} ghế
+                            </span>
+                          </div>
+
+                          <div className="mt-1.5 text-[11px] text-slate-600 flex items-center gap-2">
+                            <span className="flex items-center gap-1 font-medium text-slate-800">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              {trip.departureTime}
+                            </span>
+                            <span>•</span>
+                            <span>{trip.origin} → {trip.destination}</span>
+                          </div>
+
+                          <div className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            {trip.departureDate} ({trip.vehicleType})
+                          </div>
+
+                          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <span className="font-bold text-rose-600 text-xs">
+                              {trip.price ? trip.price.toLocaleString('vi-VN') + ' đ' : 'Liên hệ'}
+                            </span>
+                            <Link
+                              href={`/trips/${trip.tripId}`}
+                              className="text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors"
+                            >
+                              Đặt vé ngay
+                              <ArrowRight className="w-3 h-3" />
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 2. HIỂN THỊ DANH SÁCH TRÍCH DẪN NGUỒN (CITATIONS) */}
+                  {msg.citations && msg.citations.length > 0 && (
+                    <div className="w-full mt-1">
+                      <button
+                        onClick={() =>
+                          setExpandedCitationId((prev) =>
+                            prev === msg.id ? null : msg.id,
+                          )
+                        }
+                        className="text-[10px] text-slate-500 hover:text-emerald-700 flex items-center gap-1 font-medium bg-slate-100/80 px-2 py-1 rounded-md transition-colors"
+                      >
+                        <BookOpen className="w-3 h-3 text-emerald-600" />
+                        {msg.citations.length} điều khoản chính sách trích dẫn
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform ${
+                            expandedCitationId === msg.id ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {expandedCitationId === msg.id && (
+                        <div className="mt-1.5 p-2 bg-emerald-50/70 border border-emerald-200/60 rounded-xl space-y-1.5 text-[11px] animate-in fade-in duration-150">
+                          {msg.citations.map((cite, idx) => (
+                            <div
+                              key={idx}
+                              className="border-b border-emerald-100 pb-1.5 last:border-0 last:pb-0"
+                            >
+                              <div className="flex items-center justify-between font-semibold text-emerald-900">
+                                <span>{cite.title}</span>
+                                <span className="text-[10px] text-emerald-600 bg-white px-1.5 py-0.2 rounded border border-emerald-200">
+                                  {cite.relevanceScore}% phù hợp
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-600 mt-0.5">
+                                {cite.hierarchyPath}
+                              </p>
+                              <span className="text-[9px] font-mono text-slate-400">
+                                [{cite.documentCode}]
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3. NÚT CHUYỂN TIẾP NHÂN VIÊN (HUMAN HANDOFF) */}
+                  {msg.requiresHumanHandoff && (
+                    <div className="w-full mt-1.5 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-1.5 text-amber-800 text-[11px]">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Cần nhân viên CSKH hỗ trợ trực tiếp?</span>
+                      </div>
+                      <button
+                        onClick={handleConnectHuman}
+                        className="bg-brand hover:bg-brand-hover text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shrink-0 shadow-xs cursor-pointer"
+                      >
+                        <Headphones className="w-3.5 h-3.5" />
+                        Gặp CSKH
+                      </button>
+                    </div>
+                  )}
+
+                  <span className="text-[10px] text-slate-400 font-medium px-1">
+                    {msg.time}
+                  </span>
                 </div>
               </div>
             ))}
+
+            {/* Loading Indicator */}
+            {isLoading && (
+              <div className="flex gap-2.5 items-center">
+                <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Bot className="w-3.5 h-3.5" />
+                </div>
+                <div className="bg-white border border-slate-200/80 p-3 rounded-2xl rounded-tl-xs shadow-xs text-xs text-slate-500 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                  <span>Trợ lý AI đang tra cứu và suy nghĩ...</span>
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
+          {/* Input & Quick Suggestions Area */}
           <div className="p-3 bg-white border-t border-slate-100 shrink-0">
+            {/* Quick Suggestions Chips */}
+            {suggestions.length > 0 && (
+              <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+                {suggestions.map((sug) => (
+                  <button
+                    key={sug.id}
+                    onClick={() => handleSendMessage(sug.question)}
+                    disabled={isLoading}
+                    className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-transparent shrink-0 text-[11px] transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {sug.question}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input Box */}
             <div className="flex gap-2">
               <input
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Nhập câu hỏi của bạn..."
-                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-emerald-600 text-xs"
+                onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
+                placeholder="Nhập câu hỏi hoặc yêu cầu hỗ trợ..."
+                disabled={isLoading}
+                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-emerald-600 text-xs transition-colors disabled:opacity-50"
               />
               <button
-                onClick={handleSend}
-                disabled={!inputValue.trim()}
-                className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => handleSendMessage()}
+                disabled={!inputValue.trim() || isLoading}
+                className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+                aria-label="Gửi tin nhắn"
               >
-                <Send className="w-4 h-4 ml-0.5" />
-              </button>
-            </div>
-            <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-              <button
-                onClick={() => setInputValue('Hủy vé')}
-                className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 shrink-0 text-[11px]"
-              >
-                Hủy vé
-              </button>
-              <button
-                onClick={() => setInputValue('Thanh toán')}
-                className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 shrink-0 text-[11px]"
-              >
-                Thanh toán
-              </button>
-              <button
-                onClick={() => {
-                  setIsBotOpen(false);
-                  setIsStaffOpen(true);
-                }}
-                className="px-2.5 py-1 bg-brand/10 text-brand font-medium rounded-lg hover:bg-brand/20 shrink-0 text-[11px] flex items-center gap-1"
-              >
-                <Headphones className="w-3 h-3" /> Gặp nhân viên nhà xe
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4 ml-0.5" />
+                )}
               </button>
             </div>
           </div>
