@@ -199,17 +199,6 @@ async function deduplicateCoreTables(prisma) {
       });
     }
   }
-
-  // Đồng bộ maTuyenXe chuẩn UUID v4 32 hex cho toàn bộ các tuyến còn lại trong database
-  const allDbRoutes = await prisma.tuyenXe.findMany();
-  for (const r of allDbRoutes) {
-    if (!/^[0-9a-f]{32}$/.test(r.maTuyenXe)) {
-      await prisma.tuyenXe.update({
-        where: { tuyenXeId: r.tuyenXeId },
-        data: { maTuyenXe: deterministicUuid('TX', r.tuyenXeId, r.diemDi, r.diemDen) },
-      });
-    }
-  }
   console.log(`   ✓ Đã gộp ${duplicateRoutePairs.length} tuyến xe bị nhân đôi và đồng bộ maTuyenXe chuẩn.`);
 
   // 1.2. Dọn các chuyến xe bị trùng (cùng tuyenXeId, ngayKhoiHanh, gioKhoiHanh)
@@ -233,16 +222,13 @@ async function deduplicateCoreTables(prisma) {
   let removedDuplicateSlotTrips = 0;
   for (const group of tripsBySlot.values()) {
     if (group.length <= 1) continue;
-    // Giữ lại chuyến có vé/đơn hàng/đánh giá hoặc chuyến đầu tiên
+    // Giữ lại chuyến có vé/đơn hàng hoặc chuyến đầu tiên
     let kept = group[0];
     for (const candidate of group) {
       const cnt = await prisma.ve.count({
         where: { gheChuyenXe: { chuyenXeId: candidate.chuyenXeId } },
       });
-      const reviewCnt = await prisma.phanHoi.count({
-        where: { chuyenXeId: candidate.chuyenXeId },
-      });
-      if (cnt > 0 || reviewCnt > 0) {
+      if (cnt > 0) {
         kept = candidate;
         break;
       }
@@ -256,10 +242,6 @@ async function deduplicateCoreTables(prisma) {
         where: { chuyenXeId: item.chuyenXeId },
       });
       if (ticketCnt === 0 && shipCnt === 0) {
-        await prisma.phanHoi.updateMany({
-          where: { chuyenXeId: item.chuyenXeId },
-          data: { chuyenXeId: kept.chuyenXeId },
-        });
         await prisma.diemDonTraChuyenXe.deleteMany({ where: { chuyenXeId: item.chuyenXeId } });
         await prisma.gheChuyenXe.deleteMany({ where: { chuyenXeId: item.chuyenXeId } });
         await prisma.giuCho.deleteMany({ where: { chuyenXeId: item.chuyenXeId } });
@@ -349,100 +331,6 @@ async function deduplicateCoreTables(prisma) {
     }
   }
   console.log(`   ✓ Đã dọn ${removedCargoDuplicates} bản ghi DiemGiaoNhanHang trùng lặp.`);
-
-  // 1.5. Đồng bộ toàn bộ mã nghiệp vụ sang UUID v4 32 hex chuẩn
-  const UUID4_HEX32_REGEX = /^[0-9a-f]{32}$/;
-
-  const badSeats = await prisma.ghe.findMany({ select: { gheId: true, maGhe: true, xeId: true, tenGhe: true } });
-  for (const s of badSeats) {
-    if (!s.maGhe || !UUID4_HEX32_REGEX.test(s.maGhe)) {
-      await prisma.ghe.update({
-        where: { gheId: s.gheId },
-        data: { maGhe: deterministicUuid('GHE_NORM', s.gheId, s.xeId) },
-      });
-    }
-  }
-
-  const badCustomers = await prisma.khachHang.findMany({ select: { khachHangId: true, maKhachHang: true } });
-  for (const c of badCustomers) {
-    if (!c.maKhachHang || !UUID4_HEX32_REGEX.test(c.maKhachHang)) {
-      await prisma.khachHang.update({
-        where: { khachHangId: c.khachHangId },
-        data: { maKhachHang: deterministicUuid('KH_NORM', c.khachHangId) },
-      });
-    }
-  }
-
-  const badTrips = await prisma.chuyenXe.findMany({ select: { chuyenXeId: true, maChuyenXe: true } });
-  for (const t of badTrips) {
-    if (!t.maChuyenXe || !UUID4_HEX32_REGEX.test(t.maChuyenXe)) {
-      await prisma.chuyenXe.update({
-        where: { chuyenXeId: t.chuyenXeId },
-        data: { maChuyenXe: deterministicUuid('CX_NORM', t.chuyenXeId) },
-      });
-    }
-  }
-
-  const badTx = await prisma.donGiaoDich.findMany({ select: { donGiaoDichId: true, maDonGiaoDich: true } });
-  for (const tx of badTx) {
-    if (!tx.maDonGiaoDich || !UUID4_HEX32_REGEX.test(tx.maDonGiaoDich)) {
-      await prisma.donGiaoDich.update({
-        where: { donGiaoDichId: tx.donGiaoDichId },
-        data: { maDonGiaoDich: deterministicUuid('GD_NORM', tx.donGiaoDichId) },
-      });
-    }
-  }
-
-  const badBk = await prisma.phieuDatVe.findMany({ select: { phieuDatVeId: true, maPhieuDatVe: true } });
-  for (const bk of badBk) {
-    if (!bk.maPhieuDatVe || !UUID4_HEX32_REGEX.test(bk.maPhieuDatVe)) {
-      await prisma.phieuDatVe.update({
-        where: { phieuDatVeId: bk.phieuDatVeId },
-        data: { maPhieuDatVe: deterministicUuid('PDV_NORM', bk.phieuDatVeId) },
-      });
-    }
-  }
-
-  const badTk = await prisma.ve.findMany({ select: { veId: true, maVe: true } });
-  for (const tk of badTk) {
-    if (!tk.maVe || !UUID4_HEX32_REGEX.test(tk.maVe)) {
-      await prisma.ve.update({
-        where: { veId: tk.veId },
-        data: { maVe: deterministicUuid('VE_NORM', tk.veId) },
-      });
-    }
-  }
-
-  const badSm = await prisma.phieuGuiHang.findMany({ select: { phieuGuiHangId: true, maVanDon: true } });
-  for (const sm of badSm) {
-    if (!sm.maVanDon || !UUID4_HEX32_REGEX.test(sm.maVanDon)) {
-      await prisma.phieuGuiHang.update({
-        where: { phieuGuiHangId: sm.phieuGuiHangId },
-        data: { maVanDon: deterministicUuid('VD_NORM', sm.phieuGuiHangId) },
-      });
-    }
-  }
-
-  const badDgnh = await prisma.diemGiaoNhanHang.findMany({ select: { diemGiaoNhanHangId: true, maDiem: true } });
-  for (const d of badDgnh) {
-    if (!d.maDiem || !UUID4_HEX32_REGEX.test(d.maDiem)) {
-      await prisma.diemGiaoNhanHang.update({
-        where: { diemGiaoNhanHangId: d.diemGiaoNhanHangId },
-        data: { maDiem: deterministicUuid('DGNH_NORM', d.diemGiaoNhanHangId) },
-      });
-    }
-  }
-
-  const badChat = await prisma.cuocTroChuyen.findMany({ select: { cuocTroChuyenId: true, maCuocTroChuyen: true } });
-  for (const c of badChat) {
-    if (!c.maCuocTroChuyen || !UUID4_HEX32_REGEX.test(c.maCuocTroChuyen)) {
-      await prisma.cuocTroChuyen.update({
-        where: { cuocTroChuyenId: c.cuocTroChuyenId },
-        data: { maCuocTroChuyen: deterministicUuid('CTC_NORM', c.cuocTroChuyenId) },
-      });
-    }
-  }
-  console.log(`   ✓ Đã chuẩn hoá toàn bộ mã nghiệp vụ sang UUID v4 32 hex.`);
 }
 
 /**

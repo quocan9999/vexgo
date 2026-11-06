@@ -37,7 +37,7 @@
         "thuTu": 5
       },
       {
-        "maDiem": "d460cf059b1841e7ae1c16c29d494837",
+        "maDiem": "86e407c6c53044c0ade94213ac683254",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 6
@@ -145,7 +145,7 @@
         "thuTu": 23
       },
       {
-        "maDiem": "f8d7551f5ef14673afce82e360ec067d",
+        "maDiem": "f472c24512234043a0350fbec6068f6f",
         "loaiDiem": "DON",
         "phutLech": 0,
         "thuTu": 24
@@ -205,7 +205,7 @@
         "thuTu": 33
       },
       {
-        "maDiem": "c8fe6cb47ef64fa7a46d7b975d88abd0",
+        "maDiem": "cf5bd5a8c08d4ee7a8b5699411674884",
         "loaiDiem": "TRA",
         "phutLech": 240,
         "thuTu": 34
@@ -262,13 +262,13 @@
         "thuTu": 6
       },
       {
-        "maDiem": "1fcaef6a46e44f94adda02f6399f6c92",
+        "maDiem": "4748b2d616be4ba2a04aaf4bcaad3e61",
         "loaiDiem": "TRA",
         "phutLech": 300,
         "thuTu": 7
       },
       {
-        "maDiem": "0df55ac98b3f4deeaf456bdc38277983",
+        "maDiem": "33c91de9d17742cda091867ccbb7df60",
         "loaiDiem": "TRA",
         "phutLech": 360,
         "thuTu": 8
@@ -289,7 +289,7 @@
     "reasons": [],
     "stops": [
       {
-        "maDiem": "3b44be79fdb84d8fa48d0f436db6b6d2",
+        "maDiem": "1b04a542cf89430dafc7f8b825b6272b",
         "loaiDiem": "DON",
         "phutLech": -15,
         "thuTu": 1
@@ -301,13 +301,13 @@
         "thuTu": 2
       },
       {
-        "maDiem": "4f390eefa8c44216a8e90ff02c2078f7",
+        "maDiem": "7358ecd81e2b4fb6a4966e419dad30be",
         "loaiDiem": "TRA",
         "phutLech": 210,
         "thuTu": 3
       },
       {
-        "maDiem": "d01772a3e6184b06a1de6fd3f31b19e1",
+        "maDiem": "ec05b1f03ea84b6caf08b7c1b1ae2bf5",
         "loaiDiem": "TRA",
         "phutLech": 240,
         "thuTu": 4
@@ -376,7 +376,7 @@
         "thuTu": 9
       },
       {
-        "maDiem": "08d3ba8446c146f5a9a71b9dec3df18f",
+        "maDiem": "96345bcb2f6943d8af5520cfc72dcc46",
         "loaiDiem": "TRA",
         "phutLech": 102,
         "thuTu": 10
@@ -392,6 +392,12 @@
         "loaiDiem": "TRA",
         "phutLech": 125,
         "thuTu": 12
+      },
+      {
+        "maDiem": "322876e1b6384779af0be11b996be02b",
+        "loaiDiem": "TRA",
+        "phutLech": 140,
+        "thuTu": 13
       }
     ]
   },
@@ -405,7 +411,7 @@
     ],
     "stops": [
       {
-        "maDiem": "b41600e35c074ea3a439f0af2ebcfe89",
+        "maDiem": "41702801662149edab7639ec367b00a2",
         "loaiDiem": "DON",
         "phutLech": -15,
         "thuTu": 1
@@ -447,7 +453,7 @@
         "thuTu": 7
       },
       {
-        "maDiem": "dd394516edb446b2a6d28dc0957b7fa1",
+        "maDiem": "ab054414690a4acdae9e943cc366fa2d",
         "loaiDiem": "DON",
         "phutLech": 25,
         "thuTu": 8
@@ -459,7 +465,7 @@
         "thuTu": 9
       },
       {
-        "maDiem": "ce44b377782544fda54eb9c4bc126fb6",
+        "maDiem": "4d0c5bb8864d44c5a00ee77cfb5c341c",
         "loaiDiem": "DON",
         "phutLech": 30,
         "thuTu": 10
