@@ -51,15 +51,19 @@ export const SupportWidget: React.FC = () => {
 
   // Khởi tạo sessionToken từ sessionStorage khi client load
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('vexgo_ai_session_token');
-      if (stored) {
-        setSessionToken(stored);
-      } else {
-        const newSession = crypto.randomUUID();
-        sessionStorage.setItem('vexgo_ai_session_token', newSession);
-        setSessionToken(newSession);
+    try {
+      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+        const stored = window.sessionStorage.getItem('vexgo_ai_session_token');
+        if (stored) {
+          setSessionToken(stored);
+        } else {
+          const newSession = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `session_${Date.now()}`;
+          window.sessionStorage.setItem('vexgo_ai_session_token', newSession);
+          setSessionToken(newSession);
+        }
       }
+    } catch {
+      // Ignore in non-browser environments
     }
   }, []);
 
@@ -126,8 +130,12 @@ export const SupportWidget: React.FC = () => {
 
       if (res.sessionToken && res.sessionToken !== sessionToken) {
         setSessionToken(res.sessionToken);
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('vexgo_ai_session_token', res.sessionToken);
+        try {
+          if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+            window.sessionStorage.setItem('vexgo_ai_session_token', res.sessionToken);
+          }
+        } catch {
+          // Ignore
         }
       }
 
