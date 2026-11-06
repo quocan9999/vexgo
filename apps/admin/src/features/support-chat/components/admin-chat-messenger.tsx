@@ -1087,7 +1087,13 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       <Button
                         variant="ghost"
                         aria-pressed={selected}
-                        className={`h-auto sm:h-auto w-full items-start justify-start gap-3 whitespace-normal rounded-lg border p-3 text-left font-normal ${selected ? 'border-primary bg-accent' : unread ? 'border-primary/30 bg-accent/40' : 'border-transparent'}`}
+                        className={`h-auto sm:h-auto w-full items-start justify-start gap-3 whitespace-normal rounded-xl border p-3.5 text-left font-normal transition-all duration-150 ${
+                          selected
+                            ? 'border-primary/40 bg-blue-50/80 dark:bg-blue-950/40 shadow-2xs ring-1 ring-primary/20'
+                            : unread
+                              ? 'border-primary/25 bg-blue-50/40 dark:bg-blue-950/20 shadow-2xs'
+                              : 'border-transparent hover:bg-slate-100/70 hover:border-slate-200/80'
+                        }`}
                         onClick={() => {
                           adminReconnectRequestIdRef.current++;
                           setSelectedConv(c);
@@ -1095,7 +1101,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       >
                         <span
                           aria-hidden
-                          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-primary"
+                          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-bold text-white shadow-2xs"
                         >
                           {c.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
                         </span>
@@ -1269,7 +1275,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               <div
                 ref={transcriptRef}
                 data-testid="admin-chat-transcript"
-                className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-muted/30 p-4 sm:p-5"
+                className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50/60 dark:bg-slate-950/40 p-4 sm:p-5"
                 aria-label="Lịch sử tin nhắn"
                 aria-busy={loadingMessages}
               >
@@ -1314,11 +1320,15 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       return (
                         <div
                           key={msg.tinNhanId}
-                          className={`flex gap-2 ${staff ? 'flex-row-reverse' : ''}`}
+                          className={`flex gap-2.5 ${staff ? 'flex-row-reverse' : ''}`}
                         >
                           <span
                             aria-hidden
-                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold"
+                            className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold shadow-2xs ${
+                              staff
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}
                           >
                             {staff ? 'NV' : <User className="size-4" />}
                           </span>
@@ -1350,7 +1360,13 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                                     msg.tinNhanId,
                                   );
                               }}
-                              className={`max-w-full whitespace-pre-wrap break-words rounded-xl border px-4 py-3 text-sm leading-normal ${staff ? (failed ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-primary bg-primary text-primary-foreground') : 'border-border bg-card'} ${pending ? 'opacity-70' : ''}`}
+                              className={`max-w-full whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-[13.5px] leading-relaxed shadow-2xs ${
+                                staff
+                                  ? failed
+                                    ? 'border border-rose-300 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 rounded-tr-xs'
+                                    : 'bg-primary text-primary-foreground rounded-tr-xs shadow-xs'
+                                  : 'border border-border/80 bg-card text-foreground rounded-tl-xs'
+                              } ${pending ? 'opacity-70' : ''}`}
                             >
                               {msg.noiDung}
                             </div>

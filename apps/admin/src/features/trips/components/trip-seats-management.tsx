@@ -52,20 +52,20 @@ const tripSeatMapStatusPresentation = {
   TRONG: {
     label: 'Trống',
     icon: CheckCircle2,
-    className: 'border-primary/40 bg-primary/5 text-primary',
+    className: 'border-emerald-300/90 bg-emerald-50/90 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs hover:scale-[1.03] transition-transform',
     badgeVariant: 'outline',
   },
   DANG_GIU: {
     label: 'Đang giữ',
     icon: Clock3,
     className:
-      'border-amber-200 bg-[var(--admin-status-warning-soft)] text-[var(--admin-status-warning)]',
+      'border-amber-300/90 bg-amber-50/90 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 shadow-2xs hover:scale-[1.03] transition-transform',
     badgeVariant: 'warning',
   },
   DA_DAT: {
     label: 'Đã đặt',
     icon: Ticket,
-    className: 'border-border bg-muted text-muted-foreground',
+    className: 'border-slate-200 bg-slate-100/90 text-slate-500 dark:bg-slate-800/80 dark:text-slate-400 dark:border-slate-700 shadow-2xs opacity-85',
     badgeVariant: 'secondary',
   },
 } satisfies Record<
@@ -456,93 +456,61 @@ export function TripSeatsManagement({
 
             <section
               aria-label="Tổng quan số lượng ghế"
-              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+              className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
             >
               {[
                 {
                   label: 'Tổng số ghế',
                   value: currentWorkspace.seatsData.meta.total,
                   icon: Armchair,
-                  tone: 'primary',
+                  iconTone: 'bg-blue-50 text-blue-600 border border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
                   detail: 'Theo cấu hình chuyến',
                 },
                 {
                   label: 'Ghế trống',
                   value: currentWorkspace.seatsData.meta.available,
                   icon: CheckCircle2,
-                  tone: 'success',
-                  detail: 'Có thể đặt',
+                  iconTone: 'bg-emerald-50 text-emerald-600 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+                  detail: 'Có thể đặt ngay',
                 },
                 {
                   label: 'Đang giữ',
                   value: currentWorkspace.seatsData.meta.held,
                   icon: Clock3,
-                  tone: 'warning',
+                  iconTone: 'bg-amber-50 text-amber-600 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
                   detail: 'Đang được giữ tạm thời',
                 },
                 {
                   label: 'Đã đặt',
                   value: currentWorkspace.seatsData.meta.booked,
                   icon: Ticket,
-                  tone: 'destructive',
-                  detail: 'Đã có lượt đặt',
+                  iconTone: 'bg-rose-50 text-rose-600 border border-rose-200/80 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
+                  detail: 'Đã có khách xác nhận',
                 },
               ].map((metric) => {
                 const Icon = metric.icon;
-                const isPrimary = metric.tone === 'primary';
-                const iconTone =
-                  metric.tone === 'success'
-                    ? 'bg-[var(--admin-status-success-soft)] text-[var(--admin-status-success)]'
-                    : metric.tone === 'warning'
-                      ? 'bg-[var(--admin-status-warning-soft)] text-[var(--admin-status-warning)]'
-                      : metric.tone === 'destructive'
-                        ? 'bg-destructive/10 text-destructive'
-                        : 'bg-white/15 text-white';
                 return (
                   <Card
-                    className={
-                      isPrimary
-                        ? 'h-auto gap-0 border-primary bg-primary py-0 text-primary-foreground'
-                        : 'h-auto gap-0 py-0'
-                    }
+                    className="h-auto gap-0 py-0 border-border/80 bg-card shadow-[var(--admin-shadow-sm)] hover:shadow-[var(--admin-shadow-md)] transition-shadow"
                     key={metric.label}
                   >
                     <CardContent className="flex min-h-28 items-start gap-4 p-4 sm:p-5">
                       <span
                         className={
-                          'grid size-10 shrink-0 place-items-center rounded-lg ' +
-                          iconTone
+                          'grid size-11 shrink-0 place-items-center rounded-xl ' +
+                          metric.iconTone
                         }
                       >
-                        <Icon aria-hidden="true" size={19} />
+                        <Icon aria-hidden="true" size={20} />
                       </span>
                       <div className="min-w-0">
-                        <p
-                          className={
-                            'mb-1 text-xs font-medium ' +
-                            (isPrimary
-                              ? 'text-white/75'
-                              : 'text-muted-foreground')
-                          }
-                        >
+                        <p className="mb-1 text-xs font-semibold text-muted-foreground">
                           {metric.label}
                         </p>
-                        <p
-                          className={
-                            'm-0 text-3xl font-semibold leading-none ' +
-                            (isPrimary ? 'text-white' : 'text-foreground')
-                          }
-                        >
+                        <p className="m-0 text-3xl font-bold leading-none tracking-tight text-foreground tabular-nums">
                           {formatCount(metric.value)}
                         </p>
-                        <p
-                          className={
-                            'mt-2 mb-0 text-xs ' +
-                            (isPrimary
-                              ? 'text-white/75'
-                              : 'text-muted-foreground')
-                          }
-                        >
+                        <p className="mt-2 mb-0 text-[11.5px] text-muted-foreground">
                           {metric.detail}
                         </p>
                       </div>
@@ -667,28 +635,29 @@ export function TripSeatsManagement({
                               </Badge>
                             </div>
 
-                            <div className="overflow-x-auto rounded-xl border bg-muted/30 p-2 sm:p-3">
+                            <div className="overflow-x-auto rounded-2xl border border-border/80 bg-slate-100/40 dark:bg-slate-900/30 p-2 sm:p-4">
                               <div className="mx-auto min-w-[340px] max-w-[460px]">
-                                <div className="grid h-11 grid-cols-3 items-center rounded-t-xl border-x border-t bg-background px-3 text-[11px] text-muted-foreground">
-                                  <Badge
-                                    className="justify-self-start"
-                                    variant="outline"
-                                  >
-                                    <BusFront aria-hidden="true" />
+                                <div className="grid h-12 grid-cols-3 items-center rounded-t-2xl border-x border-t border-slate-300/80 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-card px-4 text-[11px] font-semibold text-slate-700 dark:text-slate-300 shadow-2xs">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 px-2 py-0.5 text-blue-700 dark:text-blue-300 justify-self-start">
+                                    <BusFront aria-hidden="true" className="size-3.5 text-blue-600 dark:text-blue-400" />
                                     Tài xế
-                                  </Badge>
-                                  <span className="justify-self-center font-medium tracking-wide">
+                                  </span>
+                                  <span className="justify-self-center font-bold tracking-wider uppercase text-slate-400">
                                     ĐẦU XE
                                   </span>
-                                  <span className="justify-self-end whitespace-nowrap">
-                                    Cửa lên
+                                  <span className="justify-self-end text-slate-500 whitespace-nowrap">
+                                    Cửa lên ➔
                                   </span>
                                 </div>
                                 <div
                                   aria-label={`Sơ đồ ghế ${floorLabel.toLowerCase()}`}
-                                  className="relative overflow-hidden rounded-b-xl border-x border-b bg-background"
+                                  className="relative overflow-hidden rounded-b-2xl border-x border-b border-slate-300/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 shadow-inner"
                                   role="list"
-                                  style={{ height }}
+                                  style={{
+                                    height,
+                                    backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(148, 163, 184, 0.15) 1.5px, transparent 1.5px)',
+                                    backgroundSize: '24px 24px',
+                                  }}
                                 >
                                   {seats.map(({ seat, x, y }) => {
                                     const presentation =

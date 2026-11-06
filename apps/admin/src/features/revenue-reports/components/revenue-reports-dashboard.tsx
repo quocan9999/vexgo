@@ -109,12 +109,14 @@ function MetricCard({
   value,
   icon: Icon,
   primary = false,
+  tone = 'default',
 }: {
   label: string;
   note: string;
   value: string;
   icon: LucideIcon;
   primary?: boolean;
+  tone?: 'default' | 'success' | 'indigo' | 'destructive' | 'teal';
 }) {
   return (
     <Card
@@ -122,6 +124,7 @@ function MetricCard({
       aria-label={label}
       className={styles.metricCard}
       data-primary={primary}
+      data-tone={tone}
     >
       <div className={styles.metricHeading}>
         <h2 className={styles.metricLabel}>{label}</h2>
@@ -308,24 +311,28 @@ function RevenueReportContent({
         />
         <MetricCard
           icon={Ticket}
+          tone="success"
           label="Doanh thu vé"
           note="Vé đã thu, sau tiền hoàn"
           value={formatRevenueVnd(totals.netTicketRevenue)}
         />
         <MetricCard
           icon={Package}
+          tone="indigo"
           label="Doanh thu gửi hàng"
           note="Phí gửi hàng, sau tiền hoàn"
           value={formatRevenueVnd(totals.netShipmentRevenue)}
         />
         <MetricCard
           icon={ArrowDownLeft}
+          tone="destructive"
           label="Tiền đã hoàn"
           note="Khoản hoàn tiền thành công trong kỳ"
           value={formatRevenueVnd(totals.refundAmount)}
         />
         <MetricCard
           icon={CircleCheck}
+          tone="teal"
           label="Thanh toán thành công"
           note="Không gồm hoàn tiền, đơn 0đ hoặc đối soát"
           value={totals.successfulPayments.toLocaleString('vi-VN')}

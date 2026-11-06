@@ -7,7 +7,7 @@
   border: 1px solid var(--border);
   border-radius: var(--admin-radius-panel, 12px);
   background: var(--card);
-  box-shadow: 0 2px 5px rgb(21 40 75 / 3%);
+  box-shadow: var(--admin-shadow-md);
 }
 .inbox {
   flex-direction: column;
