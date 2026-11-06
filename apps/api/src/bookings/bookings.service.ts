@@ -698,7 +698,8 @@ export class BookingsService {
           });
         }
       }
-      const totalOrderAmount = finalTicketTotal.add(shippingFee);
+      // Gửi hàng kèm vé chỉ thông báo giá cước để khách biết; không cộng vào tổng tiền thanh toán vé mà thanh toán tại bến khi giao hàng
+      const totalOrderAmount = finalTicketTotal;
 
       const requiresPayment = totalOrderAmount.gt(0);
 
@@ -936,7 +937,7 @@ export class BookingsService {
             serviceFee: cargoPricing.serviceFee,
             discount: 0,
             totalFee: cargoPricing.totalFee,
-            note: 'Hành lý/hàng gửi kèm vé cùng chuyến',
+            note: 'Hành lý/hàng gửi kèm vé cùng chuyến - Thanh toán tại bến',
             tripId: trip.chuyenXeId,
             senderPointId: diemGuiId,
             receiverPointId: diemNhanId,

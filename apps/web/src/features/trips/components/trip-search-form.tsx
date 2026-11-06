@@ -288,7 +288,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
             <input
               type="date"
               min={todayStr}
-              value={date}
+              value={date || todayStr}
               onChange={(event) => handleDateChange(event.target.value)}
               onBlur={(e) => {
                 if (e.target.value && e.target.value < todayStr) {

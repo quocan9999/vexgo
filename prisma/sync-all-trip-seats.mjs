@@ -50,11 +50,12 @@ async function main() {
       const typeName = vehicle.loaiXe.tenLoai;
       const targetLayout = getVehicleSeatLayout(opCode, typeName, vehicle.ghes.length);
 
-      // Bước 1a: Đổi tên tạm để tránh đụng Unique Constraint @@unique([xeId, tenGhe]) & @@unique([xeId, tang, toaDoX, toaDoY])
+      // Bước 1a: Đổi tên tạm để tránh đụng Unique Constraint @@unique([xeId, tenGhe]) & @@unique([xeId, tang, toaDoX, toaDoY]) & @@unique([maGhe])
       for (let i = 0; i < vehicle.ghes.length; i++) {
         await prisma.ghe.update({
           where: { gheId: vehicle.ghes[i].gheId },
           data: {
+            maGhe: deterministicUuid('TMP_GHE', vehicle.ghes[i].gheId),
             tenGhe: `TMP_${vehicle.ghes[i].gheId}`,
             toaDoX: null,
             toaDoY: null,
@@ -69,6 +70,7 @@ async function main() {
         await prisma.ghe.update({
           where: { gheId: vehicle.ghes[i].gheId },
           data: {
+            maGhe: deterministicUuid('GHE', vehicle.bienSoXe, spec.tenGhe),
             tenGhe: spec.tenGhe,
             viTri: spec.viTri,
             tang: spec.tang,
@@ -133,6 +135,18 @@ async function main() {
       }
 
       console.log(`   ✓ Xe ${vehicle.bienSoXe} (${opCode} - ${typeName}): Hoàn tất sơ đồ ${targetLayout.length} chỗ.`);
+    }
+
+    // Chuẩn hóa maGhe cho bất kỳ ghế nào chưa đúng định dạng UUID v4 32 hex
+    const UUID4_HEX32_REGEX = /^[0-9a-f]{32}$/;
+    const allSeats = await prisma.ghe.findMany({ select: { gheId: true, maGhe: true, xeId: true, tenGhe: true } });
+    for (const s of allSeats) {
+      if (!s.maGhe || !UUID4_HEX32_REGEX.test(s.maGhe)) {
+        await prisma.ghe.update({
+          where: { gheId: s.gheId },
+          data: { maGhe: deterministicUuid('GHE', s.xeId, s.tenGhe, s.gheId) },
+        });
+      }
     }
 
     // 2. Đồng bộ tầng và tọa độ (tang, toaDoX, toaDoY) sang toàn bộ GheChuyenXe

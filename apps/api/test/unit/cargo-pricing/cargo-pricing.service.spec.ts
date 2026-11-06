@@ -512,4 +512,27 @@ describe('CargoPricingService exclusive lower bracket boundary', () => {
     expect(result.totalFee.toNumber()).toBe(60000);
     expect(result.rates[0].bangCuocGuiHangId).toBe(31);
   });
+
+  it('accepts heavy personal luggage (e.g. 20kg Vali) with HANG_NHE category without capacity group mismatch', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(7),
+          khoiLuongDen: null,
+          mucCuoc: new Prisma.Decimal(120000),
+        },
+      ],
+    });
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      bookingLimits: {
+        maxNonVehiclePackageWeightKg: 40,
+      },
+      items: [{ name: 'Vali', physicalType: 'Vali', quantity: 1, weight: 20, loaiHangHoaId: 21 }],
+    });
+    expect(result.totalFee.toNumber()).toBe(120000);
+  });
 });

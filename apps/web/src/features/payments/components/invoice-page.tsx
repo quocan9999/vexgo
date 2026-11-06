@@ -1567,6 +1567,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   {totalCargoQty > 0
                     ? ` (${totalCargoQty} kiện · ${totalCargoWeight} kg)`
                     : ''}
+                  <small style={{ display: 'block', color: '#b45309', fontSize: '11px', fontWeight: 500 }}>
+                    (Thanh toán tại bến khi gửi hàng, không cộng vào tổng thanh toán trực tuyến)
+                  </small>
                 </span>
                 <strong>
                   {invoice.cargoFee > 0

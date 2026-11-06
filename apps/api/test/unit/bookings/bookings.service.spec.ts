@@ -815,7 +815,7 @@ describe('BookingsService', () => {
       );
 
       expect(result.shippingFee).toBe(60000);
-      expect(result.totalAmount).toBe(210000);
+      expect(result.totalAmount).toBe(150000);
       expect(rateLookup).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -847,7 +847,7 @@ describe('BookingsService', () => {
       expect(Number(cargoInput.totalFee)).toBe(60000);
       expect(Number(cargoInput.rates[0].billableWeight)).toBe(6);
       expect(Number(cargoInput.rates[0].fee)).toBe(60000);
-      expect(Number(orderRows[0].tongTien)).toBe(210000);
+      expect(Number(orderRows[0].tongTien)).toBe(150000);
       expect(orderRows[0].khachHangId).toBeNull();
       expect(paymentRows).toHaveLength(1);
       expect(orderRows).toHaveLength(1);
@@ -858,7 +858,7 @@ describe('BookingsService', () => {
         trangThai: 'DANG_XU_LY',
         donGiaoDichId: 201,
       });
-      expect(Number(paymentRows[0].soTien)).toBe(210000);
+      expect(Number(paymentRows[0].soTien)).toBe(150000);
     });
 
     it('requires explicit route points when multiple active sender choices exist', async () => {
