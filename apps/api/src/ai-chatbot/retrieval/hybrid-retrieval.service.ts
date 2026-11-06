@@ -146,7 +146,11 @@ export class HybridRetrievalService implements OnApplicationBootstrap {
         trimmedQuery.toLowerCase().includes(chunk.document.documentCode.toLowerCase());
       const tier = this.resolveTier(denseScore);
 
-      if (denseScore >= SIMILARITY_THRESHOLD || (isExactCodeMatch && hybridScore >= SIMILARITY_THRESHOLD)) {
+      if (
+        denseScore >= SIMILARITY_THRESHOLD ||
+        hybridScore >= SIMILARITY_THRESHOLD ||
+        (isExactCodeMatch && hybridScore >= SIMILARITY_THRESHOLD)
+      ) {
         scoredChunks.push({
           chunkId: chunk.id,
           documentId: chunk.documentId,

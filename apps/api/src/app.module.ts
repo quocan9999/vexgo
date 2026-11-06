@@ -36,6 +36,9 @@ import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module.js';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [
+        resolve(process.cwd(), 'apps/api/.env.local'),
+        resolve(process.cwd(), 'apps/api/.env'),
+        resolve(process.cwd(), '.env.local'),
         resolve(process.cwd(), '../../.env'),
         resolve(process.cwd(), '.env'),
       ],
