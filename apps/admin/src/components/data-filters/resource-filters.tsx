@@ -17,7 +17,7 @@ export type FilterOption = { value: string; label: string };
 
 export function FilterToolbar({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end gap-3 border-b border-border p-4 sm:p-5">
+    <div className="flex flex-wrap items-end gap-3 border-b border-border bg-slate-50/40 p-3 sm:px-5 sm:py-3.5 transition-colors">
       {children}
     </div>
   );
@@ -39,7 +39,10 @@ export function SearchInput({
   const id = useId();
   return (
     <div className={className ?? 'min-w-0 flex-[2_1_260px]'}>
-      <label className="mb-2 block text-[13px] font-semibold" htmlFor={id}>
+      <label
+        className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+        htmlFor={id}
+      >
         {label}
       </label>
       <div className="relative">
@@ -48,7 +51,7 @@ export function SearchInput({
           className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
         />
         <Input
-          className="pl-9 pr-11 [&::-webkit-search-cancel-button]:appearance-none"
+          className="h-9.5 pl-9 pr-9 text-[13px] rounded-[var(--admin-radius-control)] bg-card border-border shadow-2xs focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 [&::-webkit-search-cancel-button]:appearance-none"
           id={id}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
@@ -58,12 +61,12 @@ export function SearchInput({
         {value && (
           <Button
             aria-label="Xóa nội dung tìm kiếm"
-            className="absolute right-0.5 top-1/2 -translate-y-1/2"
+            className="absolute right-1 top-1/2 -translate-y-1/2 size-7 text-muted-foreground hover:text-foreground"
             onClick={() => onChange('')}
             size="icon-sm"
             variant="ghost"
           >
-            <X aria-hidden />
+            <X aria-hidden className="size-3.5" />
           </Button>
         )}
       </div>
@@ -88,9 +91,13 @@ export function SelectFilter({
 }) {
   const id = useId();
   const allValue = '__all_filters__';
+  const selectedOption = options.find((option) => option.value === value);
   return (
     <div className={className ?? 'min-w-0 flex-[1_1_130px] sm:flex-[1_1_180px]'}>
-      <label className="mb-2 block text-[13px] font-semibold" htmlFor={id}>
+      <label
+        className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+        htmlFor={id}
+      >
         {label}
       </label>
       <Select
@@ -99,10 +106,17 @@ export function SelectFilter({
         }
         value={value || allValue}
       >
-        <SelectTrigger aria-label={label} id={id}>
+        <SelectTrigger
+          aria-label={label}
+          className="h-9.5 text-[13px] bg-card rounded-[var(--admin-radius-control)] border-border shadow-2xs"
+          id={id}
+        >
           <SelectValue>
-            {options.find((option) => option.value === value)?.label ??
-              allLabel}
+            {selectedOption ? (
+              <span className="font-medium text-foreground">{selectedOption.label}</span>
+            ) : (
+              <span className="text-muted-foreground">{allLabel}</span>
+            )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent align="start">

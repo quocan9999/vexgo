@@ -537,7 +537,7 @@ export function VehiclesManagement() {
           }
         />
         <section aria-busy={loading} aria-labelledby="vehicles-title">
-          <Card className="gap-0 py-0 ring-0">
+          <Card className="gap-0 py-0 shadow-sm overflow-hidden">
             <FilterToolbar>
               <SearchInput
                 label="Tìm kiếm xe"
