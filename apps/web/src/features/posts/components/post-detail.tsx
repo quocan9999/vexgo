@@ -65,7 +65,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
   const selectedSeatText = selectedSeats.join(', ');
   const baseFare = post.price.split(' - ')[0];
   const baseFareNumber = Number(baseFare.replace(/[^\d]/g, '')) || 0;
-  const totalFare = baseFareNumber * selectedSeats.length + luggageFee;
+  const totalFare = baseFareNumber * selectedSeats.length;
   const totalFareText = totalFare.toLocaleString('vi-VN');
   const hasCargoItems = luggageItems.length > 0;
   const totalFareLabel = hasCargoItems ? 'Tạm tính tiền vé' : 'Tổng tiền';

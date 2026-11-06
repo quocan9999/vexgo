@@ -217,9 +217,12 @@ function PaymentPriceBreakdownRows({
         </span>
       </div>
       {showCargoFee && (
-        <div className="flex justify-between gap-3">
+        <div className="flex justify-between gap-3 text-xs sm:text-sm">
           <span className="text-slate-500">
             Cước hàng
+            <span className="block text-[11px] text-amber-600 font-normal">
+              (Thanh toán tại bến khi gửi, không cộng vào tiền vé)
+            </span>
           </span>
           <span className={`font-bold text-right ${cargoFeeClassName}`}>
             {cargoFeeText}
@@ -1724,7 +1727,10 @@ function PaymentContent() {
                   </div>
                 )}
                 <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between gap-3 text-xs">
-                  <span className="text-slate-600 font-medium">Cước hàng theo đơn</span>
+                  <span className="text-slate-600 font-medium">
+                    Cước hàng theo đơn
+                    <span className="text-[11px] text-amber-600 block font-normal">(Thanh toán tại bến khi gửi, không cộng vào tiền vé)</span>
+                  </span>
                   <strong className={`${cargoFeeClassName} font-extrabold text-right`}>
                     {cargoFeeText}
                   </strong>

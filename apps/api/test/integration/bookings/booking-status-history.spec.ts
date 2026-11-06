@@ -2447,7 +2447,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(201);
     const booking = bookingResponse.body.data;
     expect(booking.shippingFee).toBe(130000);
-    expect(booking.totalAmount).toBe(280000);
+    expect(booking.totalAmount).toBe(150000);
 
     // Guest gửi hàng vẫn độc lập, kể cả khi số điện thoại được khai báo thuộc một tài khoản.
     currentPrincipal = null;

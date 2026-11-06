@@ -243,9 +243,9 @@ describe('G2 booking payment and promotion transaction boundary', () => {
     {
       promoted: true,
       cargo: true,
-      total: 60000,
-      paymentCount: 1,
-      status: 'CHO_THANH_TOAN',
+      total: 0,
+      paymentCount: 0,
+      status: 'DA_THANH_TOAN',
     },
   ])(
     'creates $paymentCount attempt(s) for total $total',
@@ -450,7 +450,7 @@ describe('G2 booking payment and promotion transaction boundary', () => {
   });
 
   it('propagates cargo persistence failure after payment/seat writes in the same transaction', async () => {
-    const f = setup({ cargo: true });
+    const f = setup({ cargo: true, promoted: false });
     const failure = new Error('shipment persistence failed');
     f.persistence.persistInTransaction.mockRejectedValueOnce(failure);
     await expect(f.service.createBooking(f.dto)).rejects.toBe(failure);

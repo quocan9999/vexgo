@@ -359,7 +359,7 @@ export function ShipmentRatesManagement() {
             )}
           >
             <Luggage className="size-4" />
-            Cước gói hành lý kèm vé (Size S, M, L, XL)
+            Gói quy chuẩn &amp; Phụ phí dịch vụ (Dễ vỡ, Giá trị cao)
           </button>
         </div>
 
@@ -367,12 +367,12 @@ export function ShipmentRatesManagement() {
           <div className="space-y-4">
             <div>
               <AdminPageHeader
-                eyebrow="HÀNH LÝ KÝ GỬI XE KHÁCH"
-                title="Cấu hình gói hành lý kèm vé xe"
+                eyebrow="QUY CHUẨN GÓI &amp; PHỤ PHÍ DỊCH VỤ"
+                title="Cấu hình gói kích thước &amp; Phụ phí bảo quản"
                 titleId="luggage-rates-title"
               />
               <p className="mt-2 text-[13px] text-muted-foreground">
-                Thiết lập mức cước 4 gói kích thước quy chuẩn (Size S, M, L, XL), phương tiện và phụ phí ký gửi cho hành khách khi đặt vé xe. Mặc định áp dụng toàn nhà xe hoặc tùy chỉnh riêng theo từng tuyến.
+                Thiết lập mức cước 4 gói kích thước quy chuẩn (Size S, M, L, XL), phương tiện và phụ phí dịch vụ bảo quản (Dễ vỡ, Giá trị cao) áp dụng cho cả gửi hàng bưu kiện và hành lý ký gửi. Mặc định áp dụng toàn nhà xe hoặc tùy chỉnh riêng theo từng tuyến.
               </p>
             </div>
             <LuggagePackagesManagement canUpdate={canUpdate} />
@@ -400,6 +400,19 @@ export function ShipmentRatesManagement() {
                 Thiết lập đơn giá gửi hàng theo tuyến xe, loại hàng hóa, nấc khối
                 lượng và thời gian hiệu lực.
               </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/40 px-3.5 py-2.5 text-xs text-muted-foreground">
+              <span>
+                💡 <strong>Mẹo:</strong> Phụ phí dịch vụ bảo quản đặc biệt (Hàng dễ vỡ, Giá trị cao) được cấu hình tập trung tại tab <strong>Gói quy chuẩn &amp; Phụ phí dịch vụ</strong>.
+              </span>
+              <button
+                type="button"
+                onClick={() => setRateTab('luggage')}
+                className="shrink-0 font-bold text-primary hover:underline cursor-pointer"
+              >
+                Chuyển đến cấu hình phụ phí →
+              </button>
             </div>
 
             <section

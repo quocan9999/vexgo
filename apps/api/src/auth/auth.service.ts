@@ -401,7 +401,7 @@ export class AuthService {
     });
 
     for (const session of otherSessions ?? []) {
-      this.sessionInvalidator?.invalidateSession(session.sessionId);
+      await this.sessionInvalidator?.invalidateSession(session.sessionId);
     }
 
     return { message: 'Đổi mật khẩu thành công.' };
@@ -472,7 +472,7 @@ export class AuthService {
     });
 
     for (const session of revokedSessions ?? []) {
-      this.sessionInvalidator?.invalidateSession(session.sessionId);
+      await this.sessionInvalidator?.invalidateSession(session.sessionId);
     }
 
     return { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' };

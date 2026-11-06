@@ -203,8 +203,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         returnDate,
       });
     } else {
+      const depDate = selectedPrice || todayStr;
       router.push(
-        `/trips?needType=${activeSearchTab}&tripType=${tripType}&province=${selectedProvince}&district=${selectedDistrict}&type=${selectedType}&price=${selectedPrice}&returnDate=${returnDate}&tickets=${ticketCount}`,
+        `/trips?needType=${activeSearchTab}&tripType=${tripType}&from=${encodeURIComponent(selectedProvince)}&to=${encodeURIComponent(selectedDistrict)}&origin=${encodeURIComponent(selectedProvince)}&destination=${encodeURIComponent(selectedDistrict)}&province=${encodeURIComponent(selectedProvince)}&district=${encodeURIComponent(selectedDistrict)}&departureDate=${depDate}&date=${depDate}&type=${selectedType}&price=${depDate}&returnDate=${returnDate}&tickets=${ticketCount}`,
       );
     }
   };
@@ -357,7 +358,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <input
                       type="date"
                       min={todayStr}
-                      value={selectedPrice}
+                      value={selectedPrice || todayStr}
                       onChange={(e) =>
                         handleDepartureDateChange(e.target.value)
                       }
@@ -480,7 +481,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <input
                     type="date"
                     min={todayStr}
-                    value={freightDate}
+                    value={freightDate || todayStr}
                     onChange={(e) => handleFreightDateChange(e.target.value)}
                     onBlur={(e) => {
                       if (e.target.value && e.target.value < todayStr) {
@@ -491,7 +492,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         setFreightDate(todayStr);
                       }
                     }}
-                    className="h-12 w-full border border-slate-200 rounded-xl px-3.5 text-sm font-bold text-slate-900 outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 transition-all"
+                    onClick={(e) => {
+                      try {
+                        (e.target as HTMLInputElement).showPicker?.();
+                      } catch {}
+                    }}
+                    className="h-12 w-full border border-slate-200 rounded-xl px-3.5 text-sm font-bold text-slate-900 outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 transition-all cursor-pointer"
                   />
                 </div>
               </div>
