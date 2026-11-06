@@ -121,7 +121,7 @@ export function SearchableCombobox({
         key={item.id}
         value={item}
         disabled={isExcluded}
-        className="group/option flex min-h-14 cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-none transition-colors hover:bg-muted/70 data-highlighted:bg-primary/5 data-selected:bg-primary/8 data-selected:text-primary data-disabled:opacity-40 data-disabled:pointer-events-none"
+        className="group/option flex min-h-12 cursor-pointer items-center gap-3 rounded-[var(--admin-radius-control)] px-3 py-2 text-sm outline-none transition-colors hover:bg-slate-100/80 data-highlighted:bg-primary/8 data-selected:bg-primary/10 data-selected:text-primary data-disabled:opacity-40 data-disabled:pointer-events-none"
       >
         <span
           aria-hidden
@@ -130,7 +130,7 @@ export function SearchableCombobox({
               ? 'border-primary/30 bg-primary/10 text-primary'
               : isStation
                 ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                : 'border-border/60 bg-muted/60 text-muted-foreground group-data-[selected]/option:border-primary/15 group-data-[selected]/option:bg-primary/10 group-data-[selected]/option:text-primary'
+                : 'border-border/60 bg-muted/60 text-muted-foreground group-data-[selected]/option:border-primary/20 group-data-[selected]/option:bg-primary/10 group-data-[selected]/option:text-primary'
           } [&_svg]:size-4`}
         >
           {isCustom ? (
@@ -145,7 +145,7 @@ export function SearchableCombobox({
           <span className="flex items-center gap-1.5 font-semibold leading-snug">
             <span>{item.label}</span>
             {item.badge && (
-              <span className="inline-flex items-center rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shrink-0">
+              <span className="inline-flex items-center rounded bg-slate-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shrink-0">
                 {item.badge}
               </span>
             )}
@@ -230,7 +230,7 @@ export function SearchableCombobox({
           collisionPadding={8}
           className="admin-ui isolate z-[80]"
         >
-          <Combobox.Popup className="max-h-[min(380px,var(--available-height))] w-(--anchor-width) min-w-[min(280px,calc(100vw-32px))] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[var(--admin-radius-panel)] border border-border/80 bg-popover p-1.5 text-popover-foreground shadow-lg ring-1 ring-foreground/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
+          <Combobox.Popup className="max-h-[min(380px,var(--available-height))] w-(--anchor-width) min-w-[min(280px,calc(100vw-32px))] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[var(--admin-radius-panel)] border border-border/80 bg-popover p-2 text-popover-foreground shadow-[var(--admin-shadow-xl)] ring-1 ring-black/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
             <Combobox.Empty className="empty:hidden text-center text-sm leading-relaxed text-muted-foreground">
               <div className="px-4 py-6">
                 {loading
@@ -238,10 +238,10 @@ export function SearchableCombobox({
                   : 'Không tìm thấy. Bạn có thể nhấn để tạo điểm mới.'}
               </div>
             </Combobox.Empty>
-            <Combobox.List className="space-y-2.5">
+            <Combobox.List className="space-y-2">
               {/* Custom New Option */}
               {otherGroup.length > 0 && (
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {otherGroup.map((item) => renderItem(item))}
                 </div>
               )}
@@ -249,10 +249,10 @@ export function SearchableCombobox({
               {/* 1. Provinces */}
               {provinceGroup.length > 0 && (
                 <Combobox.Group>
-                  <Combobox.GroupLabel className="px-3 pt-1.5 pb-1 text-sm font-bold text-muted-foreground">
+                  <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     Tỉnh / Thành phố
                   </Combobox.GroupLabel>
-                  <div className="mt-0.5 space-y-1">
+                  <div className="mt-0.5 space-y-0.5">
                     {provinceGroup.map((item) => renderItem(item))}
                   </div>
                 </Combobox.Group>
@@ -261,10 +261,10 @@ export function SearchableCombobox({
               {/* 2. Key Districts */}
               {districtGroup.length > 0 && (
                 <Combobox.Group>
-                  <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-sm font-bold text-muted-foreground">
+                  <Combobox.GroupLabel className="px-3 pt-2.5 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     Quận / Huyện / TP trực thuộc
                   </Combobox.GroupLabel>
-                  <div className="mt-0.5 space-y-1">
+                  <div className="mt-0.5 space-y-0.5">
                     {districtGroup.map((item) => renderItem(item))}
                   </div>
                 </Combobox.Group>
@@ -273,11 +273,11 @@ export function SearchableCombobox({
               {/* 3. Major Stations */}
               {stationGroup.length > 0 && (
                 <Combobox.Group>
-                  <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold text-amber-600 dark:text-amber-400">
-                    <Bus className="size-4" />
+                  <Combobox.GroupLabel className="flex items-center gap-1.5 px-3 pt-2.5 pb-1 text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    <Bus className="size-3.5" />
                     Bến xe / Điểm đón trả
                   </Combobox.GroupLabel>
-                  <div className="mt-0.5 space-y-1">
+                  <div className="mt-0.5 space-y-0.5">
                     {stationGroup.map((item) => renderItem(item))}
                   </div>
                 </Combobox.Group>

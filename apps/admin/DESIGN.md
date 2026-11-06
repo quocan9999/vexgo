@@ -18,6 +18,8 @@ Platform dashboard implementation (24/10/2026): the user subsequently authorized
 
 Platform overview refinement: use three elevated metric Cards with soft pastel icon containers, large tabular numbers and status breakdown pills. Recent companies and onboarding share the main row with enhanced bar geometry and company avatar initials. FilterToolbar uses compact 11px uppercase labels, streamlined search and 38px select triggers across all CRUD views. API semantics and contracts are unchanged.
 
+Forms, Dialogs & Detail Sheets refinement: canonical Input, Textarea, Select, Field, Combobox, Dialog, AlertDialog, and Sheet primitives use card background surfaces, subtle 2xs/xl shadows, Sapphire focus halos (`focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15`), 13px bold field labels, and frosted glass/blurred backdrop overlays. Mobile drawer navigation preserves deep navy branding. API semantics and accessibility contracts are strictly preserved.
+
 Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY_INVENTORY.md). Historical baseline registry rows below do not establish current usage or approval. Mounted legacy primitives, unconsumed branches, disconnected files and test dependencies are listed separately in that report.
 
 RBAC cleanup (24/10/2026): shared role selector and permission matrix now use canonical presentation exclusively; their legacy branches and exclusive stylesheet were removed. Optional resource appearance props remain for existing callers. Existing presentation tests were adapted but not executed; this cleanup does not establish runtime approval.

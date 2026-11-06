@@ -14,8 +14,8 @@
   gap: 0;
   padding: 24px var(--shell-sidebar-padding, 16px) 16px;
   overflow: hidden;
-  background: var(--admin-navy);
-  color: #fff;
+  background: var(--admin-navy) !important;
+  color: #fff !important;
 }
 .admin-sidebar {
   position: fixed;
