@@ -7,9 +7,21 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { VehicleTypesManagement } from '@/features/vehicle-types/components/vehicle-types-management';
+import { VehicleTypeWorkspace } from '@/features/vehicle-types/components/vehicle-type-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>{children}</a>
+  ),
+}));
 
 const vehicleType = {
   vehicleTypeId: 7,
@@ -103,57 +115,43 @@ describe('Vehicle Type action permissions', () => {
     const { rerender } = render(<VehicleTypesManagement />);
 
     expect(screen.queryByRole('button', { name: 'Thêm loại xe' })).toBeNull();
-    fireEvent.click(
-      screen.getAllByRole('button', {
-        name: 'Xem chi tiết loại xe Limousine',
-      })[0]!,
-    );
-    const detail = await screen.findByRole('dialog', {
-      name: 'Chi tiết loại xe',
+    const detailButtons = screen.getAllByRole('button', {
+      name: 'Xem chi tiết loại xe Limousine',
     });
-    expect(
-      within(detail).queryByRole('button', { name: 'Chỉnh sửa' }),
-    ).toBeNull();
+    expect(detailButtons[0]?.getAttribute('href')).toBe('/vehicle-types/7');
 
-    fireEvent.click(within(detail).getByRole('button', { name: 'Đóng' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     setEmployeeAdminTestSession(['vehicle-type:read', 'vehicle-type:create']);
     rerender(<VehicleTypesManagement />);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm loại xe' }));
     expect(
       await screen.findByRole('dialog', { name: 'Thêm loại xe' }),
     ).toBeTruthy();
+
+    // Verify detail page in read-only mode
+    cleanup();
+    setEmployeeAdminTestSession(['vehicle-type:read']);
+    render(<VehicleTypeWorkspace vehicleTypeId={7} />);
+    await screen.findByRole('heading', { name: 'Limousine' });
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
   });
 
   it('unmounts an open edit form when vehicle-type:update is revoked', async () => {
     setEmployeeAdminTestSession(['vehicle-type:read', 'vehicle-type:update']);
-    const { rerender } = render(<VehicleTypesManagement />);
-    fireEvent.click(
-      screen.getAllByRole('button', {
-        name: 'Xem chi tiết loại xe Limousine',
-      })[0]!,
-    );
-    const detail = await screen.findByRole('dialog', {
-      name: 'Chi tiết loại xe',
-    });
-    fireEvent.click(
-      await within(detail).findByRole('button', { name: 'Chỉnh sửa' }),
-    );
+    const { rerender } = render(<VehicleTypeWorkspace vehicleTypeId={7} />);
+
+    await screen.findByText('Limousine');
+    fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }));
     expect(
       await screen.findByRole('dialog', { name: 'Chỉnh sửa loại xe' }),
     ).toBeTruthy();
 
     setEmployeeAdminTestSession(['vehicle-type:read']);
-    rerender(<VehicleTypesManagement />);
+    rerender(<VehicleTypeWorkspace vehicleTypeId={7} />);
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: 'Chỉnh sửa loại xe' }),
       ).toBeNull();
-      expect(
-        within(
-          screen.getByRole('dialog', { name: 'Chi tiết loại xe' }),
-        ).queryByRole('button', { name: 'Chỉnh sửa' }),
-      ).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
     });
   });
 });

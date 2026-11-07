@@ -3,19 +3,14 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  LoaderCircle,
-  MapPinned,
-  Pencil,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
-  ResourceConfirmation,
   ResourceCreateAction,
   ResourceRefreshAction,
   ResourceDetailAction,
-  ResourceSheet,
   ResourceState,
   ResourceStatusBadge,
   ResourceTableSkeleton,
@@ -43,11 +38,11 @@ import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permi
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useRoutes } from '../hooks/use-routes';
-import { getRouteById, updateRouteStatus } from '../services/route-service';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
 import { RouteFormDialog } from './route-form-dialog';
-import { StopListEditor } from '@/features/stops/components/stop-list-editor';
-import { getRouteStops } from '@/features/stops/services/stop-service';
+import { RouteWorkspace, RouteDetails } from './route-workspace';
+
+export { RouteWorkspace, RouteDetails };
 import type { RouteStopItem } from '@/features/stops/types/stop';
 
 const STATUS_OPTIONS: FilterOption[] = [
@@ -87,294 +82,6 @@ function RouteBadge({ status }: { status: RouteStatus }) {
   );
 }
 
-type DetailState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'success'; route: Route };
-
-export function RouteDetails({
-  routeId,
-  onClose,
-  onUpdated,
-}: {
-  routeId: number;
-  onClose: () => void;
-  onUpdated: (route: Route) => void;
-}) {
-  const { can } = useAdminPermissions();
-  const canUpdate = can('route:update');
-  const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
-  const [retryCount, setRetryCount] = useState(0);
-  const [editOpen, setEditOpen] = useState(false);
-  const [stopsEditorOpen, setStopsEditorOpen] = useState(false);
-  const [routeStops, setRouteStops] = useState<RouteStopItem[]>([]);
-  const [loadingStops, setLoadingStops] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const statusSubmittingRef = useRef(false);
-
-  const nextStatus =
-    detail.status === 'success'
-      ? detail.route.status === 'HOAT_DONG'
-        ? 'TAM_NGUNG'
-        : 'HOAT_DONG'
-      : null;
-
-  async function confirmStatusChange() {
-    if (!canUpdate || statusSubmittingRef.current || nextStatus === null)
-      return;
-    statusSubmittingRef.current = true;
-    setStatusSubmitting(true);
-    try {
-      const saved = await updateRouteStatus(routeId, { status: nextStatus });
-      setStatusOpen(false);
-      setDetail({ status: 'success', route: saved });
-      onUpdated(saved);
-    } catch (error: unknown) {
-      toast.error(
-        error instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-          : error instanceof Error
-            ? error.message
-            : 'Không thể cập nhật trạng thái tuyến xe.',
-      );
-    } finally {
-      statusSubmittingRef.current = false;
-      setStatusSubmitting(false);
-    }
-  }
-
-  useEffect(() => {
-    const controller = new AbortController();
-    getRouteById(routeId, controller.signal)
-      .then((route) => {
-        if (!controller.signal.aborted) setDetail({ status: 'success', route });
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted)
-          setDetail({
-            status: 'error',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Không thể tải thông tin tuyến xe.',
-          });
-      });
-
-    void Promise.resolve().then(() => setLoadingStops(true));
-    getRouteStops(routeId)
-      .then((stops) => {
-        if (!controller.signal.aborted) setRouteStops(stops);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingStops(false);
-      });
-
-    return () => controller.abort();
-  }, [routeId, retryCount]);
-
-  return (
-    <ResourceSheet
-      busy={detail.status === 'loading'}
-      title="Thông tin tuyến xe"
-      description="Thông tin hành trình, thời gian chạy và trạng thái tuyến."
-      onClose={onClose}
-    >
-      {detail.status === 'loading' && (
-        <ResourceState loading>Đang tải thông tin tuyến xe…</ResourceState>
-      )}
-      {detail.status === 'error' && (
-        <ResourceState error>
-          <p>{detail.message}</p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setDetail({ status: 'loading' });
-              setRetryCount((count) => count + 1);
-            }}
-          >
-            Thử lại
-          </Button>
-        </ResourceState>
-      )}
-      {detail.status === 'success' && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-4 border-b pb-6">
-            <span
-              aria-hidden
-              className="grid size-12 shrink-0 place-items-center rounded-[var(--admin-radius-panel)] bg-accent text-primary"
-            >
-              <MapPinned size={24} />
-            </span>
-            <div className="min-w-0">
-              <h3 className="admin-data-mono break-words text-base font-semibold">
-                {detail.route.code}
-              </h3>
-              <p className="mt-1 break-words text-[13px] text-muted-foreground">
-                {detail.route.origin} → {detail.route.destination}
-              </p>
-            </div>
-          </div>
-          <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
-            <div>
-              <dt>Điểm đi</dt>
-              <dd>{detail.route.origin}</dd>
-            </div>
-            <div>
-              <dt>Điểm đến</dt>
-              <dd>{detail.route.destination}</dd>
-            </div>
-            <div>
-              <dt>Thời gian chạy</dt>
-              <dd>
-                {detail.route.durationMinutes === null
-                  ? 'Chưa thiết lập'
-                  : `${detail.route.durationMinutes} phút`}
-              </dd>
-            </div>
-            <div>
-              <dt>Trạng thái</dt>
-              <dd>
-                <RouteBadge status={detail.route.status} />
-              </dd>
-            </div>
-            <div className="col-span-2">
-              <dt>Nhà xe</dt>
-              <dd>
-                {detail.route.busCompany.name} (
-                <span className="admin-data-mono">
-                  {detail.route.busCompany.code}
-                </span>
-                )
-              </dd>
-            </div>
-            <div>
-              <dt>Ngày tạo</dt>
-              <dd>{timestampFormat(detail.route.createdAt)}</dd>
-            </div>
-            <div>
-              <dt>Cập nhật lần cuối</dt>
-              <dd>{timestampFormat(detail.route.updatedAt)}</dd>
-            </div>
-          </dl>
-
-          {/* Section Lộ trình mẫu */}
-          <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-semibold">Lộ trình mẫu (Khuôn điểm dừng)</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Điểm đón, trả và trạm nghỉ được áp dụng cho chuyến xe mới
-                </p>
-              </div>
-              {canUpdate && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  type="button"
-                  onClick={() => setStopsEditorOpen(true)}
-                >
-                  Cấu hình ({routeStops.length} điểm)
-                </Button>
-              )}
-            </div>
-
-            {loadingStops ? (
-              <p className="text-xs text-muted-foreground">Đang tải điểm dừng…</p>
-            ) : routeStops.length === 0 ? (
-              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                Chưa thiết lập khuôn lộ trình. Nhấn &quot;Cấu hình&quot; để thêm điểm đón/trả.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">
-                  {routeStops.filter((s) => s.loaiDiem === 'DON').length} điểm đón
-                </Badge>
-                <Badge variant="outline">
-                  {routeStops.filter((s) => s.loaiDiem === 'TRA').length} điểm trả
-                </Badge>
-                {routeStops.some((s) => s.loaiDiem === 'NGHI') && (
-                  <Badge variant="warning">
-                    {routeStops.filter((s) => s.loaiDiem === 'NGHI').length} trạm nghỉ
-                  </Badge>
-                )}
-              </div>
-            )}
-          </div>
-
-          {canUpdate && (
-            <div className="flex flex-wrap justify-end gap-3 border-t pt-4">
-              <Button variant="outline" onClick={() => setStatusOpen(true)}>
-                {detail.route.status === 'HOAT_DONG'
-                  ? 'Tạm ngưng tuyến'
-                  : 'Kích hoạt tuyến'}
-              </Button>
-              <Button onClick={() => setEditOpen(true)}>
-                <Pencil aria-hidden />
-                Chỉnh sửa
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-      {editOpen && canUpdate && detail.status === 'success' && (
-        <RouteFormDialog
-          route={detail.route}
-          onClose={() => setEditOpen(false)}
-          onSaved={(saved) => {
-            setEditOpen(false);
-            setDetail({ status: 'success', route: saved });
-            onUpdated(saved);
-          }}
-        />
-      )}
-      {stopsEditorOpen && canUpdate && detail.status === 'success' && (
-        <StopListEditor
-          mode="route"
-          targetId={routeId}
-          title={`Khuôn lộ trình: ${detail.route.code} (${detail.route.origin} - ${detail.route.destination})`}
-          onClose={() => setStopsEditorOpen(false)}
-          onSaved={() => {
-            getRouteStops(routeId).then(setRouteStops).catch(() => {});
-          }}
-        />
-      )}
-      {statusOpen && canUpdate && detail.status === 'success' && nextStatus && (
-        <ResourceConfirmation
-          busy={statusSubmitting}
-          onClose={() => setStatusOpen(false)}
-          title={
-            nextStatus === 'TAM_NGUNG'
-              ? 'Tạm ngưng tuyến xe?'
-              : 'Kích hoạt tuyến xe?'
-          }
-          description={
-            nextStatus === 'TAM_NGUNG'
-              ? 'Tuyến sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu tuyến và có thể kích hoạt lại sau.'
-              : 'Tuyến sẽ được chuyển sang trạng thái Đang hoạt động.'
-          }
-        >
-          <Button
-            disabled={statusSubmitting}
-            aria-busy={statusSubmitting}
-            onClick={confirmStatusChange}
-          >
-            {statusSubmitting && (
-              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
-            )}
-            {statusSubmitting
-              ? 'Đang cập nhật…'
-              : nextStatus === 'TAM_NGUNG'
-                ? 'Tạm ngưng tuyến'
-                : 'Kích hoạt tuyến'}
-          </Button>
-        </ResourceConfirmation>
-      )}
-    </ResourceSheet>
-  );
-}
-
 export function RoutesManagement() {
   const { can } = useAdminPermissions();
   const authState = useAdminSession();
@@ -397,7 +104,6 @@ export function RoutesManagement() {
     sortRoutes,
     refresh,
   } = useRoutes();
-  const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const items = routePage?.data ?? [];
   const hasFilters = Boolean(searchInput.trim() || status);
@@ -595,10 +301,8 @@ export function RoutesManagement() {
                               </TableCell>
                               <TableCell>
                                 <ResourceDetailAction
+                                  href={`/routes/${route.routeId}`}
                                   resourceName={`tuyến ${route.code}`}
-                                  onClick={() =>
-                                    setSelectedRouteId(route.routeId)
-                                  }
                                 />
                               </TableCell>
                             </TableRow>
@@ -642,8 +346,8 @@ export function RoutesManagement() {
                           </dl>
                           <div className="flex justify-end border-t pt-3">
                             <ResourceDetailAction
+                              href={`/routes/${route.routeId}`}
                               resourceName={`tuyến ${route.code}`}
-                              onClick={() => setSelectedRouteId(route.routeId)}
                             />
                           </div>
                         </Card>
@@ -665,17 +369,6 @@ export function RoutesManagement() {
           </Card>
         </section>
       </div>
-      {selectedRouteId !== null && (
-        <RouteDetails
-          key={selectedRouteId}
-          routeId={selectedRouteId}
-          onClose={() => setSelectedRouteId(null)}
-          onUpdated={(route) => {
-            toast.success(`Đã cập nhật tuyến ${route.code}.`);
-            refresh();
-          }}
-        />
-      )}
       {createOpen && canCreate && tenantBusCompanyId !== null && (
         <RouteFormDialog
           tenantBusCompanyId={tenantBusCompanyId}

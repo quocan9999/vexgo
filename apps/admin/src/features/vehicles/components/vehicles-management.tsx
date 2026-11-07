@@ -4,22 +4,17 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  LoaderCircle,
-  Trash2,
-  Truck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
-  ResourceConfirmation,
   ResourceCreateAction,
   ResourceDetailAction,
   ResourceNotice,
   ResourcePagination,
   ResourceRefreshAction,
-  ResourceSheet,
   ResourceState,
   ResourceStatusBadge,
   ResourceTableSkeleton,
@@ -44,13 +39,7 @@ import {
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
-  deleteVehicle,
-  getVehicleById,
-  updateVehicleStatus,
-} from '../services/vehicle-service';
-import {
   VEHICLE_STATUSES,
-  type VehicleDetail,
   type VehicleFilterOption,
   type VehicleListItem,
   type VehicleSortKey,
@@ -103,346 +92,6 @@ function filterOptions(options: VehicleFilterOption[]): FilterOption[] {
   }));
 }
 
-type DetailState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'success'; vehicle: VehicleDetail };
-
-function VehicleDetails({
-  vehicleId,
-  options,
-  onClose,
-  onDeleted,
-  onUpdated,
-}: {
-  vehicleId: number;
-  options: ReturnType<typeof useVehicleFilterOptions>;
-  onClose: () => void;
-  onDeleted: (vehicle: VehicleDetail) => void;
-  onUpdated: (action: 'edit' | 'status', vehicle: VehicleDetail) => void;
-}) {
-  const { can, canAll } = useAdminPermissions();
-  const canUpdate = can('vehicle:update');
-  const canDelete = can('vehicle:delete');
-  const canConfigureSeats = canAll(['vehicle:read', 'seat:read']);
-  const router = useRouter();
-  const statusSubmittingRef = useRef(false);
-  const deleteSubmittingRef = useRef(false);
-  const [detailState, setDetailState] = useState<DetailState>({
-    status: 'loading',
-  });
-  const [retryCount, setRetryCount] = useState(0);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let current = true;
-
-    getVehicleById(vehicleId, controller.signal)
-      .then((vehicle) => {
-        if (current) setDetailState({ status: 'success', vehicle });
-      })
-      .catch((error: unknown) => {
-        if (current && !controller.signal.aborted) {
-          setDetailState({
-            status: 'error',
-            message:
-              error instanceof TypeError
-                ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-                : error instanceof Error
-                  ? error.message
-                  : 'Không thể tải thông tin xe.',
-          });
-        }
-      });
-
-    return () => {
-      current = false;
-      controller.abort();
-    };
-  }, [retryCount, vehicleId]);
-
-  function retry() {
-    setDetailState({ status: 'loading' });
-    setRetryCount((count) => count + 1);
-  }
-
-  function handleVehicleSaved(vehicle: VehicleDetail) {
-    setDetailState({ status: 'success', vehicle });
-    setEditDialogOpen(false);
-    onUpdated('edit', vehicle);
-  }
-
-  async function confirmStatusChange() {
-    if (
-      detailState.status !== 'success' ||
-      !nextStatus ||
-      statusSubmittingRef.current
-    ) {
-      return;
-    }
-
-    statusSubmittingRef.current = true;
-    setStatusSubmitting(true);
-
-    try {
-      const updatedVehicle = await updateVehicleStatus(vehicleId, nextStatus);
-      setDetailState({ status: 'success', vehicle: updatedVehicle });
-      setStatusDialogOpen(false);
-      onUpdated('status', updatedVehicle);
-    } catch (requestError: unknown) {
-      toast.error(
-        requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-          : requestError instanceof Error
-            ? requestError.message
-            : 'Không thể cập nhật trạng thái xe. Vui lòng thử lại.',
-      );
-    } finally {
-      statusSubmittingRef.current = false;
-      setStatusSubmitting(false);
-    }
-  }
-
-  async function confirmVehicleDelete() {
-    if (detailState.status !== 'success' || deleteSubmittingRef.current) {
-      return;
-    }
-
-    deleteSubmittingRef.current = true;
-    setDeleteSubmitting(true);
-
-    try {
-      await deleteVehicle(vehicleId);
-      setDeleteDialogOpen(false);
-      onDeleted(detailState.vehicle);
-    } catch (requestError: unknown) {
-      toast.error(
-        requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-          : requestError instanceof Error
-            ? requestError.message
-            : 'Không thể xóa xe. Vui lòng thử lại.',
-      );
-    } finally {
-      deleteSubmittingRef.current = false;
-      setDeleteSubmitting(false);
-    }
-  }
-
-  const nextStatus: VehicleStatus | null =
-    detailState.status === 'success'
-      ? detailState.vehicle.status === 'HOAT_DONG'
-        ? 'BAO_TRI'
-        : 'HOAT_DONG'
-      : null;
-
-  return (
-    <ResourceSheet
-      busy={detailState.status === 'loading' || deleteSubmitting}
-      onClose={onClose}
-      preventDismiss={deleteSubmitting}
-      title="Chi tiết xe"
-      description="Thông tin xe và các danh mục liên kết."
-    >
-      {detailState.status === 'loading' && (
-        <ResourceState loading>Đang tải thông tin xe…</ResourceState>
-      )}
-      {detailState.status === 'error' && (
-        <ResourceState error>
-          <p>{detailState.message}</p>
-          <Button onClick={retry} variant="outline">
-            Thử lại
-          </Button>
-        </ResourceState>
-      )}
-      {detailState.status === 'success' && (
-        <div className="space-y-6">
-          <div className={styles.detailHero}>
-            <span className={styles.vehicleMark} aria-hidden>
-              <Truck size={24} />
-            </span>
-            <div className="min-w-0">
-              <h3 className="admin-data-mono text-xl font-semibold">
-                {detailState.vehicle.licensePlate}
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Xe #
-                <span className="admin-data-mono">
-                  {detailState.vehicle.vehicleId}
-                </span>
-              </p>
-            </div>
-            <ResourceStatusBadge tone={statusTone(detailState.vehicle.status)}>
-              {statusLabel(detailState.vehicle.status)}
-            </ResourceStatusBadge>
-          </div>
-          <section aria-labelledby="vehicle-detail-company-heading">
-            <h3
-              className={styles.sectionTitle}
-              id="vehicle-detail-company-heading"
-            >
-              Đơn vị và loại xe
-            </h3>
-            <dl className={styles.detailFields}>
-              <div>
-                <dt>Nhà xe</dt>
-                <dd>{detailState.vehicle.busCompany.name}</dd>
-              </div>
-              <div>
-                <dt>Mã nhà xe</dt>
-                <dd className="admin-data-mono">
-                  {detailState.vehicle.busCompany.code}
-                </dd>
-              </div>
-              <div>
-                <dt>Loại xe</dt>
-                <dd>{detailState.vehicle.vehicleType.name}</dd>
-              </div>
-              <div>
-                <dt>Mô tả loại xe</dt>
-                <dd>
-                  {detailState.vehicle.vehicleType.description ||
-                    'Chưa có mô tả'}
-                </dd>
-              </div>
-            </dl>
-          </section>
-          <section aria-labelledby="vehicle-detail-record-heading">
-            <h3
-              className={styles.sectionTitle}
-              id="vehicle-detail-record-heading"
-            >
-              Thông tin hồ sơ
-            </h3>
-            <dl className={styles.detailFields}>
-              <div>
-                <dt>Ngày tạo</dt>
-                <dd>{timestampFormat(detailState.vehicle.createdAt)}</dd>
-              </div>
-              <div>
-                <dt>Cập nhật lần cuối</dt>
-                <dd>{timestampFormat(detailState.vehicle.updatedAt)}</dd>
-              </div>
-            </dl>
-          </section>
-          <div className="flex flex-wrap justify-end gap-2 border-t pt-5">
-            {canConfigureSeats && (
-              <Button
-                onClick={() =>
-                  router.push(
-                    `/vehicles/${detailState.vehicle.vehicleId}/seats`,
-                  )
-                }
-                variant="outline"
-              >
-                Cấu hình ghế
-              </Button>
-            )}
-            {canUpdate && (
-              <Button
-                onClick={() => {
-                  setStatusDialogOpen(true);
-                }}
-                variant="outline"
-              >
-                {detailState.vehicle.status === 'HOAT_DONG'
-                  ? 'Chuyển sang bảo trì'
-                  : 'Đưa vào hoạt động'}
-              </Button>
-            )}
-            {canUpdate && (
-              <Button onClick={() => setEditDialogOpen(true)}>Chỉnh sửa</Button>
-            )}
-            {canDelete && (
-              <Button
-                onClick={() => setDeleteDialogOpen(true)}
-                variant="destructive"
-              >
-                <Trash2 aria-hidden />
-                Xóa xe
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-      {editDialogOpen && canUpdate && detailState.status === 'success' && (
-        <VehicleFormDialog
-          busCompanies={options.busCompanies}
-          onClose={() => setEditDialogOpen(false)}
-          onRetryOptions={options.retry}
-          onSaved={handleVehicleSaved}
-          vehicle={detailState.vehicle}
-          vehicleTypes={options.vehicleTypes}
-        />
-      )}
-      {statusDialogOpen &&
-        canUpdate &&
-        detailState.status === 'success' &&
-        nextStatus && (
-          <ResourceConfirmation
-            busy={statusSubmitting}
-            onClose={() => setStatusDialogOpen(false)}
-            title={
-              nextStatus === 'BAO_TRI'
-                ? 'Chuyển xe sang bảo trì?'
-                : 'Đưa xe vào hoạt động?'
-            }
-            description={
-              nextStatus === 'BAO_TRI'
-                ? 'Xe sẽ được chuyển sang trạng thái Bảo trì. Thao tác này không xóa dữ liệu và có thể đưa xe hoạt động lại sau.'
-                : 'Xe sẽ được chuyển sang trạng thái Đang hoạt động.'
-            }
-          >
-            <Button
-              aria-busy={statusSubmitting}
-              disabled={statusSubmitting}
-              onClick={confirmStatusChange}
-            >
-              {statusSubmitting && (
-                <LoaderCircle
-                  aria-hidden
-                  className="motion-safe:animate-spin"
-                />
-              )}
-              {statusSubmitting
-                ? 'Đang cập nhật…'
-                : nextStatus === 'BAO_TRI'
-                  ? 'Chuyển sang bảo trì'
-                  : 'Đưa vào hoạt động'}
-            </Button>
-          </ResourceConfirmation>
-        )}
-      {deleteDialogOpen && canDelete && detailState.status === 'success' && (
-        <ResourceConfirmation
-          busy={deleteSubmitting}
-          onClose={() => setDeleteDialogOpen(false)}
-          title={`Xóa xe ${detailState.vehicle.licensePlate}?`}
-          description="Xe cùng sơ đồ ghế sẽ bị xóa vĩnh viễn. Chỉ xe chưa từng gắn với chuyến nào mới xóa được; xe đã có chuyến, kể cả chuyến đã hủy, sẽ được giữ lại."
-        >
-          <Button
-            aria-busy={deleteSubmitting}
-            disabled={deleteSubmitting}
-            onClick={confirmVehicleDelete}
-            variant="destructive"
-          >
-            {deleteSubmitting ? (
-              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
-            ) : (
-              <Trash2 aria-hidden />
-            )}
-            {deleteSubmitting ? 'Đang xóa…' : 'Xóa xe'}
-          </Button>
-        </ResourceConfirmation>
-      )}
-    </ResourceSheet>
-  );
-}
-
 function sortIcon(
   field: VehicleSortKey,
   currentField: VehicleSortKey,
@@ -466,6 +115,7 @@ function vehicleStatusBadge(vehicle: VehicleListItem) {
 }
 
 export function VehiclesManagement() {
+  const router = useRouter();
   const { can } = useAdminPermissions();
   const canCreate = can('vehicle:create');
   const {
@@ -485,9 +135,6 @@ export function VehiclesManagement() {
     updateSearch,
   } = useVehicles();
   const options = useVehicleFilterOptions();
-  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(
-    null,
-  );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const items = vehiclePage?.data ?? [];
@@ -715,8 +362,9 @@ export function VehiclesManagement() {
                               </TableCell>
                               <TableCell>
                                 <ResourceDetailAction
+                                  href={`/vehicles/${vehicle.vehicleId}`}
                                   onClick={() =>
-                                    setSelectedVehicleId(vehicle.vehicleId)
+                                    router.push(`/vehicles/${vehicle.vehicleId}`)
                                   }
                                   resourceName={`xe ${vehicle.licensePlate}`}
                                 />
@@ -766,8 +414,9 @@ export function VehiclesManagement() {
                           </dl>
                           <div className="flex justify-end border-t pt-3">
                             <ResourceDetailAction
+                              href={`/vehicles/${vehicle.vehicleId}`}
                               onClick={() =>
-                                setSelectedVehicleId(vehicle.vehicleId)
+                                router.push(`/vehicles/${vehicle.vehicleId}`)
                               }
                               resourceName={`xe ${vehicle.licensePlate}`}
                             />
@@ -791,27 +440,6 @@ export function VehiclesManagement() {
           </Card>
         </section>
       </div>
-      {selectedVehicleId !== null && (
-        <VehicleDetails
-          key={selectedVehicleId}
-          onDeleted={(vehicle) => {
-            setSelectedVehicleId(null);
-            toast.success(`Đã xóa xe ${vehicle.licensePlate}.`);
-            refresh();
-          }}
-          onUpdated={(action, vehicle) => {
-            toast.success(
-              action === 'edit'
-                ? `Đã cập nhật xe ${vehicle.licensePlate}.`
-                : `Đã chuyển xe ${vehicle.licensePlate} sang trạng thái ${statusLabel(vehicle.status)}.`,
-            );
-            refresh();
-          }}
-          onClose={() => setSelectedVehicleId(null)}
-          options={options}
-          vehicleId={selectedVehicleId}
-        />
-      )}
       {createDialogOpen && canCreate && (
         <VehicleFormDialog
           busCompanies={options.busCompanies}

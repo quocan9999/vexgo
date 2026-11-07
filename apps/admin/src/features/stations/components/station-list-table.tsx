@@ -28,7 +28,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 interface StationListTableProps {
   stations: Station[];
-  onSelectStation: (station: Station) => void;
+  onSelectStation?: (station: Station) => void;
 }
 
 export function StationListTable({
@@ -108,7 +108,8 @@ export function StationListTable({
                 </TableCell>
                 <TableCell>
                   <ResourceDetailAction
-                    onClick={() => onSelectStation(st)}
+                    href={`/stations/${st.diemDonTraId}`}
+                    onClick={onSelectStation ? () => onSelectStation(st) : undefined}
                     resourceName={`điểm ${st.tenDiem}`}
                   />
                 </TableCell>
@@ -153,7 +154,8 @@ export function StationListTable({
             </div>
             <div className="flex justify-end border-t pt-2">
               <ResourceDetailAction
-                onClick={() => onSelectStation(st)}
+                href={`/stations/${st.diemDonTraId}`}
+                onClick={onSelectStation ? () => onSelectStation(st) : undefined}
                 resourceName={`điểm ${st.tenDiem}`}
               />
             </div>

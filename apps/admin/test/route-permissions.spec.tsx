@@ -1,8 +1,19 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoutesManagement, RouteDetails } from '@/features/routes/components/routes-management';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>{children}</a>
+  ),
+}));
 
 const state = vi.hoisted(() => ({
   routePage: null as unknown,
@@ -113,11 +124,15 @@ describe('Admin route action permissions', () => {
     render(<RoutesManagement />);
 
     expect(screen.queryByRole('button', { name: 'Thêm tuyến' })).toBeNull();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết tuyến FUTA-TX-0100' })[0]!);
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    expect(within(detail).getByRole('heading', { name: 'FUTA-TX-0100' })).toBeTruthy();
-    expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
-    expect(within(detail).queryByRole('button', { name: 'Tạm ngưng tuyến' })).toBeNull();
+    const detailButtons = screen.getAllByRole('button', { name: 'Xem chi tiết tuyến FUTA-TX-0100' });
+    expect(detailButtons[0]?.getAttribute('href')).toBe('/routes/17');
+
+    cleanup();
+    setEmployeeAdminTestSession(['route:read']);
+    renderRouteDetails();
+    await screen.findByRole('heading', { name: 'FUTA-TX-0100' });
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tạm ngưng tuyến' })).toBeNull();
   });
 
   it('shows create only with route:create and unmounts an open create form when permission is revoked', async () => {
@@ -138,10 +153,10 @@ describe('Admin route action permissions', () => {
   it('shows edit only with route:update and unmounts an open edit form when permission is revoked', async () => {
     setEmployeeAdminTestSession(['route:read', 'route:update']);
     const { rerender } = renderRouteDetails();
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
 
-    expect(within(detail).getByRole('button', { name: 'Chỉnh sửa' })).toBeTruthy();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Chỉnh sửa' }));
+    const editBtn = await screen.findByRole('button', { name: 'Chỉnh sửa' });
+    expect(editBtn).toBeTruthy();
+    fireEvent.click(editBtn);
     expect(await screen.findByRole('dialog', { name: 'Chỉnh sửa tuyến xe' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['route:read']);
@@ -152,16 +167,15 @@ describe('Admin route action permissions', () => {
     />);
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Chỉnh sửa tuyến xe' })).toBeNull();
-      expect(within(screen.getByRole('dialog', { name: 'Thông tin tuyến xe' }))
-        .queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
     });
   });
 
   it('unmounts status confirmation and does not call update after route:update is revoked', async () => {
     setEmployeeAdminTestSession(['route:read', 'route:update']);
     const { rerender } = renderRouteDetails();
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng tuyến' }));
+    const pauseBtn = await screen.findByRole('button', { name: 'Tạm ngưng tuyến' });
+    fireEvent.click(pauseBtn);
     expect(await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['route:read']);
