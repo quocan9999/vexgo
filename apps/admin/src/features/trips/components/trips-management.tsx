@@ -158,7 +158,9 @@ export function TripsManagement() {
                 <ResourceCreateAction
                   label="Thêm chuyến"
                   onClick={() => {
-                    setCreateOpen(true);
+                    if (typeof window !== 'undefined') {
+                      window.location.assign('/trips/create');
+                    }
                   }}
                 />
               )}

@@ -1,10 +1,10 @@
 'use client';
 
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import { ResourceSheet, ResourceNotice } from '@/components/admin/resource-ui';
+import { ResourceModalDialog, ResourceNotice } from '@/components/admin/resource-ui';
 import {
   Field as FormField,
   FieldLabel,
@@ -313,7 +313,7 @@ export function TripFormDialog({
   }
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title={editing ? 'Chỉnh sửa chuyến xe' : 'Thêm chuyến xe'}
       description={
         editing
@@ -323,13 +323,14 @@ export function TripFormDialog({
       busy={submitting}
       preventDismiss={submitting}
       onClose={onClose}
+      size="xl"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         ref={formRef}
         noValidate
         onSubmit={handleSubmit}
         footer={
-          <div className="-mx-4 flex justify-end gap-3 border-t bg-card px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+          <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button disabled={submitting} onClick={closeDialog} variant="outline">
               Hủy
             </Button>
@@ -450,7 +451,7 @@ export function TripFormDialog({
             </FormField>
           ))}
         </div>
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }
