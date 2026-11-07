@@ -22,6 +22,7 @@ import {
 } from '@/components/data-filters/resource-filters';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { getStations, deleteStation } from '../services/station-service';
 import type { Station } from '../types/station';
 import { StationFormDialog } from './station-form-dialog';
@@ -36,6 +37,8 @@ const TYPE_FILTER_OPTIONS: FilterOption[] = [
 ];
 
 export function StationsManagement() {
+  const tStations = useTranslations('stations');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canCreate = can('route:create');
   const canUpdate = can('route:update');
@@ -102,13 +105,13 @@ export function StationsManagement() {
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
           eyebrow="QUẢN LÝ VẬN HÀNH"
-          title="Bến bãi & Điểm đón trả"
+          title={tStations('stationsTitle')}
           titleId="stations-title"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm điểm đón trả"
+                  label={tStations('addStop')}
                   onClick={() => {
                     setEditingStation(undefined);
                     setFormOpen(true);
@@ -124,16 +127,16 @@ export function StationsManagement() {
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label="Tìm kiếm điểm đón trả"
+                label={tStations('stationsTitle')}
                 value={search}
                 onChange={(val) => {
                   setSearch(val);
                   setPage(1);
                 }}
-                placeholder="Tìm theo tên điểm, mã điểm, địa chỉ…"
+                placeholder={tStations('searchPlaceholder')}
               />
               <SelectFilter
-                label="Loại điểm"
+                label={tStations('stationType')}
                 allLabel="Tất cả loại điểm"
                 value={typeFilter}
                 onChange={(val) => {

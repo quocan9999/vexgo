@@ -37,6 +37,7 @@ import { AdminAccountPopover } from '@/components/admin/admin-account-popover';
 import { AdminLanguageSwitcher } from '@/components/admin/admin-language-switcher';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import '../admin-shell.css';
 import headerStyles from './admin-header.module.css';
@@ -288,6 +289,34 @@ const OPERATION_CLUSTERS: NavCluster[] = [
   },
 ];
 
+const SECTION_TRANSLATION_KEYS: Record<string, string> = {
+  overview: 'overview',
+  'bus-companies': 'busCompanies',
+  'admin-accounts': 'adminAccounts',
+  rbac: 'platformRbac',
+  'tenant-rbac': 'tenantRbac',
+  'vehicle-types': 'vehicleTypes',
+  vehicles: 'vehicles',
+  routes: 'routes',
+  stations: 'stations',
+  'fare-prices': 'farePrices',
+  trips: 'trips',
+  customers: 'customers',
+  'support-chat': 'supportChat',
+  reviews: 'reviews',
+  'booking-management': 'bookingManagement',
+  promotions: 'promotions',
+  shipments: 'shipments',
+  'revenue-reports': 'revenueReports',
+};
+
+const CLUSTER_TRANSLATION_KEYS: Record<NavClusterKey, string> = {
+  operations: 'clusterOperations',
+  fleet: 'clusterFleet',
+  commercial: 'clusterCommercial',
+  customer: 'clusterCustomer',
+};
+
 export function SuperAdminLayout({
   activeSection,
   breadcrumbs,
@@ -295,6 +324,20 @@ export function SuperAdminLayout({
 }: SuperAdminLayoutProps) {
   const router = useRouter();
   const authState = useAdminSession();
+  const tNav = useTranslations('nav');
+  const tAuth = useTranslations('auth');
+
+  function getTranslatedSectionLabel(section: string): string {
+    const key = SECTION_TRANSLATION_KEYS[section];
+    if (key) {
+      try {
+        return tNav(key);
+      } catch {
+        return BREADCRUMB_SECTION_LABELS[section] ?? section;
+      }
+    }
+    return BREADCRUMB_SECTION_LABELS[section] ?? section;
+  }
   const sidebarCollapsed = useSyncExternalStore(
     subscribeToSidebarCollapsed,
     getSidebarCollapsedSnapshot,
@@ -448,9 +491,9 @@ export function SuperAdminLayout({
           (tenantScope && accessibleOperationSections.length > 0)) && (
           <div className="sidebar-nav-group">
             <p className="sidebar-label">
-              {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+              {tenantScope ? tNav('operationsHeader') : tNav('platformHeader')}
             </p>
-            <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
+            <nav aria-label={tenantScope ? tNav('operationsHeader') : tNav('platformHeader')}>
               {tenantScope ? (
                 <>
                   <div className="sidebar-cluster-links mb-2">
@@ -458,7 +501,7 @@ export function SuperAdminLayout({
                       active={activeSection === 'overview'}
                       href="/"
                       icon={<LayoutDashboard size={18} />}
-                      label="Tổng quan"
+                      label={tNav('overview')}
                       onClick={closeMobileNavigation}
                       tooltipEnabled={sidebarTooltipEnabled}
                     />
@@ -469,14 +512,16 @@ export function SuperAdminLayout({
                     );
                     if (clusterItems.length === 0) return null;
 
+                    const clusterLabel = tNav(CLUSTER_TRANSLATION_KEYS[cluster.key] ?? cluster.key);
+
                     return (
                       <div key={cluster.key} className="sidebar-nav-cluster">
                         <p className="sidebar-cluster-label">
-                          {cluster.label}
+                          {clusterLabel}
                         </p>
                         <div className="sidebar-cluster-links">
                           {clusterItems.map((item) => {
-                            const { icon, label } =
+                            const { icon } =
                               OPERATION_NAVIGATION_DETAILS[item.section];
                             return (
                               <AdminSidebarLink
@@ -484,7 +529,7 @@ export function SuperAdminLayout({
                                 href={item.href}
                                 icon={icon()}
                                 key={item.section}
-                                label={label}
+                                label={getTranslatedSectionLabel(item.section)}
                                 onClick={closeMobileNavigation}
                                 tooltipEnabled={sidebarTooltipEnabled}
                               />
@@ -501,7 +546,7 @@ export function SuperAdminLayout({
                         active={activeSection === 'overview'}
                         href="/"
                         icon={<Database size={18} />}
-                        label="Tổng quan"
+                        label={tNav('overview')}
                         onClick={closeMobileNavigation}
                         tooltipEnabled={sidebarTooltipEnabled}
                       />
@@ -510,7 +555,7 @@ export function SuperAdminLayout({
                           active={activeSection === 'bus-companies'}
                           href="/bus-companies"
                           icon={<Building2 size={18} />}
-                          label="Nhà xe"
+                          label={tNav('busCompanies')}
                           onClick={closeMobileNavigation}
                           tooltipEnabled={sidebarTooltipEnabled}
                         />
@@ -520,7 +565,7 @@ export function SuperAdminLayout({
                           active={activeSection === 'admin-accounts'}
                           href="/admin-accounts"
                           icon={<UsersRound size={18} />}
-                          label="Tài khoản Admin"
+                          label={tNav('adminAccounts')}
                           onClick={closeMobileNavigation}
                           tooltipEnabled={sidebarTooltipEnabled}
                         />
@@ -530,7 +575,7 @@ export function SuperAdminLayout({
                           active={activeSection === 'rbac'}
                           href="/rbac"
                           icon={<ShieldCheck size={18} />}
-                          label="Phân quyền"
+                          label={tNav('platformRbac')}
                           onClick={closeMobileNavigation}
                           tooltipEnabled={sidebarTooltipEnabled}
                         />
@@ -539,7 +584,7 @@ export function SuperAdminLayout({
                         active={activeSection === 'reviews'}
                         href="/reviews"
                         icon={<Star size={18} />}
-                        label="Đánh giá & Phản hồi"
+                        label={tNav('reviews')}
                         onClick={closeMobileNavigation}
                         tooltipEnabled={sidebarTooltipEnabled}
                       />
@@ -558,13 +603,13 @@ export function SuperAdminLayout({
         )}
         {tenantScope && canReadTenantRolePermissions && (
           <div className="sidebar-nav-group">
-            <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
-            <nav aria-label="Quản trị nhà xe">
+            <p className="sidebar-label">{tNav('tenantHeader')}</p>
+            <nav aria-label={tNav('tenantHeader')}>
               <AdminSidebarLink
                 active={activeSection === 'tenant-rbac'}
                 href="/tenant-rbac"
                 icon={<ShieldCheck size={18} />}
-                label="Phân quyền"
+                label={tNav('tenantRbac')}
                 onClick={closeMobileNavigation}
                 tooltipEnabled={sidebarTooltipEnabled}
               />
@@ -668,9 +713,9 @@ export function SuperAdminLayout({
                     <span className={headerStyles.current} aria-current="page">
                       {activeSection === 'overview'
                         ? tenantScope
-                          ? 'Tổng quan vận hành'
-                          : 'Tổng quan hệ thống'
-                        : (BREADCRUMB_SECTION_LABELS[activeSection] ?? sectionLabel)}
+                          ? tNav('tenantOverview')
+                          : tNav('systemOverview')
+                        : getTranslatedSectionLabel(activeSection)}
                     </span>
                   )}
                 </nav>
@@ -689,12 +734,12 @@ export function SuperAdminLayout({
               <button
                 type="button"
                 className="sr-only"
-                aria-label="Đăng xuất"
+                aria-label={tAuth('signOut')}
                 disabled={signingOut}
                 aria-busy={signingOut}
                 onClick={() => void logout()}
               >
-                Đăng xuất
+                {signingOut ? tAuth('signingOut') : tAuth('signOut')}
               </button>
             </div>
           </div>

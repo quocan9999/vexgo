@@ -9,48 +9,51 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-
-const PLATFORM_QUICK_ACTIONS = [
-  {
-    title: 'Quản lý nhà xe',
-    description: 'Thêm & kiểm duyệt đối tác nhà xe',
-    href: '/bus-companies',
-    icon: Building2,
-    color: 'bg-blue-50 text-blue-600 border-blue-100',
-  },
-  {
-    title: 'Tài khoản quản trị',
-    description: 'Cấp tài khoản & quản lý nhân sự',
-    href: '/admin-accounts',
-    icon: UsersRound,
-    color: 'bg-teal-50 text-teal-600 border-teal-100',
-  },
-  {
-    title: 'Phân quyền nền tảng',
-    description: 'Ma trận vai trò & quyền hạn RBAC',
-    href: '/rbac',
-    icon: ShieldCheck,
-    color: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-  },
-  {
-    title: 'Kiểm duyệt đánh giá',
-    description: 'Phản hồi & giải quyết khiếu nại',
-    href: '/reviews',
-    icon: Star,
-    color: 'bg-amber-50 text-amber-600 border-amber-100',
-  },
-];
+import { useTranslations } from 'next-intl';
 
 export function PlatformQuickActions() {
+  const t = useTranslations('dashboard');
+
+  const actions = [
+    {
+      title: t('actionBusCompaniesTitle'),
+      description: t('busCompaniesDesc'),
+      href: '/bus-companies',
+      icon: Building2,
+      color: 'bg-blue-50 text-blue-600 border-blue-100',
+    },
+    {
+      title: t('actionAdminAccountsTitle'),
+      description: t('adminAccountsDesc'),
+      href: '/admin-accounts',
+      icon: UsersRound,
+      color: 'bg-teal-50 text-teal-600 border-teal-100',
+    },
+    {
+      title: t('actionRbacTitle'),
+      description: t('rbacDesc'),
+      href: '/rbac',
+      icon: ShieldCheck,
+      color: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    },
+    {
+      title: t('actionReviewsTitle'),
+      description: t('reviewsDesc'),
+      href: '/reviews',
+      icon: Star,
+      color: 'bg-amber-50 text-amber-600 border-amber-100',
+    },
+  ];
+
   return (
     <Card className="shadow-xs border border-border">
       <CardHeader className="border-b border-border/80 pb-3">
         <CardTitle className="text-sm font-semibold text-foreground">
-          Lối tắt quản trị sàn
+          {t('platformShortcutsTitle')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-2 space-y-1">
-        {PLATFORM_QUICK_ACTIONS.map((action) => {
+        {actions.map((action) => {
           const Icon = action.icon;
           return (
             <Link

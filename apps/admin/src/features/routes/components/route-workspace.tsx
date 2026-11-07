@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/status-badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
+import { useTranslations } from 'next-intl';
 import { StopListEditor } from '@/features/stops/components/stop-list-editor';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
@@ -65,6 +66,8 @@ export function RouteWorkspace({
   routeId,
   onUpdated,
 }: RouteWorkspaceProps) {
+  const tRoutes = useTranslations('routes');
+  const tCommon = useTranslations('common');
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const canUpdate = hasAdminPermission(session, 'route:update');
@@ -184,7 +187,7 @@ export function RouteWorkspace({
               {canUpdate && route && (
                 <Button onClick={() => setEditOpen(true)}>
                   <Pencil aria-hidden="true" />
-                  Chỉnh sửa
+                  {tCommon('edit')}
                 </Button>
               )}
               <ResourceRefreshAction
@@ -207,10 +210,10 @@ export function RouteWorkspace({
             <p>{detail.message}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={retry} variant="outline">
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button nativeButton={false} render={<Link href="/routes" />}>
-                Về danh sách tuyến
+                {tRoutes('backToRoutes')}
               </Button>
             </div>
           </ResourceState>
@@ -242,7 +245,7 @@ export function RouteWorkspace({
                 <ResourceStatusBadge
                   tone={route.status === 'HOAT_DONG' ? 'active' : 'muted'}
                 >
-                  {route.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}
+                  {route.status === 'HOAT_DONG' ? tRoutes('active') : tRoutes('inactive')}
                 </ResourceStatusBadge>
               </div>
             </Card>
@@ -255,7 +258,7 @@ export function RouteWorkspace({
                   <div className="flex items-center gap-2">
                     <Compass className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Thông tin hành trình
+                      {tRoutes('journeyInfo')}
                     </CardTitle>
                   </div>
                 </CardHeader>

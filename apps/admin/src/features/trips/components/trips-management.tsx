@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useTripLookupOptions } from '../hooks/use-trip-lookup-options';
 import { useTrips } from '../hooks/use-trips';
 import type { TripSortKey } from '../types/trip';
@@ -80,6 +81,8 @@ function formatTime(timeStr: string) {
 }
 
 export function TripsManagement() {
+  const tTrips = useTranslations('trips');
+  const tCommon = useTranslations('common');
   const {
     tripPage,
     error,
@@ -156,7 +159,7 @@ export function TripsManagement() {
             <div className="page-intro-actions">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm chuyến"
+                  label={tTrips('createTrip')}
                   onClick={() => {
                     if (typeof window !== 'undefined') {
                       window.location.assign('/trips/create');
@@ -168,7 +171,7 @@ export function TripsManagement() {
             </div>
           }
           eyebrow="QUẢN LÝ VẬN HÀNH"
-          title="Quản lý chuyến xe"
+          title={tTrips('tripsTitle')}
           titleId="trips-title"
         />
 
@@ -180,9 +183,9 @@ export function TripsManagement() {
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
             <FilterToolbar>
               <SearchInput
-                label="Tìm chuyến xe"
+                label={tTrips('tripsTitle')}
                 onChange={updateSearch}
-                placeholder="Tìm mã chuyến, biển số xe..."
+                placeholder={tTrips('searchPlaceholder')}
                 value={searchInput}
               />
               <div className="min-w-0 flex-[1_1_180px] sm:flex-[1_1_200px]">

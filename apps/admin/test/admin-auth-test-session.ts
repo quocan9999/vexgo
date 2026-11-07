@@ -24,6 +24,32 @@ const mockAdminSession = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 
+import viMessages from '../src/messages/vi.json';
+
+vi.mock('next-intl', () => ({
+  useTranslations: (namespace?: string) => {
+    return (key: string, values?: Record<string, any>) => {
+      const keys = namespace ? `${namespace}.${key}`.split('.') : key.split('.');
+      let val: any = viMessages;
+      for (const k of keys) {
+        val = val?.[k];
+      }
+      if (typeof val === 'string') {
+        if (values) {
+          return Object.entries(values).reduce(
+            (acc, [k, v]) => acc.replace(`{${k}}`, String(v)),
+            val,
+          );
+        }
+        return val;
+      }
+      return key;
+    };
+  },
+  useLocale: () => 'vi',
+  NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 vi.mock('@/features/admin-auth/hooks/use-admin-session', () => {
   return {
     useAdminSession: () =>

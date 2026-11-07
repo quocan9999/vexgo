@@ -2,6 +2,7 @@
 
 import { Radio, Calendar } from 'lucide-react';
 import { ResourceRefreshAction } from '@/components/admin/resource-ui';
+import { useTranslations } from 'next-intl';
 
 interface TenantDashboardHeaderProps {
   businessDate?: string;
@@ -20,6 +21,7 @@ export function TenantDashboardHeader({
   onRefresh,
   onAutoRefreshChange,
 }: TenantDashboardHeaderProps) {
+  const t = useTranslations('dashboard');
   const formatTime = (date: Date | null) => {
     if (!date) return '—';
     return date.toLocaleTimeString('vi-VN', {
@@ -32,7 +34,7 @@ export function TenantDashboardHeader({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-1">
       {/* Screen-reader landmark */}
-      <h1 className="sr-only">Tổng quan vận hành nhà xe</h1>
+      <h1 className="sr-only">{t('tenantDashboardTitle')}</h1>
 
       {/* Left: Context chips */}
       <div className="flex items-center gap-2.5 flex-wrap">
@@ -47,7 +49,7 @@ export function TenantDashboardHeader({
         </div>
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
           <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-          Trực tiếp
+          {t('liveBadge')}
         </span>
       </div>
 
@@ -60,12 +62,12 @@ export function TenantDashboardHeader({
         >
           <span className="text-muted-foreground px-2 py-1 font-medium flex items-center gap-1">
             <Radio className="size-3 text-primary" />
-            <span>Làm mới:</span>
+            <span>{t('refreshLabel')}:</span>
           </span>
           {[
             { value: 30, label: '30s' },
             { value: 60, label: '60s' },
-            { value: 0, label: 'Tắt' },
+            { value: 0, label: t('refreshOff') },
           ].map((option) => (
             <button
               key={option.value}

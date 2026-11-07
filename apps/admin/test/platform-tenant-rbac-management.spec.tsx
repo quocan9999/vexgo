@@ -45,7 +45,7 @@ vi.mock('@/features/admin-auth/services/admin-auth', async (importOriginal) => {
   };
 });
 
-import PlatformTenantRbacPage from '@/app/rbac/tenants/[nhaXeId]/page';
+import PlatformTenantRbacPage from '@/app/[locale]/rbac/tenants/[nhaXeId]/page';
 import type {
   TenantRbacConfig,
   TenantRbacPermission,

@@ -37,6 +37,7 @@ import {
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useRoutes } from '../hooks/use-routes';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
 import { RouteFormDialog } from './route-form-dialog';
@@ -83,6 +84,8 @@ function RouteBadge({ status }: { status: RouteStatus }) {
 }
 
 export function RoutesManagement() {
+  const tRoutes = useTranslations('routes');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const authState = useAdminSession();
   const tenantBusCompanyId =
@@ -134,13 +137,13 @@ export function RoutesManagement() {
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
           eyebrow="QUẢN LÝ VẬN HÀNH"
-          title="Quản lý tuyến xe"
+          title={tRoutes('routesTitle')}
           titleId="routes-title"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm tuyến"
+                  label={tRoutes('createRoute')}
                   onClick={() => setCreateOpen(true)}
                 />
               )}
@@ -152,13 +155,13 @@ export function RoutesManagement() {
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label="Tìm tuyến xe"
+                label={tRoutes('routesTitle')}
                 value={searchInput}
                 onChange={updateSearch}
-                placeholder="Tìm mã tuyến, điểm đi, điểm đến…"
+                placeholder={tRoutes('searchPlaceholder')}
               />
               <SelectFilter
-                label="Trạng thái tuyến"
+                label={tRoutes('routeStatus')}
                 allLabel="Tất cả trạng thái"
                 value={status}
                 options={STATUS_OPTIONS}
