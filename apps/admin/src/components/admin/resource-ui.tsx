@@ -11,6 +11,7 @@ import {
   RefreshCw,
   SearchX,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRef, type ReactNode } from 'react';
 import { Button } from '@/components/ui/action-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -178,10 +179,28 @@ export function ResourceRefreshAction({
 export function ResourceDetailAction({
   resourceName,
   onClick,
+  href,
 }: {
   resourceName: string;
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
 }) {
+  if (href) {
+    return (
+      <Button
+        aria-label={`Xem chi tiết ${resourceName}`}
+        nativeButton={false}
+        onClick={onClick}
+        render={<Link href={href} />}
+        size="sm"
+        variant="ghost"
+      >
+        <Eye aria-hidden />
+        Xem chi tiết
+      </Button>
+    );
+  }
+
   return (
     <Button
       aria-label={`Xem chi tiết ${resourceName}`}
