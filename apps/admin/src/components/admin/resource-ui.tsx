@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRef, type ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/action-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -22,6 +23,13 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/status-badge';
 import {
   Sheet,
@@ -31,6 +39,64 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+
+export type ResourceModalDialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
+
+const MODAL_SIZE_CLASSES: Record<ResourceModalDialogSize, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
+};
+
+export function ResourceModalDialog({
+  children,
+  title,
+  description,
+  size = 'lg',
+  busy = false,
+  preventDismiss = false,
+  onClose,
+}: {
+  children: ReactNode;
+  title: string;
+  description?: string;
+  size?: ResourceModalDialogSize;
+  busy?: boolean;
+  preventDismiss?: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog
+      open
+      onOpenChange={(open, event) => {
+        if (!open && preventDismiss) event.cancel();
+        else if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        aria-busy={busy}
+        className={cn(
+          MODAL_SIZE_CLASSES[size],
+          'flex max-h-[90vh] flex-col gap-0 p-0 overflow-hidden',
+        )}
+        showCloseButton={!preventDismiss}
+      >
+        <DialogHeader className="border-b px-5 py-4 sm:px-6">
+          <DialogTitle>{title}</DialogTitle>
+          {description && (
+            <DialogDescription className="mt-1">{description}</DialogDescription>
+          )}
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function ResourceSheet({
   children,

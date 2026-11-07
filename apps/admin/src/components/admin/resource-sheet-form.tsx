@@ -19,3 +19,6 @@ export function ResourceSheetForm({
     </form>
   );
 }
+
+export const ResourceModalForm = ResourceSheetForm;
+export type ResourceModalFormProps = ResourceSheetFormProps;

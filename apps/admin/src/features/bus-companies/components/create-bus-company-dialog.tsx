@@ -1,10 +1,10 @@
 'use client';
 
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Button } from '@/components/ui/action-button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -152,18 +152,19 @@ export function CreateBusCompanyDialog({
   }
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title="Thêm nhà xe"
       description="Nhập thông tin cơ bản để thêm đối tác vào hệ thống."
       busy={submitting}
       preventDismiss={submitting}
       onClose={onClose}
+      size="lg"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         noValidate
         onSubmit={handleSubmit}
         footer={
-          <div className="-mx-4 flex justify-end gap-2 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+          <div className="-mx-5 -mb-5 flex justify-end gap-2 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button
               disabled={submitting}
               onClick={closeDialog}
@@ -172,7 +173,7 @@ export function CreateBusCompanyDialog({
             >
               Hủy
             </Button>
-              <Button disabled={submitting} type="submit">
+            <Button disabled={submitting} type="submit">
               {submitting && (
                 <LoaderCircle
                   aria-hidden="true"
@@ -295,7 +296,7 @@ export function CreateBusCompanyDialog({
             {fieldErrors.status}
           </FieldError>
         </Field>
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }
