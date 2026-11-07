@@ -13,7 +13,7 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { ResourceModalDialog } from '@/components/admin/resource-ui';
-import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';

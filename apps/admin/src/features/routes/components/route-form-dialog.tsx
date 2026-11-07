@@ -1,6 +1,6 @@
 'use client';
 
-import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { LocationPicker } from '@/features/locations/components/location-picker';
 
 import { LoaderCircle } from 'lucide-react';

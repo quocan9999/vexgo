@@ -10,7 +10,7 @@ import {
   ResourceModalDialog,
   ResourceState,
 } from '@/components/admin/resource-ui';
-import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { Button } from '@/components/ui/action-button';
 import { Card, CardContent } from '@/components/ui/card';

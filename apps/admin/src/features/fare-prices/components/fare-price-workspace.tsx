@@ -551,4 +551,4 @@ export function FarePriceWorkspace({
   );
 }
 
-export { FarePriceWorkspace as FarePriceDetailSheet };
+

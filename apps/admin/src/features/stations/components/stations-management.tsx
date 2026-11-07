@@ -197,7 +197,7 @@ export function StationsManagement() {
           </Card>
         </section>
 
-        {/* Create / Edit Form Sheet */}
+        {/* Create / Edit Form Dialog */}
         {formOpen && (
           <StationFormDialog
             station={editingStation}
