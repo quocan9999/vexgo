@@ -76,6 +76,7 @@ export function configureSwagger(app: INestApplication): void {
     .addTag('Hỗ trợ trực tuyến & Chat CSKH (Support Chat)', 'Kênh nhắn tin hỗ trợ trực tiếp giữa khách hàng và nhà xe')
     .addTag('Báo cáo doanh thu (Revenue Reports)', 'Báo cáo tài chính, sản lượng vé và doanh thu nhà xe')
     .addTag('Bảng điều khiển nền tảng (Platform Dashboard)', 'Số liệu tổng quan chỉ số vận hành toàn hệ thống VexGo')
+    .addTag('Bảng điều khiển nhà xe (Tenant Dashboard)', 'Số liệu tổng quan chỉ số vận hành thời gian thực của nhà xe')
     .addTag('Liên hệ & Góp ý (Contacts)', 'Tiếp nhận thông tin liên hệ và phản ánh góp ý từ người dùng')
     .addTag('Kiểm tra hệ thống (System Health)', 'Kiểm tra trạng thái hoạt động của API và kết nối cơ sở dữ liệu')
     .build();
