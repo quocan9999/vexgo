@@ -111,6 +111,7 @@ vi.mock('next/navigation', async () => {
       replace: (url: string) => navigation.navigate(url, 'replace'),
       refresh: vi.fn(),
     }),
+    usePathname: () => '/booking-management',
   };
 });
 

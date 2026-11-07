@@ -35,6 +35,7 @@ import {
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/action-button';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   formatDateOnly,
   formatPeriod,
@@ -141,6 +142,7 @@ function MetricCard({
 }
 
 export function RevenueReportsDashboard() {
+  const tReports = useTranslations('reports');
   const {
     dateRange,
     error,
@@ -187,7 +189,7 @@ export function RevenueReportsDashboard() {
             </div>
           }
           eyebrow="BÁO CÁO NHÀ XE"
-          title="Báo cáo doanh thu"
+          title={tReports('reportsTitle')}
           titleId="revenue-report-title"
         />
 

@@ -30,6 +30,7 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useShipments } from '../hooks/use-shipments';
 import type { ShipmentStatus } from '../types/shipment';
 import {
@@ -49,6 +50,7 @@ const STATUS_FILTER_OPTIONS: FilterOption[] = [
 ];
 
 export function ShipmentsManagement() {
+  const tShipments = useTranslations('shipments');
   const router = useRouter();
   const {
     shipments,
@@ -100,7 +102,7 @@ export function ShipmentsManagement() {
             </div>
           }
           eyebrow="QUẢN LÝ GỬI HÀNG"
-          title="Danh sách phiếu gửi hàng"
+          title={tShipments('shipmentsTitle')}
           titleId="shipments-page-title"
         />
 

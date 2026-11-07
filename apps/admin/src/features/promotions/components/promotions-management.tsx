@@ -32,6 +32,7 @@ import {
 import { toast } from 'sonner';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   PromotionApiError,
   updatePromotionStatus,
@@ -105,6 +106,7 @@ function canReactivate(promotion: Promotion): boolean {
 }
 
 export function PromotionsManagement() {
+  const tPromotions = useTranslations('promotions');
   const { can } = useAdminPermissions();
   const canCreate = can('promotion:create');
   const canUpdate = can('promotion:update');
@@ -306,7 +308,7 @@ export function PromotionsManagement() {
             <div className="page-intro-actions">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm khuyến mãi"
+                  label={tPromotions('createPromotion')}
                   onClick={openCreate}
                 />
               )}
@@ -314,7 +316,7 @@ export function PromotionsManagement() {
             </div>
           }
           eyebrow="ƯU ĐÃI NHÀ XE"
-          title="Quản lý khuyến mãi"
+          title={tPromotions('promotionsTitle')}
           titleId="promotions-title"
         />
         <section

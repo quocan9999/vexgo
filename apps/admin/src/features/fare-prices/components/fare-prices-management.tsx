@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   getFarePriceRouteOptions,
   getFarePriceVehicleTypeOptions,
@@ -103,6 +104,7 @@ function optionFilters(options: FarePriceOption[]): FilterOption[] {
 }
 
 export function FarePricesManagement() {
+  const tFare = useTranslations('farePrices');
   const { can } = useAdminPermissions();
   const canCreate = can('fare-price:create');
   const {
@@ -260,13 +262,13 @@ export function FarePricesManagement() {
         <div>
           <AdminPageHeader
             eyebrow="QUẢN LÝ VẬN HÀNH"
-            title="Quản lý bảng giá vé"
+            title={tFare('farePricesTitle')}
             titleId="fare-prices-title"
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 {canCreate && (
                   <ResourceCreateAction
-                    label="Thêm bảng giá"
+                    label={tFare('createFarePrice')}
                     onClick={openCreateDialog}
                   />
                 )}

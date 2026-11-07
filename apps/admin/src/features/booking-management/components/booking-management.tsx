@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import { useTranslations } from 'next-intl';
 import {
   BookingManagementApiError,
   getAdminBookings,
@@ -140,6 +141,7 @@ function getSessionKey(authState: ReturnType<typeof useAdminSession>) {
 }
 
 export function BookingManagement() {
+  const tBookings = useTranslations('bookings');
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryString = searchParams.toString();
@@ -383,7 +385,7 @@ export function BookingManagement() {
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           eyebrow="QUẢN LÝ VẬN HÀNH"
-          title="Quản lý phiếu đặt vé & vé"
+          title={tBookings('bookingsTitle')}
           titleId="booking-management-title"
           actions={
             <ResourceRefreshAction
@@ -412,10 +414,10 @@ export function BookingManagement() {
                 id="booking-management-bookings-tab"
                 value="bookings"
               >
-                Phiếu đặt vé
+                {tBookings('tabBookings')}
               </TabsTrigger>
               <TabsTrigger id="booking-management-tickets-tab" value="tickets">
-                Vé
+                {tBookings('tabTickets')}
               </TabsTrigger>
             </TabsList>
             <TabsContent
@@ -426,7 +428,9 @@ export function BookingManagement() {
               <FilterToolbar>
                 <SearchInput
                   label={
-                    urlState.tab === 'bookings' ? 'Tìm phiếu đặt vé' : 'Tìm vé'
+                    urlState.tab === 'bookings'
+                      ? tBookings('searchBookings')
+                      : tBookings('searchTickets')
                   }
                   onChange={(value) => {
                     searchDirty.current = true;
