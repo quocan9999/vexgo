@@ -117,6 +117,21 @@
   display: grid;
   gap: 4px;
 }
+.sidebar-nav-cluster + .sidebar-nav-cluster {
+  margin-top: 12px;
+}
+.sidebar-cluster-label {
+  margin: 6px 12px 4px;
+  color: #8b9bb2;
+  font-size: 10.5px;
+  font-weight: var(--admin-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sidebar-cluster-links {
+  display: grid;
+  gap: 4px;
+}
 .sidebar-link {
   position: relative;
   display: flex;
@@ -204,6 +219,7 @@
   }
   .is-sidebar-collapsed .brand-copy,
   .is-sidebar-collapsed .sidebar-label,
+  .is-sidebar-collapsed .sidebar-cluster-label,
   .is-sidebar-collapsed .sidebar-link > span:last-child {
     display: none;
   }
@@ -227,6 +243,7 @@
   }
   .admin-sidebar .brand-copy,
   .admin-sidebar .sidebar-label,
+  .admin-sidebar .sidebar-cluster-label,
   .admin-sidebar .sidebar-link > span:last-child,
   .admin-sidebar .sidebar-collapse-button {
     display: none;

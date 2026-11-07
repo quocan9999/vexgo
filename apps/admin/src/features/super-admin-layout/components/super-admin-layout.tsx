@@ -249,6 +249,37 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   },
 };
 
+type NavClusterKey = 'operations' | 'fleet' | 'commercial' | 'customer';
+
+interface NavCluster {
+  key: NavClusterKey;
+  label: string;
+  sections: AdminOperationSection[];
+}
+
+const OPERATION_CLUSTERS: NavCluster[] = [
+  {
+    key: 'operations',
+    label: 'Điều độ & Bán vé',
+    sections: ['trips', 'booking-management', 'shipments'],
+  },
+  {
+    key: 'fleet',
+    label: 'Đội xe & Tuyến đường',
+    sections: ['routes', 'stations', 'vehicles', 'vehicle-types'],
+  },
+  {
+    key: 'commercial',
+    label: 'Kinh doanh & Bảng giá',
+    sections: ['fare-prices', 'promotions', 'revenue-reports'],
+  },
+  {
+    key: 'customer',
+    label: 'Khách hàng & Dịch vụ',
+    sections: ['customers', 'support-chat', 'reviews'],
+  },
+];
+
 export function SuperAdminLayout({
   activeSection,
   breadcrumbs,
@@ -410,19 +441,35 @@ export function SuperAdminLayout({
             </p>
             <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
               {tenantScope
-                ? accessibleOperationSections.map((item) => {
-                    const { icon, label } =
-                      OPERATION_NAVIGATION_DETAILS[item.section];
+                ? OPERATION_CLUSTERS.map((cluster) => {
+                    const clusterItems = accessibleOperationSections.filter(
+                      (item) => cluster.sections.includes(item.section),
+                    );
+                    if (clusterItems.length === 0) return null;
+
                     return (
-                      <AdminSidebarLink
-                        active={activeSection === item.section}
-                        href={item.href}
-                        icon={icon()}
-                        key={item.section}
-                        label={label}
-                        onClick={closeMobileNavigation}
-                        tooltipEnabled={sidebarTooltipEnabled}
-                      />
+                      <div key={cluster.key} className="sidebar-nav-cluster">
+                        <p className="sidebar-cluster-label">
+                          {cluster.label}
+                        </p>
+                        <div className="sidebar-cluster-links">
+                          {clusterItems.map((item) => {
+                            const { icon, label } =
+                              OPERATION_NAVIGATION_DETAILS[item.section];
+                            return (
+                              <AdminSidebarLink
+                                active={activeSection === item.section}
+                                href={item.href}
+                                icon={icon()}
+                                key={item.section}
+                                label={label}
+                                onClick={closeMobileNavigation}
+                                tooltipEnabled={sidebarTooltipEnabled}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })
                 : platformScope && (
@@ -540,6 +587,11 @@ export function SuperAdminLayout({
                 <Link
                   className={headerStyles.workspace}
                   href={tenantScope ? (firstAccessibleTenantPath ?? '/') : '/'}
+                  aria-label={
+                    tenantScope
+                      ? `Nhà xe ${tenantBusCompanyName}`
+                      : 'Khu vực quản trị nền tảng'
+                  }
                   title={
                     tenantScope ? tenantBusCompanyName : 'Quản trị nền tảng'
                   }
