@@ -1,12 +1,12 @@
 'use client';
 
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
-import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Input } from '@/components/ui/input';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import {
@@ -201,7 +201,7 @@ export function VehicleFormDialog({
   }
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title={editing ? 'Chỉnh sửa xe' : 'Thêm xe'}
       description={
         editing
@@ -211,13 +211,14 @@ export function VehicleFormDialog({
       busy={submitting}
       preventDismiss={submitting}
       onClose={closeDialog}
+      size={editing ? 'md' : '3xl'}
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         ref={formRef}
         noValidate
         onSubmit={handleSubmit}
         footer={
-          <div className="-mx-4 flex flex-wrap justify-end gap-2 border-t bg-card p-4 sm:-mx-6 sm:p-6 shrink-0">
+          <div className="-mx-5 -mb-5 flex flex-wrap justify-end gap-2 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button
               disabled={submitting}
               onClick={closeDialog}
@@ -384,7 +385,7 @@ export function VehicleFormDialog({
             seats={layoutSeats}
           />
         )}
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }
