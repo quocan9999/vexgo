@@ -4,9 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Plus,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useState } from 'react';

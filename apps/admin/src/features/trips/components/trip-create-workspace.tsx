@@ -2,14 +2,10 @@
 
 import {
   ArrowLeft,
-  Calendar,
   Clock,
   Compass,
-  Bus,
-  MapPin,
   LoaderCircle,
   AlertCircle,
-  PackageCheck,
   Route as RouteIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -82,31 +78,45 @@ export function TripCreateWorkspace() {
   const [loadingStops, setLoadingStops] = useState(false);
 
   useEffect(() => {
-    if (!values.routeId) {
-      setStops([]);
+    const routeIdNum = Number(values.routeId);
+    if (!Number.isSafeInteger(routeIdNum) || routeIdNum < 1) {
       return;
     }
 
-    const routeIdNum = Number(values.routeId);
-    if (!Number.isSafeInteger(routeIdNum) || routeIdNum < 1) return;
-
-    setLoadingStops(true);
+    let active = true;
     getRouteStops(routeIdNum)
       .then((data) => {
-        setStops(data);
+        if (active) {
+          setStops(data);
+        }
       })
       .catch(() => {
-        setStops([]);
+        if (active) {
+          setStops([]);
+        }
       })
       .finally(() => {
-        setLoadingStops(false);
+        if (active) {
+          setLoadingStops(false);
+        }
       });
+
+    return () => {
+      active = false;
+    };
   }, [values.routeId]);
 
   function updateField<F extends FormField>(field: F, value: FormValues[F]) {
     setValues((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     setFormError(null);
+    if (field === 'routeId') {
+      if (!value) {
+        setStops([]);
+      } else {
+        setLoadingStops(true);
+      }
+    }
   }
 
   function validate(): FieldErrors {

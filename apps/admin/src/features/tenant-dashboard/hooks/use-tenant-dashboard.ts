@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getTenantDashboardOverview } from '../services/tenant-dashboard-service';
 import type { TenantDashboardOverview } from '../types/tenant-dashboard';
 
@@ -11,51 +11,42 @@ export function useTenantDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(30); // 30s default
+  const [refreshCount, setRefreshCount] = useState(0);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const fetchOverview = useCallback(async (isSilent = false) => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    if (isSilent) {
-      setIsRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    setError(null);
-
-    try {
-      const overview = await getTenantDashboardOverview(controller.signal);
-      setData(overview);
-      setLastUpdated(new Date());
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return;
-      }
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Không thể tải dữ liệu bảng điều khiển nhà xe. Vui lòng thử lại.',
-      );
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  // Initial fetch
+  // Data fetching effect
   useEffect(() => {
-    void fetchOverview(false);
+    const controller = new AbortController();
+    let current = true;
+
+    getTenantDashboardOverview(controller.signal)
+      .then((overview) => {
+        if (current) {
+          setData(overview);
+          setError(null);
+          setLastUpdated(new Date());
+          setLoading(false);
+          setIsRefreshing(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!current) return;
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Không thể tải dữ liệu bảng điều khiển nhà xe. Vui lòng thử lại.',
+        );
+        setLoading(false);
+        setIsRefreshing(false);
+      });
+
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      current = false;
+      controller.abort();
     };
-  }, [fetchOverview]);
+  }, [refreshCount]);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -63,18 +54,20 @@ export function useTenantDashboard() {
 
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        void fetchOverview(true);
+        setIsRefreshing(true);
+        setRefreshCount((c) => c + 1);
       }
     }, autoRefreshInterval * 1000);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [autoRefreshInterval, fetchOverview]);
+  }, [autoRefreshInterval]);
 
   const refresh = useCallback(() => {
-    return fetchOverview(true);
-  }, [fetchOverview]);
+    setIsRefreshing(true);
+    setRefreshCount((c) => c + 1);
+  }, []);
 
   return {
     data,

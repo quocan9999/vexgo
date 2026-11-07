@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Calendar,
-  Clock,
   Compass,
   LoaderCircle,
   Pencil,

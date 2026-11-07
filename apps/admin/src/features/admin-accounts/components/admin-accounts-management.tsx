@@ -46,7 +46,6 @@ import {
 } from '@/features/tenant-rbac/types/tenant-rbac';
 import { useAdminAccounts } from '../hooks/use-admin-accounts';
 import type {
-  AdminAccount,
   AdminAccountSortKey,
   AdminAccountStatus,
 } from '../types/admin-account';
@@ -99,12 +98,6 @@ function formatTimestamp(value: string) {
   })
     .format(timestamp)
     .replaceAll('/', '-');
-}
-
-function formatDate(value: string | null) {
-  if (!value) return 'Chưa cập nhật';
-  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : 'Chưa cập nhật';
 }
 
 function RoleBadges({ roles }: { roles: readonly string[] }) {

@@ -2,7 +2,7 @@
 
 import { Building2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Badge, LegacyBadge } from '@/components/ui/status-badge';
+import { LegacyBadge } from '@/components/ui/status-badge';
 import {
   Table,
   TableBody,

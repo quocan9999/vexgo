@@ -5,16 +5,12 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Boxes,
-  Building2,
-  CalendarDays,
   Clock,
   LoaderCircle,
-  MapPin,
   Package,
   Receipt,
   Route,
   Tag,
-  Truck,
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';

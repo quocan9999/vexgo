@@ -23,7 +23,6 @@ import {
   type FilterOption,
 } from '@/components/data-filters/resource-filters';
 import { Button } from '@/components/ui/action-button';
-import { Badge } from '@/components/ui/status-badge';
 import { Card } from '@/components/ui/card';
 import {
   Table,
@@ -38,12 +37,11 @@ import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permi
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useRoutes } from '../hooks/use-routes';
-import type { Route, RouteSortKey, RouteStatus } from '../types/route';
+import type { RouteSortKey, RouteStatus } from '../types/route';
 import { RouteFormDialog } from './route-form-dialog';
 import { RouteWorkspace, RouteDetails } from './route-workspace';
 
 export { RouteWorkspace, RouteDetails };
-import type { RouteStopItem } from '@/features/stops/types/stop';
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },

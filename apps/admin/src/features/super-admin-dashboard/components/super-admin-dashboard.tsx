@@ -11,7 +11,6 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { PlatformQuickActions } from './platform-quick-actions';
-import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
   ResourceNotice,
   ResourceRefreshAction,

@@ -9,7 +9,6 @@ import {
   Clock,
   Compass,
   LoaderCircle,
-  MapPin,
   MapPinned,
   Pencil,
   Route as RouteIcon,

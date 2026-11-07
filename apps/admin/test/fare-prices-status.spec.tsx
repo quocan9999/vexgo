@@ -11,7 +11,6 @@ import {
 } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
 import { FarePriceWorkspace } from '@/features/fare-prices/components/fare-price-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
@@ -352,7 +351,7 @@ describe('Fare Price status lifecycle behavior', () => {
   });
 
   it('maps concurrent modification and treats a stale same-state 200 as success', async () => {
-    let api = installApi({
+    installApi({
       initialStatus: 'TAM_NGUNG',
       patchHandler: async () =>
         response(
@@ -391,7 +390,7 @@ describe('Fare Price status lifecycle behavior', () => {
     ).toBe('Tạm ngưng');
 
     cleanup();
-    api = installApi({
+    installApi({
       initialStatus: 'TAM_NGUNG',
       patchHandler: async () =>
         response({

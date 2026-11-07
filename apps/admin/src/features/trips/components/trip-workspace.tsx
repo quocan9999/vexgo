@@ -7,12 +7,8 @@ import {
   ArrowLeft,
   Boxes,
   BusFront,
-  CalendarDays,
-  Clock,
   LoaderCircle,
-  MapPin,
   Pencil,
-  RefreshCw,
   Route as RouteIcon,
   Ticket,
   Trash2,
@@ -27,7 +23,7 @@ import {
   ResourceStatusBadge,
 } from '@/components/admin/resource-ui';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button, buttonVariants } from '@/components/ui/action-button';
+import { Button } from '@/components/ui/action-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/status-badge';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';

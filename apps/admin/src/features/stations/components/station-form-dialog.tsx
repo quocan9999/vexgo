@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge, LegacyBadge } from '@/components/ui/status-badge';
+import { LegacyBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/action-button';
 import { getLocations, type LocationOption } from '@/features/locations/services/location-service';
 import { createStation, updateStation, getStations, StationApiError } from '../services/station-service';

@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import type { VehicleType, VehicleTypeSortKey } from '../types/vehicle-type';
+import type { VehicleTypeSortKey } from '../types/vehicle-type';
 import { useVehicleTypes } from '../hooks/use-vehicle-types';
 import { VehicleTypeFormDialog } from './vehicle-type-form-dialog';
 
