@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
-import { ResourceSheet } from '@/components/admin/resource-ui';
+import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Field, FieldLabel, FieldError, FieldDescription } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -132,17 +132,18 @@ export function StationFormDialog({
   };
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title={isEditing ? 'Chỉnh sửa điểm đón trả' : 'Thêm điểm đón trả mới'}
       description="Quản lý bến bãi, văn phòng và các điểm trung chuyển của nhà xe."
       busy={loading}
       preventDismiss={loading}
       onClose={onClose}
+      size="xl"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         onSubmit={handleSubmit}
         footer={
-          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+          <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
               Hủy
             </Button>
@@ -306,7 +307,7 @@ export function StationFormDialog({
             />
           </Field>
         </div>
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }

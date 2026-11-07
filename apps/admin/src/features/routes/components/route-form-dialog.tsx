@@ -1,12 +1,12 @@
 'use client';
 
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
 import { LocationPicker } from '@/features/locations/components/location-picker';
 
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
-import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import {
   Field as FieldRoot,
   FieldLabel,
@@ -231,7 +231,7 @@ export function RouteFormDialog({
   }
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title={editing ? 'Chỉnh sửa tuyến xe' : 'Thêm tuyến xe'}
       description={
         editing
@@ -241,13 +241,14 @@ export function RouteFormDialog({
       busy={submitting}
       preventDismiss={submitting}
       onClose={closeDialog}
+      size="lg"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         ref={formRef}
         noValidate
         onSubmit={handleSubmit}
         footer={
-          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+          <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button disabled={submitting} variant="outline" onClick={closeDialog}>
               Hủy
             </Button>
@@ -342,7 +343,7 @@ export function RouteFormDialog({
             </FieldError>
           </FieldRoot>
         )}
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }

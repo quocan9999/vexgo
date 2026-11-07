@@ -1,11 +1,11 @@
 'use client';
 
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
 import { AdminMoneyInput } from '@/components/admin/admin-money-input';
-import { ResourceSheet } from '@/components/admin/resource-ui';
+import { ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Field, FieldLabel, FieldError } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -282,7 +282,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
   }
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title={formTitle}
       description={
         promotion
@@ -292,12 +292,13 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
       busy={submitting}
       preventDismiss={submitting}
       onClose={closeDialog}
+      size="2xl"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         noValidate
         onSubmit={handleSubmit}
         footer={
-          <div className="-mx-4 flex shrink-0 justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6">
+          <div className="-mx-5 -mb-5 flex shrink-0 justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6">
             <Button
               disabled={submitting}
               onClick={closeDialog}
@@ -325,9 +326,10 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           </div>
         }
       >
-        <Field>
-          <FieldLabel htmlFor={`${idPrefix}-name`}>
-            Tên chương trình *
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor={`${idPrefix}-name`}>
+              Tên chương trình *
           </FieldLabel>
           <Input
             id={`${idPrefix}-name`}
@@ -400,7 +402,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           </Select>
           {fieldError('discountType', `${idPrefix}-discountType-error`)}
         </Field>
-        <Field>
+        <Field className={values.discountType === 'PHAN_TRAM' ? '' : 'sm:col-span-2'}>
           <FieldLabel htmlFor={`${idPrefix}-discountValue`}>
             Mức giảm {values.discountType === 'PHAN_TRAM' ? '(%)' : '(VND)'} *
           </FieldLabel>
@@ -549,7 +551,8 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
             </span>
           )}
         </Field>
-      </ResourceSheetForm>
-    </ResourceSheet>
+        </div>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }

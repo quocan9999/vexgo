@@ -12,8 +12,8 @@ import {
   Lock,
   ArrowUpDown,
 } from 'lucide-react';
-import { ResourceSheet } from '@/components/admin/resource-ui';
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalDialog } from '@/components/admin/resource-ui';
+import { ResourceModalForm } from '@/components/admin/resource-sheet-form';
 import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -352,7 +352,7 @@ export function StopListEditor({
   };
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title={title ?? (mode === 'route' ? 'Cấu hình khuôn lộ trình mẫu' : 'Điều chỉnh điểm đón / trả chuyến xe')}
       description={
         mode === 'route'
@@ -361,11 +361,12 @@ export function StopListEditor({
       }
       busy={loading || saving}
       onClose={onClose}
+      size="3xl"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         onSubmit={handleSave}
         footer={
-          <div className="-mx-4 flex justify-between items-center gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+          <div className="-mx-5 -mb-5 flex justify-between items-center gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button
               variant="outline"
               type="button"
@@ -631,7 +632,7 @@ export function StopListEditor({
             </div>
           )}
         </div>
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }
