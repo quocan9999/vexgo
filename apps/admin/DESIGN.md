@@ -332,10 +332,18 @@ Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and 
 
 `/booking-management` booking/ticket lists use canonical Tabs, Table/Card and Resource patterns. Shared DateRangeFilter and LabeledSelectFilter now expose opt-in appearance=resource; legacy remains default for unmigrated consumers. These adapters share state/callbacks and existing Base UI engine, and are removed after the last legacy consumer migrates. List and detail CSS removed after consumer inventory. Booking/ticket detail routes now compose canonical information cards, linked records, refund groups and history; presentation approved on 24/10/2026. Booking list approved on 24/10/2026. Support chat presentation approved by the user on 24/10/2026. See ledger for evidence and skipped checks.
 
-### Shell geometry and navigation
+### Shell geometry and navigation (Sapphire Midnight Redesign)
 
 - Desktop sidebar width 252px, collapsed/tablet rail 76px; tablet rail applies from 701–1180px. Mobile ≤700px uses a left Sheet up to 320px wide, leaving at least 32px of backdrop.
-- Sidebar padding 24px top / 16px inline; 24px between brand and divider, then 16px before the scroll region. Navigation rows have a minimum 44px height, 8px control radius and 4px row gap. Navigation owns vertical scrolling; the brand remains visible.
+- Sapphire Midnight Visuals: Sidebar features deep Slate Navy gradient surface (`linear-gradient(180deg, #0b1120 0%, #0d1527 50%, #090e1a 100%)`) with delicate boundary border (`border-r border-white/[0.08]`).
+- Information Architecture: Operational navigation is organized into 4 semantic clusters:
+  1. *Điều độ & Bán vé*: Chuyến xe (`/trips`), Quản lý phiếu đặt vé & vé (`/booking-management`), Gửi hàng (`/shipments`).
+  2. *Đội xe & Tuyến đường*: Tuyến xe (`/routes`), Bến bãi & Điểm đón trả (`/stations`), Danh sách xe (`/vehicles`), Loại xe (`/vehicle-types`).
+  3. *Kinh doanh & Bảng giá*: Bảng giá vé (`/fare-prices`), Khuyến mãi (`/promotions`), Báo cáo doanh thu (`/revenue-reports`).
+  4. *Khách hàng & Dịch vụ*: Khách hàng (`/customers`), Chăm sóc khách hàng (`/support-chat`), Đánh giá & Phản hồi (`/reviews`).
+- Active State: Sapphire Glow Pill with soft light indigo gradient (`linear-gradient(90deg, rgba(37,99,235,0.18), rgba(37,99,235,0.08))`), thin border (`border-blue-500/25`), and bright icon tint (`text-blue-400` with drop-shadow).
+- Sidebar Footer: Integrates a dedicated User Profile Card with Sapphire gradient initials avatar, emerald online presence indicator (`#10b981`), full name, user role context, and quick account logout.
+- Collapsed Rail Mode: Centers squircle icon action pills (44x44px, radius 10px), centers brand mark and user avatar, preserves subtle cluster separation dividers, and employs shared Base UI Tooltips on hover/focus.
 - Sidebar link focus outline must sit inside the link bounds so the scroll container cannot clip it. Collapsed desktop and tablet rail links use the shared Tooltip on hover and keyboard focus, with Escape dismissal and a portal outside the scroll clip. Expanded desktop and mobile Sheet links keep visible labels and disable the tooltip. Do not add native title tooltips alongside this primitive.
 - Header inner minimum height 68px desktop / 64px mobile, plus the 1px border; its centered 1510px maximum container and page-inline padding align with page content. Header styling is isolated in `features/super-admin-layout/components/admin-header.module.css`. Show authenticated scope, current section and account identity; truncate long text. Do not add a tenant switcher to tenant scope.
 - On mobile <=700px, the avatar is a 44px account-info button opening a shared Popover with full authenticated name and role labels. Content wraps and scrolls within available viewport space. Close button, Escape and outside press dismiss it; focus uses the Base UI return behavior. Switching to tablet/desktop removes the mobile popover. Desktop identity presentation and direct logout remain separate header controls.
