@@ -479,7 +479,13 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
       : 1;
 
   return (
-    <SuperAdminLayout activeSection="vehicles">
+    <SuperAdminLayout
+      activeSection="vehicles"
+      breadcrumbs={[
+        { label: 'Danh sách xe', href: '/vehicles' },
+        { label: 'Cấu hình ghế xe' },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6 vehicle-seats-page">
         <AdminPageHeader
           actions={

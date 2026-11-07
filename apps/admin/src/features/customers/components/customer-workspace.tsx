@@ -223,7 +223,13 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
   }
 
   return (
-    <SuperAdminLayout activeSection="customers">
+    <SuperAdminLayout
+      activeSection="customers"
+      breadcrumbs={[
+        { label: 'Quản lý khách hàng', href: '/customers' },
+        { label: 'Chi tiết khách hàng' },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={

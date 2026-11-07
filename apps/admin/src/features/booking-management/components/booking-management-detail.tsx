@@ -279,7 +279,13 @@ export function BookingManagementDetail({
     kind === 'bookings' ? 'Chi tiết phiếu đặt vé' : 'Chi tiết vé';
 
   return (
-    <SuperAdminLayout activeSection="booking-management">
+    <SuperAdminLayout
+      activeSection="booking-management"
+      breadcrumbs={[
+        { label: 'Quản lý đặt vé & vé', href: '/booking-management' },
+        { label: pageTitle },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={

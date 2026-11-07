@@ -67,7 +67,13 @@ export function PlatformTenantRbacPicker() {
     filteredCompanies.length === 0;
 
   return (
-    <SuperAdminLayout activeSection="rbac">
+    <SuperAdminLayout
+      activeSection="rbac"
+      breadcrumbs={[
+        { label: 'Phân quyền nền tảng', href: '/rbac' },
+        { label: 'Nhà xe đối tác' },
+      ]}
+    >
       <div
         aria-busy={loading}
         className="admin-page-content admin-ui space-y-6 [&>nav]:mt-0"

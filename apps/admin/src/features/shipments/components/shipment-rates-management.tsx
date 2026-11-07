@@ -300,7 +300,13 @@ export function ShipmentRatesManagement() {
   }
 
   return (
-    <SuperAdminLayout activeSection="shipments">
+    <SuperAdminLayout
+      activeSection="shipments"
+      breadcrumbs={[
+        { label: 'Danh sách phiếu gửi hàng', href: '/shipments' },
+        { label: 'Bảng giá cước' },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6">
         <nav
           aria-label="Chuyển đổi loại bảng giá"

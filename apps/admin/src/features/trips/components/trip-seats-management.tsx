@@ -333,7 +333,13 @@ export function TripSeatsManagement({
   );
 
   return (
-    <SuperAdminLayout activeSection="trips">
+    <SuperAdminLayout
+      activeSection="trips"
+      breadcrumbs={[
+        { label: 'Quản lý chuyến xe', href: '/trips' },
+        { label: 'Sơ đồ ghế chuyến' },
+      ]}
+    >
       <div className="admin-page-content space-y-5">
         <AdminPageHeader
           actions={

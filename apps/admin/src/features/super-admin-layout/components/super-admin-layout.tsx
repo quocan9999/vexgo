@@ -56,6 +56,11 @@ import {
 } from '@/features/admin-auth/services/admin-auth';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 
+export type BreadcrumbItem = {
+  label: string;
+  href?: string;
+};
+
 type SuperAdminLayoutProps = {
   activeSection:
     | 'overview'
@@ -75,7 +80,29 @@ type SuperAdminLayoutProps = {
     | 'rbac'
     | 'tenant-rbac'
     | 'support-chat';
+  breadcrumbs?: BreadcrumbItem[];
   children: ReactNode;
+};
+
+const BREADCRUMB_SECTION_LABELS: Record<string, string> = {
+  overview: 'Tổng quan hệ thống',
+  'bus-companies': 'Quản lý nhà xe',
+  'admin-accounts': 'Quản lý tài khoản Admin',
+  rbac: 'Phân quyền nền tảng',
+  'tenant-rbac': 'Phân quyền nội bộ',
+  'vehicle-types': 'Quản lý loại xe',
+  vehicles: 'Danh sách xe',
+  routes: 'Quản lý tuyến xe',
+  stations: 'Bến bãi & Điểm đón trả',
+  'fare-prices': 'Bảng giá vé',
+  trips: 'Quản lý chuyến xe',
+  customers: 'Quản lý khách hàng',
+  'support-chat': 'Hỗ trợ khách hàng',
+  reviews: 'Đánh giá & Phản hồi',
+  'booking-management': 'Quản lý đặt vé & vé',
+  promotions: 'Quản lý khuyến mãi',
+  shipments: 'Danh sách phiếu gửi hàng',
+  'revenue-reports': 'Báo cáo doanh thu',
 };
 
 const ADMIN_ROLE_LABELS: Record<string, string> = {
@@ -224,6 +251,7 @@ const OPERATION_NAVIGATION_DETAILS: Record<
 
 export function SuperAdminLayout({
   activeSection,
+  breadcrumbs,
   children,
 }: SuperAdminLayoutProps) {
   const router = useRouter();
@@ -509,8 +537,9 @@ export function SuperAdminLayout({
                 <Menu aria-hidden="true" size={20} />
               </Button>
               <div className={headerStyles.context}>
-                <span
+                <Link
                   className={headerStyles.workspace}
+                  href={tenantScope ? (firstAccessibleTenantPath ?? '/') : '/'}
                   title={
                     tenantScope ? tenantBusCompanyName : 'Quản trị nền tảng'
                   }
@@ -519,7 +548,7 @@ export function SuperAdminLayout({
                   <span>
                     {tenantScope ? tenantBusCompanyName : 'Nền tảng VexGo'}
                   </span>
-                </span>
+                </Link>
                 <nav
                   className={headerStyles.breadcrumb}
                   aria-label="Vị trí hiện tại"
@@ -531,10 +560,32 @@ export function SuperAdminLayout({
                         : 'Vận hành'
                       : 'Quản trị'}
                   </span>
-                  <ChevronRight aria-hidden="true" size={14} />
-                  <span className={headerStyles.current} aria-current="page">
-                    {sectionLabel}
-                  </span>
+                  <ChevronRight aria-hidden="true" size={14} className={headerStyles.separator} />
+                  {breadcrumbs && breadcrumbs.length > 0 ? (
+                    breadcrumbs.map((crumb, idx) => {
+                      const isLast = idx === breadcrumbs.length - 1;
+                      return (
+                        <span key={`${crumb.label}-${idx}`} className="inline-flex items-center gap-2">
+                          {idx > 0 && (
+                            <ChevronRight aria-hidden="true" size={14} className={headerStyles.separator} />
+                          )}
+                          {crumb.href && !isLast ? (
+                            <Link href={crumb.href} className={headerStyles.breadcrumbLink}>
+                              {crumb.label}
+                            </Link>
+                          ) : (
+                            <span className={headerStyles.current} aria-current={isLast ? 'page' : undefined}>
+                              {crumb.label}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className={headerStyles.current} aria-current="page">
+                      {BREADCRUMB_SECTION_LABELS[activeSection] ?? sectionLabel}
+                    </span>
+                  )}
                 </nav>
               </div>
             </div>

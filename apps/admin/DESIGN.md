@@ -24,6 +24,8 @@ Specialized Workspaces refinement: Seat map workspaces (`/vehicles/:id/seats`, `
 
 Responsive Verification (Phase 5): Desktop (1440px) and Mobile (375px) layouts verified across auth, shell, tables, sheets, and specialized workspaces using Chrome DevTools. Desktop maintains 252px deep navy navigation, multi-column metrics, and expanded data tables. Mobile switches to collapsible drawer navigation, full-width sheets (100vw), vertical filter stacks, and card-based data representations without horizontal scroll leakage.
 
+Breadcrumb Navigation & Header Refinement: Redundant uppercase eyebrows and duplicate visual page titles were eliminated from page bodies to reclaim vertical real estate. The sticky header breadcrumb navigation is the canonical location indicator, featuring interactive workspace links, contextual group indicators, precise screen names (`BREADCRUMB_SECTION_LABELS`), and hierarchical multi-segment support for nested routes. Screen-reader headings (`h1.sr-only`) and accessibility landmark contracts are strictly preserved.
+
 Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY_INVENTORY.md). Historical baseline registry rows below do not establish current usage or approval. Mounted legacy primitives, unconsumed branches, disconnected files and test dependencies are listed separately in that report.
 
 RBAC cleanup (24/10/2026): shared role selector and permission matrix now use canonical presentation exclusively; their legacy branches and exclusive stylesheet were removed. Optional resource appearance props remain for existing callers. Existing presentation tests were adapted but not executed; this cleanup does not establish runtime approval.
