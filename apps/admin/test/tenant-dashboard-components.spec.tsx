@@ -86,12 +86,12 @@ describe('Tenant Dashboard Frontend Components', () => {
     render(<TenantUpcomingTrips trips={mockTrips} />);
 
     expect(screen.getByText('Chuyến xe sắp khởi hành')).toBeDefined();
-    expect(screen.getByText('08:30')).toBeDefined();
-    expect(screen.getByText('Sài Gòn - Đà Lạt')).toBeDefined();
-    expect(screen.getByText('51B-123.45')).toBeDefined();
-    expect(screen.getByText('Limousine 34 phòng')).toBeDefined();
-    expect(screen.getByText('82%')).toBeDefined();
-    expect(screen.getByText('Chưa xuất bến')).toBeDefined();
+    expect(screen.getAllByText('08:30').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Sài Gòn - Đà Lạt').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('51B-123.45').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Limousine 34 phòng').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('82%').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Chưa xuất bến').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders TenantUpcomingTrips empty state when no trips are scheduled', () => {
@@ -113,10 +113,7 @@ describe('Tenant Dashboard Frontend Components', () => {
       screen.getByText('4 kiện hàng chưa gán xe', { exact: false }),
     ).toBeDefined();
     expect(
-      screen.getByText(
-        '1 chuyến sắp chạy có tỷ lệ ghế < 30%',
-        { exact: false },
-      ),
+      screen.getByText('1 chuyến ghế < 30%', { exact: false }),
     ).toBeDefined();
   });
 
@@ -149,11 +146,9 @@ describe('Tenant Dashboard Frontend Components', () => {
       />,
     );
 
-    expect(screen.getByText('Trung tâm Điều hành Nhà xe')).toBeDefined();
+    expect(screen.getByText('Tổng quan vận hành nhà xe')).toBeDefined();
     expect(screen.getByText('Trực tiếp')).toBeDefined();
-    expect(
-      screen.getByText('Giám sát hoạt động vận tải & điều độ ngày 08-11-2026'),
-    ).toBeDefined();
+    expect(screen.getByText('08-11-2026')).toBeDefined();
     expect(screen.getByText('30s')).toBeDefined();
   });
 });

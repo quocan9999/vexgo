@@ -26,8 +26,8 @@ export function TenantDashboard() {
 
   return (
     <SuperAdminLayout activeSection="overview">
-      <div className="space-y-6 pb-12">
-        {/* Header */}
+      <div className="admin-ui admin-page-content space-y-6">
+        {/* Context Command Bar */}
         <TenantDashboardHeader
           businessDate={data?.businessDate}
           isRefreshing={isRefreshing}
@@ -39,11 +39,15 @@ export function TenantDashboard() {
 
         {/* Loading State */}
         {loading && !data && (
-          <div className="space-y-6" role="status" aria-label="Đang tải dữ liệu tổng quan">
+          <div
+            className="space-y-6"
+            role="status"
+            aria-label="Đang tải dữ liệu tổng quan"
+          >
             {/* Metrics Skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {Array.from({ length: 4 }).map((_, idx) => (
-                <Card key={idx} className="p-5 space-y-3 border border-border">
+                <Card key={idx} className="p-5.5 space-y-3 border border-border">
                   <div className="flex justify-between items-center">
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="size-9.5 rounded-xl" />
@@ -54,23 +58,36 @@ export function TenantDashboard() {
               ))}
             </div>
 
-            {/* Urgent Alerts Skeleton */}
-            <Card className="p-4 space-y-3 border border-border">
-              <Skeleton className="h-5 w-48" />
-              <Skeleton className="h-14 w-full rounded-lg" />
-            </Card>
-
-            {/* Upcoming Trips Skeleton */}
-            <Card className="p-5 space-y-4 border border-border">
-              <div className="flex justify-between items-center">
-                <Skeleton className="h-6 w-48" />
-                <Skeleton className="h-8 w-28" />
+            {/* Asymmetric 8:4 Grid Skeleton */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Main Column Skeleton (8 cols) */}
+              <div className="lg:col-span-8">
+                <Card className="p-5 space-y-4 border border-border">
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="h-8 w-28" />
+                  </div>
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                </Card>
               </div>
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-            </Card>
+
+              {/* Side Column Skeleton (4 cols) */}
+              <div className="lg:col-span-4 space-y-6">
+                <Card className="p-4 space-y-3 border border-border">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-14 w-full rounded-lg" />
+                </Card>
+                <Card className="p-4 space-y-3 border border-border">
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </Card>
+              </div>
+            </div>
           </div>
         )}
 
@@ -99,20 +116,25 @@ export function TenantDashboard() {
           </Card>
         )}
 
-        {/* Success Data State */}
+        {/* Success Data State: Bento Grid 8:4 */}
         {data && (
           <div className="space-y-6">
-            {/* 1. Chỉ số hôm nay */}
+            {/* 1. 4 Thẻ KPI Chỉ số Hôm nay */}
             <TenantMetricsGrid metrics={data.metrics} />
 
-            {/* 2. Cảnh báo việc cần xử lý ngay */}
-            <TenantUrgentAlerts alerts={data.urgentAlerts} />
+            {/* 2. Cụm Bento Grid 8:4 */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Cột chính (8/12 cột): Chuyến xe sắp khởi hành */}
+              <div className="lg:col-span-8">
+                <TenantUpcomingTrips trips={data.upcomingTrips} />
+              </div>
 
-            {/* 3. Lịch chuyến sắp chạy */}
-            <TenantUpcomingTrips trips={data.upcomingTrips} />
-
-            {/* 4. Lối tắt thao tác nhanh */}
-            <TenantQuickActions />
+              {/* Cột phụ (4/12 cột): Cảnh báo việc khẩn & Lối tắt thao tác nhanh */}
+              <div className="lg:col-span-4 space-y-6">
+                <TenantUrgentAlerts alerts={data.urgentAlerts} />
+                <TenantQuickActions />
+              </div>
+            </div>
           </div>
         )}
       </div>

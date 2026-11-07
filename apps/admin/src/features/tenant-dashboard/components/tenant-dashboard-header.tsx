@@ -1,7 +1,7 @@
 'use client';
 
-import { RefreshCw, Radio } from 'lucide-react';
-import { Button } from '@/components/ui/action-button';
+import { Radio, Calendar } from 'lucide-react';
+import { ResourceRefreshAction } from '@/components/admin/resource-ui';
 
 interface TenantDashboardHeaderProps {
   businessDate?: string;
@@ -30,84 +30,67 @@ export function TenantDashboardHeader({
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-4 border-b border-border sm:flex-row sm:items-center sm:justify-between">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Trung tâm Điều hành Nhà xe
-          </h1>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-            Trực tiếp
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-1">
+      {/* Screen-reader landmark */}
+      <h1 className="sr-only">Tổng quan vận hành nhà xe</h1>
+
+      {/* Left: Context chips */}
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200/80 shadow-2xs">
+          <Calendar className="size-3.5 text-slate-500" />
+          <span>
+            Ca trực:{' '}
+            <strong className="font-semibold text-slate-900">
+              {businessDate ?? 'Hôm nay'}
+            </strong>
           </span>
         </div>
-        <p className="text-xs sm:text-sm text-muted-foreground">
-          {businessDate
-            ? `Giám sát hoạt động vận tải & điều độ ngày ${businessDate}`
-            : 'Giám sát hoạt động vận tải & điều độ trong ca trực'}
-        </p>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+          <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+          Trực tiếp
+        </span>
       </div>
 
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-lg border border-border/70 text-xs">
-          <span className="text-muted-foreground px-1.5 font-medium flex items-center gap-1">
+      {/* Right: Controls & Refresh */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div
+          role="radiogroup"
+          aria-label="Tần suất tự động làm mới"
+          className="inline-flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-lg border border-border text-xs"
+        >
+          <span className="text-muted-foreground px-2 py-1 font-medium flex items-center gap-1">
             <Radio className="size-3 text-primary" />
-            Làm mới:
+            <span>Làm mới:</span>
           </span>
-          <button
-            type="button"
-            onClick={() => onAutoRefreshChange(30)}
-            className={`px-2 py-1 rounded font-medium transition-colors ${
-              autoRefreshInterval === 30
-                ? 'bg-card text-foreground shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            30s
-          </button>
-          <button
-            type="button"
-            onClick={() => onAutoRefreshChange(60)}
-            className={`px-2 py-1 rounded font-medium transition-colors ${
-              autoRefreshInterval === 60
-                ? 'bg-card text-foreground shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            60s
-          </button>
-          <button
-            type="button"
-            onClick={() => onAutoRefreshChange(0)}
-            className={`px-2 py-1 rounded font-medium transition-colors ${
-              autoRefreshInterval === 0
-                ? 'bg-card text-foreground shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Tắt
-          </button>
+          {[
+            { value: 30, label: '30s' },
+            { value: 60, label: '60s' },
+            { value: 0, label: 'Tắt' },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={autoRefreshInterval === option.value}
+              onClick={() => onAutoRefreshChange(option.value)}
+              className={`px-2 py-1 rounded-md font-medium text-xs transition-all ${
+                autoRefreshInterval === option.value
+                  ? 'bg-card text-foreground shadow-2xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
         {lastUpdated && (
           <span className="text-xs text-muted-foreground hidden lg:inline-block tabular-nums">
-            Cập nhật lúc: {formatTime(lastUpdated)}
+            Cập nhật: {formatTime(lastUpdated)}
           </span>
         )}
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="gap-1.5 h-8 px-2.5 text-xs font-medium"
-        >
-          <RefreshCw
-            className={`size-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`}
-          />
-          <span>Làm mới</span>
-        </Button>
+        <ResourceRefreshAction loading={isRefreshing} onClick={onRefresh} />
       </div>
     </div>
   );

@@ -647,7 +647,11 @@ export function SuperAdminLayout({
                     })
                   ) : (
                     <span className={headerStyles.current} aria-current="page">
-                      {BREADCRUMB_SECTION_LABELS[activeSection] ?? sectionLabel}
+                      {activeSection === 'overview'
+                        ? tenantScope
+                          ? 'Tổng quan vận hành'
+                          : 'Tổng quan hệ thống'
+                        : (BREADCRUMB_SECTION_LABELS[activeSection] ?? sectionLabel)}
                     </span>
                   )}
                 </nav>
