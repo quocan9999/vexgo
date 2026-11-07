@@ -1,8 +1,22 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
+import { FarePriceWorkspace } from '@/features/fare-prices/components/fare-price-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('next/link', () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 const state = vi.hoisted(() => ({
   farePricePage: null as unknown,
@@ -128,21 +142,20 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
-async function openDetail() {
-  fireEvent.click((await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' }))[0]!);
-  return screen.findByRole('dialog', { name: 'Chi tiết bảng giá' });
-}
-
 describe('Admin fare price action permissions', () => {
   it('keeps list and detail readable without create, edit, or status actions for read-only access', async () => {
     setEmployeeAdminTestSession(['fare-price:read']);
     render(<FarePricesManagement />);
 
     expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
-    const detail = await openDetail();
-    expect(within(detail).getByText('SG-DL-01')).toBeTruthy();
-    expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
-    expect(within(detail).queryByRole('button', { name: 'Tạm ngưng' })).toBeNull();
+    const link = (await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' }))[0]!;
+    expect(link.getAttribute('href') || link.closest('a')?.getAttribute('href')).toBe('/fare-prices/15');
+
+    cleanup();
+    render(<FarePriceWorkspace farePriceId={15} />);
+    expect(await screen.findByText('SG-DL-01')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tạm ngưng' })).toBeNull();
   });
 
   it('shows create only with fare-price:create and unmounts an open form when revoked', async () => {
@@ -162,40 +175,39 @@ describe('Admin fare price action permissions', () => {
 
   it('does not treat fare-price:create as permission to edit or change status', async () => {
     setEmployeeAdminTestSession(['fare-price:read', 'fare-price:create']);
-    render(<FarePricesManagement />);
-    const detail = await openDetail();
+    render(<FarePriceWorkspace farePriceId={15} />);
 
-    expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
-    expect(within(detail).queryByRole('button', { name: 'Tạm ngưng' })).toBeNull();
+    expect(await screen.findByText('SG-DL-01')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tạm ngưng' })).toBeNull();
   });
 
   it('shows edit only with fare-price:update and unmounts an open form when revoked', async () => {
     setEmployeeAdminTestSession(['fare-price:read', 'fare-price:update']);
-    const { rerender } = render(<FarePricesManagement />);
-    const detail = await openDetail();
+    const { rerender } = render(<FarePriceWorkspace farePriceId={15} />);
 
-    expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Chỉnh sửa' }));
+    expect(await screen.findByText('SG-DL-01')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }));
     expect(await screen.findByRole('dialog', { name: 'Chỉnh sửa bảng giá' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['fare-price:read']);
-    rerender(<FarePricesManagement />);
+    rerender(<FarePriceWorkspace farePriceId={15} />);
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' })).toBeNull();
-      expect(within(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' }))
-        .queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
     });
   });
 
   it('unmounts status confirmation when fare-price:update is revoked', async () => {
     setEmployeeAdminTestSession(['fare-price:read', 'fare-price:update']);
-    const { rerender } = render(<FarePricesManagement />);
-    const detail = await openDetail();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
+    const { rerender } = render(<FarePriceWorkspace farePriceId={15} />);
+
+    expect(await screen.findByText('SG-DL-01')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
     expect(await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['fare-price:read']);
-    rerender(<FarePricesManagement />);
+    rerender(<FarePriceWorkspace farePriceId={15} />);
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' })).toBeNull());
     expect(state.updateFarePriceStatus).not.toHaveBeenCalled();
   });

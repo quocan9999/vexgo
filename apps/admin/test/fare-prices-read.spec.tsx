@@ -11,7 +11,12 @@ import {
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
+import { FarePriceWorkspace } from '@/features/fare-prices/components/fare-price-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
+  SuperAdminLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+}));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/fare-prices',
@@ -185,7 +190,7 @@ beforeAll(() => {
 });
 
 describe('Fare Prices list and detail behavior', () => {
-  it('renders API data without write actions and opens the shared detail sheet', async () => {
+  it('renders API data without write actions and links to detail workspace', async () => {
     const api = installApi();
 
     render(<FarePricesManagement />);
@@ -207,19 +212,14 @@ describe('Fare Prices list and detail behavior', () => {
     const trigger = screen.getAllByRole('button', {
       name: 'Xem chi tiết SG-DL-01',
     })[0];
-    trigger.focus();
-    fireEvent.click(trigger);
-    const detail = await screen.findByRole('dialog');
-    expect(within(detail).getByText(/250\.000/)).toBeTruthy();
-    expect(api.requests).toContain('/api/v1/fare-prices/15');
+    expect(
+      trigger.getAttribute('href') || trigger.closest('a')?.getAttribute('href'),
+    ).toBe('/fare-prices/15');
 
-    const closeButton = within(detail).getByRole('button', {
-      name: 'Đóng',
-    });
-    closeButton.focus();
-    fireEvent.click(closeButton);
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(document.activeElement).toBe(trigger);
+    cleanup();
+    render(<FarePriceWorkspace farePriceId={15} />);
+    expect(await screen.findByText(/250\.000/)).toBeTruthy();
+    expect(api.requests).toContain('/api/v1/fare-prices/15');
   });
 
   it('shows an empty state when the server returns no fares', async () => {
@@ -242,22 +242,13 @@ describe('Fare Prices list and detail behavior', () => {
     expect(api.getFareListRequests()).toBe(2);
   });
 
-  it('closes a stale detail and refreshes the list when the detail API returns 404', async () => {
-    const api = installApi({ missingFareDetail: true });
+  it('shows error state and toast when the detail API returns 404', async () => {
+    installApi({ missingFareDetail: true });
 
-    render(<FarePricesManagement />);
+    render(<FarePriceWorkspace farePriceId={15} />);
 
-    fireEvent.click(
-      (
-        await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' })
-      )[0]!,
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).toBeNull();
-      expect(api.getFareListRequests()).toBeGreaterThan(1);
-    });
     await expectOperationToast('error', 'Bảng giá không còn tồn tại.');
+    expect(await screen.findByText('Không thể tải thông tin bảng giá.')).toBeTruthy();
   });
 
   it('sends search to the API instead of filtering only the current page', async () => {

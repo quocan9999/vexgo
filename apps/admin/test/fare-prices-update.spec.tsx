@@ -11,7 +11,12 @@ import {
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
+import { FarePriceWorkspace } from '@/features/fare-prices/components/fare-price-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
+  SuperAdminLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+}));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/fare-prices',
@@ -156,22 +161,22 @@ function installApi(options: ApiOptions = {}) {
   };
 }
 
-async function openEditDialog() {
-  fireEvent.click(
-    (
-      await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' })
-    )[0]!,
+async function openEditDialog(
+  options: { onUpdated?: () => void; onNotFound?: () => void } = {},
+) {
+  render(
+    <FarePriceWorkspace
+      farePriceId={15}
+      onNotFound={options.onNotFound}
+      onUpdated={options.onUpdated}
+    />,
   );
-  const detail = await screen.findByRole('dialog', {
-    name: 'Chi tiết bảng giá',
-  });
-  fireEvent.click(
-    await within(detail).findByRole('button', { name: 'Chỉnh sửa' }),
-  );
+  const editButton = await screen.findByRole('button', { name: 'Chỉnh sửa' });
+  fireEvent.click(editButton);
   const edit = await screen.findByRole('dialog', {
     name: 'Chỉnh sửa bảng giá',
   });
-  return { detail, edit };
+  return { edit };
 }
 
 afterEach(() => {
@@ -199,7 +204,6 @@ beforeAll(() => {
 describe('Fare Price edit dialog behavior', () => {
   it('opens from detail with current values and immutable route/type/status context', async () => {
     installApi();
-    render(<FarePricesManagement />);
     const { edit } = await openEditDialog();
 
     expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
@@ -223,7 +227,7 @@ describe('Fare Price edit dialog behavior', () => {
     expect(within(edit).queryByLabelText(/Trạng thái/)).toBeNull();
   });
 
-  it('patches only editable fields, refreshes the list, and updates the still-open detail sheet', async () => {
+  it('patches only editable fields, and updates the still-open detail workspace', async () => {
     let resolvePatch: ((value: Response) => void) | undefined;
     const api = installApi({
       patchHandler: () =>
@@ -231,8 +235,8 @@ describe('Fare Price edit dialog behavior', () => {
           resolvePatch = resolve;
         }),
     });
-    render(<FarePricesManagement />);
-    const { detail, edit } = await openEditDialog();
+    const onUpdated = vi.fn();
+    const { edit } = await openEditDialog({ onUpdated });
 
     fireEvent.change(within(edit).getByLabelText('Giá niêm yết (VND) *'), {
       target: { value: '280000' },
@@ -268,9 +272,8 @@ describe('Fare Price edit dialog behavior', () => {
         screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),
       ).toBeNull(),
     );
-    expect(detail.isConnected).toBe(true);
-    expect(within(detail).getByText(/280\.000/)).toBeTruthy();
-    await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
+    expect(screen.getByText(/280\.000/)).toBeTruthy();
+    expect(onUpdated).toHaveBeenCalled();
   });
 
   it('keeps the edit form and entered price after an overlap error', async () => {
@@ -287,21 +290,22 @@ describe('Fare Price edit dialog behavior', () => {
           409,
         ),
     });
-    render(<FarePricesManagement />);
-    const { detail, edit } = await openEditDialog();
+    const { edit } = await openEditDialog();
 
     fireEvent.change(within(edit).getByLabelText('Giá niêm yết (VND) *'), {
       target: { value: '280000' },
     });
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
 
-    await expectOperationToast('error', 'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.');
+    await expectOperationToast(
+      'error',
+      'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+    );
     expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
       'value',
       '280000',
     );
-    expect(within(detail).getByText(/250\.000/)).toBeTruthy();
-    expect(detail.isConnected).toBe(true);
+    expect(screen.getByText(/250\.000/)).toBeTruthy();
   });
 
   it('shows a stable conflict message for exhausted transaction retries', async () => {
@@ -318,22 +322,24 @@ describe('Fare Price edit dialog behavior', () => {
           409,
         ),
     });
-    render(<FarePricesManagement />);
     const { edit } = await openEditDialog();
     fireEvent.change(within(edit).getByLabelText('Giá niêm yết (VND) *'), {
       target: { value: '280000' },
     });
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
 
-    await expectOperationToast('error', 'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.');
+    await expectOperationToast(
+      'error',
+      'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+    );
     expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
       'value',
       '280000',
     );
   });
 
-  it('closes stale detail and refreshes the list when the API reports a missing fare', async () => {
-    const api = installApi({
+  it('notifies onNotFound when the API reports a missing fare during edit', async () => {
+    installApi({
       patchHandler: async () =>
         response(
           {
@@ -345,19 +351,22 @@ describe('Fare Price edit dialog behavior', () => {
           404,
         ),
     });
-    render(<FarePricesManagement />);
-    const { edit } = await openEditDialog();
+    const onNotFound = vi.fn();
+    const { edit } = await openEditDialog({ onNotFound });
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
 
     await expectOperationToast('error', 'Bảng giá không còn tồn tại.');
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),
+      ).toBeNull(),
+    );
+    expect(onNotFound).toHaveBeenCalled();
   });
 
   it('closes only the edit dialog when canceled and sends no PATCH', async () => {
     const api = installApi();
-    render(<FarePricesManagement />);
-    const { detail, edit } = await openEditDialog();
+    const { edit } = await openEditDialog();
 
     fireEvent.click(within(edit).getByRole('button', { name: 'Hủy' }));
     await waitFor(() =>
@@ -365,7 +374,6 @@ describe('Fare Price edit dialog behavior', () => {
         screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),
       ).toBeNull(),
     );
-    expect(detail.isConnected).toBe(true);
     expect(api.requests.some((item) => item.method === 'PATCH')).toBe(false);
   });
 });

@@ -12,7 +12,12 @@ import {
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
+import { FarePriceWorkspace } from '@/features/fare-prices/components/fare-price-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
+  SuperAdminLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+}));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/fare-prices',
@@ -169,15 +174,6 @@ function installApi(options: ApiOptions = {}) {
   };
 }
 
-async function openDetail() {
-  fireEvent.click(
-    (
-      await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' })
-    )[0]!,
-  );
-  return screen.findByRole('dialog', { name: 'Chi tiết bảng giá' });
-}
-
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -201,30 +197,28 @@ beforeAll(() => {
 });
 
 describe('Fare Price status lifecycle behavior', () => {
-  it('shows the status-dependent target action in the detail sheet', async () => {
+  it('shows the status-dependent target action in the detail workspace', async () => {
     installApi();
-    render(<FarePricesManagement />);
-    const activeDetail = await openDetail();
+    render(<FarePriceWorkspace farePriceId={15} />);
     expect(
-      await within(activeDetail).findByRole('button', { name: 'Tạm ngưng' }),
+      await screen.findByRole('button', { name: 'Tạm ngưng' }),
     ).toBeTruthy();
 
     cleanup();
     installApi({ initialStatus: 'TAM_NGUNG' });
-    render(<FarePricesManagement />);
-    const suspendedDetail = await openDetail();
+    render(<FarePriceWorkspace farePriceId={15} />);
     expect(
-      await within(suspendedDetail).findByRole('button', { name: 'Kích hoạt' }),
+      await screen.findByRole('button', { name: 'Kích hoạt' }),
     ).toBeTruthy();
   });
 
   it('cancels the confirmation without sending a request', async () => {
     const api = installApi();
-    render(<FarePricesManagement />);
-    const detail = await openDetail();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
+    render(<FarePriceWorkspace farePriceId={15} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
 
-    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?',
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Tạm ngưng bảng giá?',
     });
     expect(
       within(confirm).getByText(/không còn được dùng để xác định giá áp dụng/i),
@@ -236,7 +230,6 @@ describe('Fare Price status lifecycle behavior', () => {
         screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' }),
       ).toBeNull(),
     );
-    expect(detail.isConnected).toBe(true);
     expect(
       api.requests.some(
         (item) => item.path.endsWith('/status') && item.method === 'PATCH',
@@ -244,7 +237,7 @@ describe('Fare Price status lifecycle behavior', () => {
     ).toBe(false);
   });
 
-  it('sends a single target-state request and refreshes the list/detail after success', async () => {
+  it('sends a single target-state request and updates the detail after success', async () => {
     let resolvePatch: ((value: Response) => void) | undefined;
     const api = installApi({
       patchHandler: () =>
@@ -252,10 +245,11 @@ describe('Fare Price status lifecycle behavior', () => {
           resolvePatch = resolve;
         }),
     });
-    render(<FarePricesManagement />);
-    const detail = await openDetail();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
-    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?',
+    const onUpdated = vi.fn();
+    render(<FarePriceWorkspace farePriceId={15} onUpdated={onUpdated} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Tạm ngưng bảng giá?',
     });
     const confirmButton = within(confirm).getByRole('button', {
       name: 'Tạm ngưng bảng giá',
@@ -288,13 +282,12 @@ describe('Fare Price status lifecycle behavior', () => {
         screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' }),
       ).toBeNull(),
     );
-    expect(detail.isConnected).toBe(true);
     expect(
-      within(detail).getByText('Trạng thái cấu hình').nextElementSibling
+      screen.getByText('Trạng thái cấu hình').nextElementSibling
         ?.textContent,
     ).toBe('Tạm ngưng');
     await expectOperationToast('success', /Đã cập nhật bảng giá/);
-    await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
+    expect(onUpdated).toHaveBeenCalled();
   });
 
   it('shows the activation-specific overlap error and leaves the detail unchanged', async () => {
@@ -312,25 +305,27 @@ describe('Fare Price status lifecycle behavior', () => {
           409,
         ),
     });
-    render(<FarePricesManagement />);
-    const detail = await openDetail();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Kích hoạt' }));
-    const confirm = await screen.findByRole('alertdialog', { name: 'Kích hoạt bảng giá?',
+    render(<FarePriceWorkspace farePriceId={15} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Kích hoạt bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Kích hoạt bảng giá' }),
     );
 
-    await expectOperationToast('error', 'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.');
+    await expectOperationToast(
+      'error',
+      'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+    );
     expect(
-      within(detail).getByText('Trạng thái cấu hình').nextElementSibling
+      screen.getByText('Trạng thái cấu hình').nextElementSibling
         ?.textContent,
     ).toBe('Tạm ngưng');
-    expect(detail.isConnected).toBe(true);
   });
 
-  it('closes stale detail and refreshes the list when status mutation returns 404', async () => {
-    const api = installApi({
+  it('notifies onNotFound when status mutation returns 404', async () => {
+    installApi({
       patchHandler: async () =>
         response(
           {
@@ -342,20 +337,18 @@ describe('Fare Price status lifecycle behavior', () => {
           404,
         ),
     });
-    render(<FarePricesManagement />);
-    const detail = await openDetail();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
-    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?',
+    const onNotFound = vi.fn();
+    render(<FarePriceWorkspace farePriceId={15} onNotFound={onNotFound} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Tạm ngưng bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Tạm ngưng bảng giá' }),
     );
 
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).toBeNull();
-      expect(api.getListRequests()).toBeGreaterThan(1);
-    });
     await expectOperationToast('error', 'Bảng giá không còn tồn tại.');
+    expect(onNotFound).toHaveBeenCalled();
   });
 
   it('maps concurrent modification and treats a stale same-state 200 as success', async () => {
@@ -373,15 +366,19 @@ describe('Fare Price status lifecycle behavior', () => {
           409,
         ),
     });
-    render(<FarePricesManagement />);
-    let detail = await openDetail();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Kích hoạt' }));
-    let confirm = await screen.findByRole('alertdialog', { name: 'Kích hoạt bảng giá?',
+    render(<FarePriceWorkspace farePriceId={15} />);
+    let activeBtn = await screen.findByRole('button', { name: 'Kích hoạt' });
+    fireEvent.click(activeBtn);
+    let confirm = await screen.findByRole('alertdialog', {
+      name: 'Kích hoạt bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Kích hoạt bảng giá' }),
     );
-    await expectOperationToast('error', 'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.');
+    await expectOperationToast(
+      'error',
+      'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+    );
     fireEvent.click(within(confirm).getByRole('button', { name: 'Hủy' }));
     await waitFor(() =>
       expect(
@@ -389,7 +386,7 @@ describe('Fare Price status lifecycle behavior', () => {
       ).toBeNull(),
     );
     expect(
-      within(detail).getByText('Trạng thái cấu hình').nextElementSibling
+      screen.getByText('Trạng thái cấu hình').nextElementSibling
         ?.textContent,
     ).toBe('Tạm ngưng');
 
@@ -405,10 +402,11 @@ describe('Fare Price status lifecycle behavior', () => {
           },
         }),
     });
-    render(<FarePricesManagement />);
-    detail = await openDetail();
-    fireEvent.click(within(detail).getByRole('button', { name: 'Kích hoạt' }));
-    confirm = await screen.findByRole('alertdialog', { name: 'Kích hoạt bảng giá?',
+    render(<FarePriceWorkspace farePriceId={15} />);
+    activeBtn = await screen.findByRole('button', { name: 'Kích hoạt' });
+    fireEvent.click(activeBtn);
+    confirm = await screen.findByRole('alertdialog', {
+      name: 'Kích hoạt bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Kích hoạt bảng giá' }),
@@ -419,8 +417,7 @@ describe('Fare Price status lifecycle behavior', () => {
         screen.queryByRole('alertdialog', { name: 'Kích hoạt bảng giá?' }),
       ).toBeNull(),
     );
-    expect(within(detail).getByText('Hoạt động')).toBeTruthy();
+    expect((await screen.findAllByText('Hoạt động')).length).toBeGreaterThan(0);
     await expectOperationToast('success', /Đã cập nhật bảng giá/);
-    await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
   });
 });
