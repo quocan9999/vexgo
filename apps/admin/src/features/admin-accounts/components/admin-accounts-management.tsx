@@ -4,22 +4,14 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Building2,
-  LoaderCircle,
-  Pencil,
-  ShieldCheck,
-  UserRound,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useState } from 'react';
 import {
-  ResourceConfirmation,
   ResourceCreateAction,
   ResourceDetailAction,
   ResourceNotice,
   ResourcePagination,
   ResourceRefreshAction,
-  ResourceSheet,
   ResourceState,
   ResourceStatusBadge,
   ResourceTableSkeleton,
@@ -53,17 +45,12 @@ import {
   type TenantRbacRoleName,
 } from '@/features/tenant-rbac/types/tenant-rbac';
 import { useAdminAccounts } from '../hooks/use-admin-accounts';
-import {
-  getAdminAccountById,
-  updateAdminAccountStatus,
-} from '../services/admin-account-service';
 import type {
   AdminAccount,
   AdminAccountSortKey,
   AdminAccountStatus,
 } from '../types/admin-account';
 import { AdminAccountFormDialog } from './admin-account-form-dialog';
-import { AdminAccountRolesDialog } from './admin-account-roles-dialog';
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
@@ -143,239 +130,6 @@ function AccountStatusBadge({ status }: { status: AdminAccountStatus }) {
   );
 }
 
-type AccountDetailState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'success'; account: AdminAccount };
-
-function AccountDetailSheet({
-  accountId,
-  canUpdate,
-  onClose,
-  onAccountUpdated,
-}: {
-  accountId: number;
-  canUpdate: boolean;
-  onClose: () => void;
-  onAccountUpdated: (account: AdminAccount) => void;
-}) {
-  const [detail, setDetail] = useState<AccountDetailState>({
-    status: 'loading',
-  });
-  const [retryCount, setRetryCount] = useState(0);
-  const [editOpen, setEditOpen] = useState(false);
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
-  const statusSubmittingRef = useRef(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    getAdminAccountById(accountId, controller.signal)
-      .then((account) => {
-        if (!controller.signal.aborted) setDetail({ status: 'success', account });
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setDetail({
-          status: 'error',
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Không thể tải thông tin tài khoản.',
-        });
-      });
-    return () => controller.abort();
-  }, [accountId, retryCount]);
-
-  async function confirmStatusChange() {
-    if (statusSubmittingRef.current || detail.status !== 'success') return;
-    const nextStatus =
-      detail.account.status === 'HOAT_DONG' ? 'TAM_KHOA' : 'HOAT_DONG';
-    statusSubmittingRef.current = true;
-    setStatusSubmitting(true);
-    setStatusError(null);
-    try {
-      const updatedAccount = await updateAdminAccountStatus(
-        detail.account.accountId,
-        nextStatus,
-      );
-      setDetail({ status: 'success', account: updatedAccount });
-      setStatusDialogOpen(false);
-      toast.success(
-        nextStatus === 'TAM_KHOA'
-          ? 'Đã khóa tài khoản Admin.'
-          : 'Đã mở khóa tài khoản Admin.',
-      );
-      onAccountUpdated(updatedAccount);
-    } catch (requestError: unknown) {
-      setStatusError(
-        requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-          : requestError instanceof Error
-            ? requestError.message
-            : 'Không thể cập nhật trạng thái tài khoản.',
-      );
-    } finally {
-      statusSubmittingRef.current = false;
-      setStatusSubmitting(false);
-    }
-  }
-
-  return (
-    <>
-      <ResourceSheet
-        busy={detail.status === 'loading'}
-        description="Thông tin định danh, nhà xe, vai trò và trạng thái tài khoản."
-        onClose={onClose}
-        title="Thông tin tài khoản"
-      >
-        {detail.status === 'loading' && (
-          <ResourceState loading>Đang tải thông tin tài khoản…</ResourceState>
-        )}
-        {detail.status === 'error' && (
-          <ResourceState error>
-            <p>{detail.message}</p>
-            <Button
-              onClick={() => {
-                setDetail({ status: 'loading' });
-                setRetryCount((count) => count + 1);
-              }}
-              variant="outline"
-            >
-              Thử lại
-            </Button>
-          </ResourceState>
-        )}
-        {detail.status === 'success' && (
-          <div className="space-y-5">
-            <div className="flex min-w-0 items-center gap-4 border-b pb-5">
-              <span
-                aria-hidden
-                className="grid size-12 shrink-0 place-items-center rounded-full bg-accent text-primary"
-              >
-                <UserRound aria-hidden size={23} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h3 className="break-words text-base font-semibold text-foreground">
-                  {detail.account.fullName}
-                </h3>
-                <p className="mt-1 break-all text-[13px] text-muted-foreground">
-                  {detail.account.email ?? detail.account.phoneNumber}
-                </p>
-              </div>
-              <AccountStatusBadge status={detail.account.status} />
-            </div>
-
-            <section aria-labelledby="account-identity-heading" className="space-y-3 rounded-xl border p-4">
-              <h3 className="text-sm font-semibold" id="account-identity-heading">Thông tin định danh</h3>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px] [&_dd]:mt-1 [&_dd]:break-words [&_dt]:text-xs [&_dt]:text-muted-foreground">
-                <div><dt>Số điện thoại</dt><dd>{detail.account.phoneNumber}</dd></div>
-                <div><dt>Email</dt><dd>{detail.account.email ?? 'Chưa cập nhật'}</dd></div>
-                <div><dt>Chức vụ</dt><dd>{detail.account.employee.position || 'Chưa cập nhật'}</dd></div>
-                <div><dt>Ngày vào làm</dt><dd>{formatDate(detail.account.employee.joinedAt ?? null)}</dd></div>
-                <div><dt>Ngày sinh</dt><dd>{formatDate(detail.account.dateOfBirth)}</dd></div>
-                <div><dt>CCCD</dt><dd className="admin-data-mono">{detail.account.citizenId ?? 'Chưa cập nhật'}</dd></div>
-                <div><dt>Mã nhân viên</dt><dd className="admin-data-mono">{detail.account.employee.employeeCode}</dd></div>
-                <div><dt>Trạng thái nhân viên</dt><dd>{detail.account.employee.employmentStatus}</dd></div>
-              </dl>
-            </section>
-
-            <section aria-labelledby="account-scope-heading" className="space-y-3 rounded-xl border p-4">
-              <h3 className="text-sm font-semibold" id="account-scope-heading">Phạm vi và vai trò</h3>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px] [&_dd]:mt-1 [&_dd]:break-words [&_dt]:text-xs [&_dt]:text-muted-foreground">
-                <div className="col-span-2">
-                  <dt>Nhà xe</dt>
-                  <dd className="flex items-center gap-2"><Building2 aria-hidden className="size-4 text-muted-foreground" />{detail.account.busCompany.name} · <span className="admin-data-mono">{detail.account.busCompany.code}</span></dd>
-                </div>
-                <div className="col-span-2">
-                  <dt>Vai trò</dt>
-                  <dd><RoleBadges roles={detail.account.roles} /></dd>
-                </div>
-                <div><dt>Số điện thoại</dt><dd>{detail.account.phoneVerified ? 'Đã xác minh' : 'Chưa xác minh'}</dd></div>
-                <div><dt>Ngày tạo</dt><dd>{formatTimestamp(detail.account.createdAt)}</dd></div>
-                <div className="col-span-2"><dt>Cập nhật lần cuối</dt><dd>{formatTimestamp(detail.account.updatedAt)}</dd></div>
-              </dl>
-            </section>
-
-            {canUpdate && (
-              <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-                <Button onClick={() => setRoleDialogOpen(true)} variant="outline">
-                  <ShieldCheck aria-hidden />
-                  Gán vai trò
-                </Button>
-                <Button
-                  onClick={() => {
-                    setStatusError(null);
-                    setStatusDialogOpen(true);
-                  }}
-                  variant="outline"
-                >
-                  {detail.account.status === 'HOAT_DONG' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                </Button>
-                <Button onClick={() => setEditOpen(true)}>
-                  <Pencil aria-hidden />
-                  Chỉnh sửa
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </ResourceSheet>
-
-      {editOpen && detail.status === 'success' && (
-        <AdminAccountFormDialog
-          account={detail.account}
-          onClose={() => setEditOpen(false)}
-          onSaved={(updatedAccount) => {
-            setDetail({ status: 'success', account: updatedAccount });
-            setEditOpen(false);
-            onAccountUpdated(updatedAccount);
-          }}
-        />
-      )}
-      {canUpdate && roleDialogOpen && detail.status === 'success' && (
-        <AdminAccountRolesDialog
-          account={detail.account}
-          onClose={() => setRoleDialogOpen(false)}
-          onSaved={(updatedAccount) => {
-            setDetail({ status: 'success', account: updatedAccount });
-            setRoleDialogOpen(false);
-            onAccountUpdated(updatedAccount);
-          }}
-        />
-      )}
-      {canUpdate && statusDialogOpen && detail.status === 'success' && (
-        <ResourceConfirmation
-          busy={statusSubmitting}
-          onClose={() => {
-            if (!statusSubmittingRef.current) setStatusDialogOpen(false);
-          }}
-          title={detail.account.status === 'HOAT_DONG' ? 'Khóa tài khoản này?' : 'Mở khóa tài khoản này?'}
-          description={
-            detail.account.status === 'HOAT_DONG'
-              ? 'Tài khoản sẽ chuyển sang trạng thái Đang khóa và các phiên đăng nhập đang hoạt động sẽ bị thu hồi.'
-              : 'Tài khoản sẽ được mở khóa. Thao tác này không tạo phiên đăng nhập mới.'
-          }
-        >
-          <div className="space-y-3">
-            {statusError && <ResourceNotice kind="error">{statusError}</ResourceNotice>}
-            <Button
-              aria-busy={statusSubmitting}
-              disabled={statusSubmitting}
-              onClick={() => void confirmStatusChange()}
-            >
-              {statusSubmitting && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
-              {statusSubmitting ? 'Đang cập nhật…' : detail.account.status === 'HOAT_DONG' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-            </Button>
-          </div>
-        </ResourceConfirmation>
-      )}
-    </>
-  );
-}
-
 export function AdminAccountsManagement() {
   const {
     accountPage,
@@ -401,11 +155,9 @@ export function AdminAccountsManagement() {
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const canCreate = hasPlatformAdminPermission(session, 'admin-account:create');
-  const canUpdate = hasPlatformAdminPermission(session, 'admin-account:update');
   const [createOpen, setCreateOpen] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptionsState>({ status: 'loading' });
   const [filterOptionsRetry, setFilterOptionsRetry] = useState(0);
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const accounts = accountPage?.data ?? [];
   const hasFilters = Boolean(
     searchInput.trim() || status || busCompanyId !== undefined || roleName || createdDateRange,
@@ -599,7 +351,7 @@ export function AdminAccountsManagement() {
                           <TableCell><AccountStatusBadge status={account.status} /></TableCell>
                           <TableCell>{formatTimestamp(account.createdAt)}</TableCell>
                           <TableCell className="text-right">
-                            <ResourceDetailAction onClick={() => setSelectedAccountId(account.accountId)} resourceName={`tài khoản ${account.fullName}`} />
+                            <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`tài khoản ${account.fullName}`} />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -633,7 +385,7 @@ export function AdminAccountsManagement() {
                         <div className="col-span-2"><dt>Vai trò</dt><dd className="mt-2"><RoleBadges roles={account.roles} /></dd></div>
                       </dl>
                       <div className="border-t pt-3">
-                        <ResourceDetailAction onClick={() => setSelectedAccountId(account.accountId)} resourceName={`tài khoản ${account.fullName}`} />
+                        <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`tài khoản ${account.fullName}`} />
                       </div>
                     </Card>
                   ))}
@@ -654,15 +406,6 @@ export function AdminAccountsManagement() {
         </section>
       </div>
 
-      {selectedAccountId !== null && (
-        <AccountDetailSheet
-          accountId={selectedAccountId}
-          canUpdate={canUpdate}
-          key={selectedAccountId}
-          onClose={() => setSelectedAccountId(null)}
-          onAccountUpdated={() => refresh()}
-        />
-      )}
       {createOpen && (
         <AdminAccountFormDialog
           onClose={() => setCreateOpen(false)}
