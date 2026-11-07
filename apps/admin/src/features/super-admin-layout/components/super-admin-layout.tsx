@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Database,
   Headphones,
+  LayoutDashboard,
   MapPinned,
   Menu,
   Package,
@@ -439,8 +440,19 @@ export function SuperAdminLayout({
               {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
             </p>
             <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
-              {tenantScope
-                ? OPERATION_CLUSTERS.map((cluster) => {
+              {tenantScope ? (
+                <>
+                  <div className="sidebar-cluster-links mb-2">
+                    <AdminSidebarLink
+                      active={activeSection === 'overview'}
+                      href="/"
+                      icon={<LayoutDashboard size={18} />}
+                      label="Tổng quan"
+                      onClick={closeMobileNavigation}
+                      tooltipEnabled={sidebarTooltipEnabled}
+                    />
+                  </div>
+                  {OPERATION_CLUSTERS.map((cluster) => {
                     const clusterItems = accessibleOperationSections.filter(
                       (item) => cluster.sections.includes(item.section),
                     );
@@ -470,8 +482,9 @@ export function SuperAdminLayout({
                         </div>
                       </div>
                     );
-                  })
-                : platformScope && (
+                  })}
+                </>
+              ) : platformScope && (
                     <>
                       <AdminSidebarLink
                         active={activeSection === 'overview'}
