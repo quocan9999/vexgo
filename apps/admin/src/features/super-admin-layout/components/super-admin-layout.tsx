@@ -541,6 +541,49 @@ export function SuperAdminLayout({
           </div>
         )}
       </div>
+      <div className="sidebar-footer">
+        <div className="sidebar-user-card">
+          <div className="sidebar-user-avatar-wrap">
+            <span
+              role="img"
+              aria-label={`Tài khoản ${session.fullName}`}
+              className="sidebar-user-avatar"
+            >
+              {session.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') ||
+                'V'}
+            </span>
+            <span className="sidebar-user-status" aria-hidden="true" />
+          </div>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name" title={session.fullName}>
+              {session.fullName}
+            </span>
+            <span className="sidebar-user-role" title={roleLabel}>
+              Vai trò: {roleLabel}
+            </span>
+          </div>
+          <Button
+            aria-label="Thoát tài khoản"
+            variant="ghost"
+            size="icon"
+            disabled={signingOut}
+            aria-busy={signingOut}
+            className="sidebar-user-logout"
+            onClick={() => void logout()}
+            title="Đăng xuất"
+          >
+            {signingOut ? (
+              <LoaderCircle
+                aria-hidden="true"
+                size={16}
+                className="motion-safe:animate-spin"
+              />
+            ) : (
+              <LogOut aria-hidden="true" size={16} />
+            )}
+          </Button>
+        </div>
+      </div>
     </TooltipProvider>
   );
 
