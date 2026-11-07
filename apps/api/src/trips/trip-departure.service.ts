@@ -88,7 +88,7 @@ export class TripDepartureService
       ],
       take: 100,
     });
-    if (trips.length === 0) return { count: 0 };
+    if (!trips || trips.length === 0) return { count: 0 };
     return this.prisma.chuyenXe.updateMany({
       // Re-check eligibility at write time: a selected trip may have been
       // cancelled or rescheduled, or started by another API instance.

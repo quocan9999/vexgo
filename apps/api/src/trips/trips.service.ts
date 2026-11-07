@@ -18,6 +18,7 @@ import {
   combineDeparture,
   computeArrival,
   getBusinessDate,
+  getTripEarliestDepartureTime,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -76,6 +77,8 @@ export interface ExpandSuggestion {
   totalAdditionalTrips: number;
 }
 
+export { getTripEarliestDepartureTime };
+
 type TripRecord = Prisma.ChuyenXeGetPayload<{ include: typeof TRIP_INCLUDE }>;
 
 type FareRecord = {
@@ -109,7 +112,10 @@ export interface StopPointPayload {
   thoiGianDuKienIso?: string | null;
 }
 
-function getLegacySeatFloor(seatNumber: string | undefined, position: string | null | undefined) {
+function getLegacySeatFloor(
+  seatNumber: string | undefined,
+  position: string | null | undefined,
+) {
   return position?.toLocaleLowerCase('vi-VN').includes('trên') ||
     Boolean(seatNumber?.toLocaleUpperCase('vi-VN').startsWith('B'))
     ? 2
@@ -207,7 +213,9 @@ function formatClockTime(d: Date): string {
   return `${h}:${m}`;
 }
 
-function mapStationType(loaiDiem: string): 'station' | 'office' | 'transfer' | 'point' | 'rest' {
+function mapStationType(
+  loaiDiem: string,
+): 'station' | 'office' | 'transfer' | 'point' | 'rest' {
   switch (loaiDiem) {
     case 'BEN_XE':
       return 'station';
@@ -295,7 +303,8 @@ function computePickupAndDropoffPoints(
       dropoffPoints[dropoffPoints.length - 1] || allStops[allStops.length - 1];
 
     return {
-      pickupPoints: pickupPoints.length > 0 ? pickupPoints : allStops.slice(0, 1),
+      pickupPoints:
+        pickupPoints.length > 0 ? pickupPoints : allStops.slice(0, 1),
       dropoffPoints:
         dropoffPoints.length > 0 ? dropoffPoints : allStops.slice(-1),
       stops: allStops,
@@ -410,7 +419,7 @@ export const OPERATOR_BASELINE_RATINGS: Record<string, number> = {
   'thành bưởi': 4.6,
   'mai linh': 4.5,
   'hoàng long': 4.7,
-  'kumho': 4.6,
+  kumho: 4.6,
   'hà lan': 4.7,
   'hoa mai': 4.6,
 };
@@ -586,7 +595,12 @@ function mapTripItem(trip: {
 
 function cityToCode(city: string): string {
   if (!city) return 'HCM';
-  if (city.includes('TP.HCM') || city.includes('Hồ Chí Minh') || city.includes('Sài Gòn')) return 'HCM';
+  if (
+    city.includes('TP.HCM') ||
+    city.includes('Hồ Chí Minh') ||
+    city.includes('Sài Gòn')
+  )
+    return 'HCM';
   if (city.includes('Đà Lạt') || city.includes('Da Lat')) return 'DL';
   if (city.includes('Vũng Tàu') || city.includes('Vung Tau')) return 'VT';
   if (city.includes('Nha Trang')) return 'NT';
@@ -613,12 +627,17 @@ function codeToCity(code?: string): string | undefined {
   ) {
     return 'TP.HCM';
   }
-  if (upper === 'DL' || upper === 'ĐÀ LẠT' || upper === 'DA LAT') return 'Đà Lạt';
-  if (upper === 'VT' || upper === 'VŨNG TÀU' || upper === 'VUNG TAU') return 'Vũng Tàu';
+  if (upper === 'DL' || upper === 'ĐÀ LẠT' || upper === 'DA LAT')
+    return 'Đà Lạt';
+  if (upper === 'VT' || upper === 'VŨNG TÀU' || upper === 'VUNG TAU')
+    return 'Vũng Tàu';
   if (upper === 'NT' || upper === 'NHA TRANG') return 'Nha Trang';
-  if (upper === 'HN' || upper === 'HÀ NỘI' || upper === 'HA NOI') return 'Hà Nội';
-  if (upper === 'DN' || upper === 'ĐÀ NẴNG' || upper === 'DA NANG') return 'Đà Nẵng';
-  if (upper === 'CT' || upper === 'CẦN THƠ' || upper === 'CAN THO') return 'Cần Thơ';
+  if (upper === 'HN' || upper === 'HÀ NỘI' || upper === 'HA NOI')
+    return 'Hà Nội';
+  if (upper === 'DN' || upper === 'ĐÀ NẴNG' || upper === 'DA NANG')
+    return 'Đà Nẵng';
+  if (upper === 'CT' || upper === 'CẦN THƠ' || upper === 'CAN THO')
+    return 'Cần Thơ';
   return trimmed;
 }
 
@@ -703,8 +722,7 @@ export class TripsService {
       for (const trip of trips) {
         const points = (trip.diemDonTraChuyenXes ?? []).filter(
           (p) =>
-            p.loaiDiem === direction &&
-            p.diemDonTra?.trangThai === 'HOAT_DONG',
+            p.loaiDiem === direction && p.diemDonTra?.trangThai === 'HOAT_DONG',
         );
         if (points.length > 0) {
           if (points.some((p) => p.diemDonTra?.diaDiemCuId === m.diaDiemCuId)) {
@@ -784,11 +802,7 @@ export class TripsService {
     const validSiblingTrips = siblingTrips.filter(
       (trip) =>
         !primaryTripIds.has(trip.chuyenXeId) &&
-        combineDeparture(
-          trip.ngayKhoiHanh,
-          trip.gioKhoiHanh,
-          businessTimeZone,
-        ) > now &&
+        getTripEarliestDepartureTime(trip, businessTimeZone) > now &&
         matchesTimeRange(trip.gioKhoiHanh, timeRange),
     );
 
@@ -801,8 +815,7 @@ export class TripsService {
     for (const trip of validSiblingTrips) {
       const points = (trip.diemDonTraChuyenXes ?? []).filter(
         (p) =>
-          p.loaiDiem === direction &&
-          p.diemDonTra?.trangThai === 'HOAT_DONG',
+          p.loaiDiem === direction && p.diemDonTra?.trangThai === 'HOAT_DONG',
       );
       for (const p of points) {
         if (p.diemDonTra && siblingTripSets.has(p.diemDonTra.diaDiemCuId)) {
@@ -854,9 +867,9 @@ export class TripsService {
 
     const hasLocationOrStation = Boolean(
       dto.fromLocationId ||
-        dto.toLocationId ||
-        dto.fromStationId ||
-        dto.toStationId,
+      dto.toLocationId ||
+      dto.fromStationId ||
+      dto.toStationId,
     );
 
     // Variables for location resolution
@@ -1009,21 +1022,29 @@ export class TripsService {
       if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
         where.tuyenXe = {};
         if (dto.from) {
-          where.tuyenXe.AND = [{
-            OR: locationSearchTerms(codeToCity(dto.from)!, catalogue).map((term) => ({
-              diemDi: { contains: term },
-            })),
-          }];
+          where.tuyenXe.AND = [
+            {
+              OR: locationSearchTerms(codeToCity(dto.from)!, catalogue).map(
+                (term) => ({
+                  diemDi: { contains: term },
+                }),
+              ),
+            },
+          ];
         }
         if (dto.to) {
           const originFilter = where.tuyenXe.AND as
-            | Prisma.TuyenXeWhereInput[]
-            | undefined;
-          where.tuyenXe.AND = [...(originFilter ?? []), {
-            OR: locationSearchTerms(codeToCity(dto.to)!, catalogue).map((term) => ({
-              diemDen: { contains: term },
-            })),
-          }];
+            Prisma.TuyenXeWhereInput[] | undefined;
+          where.tuyenXe.AND = [
+            ...(originFilter ?? []),
+            {
+              OR: locationSearchTerms(codeToCity(dto.to)!, catalogue).map(
+                (term) => ({
+                  diemDen: { contains: term },
+                }),
+              ),
+            },
+          ];
         }
         if (dto.busCompanyId) {
           where.tuyenXe.nhaXeId = dto.busCompanyId;
@@ -1291,10 +1312,10 @@ export class TripsService {
     });
     let chuyenXes = queriedTrips.filter(
       (trip) =>
-        combineDeparture(
-          trip.ngayKhoiHanh,
-          trip.gioKhoiHanh,
+        getTripEarliestDepartureTime(
+          trip,
           businessTimeZone,
+          dto.fromStationId,
         ) > now && matchesTimeRange(trip.gioKhoiHanh, dto.timeRange),
     );
 
@@ -1575,6 +1596,10 @@ export class TripsService {
           ratingMap.get(trip.tuyenXe.nhaXe.nhaXeId),
         ),
       )
+      .filter((trip) => {
+        const depTime = new Date(trip.departureTime);
+        return !isNaN(depTime.getTime()) && depTime.getTime() > now.getTime();
+      })
       .filter(
         (trip) =>
           dto.minPrice === undefined ||
@@ -1627,7 +1652,8 @@ export class TripsService {
 
     if (fromSubAreas) response.fromSubAreas = fromSubAreas;
     if (toSubAreas) response.toSubAreas = toSubAreas;
-    if (fromExpandSuggestion) response.fromExpandSuggestion = fromExpandSuggestion;
+    if (fromExpandSuggestion)
+      response.fromExpandSuggestion = fromExpandSuggestion;
     if (toExpandSuggestion) response.toExpandSuggestion = toExpandSuggestion;
 
     if (fromSubAreas || toSubAreas) {
@@ -1665,11 +1691,7 @@ export class TripsService {
       });
     }
 
-    const departureAt = combineDeparture(
-      cx.ngayKhoiHanh,
-      cx.gioKhoiHanh,
-      businessTimeZone,
-    );
+    const departureAt = getTripEarliestDepartureTime(cx, businessTimeZone);
     if (departureAt <= now) {
       throw new NotFoundException({
         error: 'TRIP_ALREADY_DEPARTED',
@@ -1700,7 +1722,10 @@ export class TripsService {
   }
 
   async getCargoCapacity(id: number) {
-    const snapshot = await this.cargoCapacityService.getSnapshot(this.prisma, id);
+    const snapshot = await this.cargoCapacityService.getSnapshot(
+      this.prisma,
+      id,
+    );
 
     if (!snapshot) {
       throw new NotFoundException({
@@ -1748,7 +1773,10 @@ export class TripsService {
   async getCustomerSeats(id: number) {
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: id },
-      include: { xe: true },
+      include: {
+        xe: true,
+        diemDonTraChuyenXes: true,
+      },
     });
 
     if (!trip) {
@@ -1762,6 +1790,17 @@ export class TripsService {
       throw new NotFoundException({
         error: 'TRIP_NOT_AVAILABLE',
         message: 'Chuyến xe này hiện không mở bán.',
+      });
+    }
+
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+    const departureAt = getTripEarliestDepartureTime(trip, businessTimeZone);
+    if (departureAt <= new Date()) {
+      throw new NotFoundException({
+        error: 'TRIP_ALREADY_DEPARTED',
+        message: 'Chuyến xe này đã khởi hành.',
       });
     }
 
@@ -1829,7 +1868,12 @@ export class TripsService {
       seatNumber: gx.ghe.tenGhe ?? (gx.ghe as any).soGhe,
       position: gx.ghe.viTri,
       floor:
-        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.tenGhe ?? (gx.ghe as any).soGhe, gx.ghe.viTri),
+        gx.ghe.tang ??
+        gx.tang ??
+        getLegacySeatFloor(
+          gx.ghe.tenGhe ?? (gx.ghe as any).soGhe,
+          gx.ghe.viTri,
+        ),
       x: gx.ghe.toaDoX,
       y: gx.ghe.toaDoY,
       status: gx.trangThai,
@@ -1878,8 +1922,10 @@ export class TripsService {
     });
 
     allSeats.sort((a, b) => {
-      const aName = a.ghe.tenGhe ?? (a.ghe as any).soGhe ?? (a.ghe as any).maGhe ?? '';
-      const bName = b.ghe.tenGhe ?? (b.ghe as any).soGhe ?? (b.ghe as any).maGhe ?? '';
+      const aName =
+        a.ghe.tenGhe ?? (a.ghe as any).soGhe ?? (a.ghe as any).maGhe ?? '';
+      const bName =
+        b.ghe.tenGhe ?? (b.ghe as any).soGhe ?? (b.ghe as any).maGhe ?? '';
       const codeCompare = aName.localeCompare(bName, undefined, {
         numeric: true,
         sensitivity: 'base',
@@ -1908,12 +1954,19 @@ export class TripsService {
       status: item.trangThai,
       seat: {
         seatId: item.ghe.gheId,
-        code: item.ghe.tenGhe ?? (item.ghe as any).soGhe ?? (item.ghe as any).maGhe ?? '',
+        code:
+          item.ghe.tenGhe ??
+          (item.ghe as any).soGhe ??
+          (item.ghe as any).maGhe ??
+          '',
         position: item.ghe.viTri,
         floor:
           item.ghe.tang ??
           item.tang ??
-          getLegacySeatFloor(item.ghe.tenGhe ?? (item.ghe as any).soGhe ?? '', item.ghe.viTri),
+          getLegacySeatFloor(
+            item.ghe.tenGhe ?? (item.ghe as any).soGhe ?? '',
+            item.ghe.viTri,
+          ),
         x: item.ghe.toaDoX,
         y: item.ghe.toaDoY,
       },
@@ -2037,10 +2090,14 @@ export class TripsService {
     const unassignedPassengers = mappedPassengers.filter(
       (pass) =>
         !pass.diemDonChuyenXeId ||
-        !pickupGroups.some((g) => g.diemDonTraChuyenXeId === pass.diemDonChuyenXeId),
+        !pickupGroups.some(
+          (g) => g.diemDonTraChuyenXeId === pass.diemDonChuyenXeId,
+        ),
     );
 
-    const depDateStr = trip.ngayKhoiHanh ? trip.ngayKhoiHanh.toISOString().slice(0, 10) : '';
+    const depDateStr = trip.ngayKhoiHanh
+      ? trip.ngayKhoiHanh.toISOString().slice(0, 10)
+      : '';
 
     return {
       data: {
@@ -2263,7 +2320,16 @@ export class TripsService {
   }
 
   async previewCode(date: string, principal: AuthPrincipal) {
-    return { data: { code: await businessCode(this.prisma, requireTenantPrincipal(principal), 'CX', date) } };
+    return {
+      data: {
+        code: await businessCode(
+          this.prisma,
+          requireTenantPrincipal(principal),
+          'CX',
+          date,
+        ),
+      },
+    };
   }
 
   async create(dto: CreateTripDto, principal: AuthPrincipal) {
@@ -2322,7 +2388,13 @@ export class TripsService {
     try {
       const trip = await this.prisma.$transaction(
         async (tx) => {
-          const code = await businessCode(tx, nhaXeId, 'CX', dto.departureDate, true);
+          const code = await businessCode(
+            tx,
+            nhaXeId,
+            'CX',
+            dto.departureDate,
+            true,
+          );
           const lockedVehicles = await tx.$queryRaw<Array<{ xeId: number }>>`
             SELECT xeId
             FROM Xe
@@ -2407,7 +2479,10 @@ export class TripsService {
             });
 
             for (const stop of templateStops) {
-              const thoiGianDuKien = calculateClockTime(departureTime, stop.phutLech);
+              const thoiGianDuKien = calculateClockTime(
+                departureTime,
+                stop.phutLech,
+              );
               if (tx.diemDonTraChuyenXe) {
                 await tx.diemDonTraChuyenXe.create({
                   data: {
@@ -2885,7 +2960,10 @@ export class TripsService {
         loaiXeId: originalTrip.xe.loaiXeId,
         trangThai: 'HOAT_DONG',
         tuNgay: { lte: originalTrip.ngayKhoiHanh },
-        OR: [{ denNgay: null }, { denNgay: { gte: originalTrip.ngayKhoiHanh } }],
+        OR: [
+          { denNgay: null },
+          { denNgay: { gte: originalTrip.ngayKhoiHanh } },
+        ],
       },
       orderBy: {
         tuNgay: 'desc',
@@ -2936,6 +3014,7 @@ export class TripsService {
             trangThai: 'HIEN_THI',
           },
         },
+        diemDonTraChuyenXes: true,
       },
     });
 
@@ -2954,11 +3033,7 @@ export class TripsService {
           return null; // Bỏ qua chuyến đã hết chỗ
         }
 
-        const candTime = combineDeparture(
-          trip.ngayKhoiHanh,
-          trip.gioKhoiHanh,
-          businessTimeZone,
-        );
+        const candTime = getTripEarliestDepartureTime(trip, businessTimeZone);
 
         // Loại bỏ chuyến đã qua thời điểm khởi hành (departureAt <= now)
         if (candTime.getTime() <= Date.now()) {
@@ -3103,7 +3178,7 @@ export class TripsService {
               ) / 10
             : fallbackRating.rating;
         const finalReviewCount =
-          reviewCount > 0 ? reviewCount : fallbackRating.reviewsCount ?? 0;
+          reviewCount > 0 ? reviewCount : (fallbackRating.reviewsCount ?? 0);
 
         return {
           score,

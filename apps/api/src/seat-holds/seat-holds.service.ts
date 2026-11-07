@@ -16,7 +16,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { normalizePhone } from '../common/validation/vietnamese-phone.js';
 import {
-  combineDeparture,
+  getTripEarliestDepartureTime,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
@@ -301,6 +301,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     // 1. Kiểm tra chuyến xe tồn tại, trạng thái CHUA_KHOI_HANH và thời gian chưa qua
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: validTripId },
+      include: { diemDonTraChuyenXes: true },
     });
 
     if (!trip) {
@@ -314,9 +315,8 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const departureDateTime = combineDeparture(
-      trip.ngayKhoiHanh,
-      trip.gioKhoiHanh,
+    const departureDateTime = getTripEarliestDepartureTime(
+      trip,
       this.businessTimeZone,
     );
     if (departureDateTime <= new Date()) {
@@ -355,7 +355,8 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     if (tripSeats.length !== numericIds.length) {
       throw new ConflictException({
         error: 'SEATS_NOT_FOUND',
-        message: 'Một hoặc nhiều ghế được chọn không tồn tại trên chuyến xe này.',
+        message:
+          'Một hoặc nhiều ghế được chọn không tồn tại trên chuyến xe này.',
       });
     }
 
@@ -434,7 +435,9 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         },
         data: {
           trangThai: 'DANG_GIU',
-          ...(createdGiuChoId !== undefined ? { giuChoId: createdGiuChoId } : {}),
+          ...(createdGiuChoId !== undefined
+            ? { giuChoId: createdGiuChoId }
+            : {}),
         },
       });
 
@@ -446,14 +449,17 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    const timer = setTimeout(() => {
-      this.releaseSeatHold(holdToken).catch((err) => {
-        this.logger.error(
-          `Error auto-releasing hold (tokenHash: ${this.maskHoldToken(holdToken)}):`,
-          err,
-        );
-      });
-    }, 10 * 60 * 1000);
+    const timer = setTimeout(
+      () => {
+        this.releaseSeatHold(holdToken).catch((err) => {
+          this.logger.error(
+            `Error auto-releasing hold (tokenHash: ${this.maskHoldToken(holdToken)}):`,
+            err,
+          );
+        });
+      },
+      10 * 60 * 1000,
+    );
 
     this.holds.set(holdToken, {
       holdToken,
@@ -589,7 +595,8 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     if (!hold) {
       throw new ConflictException({
         error: 'HOLD_EXPIRED',
-        message: 'Mã giữ chỗ không tồn tại hoặc đã hết hạn. Vui lòng chọn ghế lại.',
+        message:
+          'Mã giữ chỗ không tồn tại hoặc đã hết hạn. Vui lòng chọn ghế lại.',
       });
     }
 
@@ -730,7 +737,8 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     if (updateHoldResult.count === 0) {
       throw new ConflictException({
         error: 'HOLD_INACTIVE',
-        message: 'Mã giữ chỗ không còn ở trạng thái giữ chỗ (đã bị giải phóng hoặc thay đổi).',
+        message:
+          'Mã giữ chỗ không còn ở trạng thái giữ chỗ (đã bị giải phóng hoặc thay đổi).',
       });
     }
 
@@ -751,12 +759,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     expectedCustomerId?: number | null,
   ): Promise<boolean> {
     if (!holdToken) return false;
-    this.verifyHold(
-      holdToken,
-      tripId ?? 0,
-      seatIds ?? [],
-      expectedCustomerId,
-    );
+    this.verifyHold(holdToken, tripId ?? 0, seatIds ?? [], expectedCustomerId);
 
     const tokenHash = this.hashHoldToken(holdToken);
     if (this.prisma.giuCho) {
