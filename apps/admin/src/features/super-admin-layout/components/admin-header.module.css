@@ -107,6 +107,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: var(--admin-space-2);
 }
 .menu {
   display: none;

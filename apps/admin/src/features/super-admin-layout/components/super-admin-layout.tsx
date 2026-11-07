@@ -32,6 +32,7 @@ import {
 import { Button } from '@/components/ui/action-button';
 import { AdminSidebarLink } from '@/components/admin/admin-sidebar-link';
 import { AdminAccountPopover } from '@/components/admin/admin-account-popover';
+import { AdminLanguageSwitcher } from '@/components/admin/admin-language-switcher';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
@@ -640,6 +641,7 @@ export function SuperAdminLayout({
               </div>
             </div>
             <div className={headerStyles.account}>
+              <AdminLanguageSwitcher />
               <AdminAccountPopover
                 fullName={session.fullName}
                 roleLabel={roleLabel}
