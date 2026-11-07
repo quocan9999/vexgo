@@ -36,7 +36,6 @@ import {
   formatDateTime,
   getShipmentStatusTone,
   SHIPMENT_STATUS_LABELS,
-  ShipmentDetails,
 } from './shipment-details';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { ShipmentScanDialog } from './shipment-scan-dialog';
@@ -65,10 +64,6 @@ export function ShipmentsManagement() {
     refresh,
     resetFilters,
   } = useShipments();
-
-  const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(
-    null,
-  );
 
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const { can } = useAdminPermissions();
@@ -236,10 +231,8 @@ export function ShipmentsManagement() {
                           </TableCell>
                           <TableCell>
                             <ResourceDetailAction
+                              href={`/shipments/${shipment.shipmentId}`}
                               resourceName={`phiếu gửi ${shipment.waybillCode}`}
-                              onClick={() =>
-                                setSelectedShipmentId(shipment.shipmentId)
-                              }
                             />
                           </TableCell>
                         </TableRow>
@@ -302,10 +295,8 @@ export function ShipmentsManagement() {
 
                       <div className="flex justify-end border-t pt-3">
                         <ResourceDetailAction
+                          href={`/shipments/${shipment.shipmentId}`}
                           resourceName={`phiếu gửi ${shipment.waybillCode}`}
-                          onClick={() =>
-                            setSelectedShipmentId(shipment.shipmentId)
-                          }
                         />
                       </div>
                     </Card>
@@ -329,16 +320,8 @@ export function ShipmentsManagement() {
         <ShipmentScanDialog
           open={scanDialogOpen}
           onOpenChange={setScanDialogOpen}
-          onSelectShipment={(id) => setSelectedShipmentId(id)}
+          onSelectShipment={(id) => router.push(`/shipments/${id}`)}
         />
-
-        {selectedShipmentId !== null && (
-          <ShipmentDetails
-            shipmentId={selectedShipmentId}
-            onClose={() => setSelectedShipmentId(null)}
-            onStatusUpdated={refresh}
-          />
-        )}
       </div>
     </SuperAdminLayout>
   );

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
@@ -223,17 +223,29 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
   }
 
   return (
-    <SuperAdminLayout activeSection="customers">
+    <SuperAdminLayout
+      activeSection="customers"
+      breadcrumbs={[
+        { label: 'Quản lý khách hàng', href: '/customers' },
+        {
+          label: customer
+            ? `${customer.fullName} (${customer.customerCode})`
+            : 'Chi tiết khách hàng',
+        },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <Link
-                className={buttonVariants({ variant: 'outline' })}
-                href="/customers"
+              <Button
+                nativeButton={false}
+                render={<Link href="/customers" />}
+                variant="outline"
               >
+                <ArrowLeft aria-hidden="true" />
                 Quay lại danh sách
-              </Link>
+              </Button>
               {canUpdateStatus && customer && (
                 <Button
                   variant={

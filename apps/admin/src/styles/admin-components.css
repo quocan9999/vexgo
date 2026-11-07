@@ -62,9 +62,16 @@ dialog:focus-visible {
 
 .page-intro {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--admin-space-section-gap);
+}
+
+.page-intro.page-intro-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .eyebrow {

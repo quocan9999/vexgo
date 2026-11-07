@@ -11,6 +11,7 @@ import {
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ShipmentsManagement } from '@/features/shipments/components/shipments-management';
+import { ShipmentWorkspace } from '@/features/shipments/components/shipment-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
@@ -187,14 +188,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-
-    const detailButton = (
-      await screen.findAllByRole('button', {
-        name: /Xem chi tiết phiếu gửi VD20261009001/i,
-      })
-    )[0];
-    fireEvent.click(detailButton);
+    render(<ShipmentWorkspace shipmentId={10} />);
 
     expect(
       await screen.findByRole('heading', { name: 'Chi tiết phiếu gửi' }),
@@ -232,14 +226,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-
-    const detailButton = (
-      await screen.findAllByRole('button', {
-        name: /Xem chi tiết phiếu gửi VD20261009001/i,
-      })
-    )[0];
-    fireEvent.click(detailButton);
+    render(<ShipmentWorkspace shipmentId={10} />);
 
     expect(
       await screen.findByRole('heading', { name: 'Chi tiết phiếu gửi' }),
@@ -277,14 +264,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-    fireEvent.click(
-      (
-        await screen.findAllByRole('button', {
-          name: /Xem chi tiết phiếu gửi VD20261009001/i,
-        })
-      )[0],
-    );
+    render(<ShipmentWorkspace shipmentId={10} />);
 
     expect(await screen.findByText('Chờ thanh toán')).toBeTruthy();
     expect(
@@ -361,16 +341,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
+    render(<ShipmentWorkspace shipmentId={10} />);
 
-    const detailButton = (
-      await screen.findAllByRole('button', {
-        name: /Xem chi tiết phiếu gửi VD20261009001/i,
-      })
-    )[0];
-    fireEvent.click(detailButton);
-
-    const underlyingDetail = await screen.findByRole('dialog', {
+    const underlyingDetail = await screen.findByRole('heading', {
       name: 'Chi tiết phiếu gửi',
     });
     const acceptButton = await screen.findByRole('button', {
@@ -468,14 +441,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-
-    const detailButton = (
-      await screen.findAllByRole('button', {
-        name: /Xem chi tiết phiếu gửi VD20261009001/i,
-      })
-    )[0];
-    fireEvent.click(detailButton);
+    render(<ShipmentWorkspace shipmentId={10} />);
 
     const acceptButton = await screen.findByRole('button', {
       name: 'Bắt đầu vận chuyển',
@@ -555,14 +521,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-
-    const detailButton = (
-      await screen.findAllByRole('button', {
-        name: /Xem chi tiết phiếu gửi VD20261009001/i,
-      })
-    )[0];
-    fireEvent.click(detailButton);
+    render(<ShipmentWorkspace shipmentId={10} />);
     fireEvent.click(
       await screen.findByRole('button', {
         name: 'Bắt đầu vận chuyển',
@@ -669,14 +628,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-
-    const detailButton = (
-      await screen.findAllByRole('button', {
-        name: /Xem chi tiết phiếu gửi VD20261009001/i,
-      })
-    )[0];
-    fireEvent.click(detailButton);
+    render(<ShipmentWorkspace shipmentId={10} />);
 
     fireEvent.click(
       await screen.findByRole('button', {
@@ -689,7 +641,6 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
 
     await waitFor(() => {
       expect(detailReadCount).toBe(2);
-      expect(listReadCount).toBe(2);
     });
 
     expect(
@@ -704,7 +655,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     );
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(
-      screen.getByRole('dialog', { name: 'Chi tiết phiếu gửi' }),
+      screen.getByRole('heading', { name: 'Chi tiết phiếu gửi' }),
     ).toBeTruthy();
     expect(patchCount).toBe(1);
   });

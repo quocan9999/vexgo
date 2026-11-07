@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { Button } from '@/components/ui/action-button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -289,8 +289,10 @@ export function ShipmentRateFormDialog({
     }
   }
 
+  if (!open) return null;
+
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       title={
         mode === 'edit'
           ? 'Chỉnh sửa mức cước gửi hàng'
@@ -300,12 +302,13 @@ export function ShipmentRateFormDialog({
       busy={submitting}
       preventDismiss={submitting}
       onClose={onClose}
+      size="xl"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         noValidate
         onSubmit={handleSubmit}
         footer={
-          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+          <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button
               type="button"
               variant="outline"
@@ -558,7 +561,7 @@ export function ShipmentRateFormDialog({
             <FieldError>{fieldErrors.validTo}</FieldError>
           </Field>
         </div>
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }

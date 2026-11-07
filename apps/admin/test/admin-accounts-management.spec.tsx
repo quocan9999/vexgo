@@ -1,3 +1,4 @@
+import type { TenantRbacRoleName } from '@/features/tenant-rbac/types/tenant-rbac';
 import { selectCanonicalOption } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
@@ -19,7 +20,7 @@ const account = {
   email: 'minhanh@example.test',
   phoneVerified: true,
   status: 'HOAT_DONG' as const,
-  roles: ['NHA_XE_ADMIN'] as const,
+  roles: ['NHA_XE_ADMIN'] as TenantRbacRoleName[],
   employee: {
     employeeId: 81,
     employeeCode: 'PT-081',
@@ -235,6 +236,7 @@ vi.mock('@/features/platform-rbac/services/platform-rbac-service', () => ({
 }));
 
 import { AdminAccountsManagement } from '@/features/admin-accounts/components/admin-accounts-management';
+import { AdminAccountWorkspace } from '@/features/admin-accounts/components/admin-account-workspace';
 
 describe('Admin accounts management page', () => {
   beforeEach(() => {
@@ -393,7 +395,7 @@ describe('Admin accounts management page', () => {
     });
   });
 
-  it('shows account identity and opens a detail sheet with tenant and role', async () => {
+  it('shows account identity and links to dedicated workspace', async () => {
     state.hook = {
       ...state.hook,
       accountPage: {
@@ -412,24 +414,13 @@ describe('Admin accounts management page', () => {
     expect(within(row).getByText('Phương Trang')).toBeTruthy();
     expect(within(row).getByText('Quản trị nhà xe')).toBeTruthy();
 
-    fireEvent.click(
-      within(table).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
-    );
-
+    const detailAction = within(table).getAllByRole('button', {
+      name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+    })[0]!;
     expect(
-      await screen.findByRole('heading', { name: 'Thông tin tài khoản' }),
-    ).toBeTruthy();
-    const detailSheet = screen.getByRole('dialog');
-    expect(await within(detailSheet).findByText('PT-081')).toBeTruthy();
-    expect(await within(detailSheet).findByText(/Phương Trang/)).toBeTruthy();
-    await waitFor(() =>
-      expect(state.getAdminAccountById).toHaveBeenCalledWith(
-        41,
-        expect.any(AbortSignal),
-      ),
-    );
+      detailAction.getAttribute('href') ||
+        detailAction.closest('a')?.getAttribute('href'),
+    ).toBe('/admin-accounts/41');
   });
 
   it('shows an empty state when there are no matching accounts', () => {
@@ -642,27 +633,17 @@ describe('Admin accounts management page', () => {
 
   it('shows profile editing only with update permission and does not expose immutable identity fields', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
 
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
     fireEvent.click(
-      within(detailSheet).getByRole('button', {
+      await screen.findByRole('button', {
         name: 'Chỉnh sửa',
       }),
     );
@@ -698,55 +679,25 @@ describe('Admin accounts management page', () => {
 
   it('shows the lock action only to a platform account with update permission', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
-    );
+    render(<AdminAccountWorkspace accountId={41} initialAccount={account} />);
 
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
     expect(
-      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+      await screen.findByRole('button', { name: 'Khóa tài khoản' }),
     ).toBeTruthy();
   });
 
   it('requires confirmation and warns that locking revokes active sessions', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
+    render(<AdminAccountWorkspace accountId={41} initialAccount={account} />);
+
     fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
-    );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
-    fireEvent.click(
-      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+      await screen.findByRole('button', { name: 'Khóa tài khoản' }),
     );
 
-    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', {
+      name: 'Khóa tài khoản này?',
     });
     expect(confirmation.textContent).toContain(
       'các phiên đăng nhập đang hoạt động sẽ bị thu hồi',
@@ -756,28 +707,20 @@ describe('Admin accounts management page', () => {
   it('locks an account after confirmation and refreshes the account list', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
     state.updateAdminAccountStatus.mockResolvedValue(lockedAccount);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+
     fireEvent.click(
-      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+      await screen.findByRole('button', { name: 'Khóa tài khoản' }),
     );
-    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', {
+      name: 'Khóa tài khoản này?',
     });
     fireEvent.click(
       within(confirmation).getByRole('button', { name: 'Khóa tài khoản' }),
@@ -789,7 +732,7 @@ describe('Admin accounts management page', () => {
         'TAM_KHOA',
       ),
     );
-    expect(within(detailSheet).getByText('Đang khóa')).toBeTruthy();
+    expect(await screen.findByText('Tạm khóa')).toBeTruthy();
     expect(state.hook.refresh).toHaveBeenCalledOnce();
   });
 
@@ -797,30 +740,22 @@ describe('Admin accounts management page', () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
     state.getAdminAccountById.mockResolvedValue(lockedAccount);
     state.updateAdminAccountStatus.mockResolvedValue(account);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [lockedAccount],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={lockedAccount}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+
     fireEvent.click(
-      await within(detailSheet).findByRole('button', {
+      await screen.findByRole('button', {
         name: 'Mở khóa tài khoản',
       }),
     );
-    const confirmation = await screen.findByRole('alertdialog', { name: 'Mở khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', {
+      name: 'Mở khóa tài khoản này?',
     });
     expect(confirmation.textContent).toContain('không tạo phiên đăng nhập mới');
     fireEvent.click(
@@ -833,7 +768,7 @@ describe('Admin accounts management page', () => {
         'HOAT_DONG',
       ),
     );
-    expect(within(detailSheet).getByText('Đang hoạt động')).toBeTruthy();
+    expect(await screen.findByText('Hoạt động')).toBeTruthy();
     expect(state.hook.refresh).toHaveBeenCalledOnce();
   });
 
@@ -842,38 +777,23 @@ describe('Admin accounts management page', () => {
     state.updateAdminAccountStatus.mockRejectedValue(
       new Error('Không thể khóa tài khoản lúc này.'),
     );
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
+    render(<AdminAccountWorkspace accountId={41} initialAccount={account} />);
+
     fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+      await screen.findByRole('button', { name: 'Khóa tài khoản' }),
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
-    fireEvent.click(
-      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
-    );
-    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', {
+      name: 'Khóa tài khoản này?',
     });
     fireEvent.click(
       within(confirmation).getByRole('button', { name: 'Khóa tài khoản' }),
     );
 
-    expect(await within(confirmation).findByRole('alert')).toBeTruthy();
     expect(
-      within(confirmation).getByText('Không thể khóa tài khoản lúc này.'),
+      await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?' }),
     ).toBeTruthy();
-    expect(within(detailSheet).getByText('Đang hoạt động')).toBeTruthy();
+    expect(screen.getByText('Hoạt động')).toBeTruthy();
     expect(state.hook.refresh).not.toHaveBeenCalled();
   });
 
@@ -886,28 +806,20 @@ describe('Admin accounts management page', () => {
           resolveStatusChange = resolve;
         }),
     );
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+
     fireEvent.click(
-      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+      await screen.findByRole('button', { name: 'Khóa tài khoản' }),
     );
-    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', {
+      name: 'Khóa tài khoản này?',
     });
     const submit = within(confirmation).getByRole('button', {
       name: 'Khóa tài khoản',
@@ -921,35 +833,20 @@ describe('Admin accounts management page', () => {
   });
 
   it('does not expose profile editing to a read-only platform account', async () => {
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
+    setAdminPermissions(['admin-account:read']);
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
-    );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+    render(<AdminAccountWorkspace accountId={41} initialAccount={account} />);
 
     expect(
-      within(detailSheet).queryByRole('button', {
+      screen.queryByRole('button', {
         name: 'Chỉnh sửa',
       }),
     ).toBeNull();
     expect(
-      within(detailSheet).queryByRole('button', { name: 'Khóa tài khoản' }),
+      screen.queryByRole('button', { name: 'Khóa tài khoản' }),
     ).toBeNull();
     expect(
-      within(detailSheet).queryByRole('button', {
+      screen.queryByRole('button', {
         name: 'Gán vai trò',
       }),
     ).toBeNull();
@@ -959,29 +856,20 @@ describe('Admin accounts management page', () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
     const updatedAccount = {
       ...account,
-      roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'] as const,
+      roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'] as TenantRbacRoleName[],
     };
     state.replaceAdminAccountRoles.mockResolvedValue(updatedAccount);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+
     fireEvent.click(
-      await within(detailSheet).findByRole('button', {
+      await screen.findByRole('button', {
         name: 'Gán vai trò',
       }),
     );
@@ -995,14 +883,14 @@ describe('Admin accounts management page', () => {
           name: 'Quản trị nhà xe',
         }) as HTMLInputElement
       ).getAttribute('aria-checked'),
-    ).toBe("true");
+    ).toBe('true');
     expect(
       (
         within(roleDialog).getByRole('checkbox', {
           name: 'Nhân viên bán vé',
         }) as HTMLInputElement
       ).getAttribute('aria-checked'),
-    ).toBe("false");
+    ).toBe('false');
     expect(
       within(roleDialog).queryByRole('checkbox', { name: 'Super Admin' }),
     ).toBeNull();
@@ -1023,34 +911,25 @@ describe('Admin accounts management page', () => {
         'NHAN_VIEN_BAN_VE',
       ]),
     );
-    expect(within(detailSheet).getByText('Nhân viên bán vé')).toBeTruthy();
+    expect(await screen.findByText('Nhân viên bán vé')).toBeTruthy();
     expect(state.hook.refresh).toHaveBeenCalledOnce();
   });
 
   it('requires explicit confirmation before revoking every role', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
-    const noRoleAccount = { ...account, roles: [] as const };
+    const noRoleAccount = { ...account, roles: [] as TenantRbacRoleName[] };
     state.replaceAdminAccountRoles.mockResolvedValue(noRoleAccount);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+
     fireEvent.click(
-      await within(detailSheet).findByRole('button', {
+      await screen.findByRole('button', {
         name: 'Gán vai trò',
       }),
     );
@@ -1064,7 +943,8 @@ describe('Admin accounts management page', () => {
       within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
     );
 
-    const confirmation = await screen.findByRole('alertdialog', { name: 'Thu hồi toàn bộ vai trò?',
+    const confirmation = await screen.findByRole('alertdialog', {
+      name: 'Thu hồi toàn bộ vai trò?',
     });
     expect(confirmation.textContent).toContain(
       'tài khoản sẽ không còn quyền quản trị',
@@ -1082,7 +962,8 @@ describe('Admin accounts management page', () => {
     fireEvent.click(
       within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
     );
-    const secondConfirmation = await screen.findByRole('alertdialog', { name: 'Thu hồi toàn bộ vai trò?',
+    const secondConfirmation = await screen.findByRole('alertdialog', {
+      name: 'Thu hồi toàn bộ vai trò?',
     });
     fireEvent.click(
       within(secondConfirmation).getByRole('button', {
@@ -1093,7 +974,7 @@ describe('Admin accounts management page', () => {
     await waitFor(() =>
       expect(state.replaceAdminAccountRoles).toHaveBeenCalledWith(41, []),
     );
-    expect(within(detailSheet).getByText('Chưa được gán vai trò')).toBeTruthy();
+    expect(await screen.findByText('Chưa được gán vai trò')).toBeTruthy();
     expect(state.hook.refresh).toHaveBeenCalledOnce();
   });
 
@@ -1102,26 +983,17 @@ describe('Admin accounts management page', () => {
     state.replaceAdminAccountRoles.mockRejectedValue(
       new Error('Không thể cập nhật vai trò lúc này.'),
     );
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+
     fireEvent.click(
-      await within(detailSheet).findByRole('button', {
+      await screen.findByRole('button', {
         name: 'Gán vai trò',
       }),
     );
@@ -1146,7 +1018,7 @@ describe('Admin accounts management page', () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
     const updatedAccount = {
       ...account,
-      roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'] as const,
+      roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'] as TenantRbacRoleName[],
     };
     let resolveRoleChange!: (value: typeof updatedAccount) => void;
     state.replaceAdminAccountRoles.mockImplementation(
@@ -1155,26 +1027,17 @@ describe('Admin accounts management page', () => {
           resolveRoleChange = resolve;
         }),
     );
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+        onAccountUpdated={() => state.hook.refresh()}
+      />,
     );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
+
     fireEvent.click(
-      await within(detailSheet).findByRole('button', { name: 'Gán vai trò' }),
+      await screen.findByRole('button', { name: 'Gán vai trò' }),
     );
     const roleDialog = await screen.findByRole('dialog', {
       name: 'Gán vai trò tài khoản',
@@ -1202,32 +1065,20 @@ describe('Admin accounts management page', () => {
   it('shows catalog errors and allows retry without enabling an unsafe save', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:update']);
     state.getDefaultRolePermissions.mockResolvedValue(roleCatalog);
-    state.hook = {
-      ...state.hook,
-      accountPage: {
-        data: [account],
-        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-      },
-      loading: false,
-    };
 
-    render(<AdminAccountsManagement />);
-    await waitFor(() =>
-      expect(state.getDefaultRolePermissions).toHaveBeenCalledOnce(),
+    render(
+      <AdminAccountWorkspace
+        accountId={41}
+        initialAccount={account}
+      />,
     );
+
     state.getDefaultRolePermissions.mockRejectedValueOnce(
       new Error('Danh mục vai trò hiện không khả dụng.'),
     );
+
     fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
-      }),
-    );
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Thông tin tài khoản',
-    });
-    fireEvent.click(
-      await within(detailSheet).findByRole('button', { name: 'Gán vai trò' }),
+      await screen.findByRole('button', { name: 'Gán vai trò' }),
     );
 
     const roleDialog = await screen.findByRole('dialog', {

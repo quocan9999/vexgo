@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { CustomerDetails } from '@/features/customers/components/customer-details';
 import { CustomerWorkspace } from '@/features/customers/components/customer-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
@@ -154,15 +153,6 @@ describe('Customer Transaction History & Workspace (/customers/[customerId])', (
     cleanup();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
-  });
-
-  it('renders link to activity workspace from customer detail sheet', async () => {
-    installApi();
-    render(<CustomerDetails customerId={101} onClose={vi.fn()} />);
-
-    const link = await screen.findByRole('link', { name: 'Xem lịch sử hoạt động' });
-    expect(link).toBeTruthy();
-    expect(link.getAttribute('href')).toBe('/customers/101');
   });
 
   it('renders dedicated workspace with customer summary and transaction list', async () => {

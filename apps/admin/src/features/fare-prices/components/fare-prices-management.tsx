@@ -46,7 +46,6 @@ import type {
   FarePriceSortKey,
 } from '../types/fare-price';
 import { useFarePrices } from '../hooks/use-fare-prices';
-import { FarePriceDetailSheet } from './fare-price-detail-sheet';
 import { FarePriceFormDialog } from './fare-price-form-dialog';
 
 const STATUS_OPTIONS: FilterOption[] = [
@@ -127,9 +126,6 @@ export function FarePricesManagement() {
     resetFilters,
     refresh,
   } = useFarePrices();
-  const [selectedFarePriceId, setSelectedFarePriceId] = useState<number | null>(
-    null,
-  );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [routeOptions, setRouteOptions] = useState<FarePriceOptionsState>({
     status: 'loading',
@@ -180,10 +176,6 @@ export function FarePricesManagement() {
     searchInput.trim() || routeId || vehicleTypeId || status || effectiveState,
   );
 
-  function openDetails(farePrice: FarePrice) {
-    setSelectedFarePriceId(farePrice.farePriceId);
-  }
-
   function openCreateDialog() {
     setCreateDialogOpen(true);
   }
@@ -191,17 +183,6 @@ export function FarePricesManagement() {
   function handleFarePriceCreated(farePrice: FarePrice) {
     setCreateDialogOpen(false);
     toast.success(`Đã tạo bảng giá vé ${farePrice.route.code}.`);
-    refresh();
-  }
-
-  function handleFarePriceUpdated(farePrice: FarePrice) {
-    toast.success(`Đã cập nhật bảng giá vé ${farePrice.route.code}.`);
-    refresh();
-  }
-
-  function handleFarePriceNotFound() {
-    setSelectedFarePriceId(null);
-    toast.error('Bảng giá không còn tồn tại. Danh sách đã được làm mới.');
     refresh();
   }
 
@@ -504,8 +485,8 @@ export function FarePricesManagement() {
                               <TableCell>{effectiveStateBadge(item)}</TableCell>
                               <TableCell>
                                 <ResourceDetailAction
+                                  href={`/fare-prices/${item.farePriceId}`}
                                   resourceName={item.route.code}
-                                  onClick={() => openDetails(item)}
                                 />
                               </TableCell>
                             </TableRow>
@@ -557,8 +538,8 @@ export function FarePricesManagement() {
                           </dl>
                           <div className="flex justify-end border-t pt-3">
                             <ResourceDetailAction
+                              href={`/fare-prices/${item.farePriceId}`}
                               resourceName={item.route.code}
-                              onClick={() => openDetails(item)}
                             />
                           </div>
                         </Card>
@@ -580,18 +561,6 @@ export function FarePricesManagement() {
           </Card>
         </section>
       </div>
-      {selectedFarePriceId !== null && (
-        <FarePriceDetailSheet
-          farePriceId={selectedFarePriceId}
-          onNotFound={handleFarePriceNotFound}
-          onClose={() => setSelectedFarePriceId(null)}
-          onRetryRouteOptions={retryRouteOptions}
-          onRetryVehicleTypeOptions={retryVehicleTypeOptions}
-          onUpdated={handleFarePriceUpdated}
-          routeOptions={routeOptions}
-          vehicleTypeOptions={vehicleTypeOptions}
-        />
-      )}
       {createDialogOpen && canCreate && (
         <FarePriceFormDialog
           onClose={() => setCreateDialogOpen(false)}

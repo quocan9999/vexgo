@@ -65,6 +65,7 @@ beforeAll(() => {
 async function renderSeatWorkspace() {
   render(<VehicleSeatsManagement vehicleId={12} />);
   await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
+  await screen.findByText('A1');
 }
 
 describe('Vehicle seat action permissions', () => {

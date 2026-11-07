@@ -426,13 +426,17 @@ export function SeatLayoutEditor({
     return (
       <div
         aria-label={`Sơ đồ ghế tầng ${floor === 1 ? 'dưới' : 'trên'}`}
-        className="relative mx-auto w-full max-w-[460px] overflow-hidden rounded-b-[28px] border-x border-b border-border bg-muted/20"
+        className="relative mx-auto w-full max-w-[460px] overflow-hidden rounded-b-[32px] border-x border-b border-slate-300/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 shadow-inner select-none"
         onPointerCancel={stopDrag}
         onPointerMove={moveDrag}
         onPointerUp={stopDrag}
         ref={floor === activeVisibleFloor ? canvasRef : undefined}
         role="group"
-        style={{ height }}
+        style={{
+          height,
+          backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(148, 163, 184, 0.15) 1.5px, transparent 1.5px)',
+          backgroundSize: '24px 24px',
+        }}
       >
         {alignmentGuides.x !== null && (
           <div
@@ -459,7 +463,11 @@ export function SeatLayoutEditor({
               <Button
                 aria-label={`${seat.seatNumber}, tầng ${floor === 1 ? 'dưới' : 'trên'}. Dùng phím mũi tên để căn chỉnh theo hàng hoặc cột.`}
                 aria-pressed={selected}
-                className={`absolute z-10 h-14 w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col gap-0.5 rounded-xl px-1 shadow-sm ${busy ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'}`}
+                className={`absolute z-10 h-14 w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col gap-0.5 rounded-xl px-1 transition-all duration-150 ${
+                  selected
+                    ? 'bg-primary text-primary-foreground shadow-[var(--admin-shadow-md)] ring-3 ring-primary/25 scale-[1.03] border-primary'
+                    : 'bg-card text-foreground border border-slate-300/90 dark:border-slate-700 shadow-2xs hover:border-primary/60 hover:shadow-xs hover:scale-[1.02]'
+                } ${busy ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'}`}
                 key={seat.seatNumber}
                 onClick={() => setSelectedSeatNumber(seat.seatNumber)}
                 onKeyDown={(event) => handleSeatKeyDown(event, seat)}
@@ -473,7 +481,7 @@ export function SeatLayoutEditor({
                 variant={selected ? 'default' : 'outline'}
               >
                 <Armchair aria-hidden size={17} />
-                <span className="max-w-full truncate font-mono text-[10px] font-semibold">
+                <span className="max-w-full truncate font-mono text-[10.5px] font-bold">
                   {seat.seatNumber}
                 </span>
               </Button>
@@ -631,13 +639,15 @@ export function SeatLayoutEditor({
             </div>
           </CardHeader>
           <CardContent className="space-y-4 p-4 sm:p-5">
-            <div className="mx-auto flex w-full max-w-[460px] items-center justify-between rounded-t-[28px] border border-border bg-card px-4 py-3 text-xs font-medium text-muted-foreground">
-              <span className="inline-flex items-center gap-2">
-                <BusFront aria-hidden className="text-primary" size={18} />
-                Tài xế
+            <div className="mx-auto flex w-full max-w-[460px] items-center justify-between rounded-t-[32px] border border-b-0 border-slate-300/80 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-card px-5 py-3 text-xs font-semibold text-slate-700 dark:text-slate-300 shadow-2xs">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 dark:border-blue-800/80 px-2.5 py-1 text-blue-700 dark:text-blue-300">
+                <BusFront aria-hidden className="size-4 text-blue-600 dark:text-blue-400" />
+                Vị trí tài xế
               </span>
-              <span>Đầu xe</span>
-              <span>Cửa lên</span>
+              <span className="font-bold uppercase tracking-wider text-[11px] text-slate-400">Đầu xe</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-slate-600 dark:text-slate-400">
+                Cửa đón khách ➔
+              </span>
             </div>
 
             <TabsContent className="mt-0" value="1">

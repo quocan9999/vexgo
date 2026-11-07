@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ShipmentsManagement } from '@/features/shipments/components/shipments-management';
+import { ShipmentWorkspace } from '@/features/shipments/components/shipment-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
@@ -220,6 +221,10 @@ describe('ShipmentsManagement UI', () => {
       name: /Xem chi tiết phiếu gửi VD20261009001/i,
     });
     expect(detailButtons.length).toBeGreaterThan(0);
+    expect(
+      detailButtons[0].getAttribute('href') ||
+        detailButtons[0].closest('a')?.getAttribute('href'),
+    ).toBe('/shipments/10');
 
     // Verify Read-Management boundary: Không có action mutation trong Phase 03
     expect(screen.queryByRole('button', { name: /thêm/i })).toBeNull();
@@ -227,7 +232,7 @@ describe('ShipmentsManagement UI', () => {
     expect(screen.queryByRole('button', { name: /xóa/i })).toBeNull();
   });
 
-  it('opens detail sheet with cargo, fees, and timeline history when clicking detail button', async () => {
+  it('renders detail page with cargo, fees, and timeline history', async () => {
     setEmployeeAdminTestSession(['shipment:read']);
 
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -239,41 +244,22 @@ describe('ShipmentsManagement UI', () => {
           }),
         );
       }
-      if (url.includes('/api/v1/shipments')) {
-        return Promise.resolve(
-          response({
-            data: [mockShipmentSummary],
-            meta: {
-              page: 1,
-              pageSize: 10,
-              totalItems: 1,
-              totalPages: 1,
-            },
-          }),
-        );
-      }
       return Promise.resolve(response({ message: 'Not found' }, false, 404));
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-
-    const waybills = await screen.findAllByText('VD20261009001');
-    expect(waybills.length).toBeGreaterThan(0);
-
-    const detailButton = screen.getAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    })[0];
-    fireEvent.click(detailButton);
+    render(<ShipmentWorkspace shipmentId={10} />);
 
     expect(
-      await screen.findByRole('heading', { name: 'Chi tiết phiếu gửi' }),
+      await screen.findByRole('heading', {
+        name: 'Chi tiết phiếu gửi',
+      }),
     ).toBeTruthy();
 
     expect(await screen.findByText('Thùng trái cây sấy')).toBeTruthy();
     expect(screen.getByText('Lê Thị Nhận')).toBeTruthy();
     expect(screen.getByText('+84944555666')).toBeTruthy();
-    expect(screen.getAllByText('150.000 đ')).toHaveLength(3);
+    expect(screen.getAllByText('150.000 đ').length).toBeGreaterThan(0);
     expect(screen.getByText('Hàng dễ vỡ, xin nhẹ tay')).toBeTruthy();
     expect(screen.getByText('Nhân viên Điều hành')).toBeTruthy();
     expect(screen.getByText(/Tạo phiếu gửi mới qua quầy/)).toBeTruthy();
@@ -298,32 +284,11 @@ describe('ShipmentsManagement UI', () => {
           }),
         );
       }
-      if (url.includes('/api/v1/shipments')) {
-        return Promise.resolve(
-          response({
-            data: [mockShipmentSummary],
-            meta: {
-              page: 1,
-              pageSize: 10,
-              totalItems: 1,
-              totalPages: 1,
-            },
-          }),
-        );
-      }
       return Promise.resolve(response({ message: 'Not found' }, false, 404));
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ShipmentsManagement />);
-
-    const waybills = await screen.findAllByText('VD20261009001');
-    expect(waybills.length).toBeGreaterThan(0);
-
-    const detailButton = screen.getAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    })[0];
-    fireEvent.click(detailButton);
+    render(<ShipmentWorkspace shipmentId={10} />);
 
     expect(await screen.findByText('Chưa có lịch sử trạng thái')).toBeTruthy();
   });

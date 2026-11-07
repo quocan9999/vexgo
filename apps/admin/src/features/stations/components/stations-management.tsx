@@ -24,7 +24,6 @@ import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permi
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getStations, deleteStation } from '../services/station-service';
 import type { Station } from '../types/station';
-import { StationDetailSheet } from './station-detail-sheet';
 import { StationFormDialog } from './station-form-dialog';
 import { StationListTable } from './station-list-table';
 
@@ -51,7 +50,6 @@ export function StationsManagement() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  const [selectedStation, setSelectedStation] = useState<Station | undefined>();
   const [formOpen, setFormOpen] = useState(false);
   const [editingStation, setEditingStation] = useState<Station | undefined>();
   const [deletingStation, setDeletingStation] = useState<Station | undefined>();
@@ -183,10 +181,7 @@ export function StationsManagement() {
 
             {!error && stations.length > 0 && (
               <>
-                <StationListTable
-                  stations={stations}
-                  onSelectStation={(st) => setSelectedStation(st)}
-                />
+                <StationListTable stations={stations} />
 
                 {/* Pagination */}
                 <ResourcePagination
@@ -202,28 +197,7 @@ export function StationsManagement() {
           </Card>
         </section>
 
-        {/* Detail Sheet */}
-        {selectedStation && (
-          <StationDetailSheet
-            station={selectedStation}
-            canUpdate={canUpdate}
-            canDelete={canDelete}
-            onClose={() => setSelectedStation(undefined)}
-            onEdit={() => {
-              const current = selectedStation;
-              setSelectedStation(undefined);
-              setEditingStation(current);
-              setFormOpen(true);
-            }}
-            onDelete={() => {
-              const current = selectedStation;
-              setSelectedStation(undefined);
-              setDeletingStation(current);
-            }}
-          />
-        )}
-
-        {/* Create / Edit Form Sheet */}
+        {/* Create / Edit Form Dialog */}
         {formOpen && (
           <StationFormDialog
             station={editingStation}

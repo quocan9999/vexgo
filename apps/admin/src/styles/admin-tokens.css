@@ -9,52 +9,75 @@
   --primary: var(--admin-blue);
   --primary-foreground: #fff;
   --secondary: var(--card);
-  --secondary-foreground: var(--card-foreground);
+  --secondary-foreground: var(--admin-text-strong);
   --muted: #f1f5f9;
   --muted-foreground: var(--admin-text-muted);
   --accent: var(--admin-blue-soft);
   --accent-foreground: var(--admin-blue);
   --border: var(--admin-border);
-  --input: #738096;
+  --input: #cbd5e1;
   --ring: var(--admin-blue);
   --destructive: var(--admin-danger);
   --destructive-foreground: #fff;
-  --radius: 0.75rem;
+  --radius: 0.875rem;
   --admin-surface: var(--card);
-  --admin-radius-panel: 12px;
-  --admin-status-success: #166534;
-  --admin-status-success-soft: #f0f8f3;
-  --admin-status-warning: #92400e;
+  --admin-radius-panel: 14px;
+  --admin-status-success: #059669;
+  --admin-status-success-soft: #ecfdf5;
+  --admin-status-warning: #d97706;
   --admin-status-warning-soft: #fffbeb;
+  --admin-status-danger: #dc2626;
+  --admin-status-danger-soft: #fef2f2;
   --chart-1: var(--admin-blue);
   color: var(--foreground);
 }
 
 :root {
-  --admin-navy: #14233d;
-  --admin-blue: #1e40af;
-  --admin-blue-hover: #18368f;
-  --admin-blue-soft: #eff5ff;
-  --admin-ink: #17243b;
-  --admin-text-strong: #1c2e48;
-  --admin-text-muted: #5d6d84;
-  --admin-muted: #738096;
-  --admin-border: #e4e9f1;
-  --admin-canvas: #f6f8fb;
-  --admin-success: #1b9a70;
-  --admin-success-soft: #f0f8f3;
-  --admin-success-border: #d3eadc;
-  --admin-danger: #a63732;
+  --admin-navy: #0f172a;
+  --admin-blue: #2563eb;
+  --admin-blue-hover: #1d4ed8;
+  --admin-blue-active: #1e40af;
+  --admin-blue-soft: #eff6ff;
+  --admin-blue-muted: #dbeafe;
+  --admin-ink: #0f172a;
+  --admin-text-strong: #1e293b;
+  --admin-text-muted: #64748b;
+  --admin-muted: #94a3b8;
+  --admin-border: #e2e8f0;
+  --admin-border-subtle: #f1f5f9;
+  --admin-canvas: #f8fafc;
+  --admin-success: #059669;
+  --admin-success-soft: #ecfdf5;
+  --admin-success-border: #a7f3d0;
+  --admin-status-success: #059669;
+  --admin-status-success-soft: #ecfdf5;
+  --admin-warning: #d97706;
+  --admin-warning-soft: #fffbeb;
+  --admin-warning-border: #fde68a;
+  --admin-status-warning: #d97706;
+  --admin-status-warning-soft: #fffbeb;
+  --admin-danger: #dc2626;
+  --admin-danger-soft: #fef2f2;
+  --admin-danger-border: #fecaca;
+  --admin-status-danger: #dc2626;
+  --admin-status-danger-soft: #fef2f2;
   --success: var(--admin-success);
-  --status-muted: #d8dee8;
+  --status-muted: #e2e8f0;
 
-  /* Existing geometry and color references stay outside the type/space refresh. */
-  --admin-radius-control: 8px;
-  --admin-radius-panel: 10px;
+  /* Modern multi-layer elevation system */
+  --admin-shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --admin-shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+  --admin-shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.07), 0 2px 4px -2px rgb(15 23 42 / 0.05);
+  --admin-shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.04);
+  --admin-shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.06);
+
+  /* Modernized geometry references */
+  --admin-radius-control: 10px;
+  --admin-radius-panel: 14px;
   --admin-radius-card: var(--admin-radius-panel);
   --admin-surface: var(--background);
-  --admin-surface-muted: #f8fafc;
-  --admin-control-height: 37px;
+  --admin-surface-muted: #f1f5f9;
+  --admin-control-height: 40px;
 
   /* Inter is for reading; JetBrains Mono is for exact, copyable identifiers. */
   --admin-font-mono: var(--font-jetbrains-mono);

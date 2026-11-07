@@ -56,10 +56,7 @@ import type {
   ShipmentRateStatus,
   SortDirection,
 } from '../types/shipment-rate';
-import {
-  formatWeightBand,
-  ShipmentRateDetailSheet,
-} from './shipment-rate-detail-sheet';
+import { formatWeightBand } from './shipment-rate-workspace';
 import { ShipmentRateFormDialog } from './shipment-rate-form-dialog';
 import { LuggagePackagesManagement } from './luggage-packages-management';
 
@@ -123,8 +120,6 @@ export function ShipmentRatesManagement() {
   const [formOptions, setFormOptions] =
     useState<ShipmentRateOptionsState>(INITIAL_OPTIONS);
   const [optionsReloadTick, setOptionsReloadTick] = useState(0);
-  const [selectedRate, setSelectedRate] = useState<ShipmentRate | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [formOpen, setFormOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ShipmentRate | null>(null);
@@ -202,51 +197,11 @@ export function ShipmentRatesManagement() {
     setFormOpen(true);
   }, [canCreate]);
 
-  const handleOpenDetail = useCallback((item: ShipmentRate) => {
-    setSelectedRate(item);
-    setDetailOpen(true);
-  }, []);
-
-  const handleOpenEdit = useCallback(
-    (item: ShipmentRate) => {
-      if (!canUpdate) return;
-      setDetailOpen(false);
-      setEditingRate(item);
-      setFormMode('edit');
-      setFormOpen(true);
-    },
-    [canUpdate],
-  );
-
   const handleRateSaved = useCallback(
     (saved: ShipmentRate, message: string) => {
       setFormOpen(false);
       setEditingRate(null);
-      setSelectedRate((current) =>
-        current?.rateId === saved.rateId ? saved : current,
-      );
       toast.success(message);
-      refresh();
-    },
-    [refresh],
-  );
-
-  const handleRateChanged = useCallback(
-    (updated: ShipmentRate, message?: string) => {
-      setSelectedRate(updated);
-      if (message) {
-        toast.success(message);
-        refresh();
-      }
-    },
-    [refresh],
-  );
-
-  const handleDetailMissing = useCallback(
-    (message: string) => {
-      setDetailOpen(false);
-      setSelectedRate(null);
-      toast.error(message);
       refresh();
     },
     [refresh],
@@ -300,7 +255,13 @@ export function ShipmentRatesManagement() {
   }
 
   return (
-    <SuperAdminLayout activeSection="shipments">
+    <SuperAdminLayout
+      activeSection="shipments"
+      breadcrumbs={[
+        { label: 'Danh sách phiếu gửi hàng', href: '/shipments' },
+        { label: 'Bảng giá cước' },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6">
         <nav
           aria-label="Chuyển đổi loại bảng giá"
@@ -611,8 +572,8 @@ export function ShipmentRatesManagement() {
                         </TableCell>
                         <TableCell>
                           <ResourceDetailAction
+                            href={`/shipments/rates/${item.rateId}`}
                             resourceName={item.route.code}
-                            onClick={() => handleOpenDetail(item)}
                           />
                         </TableCell>
                       </TableRow>
@@ -640,8 +601,8 @@ export function ShipmentRatesManagement() {
                         </h3>
                       </div>
                       <ResourceDetailAction
+                        href={`/shipments/rates/${item.rateId}`}
                         resourceName={item.route.code}
-                        onClick={() => handleOpenDetail(item)}
                       />
                     </div>
                     <p className="text-lg font-semibold tabular-nums">
@@ -704,16 +665,6 @@ export function ShipmentRatesManagement() {
         </section>
         </>
         )}
-
-        <ShipmentRateDetailSheet
-          open={detailOpen}
-          rate={selectedRate}
-          canEdit={canUpdate}
-          onClose={() => setDetailOpen(false)}
-          onEdit={handleOpenEdit}
-          onChanged={handleRateChanged}
-          onMissing={handleDetailMissing}
-        />
 
         {((formMode === 'create' && canCreate) ||
           (formMode === 'edit' && canUpdate)) && (

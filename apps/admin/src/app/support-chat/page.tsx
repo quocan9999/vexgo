@@ -58,15 +58,12 @@ function SupportChatContent() {
 
   return (
     <SuperAdminLayout activeSection="support-chat">
-      <div className="admin-page-content admin-ui space-y-5">
+      <div className="admin-page-content admin-ui space-y-4">
         <AdminPageHeader
           eyebrow="CHĂM SÓC KHÁCH HÀNG"
           title="Hỗ trợ khách hàng"
           titleId="support-chat-heading"
         />
-        <p className="text-[13px] text-muted-foreground">
-          Tiếp nhận và phản hồi tin nhắn hỗ trợ từ hành khách.
-        </p>
         <AdminChatMessenger key={session.accountId} session={session} />
       </div>
     </SuperAdminLayout>

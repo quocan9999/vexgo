@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VehiclesManagement } from '@/features/vehicles/components/vehicles-management';
+import { VehicleWorkspace } from '@/features/vehicles/components/vehicle-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 const fixture = vi.hoisted(() => ({
@@ -98,13 +99,6 @@ beforeAll(() => {
   });
 });
 
-async function openVehicleDetails() {
-  fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết xe 29A-123.45' })[0]!);
-  const detail = await screen.findByRole('dialog', { name: 'Chi tiết xe' });
-  await within(detail).findByText('29A-123.45');
-  return detail;
-}
-
 describe('Vehicle action permissions', () => {
   it('shows the create action only with vehicle:create', () => {
     setEmployeeAdminTestSession(['vehicle:read']);
@@ -116,40 +110,46 @@ describe('Vehicle action permissions', () => {
     expect(screen.getByRole('button', { name: 'Thêm xe' })).toBeTruthy();
   });
 
-  it('shows read-only details without create, update, status, or seat-management actions', async () => {
+  it('renders link to vehicle detail page on detail action', () => {
     setEmployeeAdminTestSession(['vehicle:read']);
     render(<VehiclesManagement />);
 
-    expect(screen.queryByRole('button', { name: 'Thêm xe' })).toBeNull();
-    const detail = await openVehicleDetails();
-    expect(within(detail).queryByRole('button', { name: 'Cấu hình ghế' })).toBeNull();
-    expect(within(detail).queryByRole('button', { name: 'Chuyển sang bảo trì' })).toBeNull();
-    expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+    const detailButtons = screen.getAllByRole('button', { name: 'Xem chi tiết xe 29A-123.45' });
+    expect(detailButtons[0]?.getAttribute('href')).toBe('/vehicles/12');
+  });
+
+  it('shows read-only details without create, update, status, or seat-management actions', async () => {
+    setEmployeeAdminTestSession(['vehicle:read']);
+    render(<VehicleWorkspace vehicleId={12} />);
+
+    await screen.findByText('29A-123.45');
+    expect(screen.queryByRole('button', { name: 'Cấu hình ghế' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chuyển sang bảo trì' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
   });
 
   it('requires vehicle:read plus seat:read for the seat-configuration link', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read']);
-    render(<VehiclesManagement />);
-    const detail = await openVehicleDetails();
+    render(<VehicleWorkspace vehicleId={12} />);
 
-    expect(within(detail).getByRole('button', { name: 'Cấu hình ghế' })).toBeTruthy();
-    expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+    await screen.findByText('29A-123.45');
+    expect(screen.getAllByRole('button', { name: /cấu hình ghế/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
   });
 
   it('unmounts the status confirmation when vehicle:update is revoked', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'vehicle:update']);
-    const { rerender } = render(<VehiclesManagement />);
-    const detail = await openVehicleDetails();
+    const { rerender } = render(<VehicleWorkspace vehicleId={12} />);
 
-    fireEvent.click(within(detail).getByRole('button', { name: 'Chuyển sang bảo trì' }));
+    await screen.findByText('29A-123.45');
+    fireEvent.click(screen.getByRole('button', { name: 'Chuyển sang bảo trì' }));
     expect(await screen.findByRole('alertdialog', { name: 'Chuyển xe sang bảo trì?' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['vehicle:read']);
-    rerender(<VehiclesManagement />);
+    rerender(<VehicleWorkspace vehicleId={12} />);
     await waitFor(() => {
       expect(screen.queryByRole('alertdialog', { name: 'Chuyển xe sang bảo trì?' })).toBeNull();
-      expect(within(screen.getByRole('dialog', { name: 'Chi tiết xe' }))
-        .queryByRole('button', { name: 'Chuyển sang bảo trì' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Chuyển sang bảo trì' })).toBeNull();
     });
   });
 });

@@ -74,6 +74,16 @@
   gap: 0;
   flex-direction: column;
   padding: var(--admin-space-card-padding);
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: var(--admin-radius-panel, 12px);
+  box-shadow: var(--admin-shadow-sm);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.metricCard:hover {
+  box-shadow: var(--admin-shadow-md);
+  border-color: rgba(37, 99, 235, 0.3);
 }
 
 .metricHeading {
@@ -100,23 +110,53 @@
 }
 
 .metricCard[data-primary='true'] {
-  border-color: var(--admin-blue);
-  background: var(--admin-blue);
+  border-color: rgba(37, 99, 235, 0.35);
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.75) 0%, var(--card) 100%);
+  box-shadow: var(--admin-shadow-sm);
 }
 
-.metricCard[data-primary='true'] .metricLabel,
-.metricCard[data-primary='true'] .metricValue,
-.metricCard[data-primary='true'] .metricNote {
-  color: #fff;
-}
-
-.metricCard[data-primary='true'] .metricIcon {
-  background: rgb(255 255 255 / 14%);
-  color: #fff;
+.metricCard[data-primary='true'] .metricLabel {
+  color: var(--admin-blue);
+  font-weight: 600;
 }
 
 .metricCard[data-primary='true'] .metricValue {
+  color: var(--admin-text-strong);
   font-size: var(--admin-type-metric-size);
+}
+
+.metricCard[data-primary='true'] .metricNote {
+  color: var(--admin-text-muted);
+}
+
+.metricCard[data-primary='true'] .metricIcon {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--admin-blue);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+.metricCard[data-tone='success'] .metricIcon {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.metricCard[data-tone='indigo'] .metricIcon {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.metricCard[data-tone='destructive'] .metricIcon {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.metricCard[data-tone='teal'] .metricIcon {
+  background: rgba(20, 184, 166, 0.12);
+  color: #0d9488;
+  border: 1px solid rgba(20, 184, 166, 0.25);
 }
 
 .metricLabel {
@@ -290,7 +330,8 @@
   stroke: var(--admin-blue);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.5px;
+  stroke-width: 3px;
+  filter: drop-shadow(0 2px 4px rgba(37, 99, 235, 0.25));
   vector-effect: non-scaling-stroke;
 }
 
@@ -303,32 +344,35 @@
   border: 2px solid #fff;
   border-radius: 50%;
   background: var(--admin-blue);
-  box-shadow: 0 0 0 1px var(--admin-blue);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
   cursor: pointer;
   padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .chartPoint:hover {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
 }
 
 .chartPoint:focus-visible {
-  outline: 3px solid var(--admin-ink);
+  outline: 3px solid var(--admin-blue);
   outline-offset: 3px;
 }
 
 .chartTooltip {
   position: absolute;
-  z-index: 3;
+  z-index: 10;
   width: min(260px, 100%);
   box-sizing: border-box;
   padding: var(--admin-space-3);
-  border: 1px solid var(--admin-border);
+  border: 1px solid var(--border);
   border-radius: var(--admin-radius-panel);
-  background: var(--admin-surface);
-  color: var(--admin-text-strong);
-  box-shadow: 0 4px 16px rgb(15 23 42 / 12%);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--admin-shadow-lg);
+  backdrop-filter: blur(8px);
   font-size: var(--admin-type-helper-size);
   line-height: var(--admin-type-helper-line-height);
   overflow-wrap: anywhere;

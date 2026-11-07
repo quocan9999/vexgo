@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
   ResourceDetailAction,
@@ -31,7 +31,6 @@ import {
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useCustomers } from '../hooks/use-customers';
 import type { CustomerAccountStatus, CustomerSortKey } from '../types/customer';
-import { CustomerDetails } from './customer-details';
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
@@ -68,9 +67,7 @@ export function CustomersManagement() {
     resetFilters,
   } = useCustomers();
 
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
-    null,
-  );
+  const router = useRouter();
 
   function renderSortIcon(key: CustomerSortKey) {
     if (sortBy !== key) {
@@ -300,10 +297,11 @@ export function CustomersManagement() {
                             </TableCell>
                             <TableCell>
                               <ResourceDetailAction
-                                resourceName={`khách hàng ${customer.customerCode}`}
+                                href={`/customers/${customer.customerId}`}
                                 onClick={() =>
-                                  setSelectedCustomerId(customer.customerId)
+                                  router.push(`/customers/${customer.customerId}`)
                                 }
+                                resourceName={`khách hàng ${customer.customerCode}`}
                               />
                             </TableCell>
                           </TableRow>
@@ -356,10 +354,11 @@ export function CustomersManagement() {
                         </dl>
                         <div className="flex justify-end border-t pt-3">
                           <ResourceDetailAction
-                            resourceName={`khách hàng ${customer.customerCode}`}
+                            href={`/customers/${customer.customerId}`}
                             onClick={() =>
-                              setSelectedCustomerId(customer.customerId)
+                              router.push(`/customers/${customer.customerId}`)
                             }
+                            resourceName={`khách hàng ${customer.customerCode}`}
                           />
                         </div>
                       </Card>
@@ -382,15 +381,6 @@ export function CustomersManagement() {
           </div>
         </section>
       </div>
-
-      {selectedCustomerId !== null && (
-        <CustomerDetails
-          key={selectedCustomerId}
-          customerId={selectedCustomerId}
-          onClose={() => setSelectedCustomerId(null)}
-          onCustomerUpdated={() => refresh()}
-        />
-      )}
     </SuperAdminLayout>
   );
 }

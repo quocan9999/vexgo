@@ -4,26 +4,14 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Building2,
-  LoaderCircle,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   ResourceCreateAction,
   ResourceDetailAction,
   ResourcePagination,
   ResourceRefreshAction,
-  ResourceSheet,
   ResourceState,
   ResourceStatusBadge,
   ResourceTableSkeleton,
@@ -52,11 +40,6 @@ import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import { CreateBusCompanyDialog } from './create-bus-company-dialog';
-import { EditBusCompanyDialog } from './edit-bus-company-dialog';
-import {
-  getBusCompanyById,
-  updateBusCompanyStatus,
-} from '../services/bus-company-service';
 import type {
   BusCompany,
   BusCompanySortKey,
@@ -105,288 +88,12 @@ function CompanyMark({ name }: { name: string }) {
   );
 }
 
-type CompanyDetailState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'success'; company: BusCompany };
-
-function CompanyDetails({
-  companyId,
-  onClose,
-  onUpdated,
-  onStatusUpdated,
-  canUpdate,
-}: {
-  companyId: number;
-  onClose: () => void;
-  onUpdated: (company: BusCompany) => void;
-  onStatusUpdated: (company: BusCompany) => void;
-  canUpdate: boolean;
-}) {
-  const statusSubmittingRef = useRef(false);
-  const [detailState, setDetailState] = useState<CompanyDetailState>({
-    status: 'loading',
-  });
-  const [retryCount, setRetryCount] = useState(0);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    getBusCompanyById(companyId, controller.signal)
-      .then((company) => {
-        if (!controller.signal.aborted) {
-          setDetailState({ status: 'success', company });
-        }
-      })
-      .catch((requestError: unknown) => {
-        if (!controller.signal.aborted) {
-          setDetailState({
-            status: 'error',
-            message:
-              requestError instanceof Error
-                ? requestError.message
-                : 'Không thể tải thông tin nhà xe.',
-          });
-        }
-      });
-
-    return () => controller.abort();
-  }, [companyId, retryCount]);
-
-  function retry() {
-    setDetailState({ status: 'loading' });
-    setRetryCount((count) => count + 1);
-  }
-
-  function handleCompanyUpdated(company: BusCompany) {
-    setDetailState({ status: 'success', company });
-    setEditDialogOpen(false);
-    onUpdated(company);
-  }
-
-  async function confirmStatusChange() {
-    if (
-      !canUpdate ||
-      detailState.status !== 'success' ||
-      statusSubmittingRef.current
-    ) {
-      return;
-    }
-
-    const targetStatus: BusCompanyStatus =
-      detailState.company.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG';
-    statusSubmittingRef.current = true;
-    setStatusSubmitting(true);
-    setStatusError(null);
-
-    try {
-      const updatedCompany = await updateBusCompanyStatus(
-        companyId,
-        targetStatus,
-      );
-      setDetailState({ status: 'success', company: updatedCompany });
-      setStatusDialogOpen(false);
-      onStatusUpdated(updatedCompany);
-    } catch (requestError: unknown) {
-      setStatusError(
-        requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-          : requestError instanceof Error
-            ? requestError.message
-            : 'Không thể cập nhật trạng thái nhà xe.',
-      );
-    } finally {
-      statusSubmittingRef.current = false;
-      setStatusSubmitting(false);
-    }
-  }
-
-  const nextStatus: BusCompanyStatus | null =
-    detailState.status === 'success'
-      ? detailState.company.status === 'HOAT_DONG'
-        ? 'TAM_NGUNG'
-        : 'HOAT_DONG'
-      : null;
-
-  return (
-    <>
-      <ResourceSheet
-        title="Thông tin nhà xe"
-        description="Thông tin liên hệ, hồ sơ và trạng thái hoạt động."
-        onClose={onClose}
-      >
-        <div className="space-y-4">
-          {detailState.status === 'loading' && (
-            <ResourceState loading>Đang tải thông tin nhà xe…</ResourceState>
-          )}
-
-          {detailState.status === 'error' && (
-            <ResourceState error>
-              <p>{detailState.message}</p>
-              <Button onClick={retry} type="button" variant="outline">
-                Thử lại
-              </Button>
-            </ResourceState>
-          )}
-
-          {detailState.status === 'success' && (
-            <>
-              <Card className="gap-3 p-4 ring-0">
-                <div className="flex items-start gap-3">
-                  <CompanyMark name={detailState.company.name} />
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <h3 className="break-words text-base font-semibold">
-                      {detailState.company.name}
-                    </h3>
-                    <p className="admin-data-mono text-xs text-muted-foreground">
-                      {detailState.company.code}
-                    </p>
-                  </div>
-                  <ResourceStatusBadge
-                    tone={
-                      detailState.company.status === 'HOAT_DONG'
-                        ? 'active'
-                        : 'muted'
-                    }
-                  >
-                    {statusLabel(detailState.company.status)}
-                  </ResourceStatusBadge>
-                </div>
-              </Card>
-
-              <Card className="gap-3 p-4 ring-0">
-                <h3 className="text-sm font-semibold">Thông tin liên hệ</h3>
-                <div className="flex items-start gap-3">
-                  <Building2
-                    aria-hidden
-                    className="mt-0.5 size-4 text-muted-foreground"
-                  />
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-xs text-muted-foreground">Đầu mối liên hệ</p>
-                    <p className="break-words text-sm">
-                      {detailState.company.contactInfo || 'Chưa cập nhật'}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="gap-3 p-4 ring-0">
-                <h3 className="text-sm font-semibold">Thông tin hồ sơ</h3>
-                <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <dt className="text-xs text-muted-foreground">Ngày tạo</dt>
-                    <dd>{timestampFormat(detailState.company.createdAt)}</dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-xs text-muted-foreground">
-                      Cập nhật lần cuối
-                    </dt>
-                    <dd>{timestampFormat(detailState.company.updatedAt)}</dd>
-                  </div>
-                </dl>
-              </Card>
-              {canUpdate && (
-                <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-                  <Button
-                    onClick={() => {
-                      setStatusError(null);
-                      setStatusDialogOpen(true);
-                    }}
-                    type="button"
-                    variant="outline"
-                  >
-                    {detailState.company.status === 'HOAT_DONG'
-                      ? 'Tạm ngưng nhà xe'
-                      : 'Kích hoạt lại'}
-                  </Button>
-                  <Button
-                    onClick={() => setEditDialogOpen(true)}
-                    type="button"
-                  >
-                    Chỉnh sửa
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </ResourceSheet>
-      {canUpdate && editDialogOpen && detailState.status === 'success' && (
-        <EditBusCompanyDialog
-          company={detailState.company}
-          onClose={() => setEditDialogOpen(false)}
-          onUpdated={handleCompanyUpdated}
-        />
-      )}
-      {canUpdate &&
-        statusDialogOpen &&
-        detailState.status === 'success' &&
-        nextStatus && (
-          <AlertDialog
-            open
-            onOpenChange={(open, event) => {
-              if (!open && statusSubmitting) event.cancel();
-              else if (!open) setStatusDialogOpen(false);
-            }}
-          >
-            <AlertDialogContent aria-busy={statusSubmitting}>
-              <AlertDialogTitle>
-                {nextStatus === 'TAM_NGUNG'
-                  ? 'Tạm ngưng nhà xe này?'
-                  : 'Kích hoạt lại nhà xe này?'}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {nextStatus === 'TAM_NGUNG'
-                  ? 'Nhà xe sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu và có thể kích hoạt lại sau.'
-                  : 'Nhà xe sẽ được chuyển sang trạng thái Đang hoạt động.'}
-              </AlertDialogDescription>
-              {statusError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {statusError}
-                </p>
-              )}
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={statusSubmitting}>
-                  Hủy
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={statusSubmitting}
-                  onClick={confirmStatusChange}
-                >
-                  {statusSubmitting && (
-                    <LoaderCircle
-                      aria-hidden="true"
-                      className="size-4 motion-safe:animate-spin"
-                    />
-                  )}
-                  {statusSubmitting
-                    ? 'Đang cập nhật…'
-                    : nextStatus === 'TAM_NGUNG'
-                      ? 'Tạm ngưng nhà xe'
-                      : 'Kích hoạt lại'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
-    </>
-  );
-}
-
 export function BusCompaniesManagement() {
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const canCreateCompany = hasPlatformAdminPermission(
     session,
     'bus-company:create',
-  );
-  const canUpdateCompanies = hasPlatformAdminPermission(
-    session,
-    'bus-company:update',
   );
   const {
     companyPage,
@@ -404,9 +111,6 @@ export function BusCompaniesManagement() {
     updateFilters,
     updateCreatedDateRange,
   } = useBusCompanies();
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(
-    null,
-  );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   function openCreateDialog() {
@@ -417,18 +121,6 @@ export function BusCompaniesManagement() {
   function handleCompanyCreated(company: BusCompany) {
     setCreateDialogOpen(false);
     toast.success(`Đã thêm nhà xe ${company.name}.`);
-    refresh();
-  }
-
-  function handleCompanyUpdated(company: BusCompany) {
-    toast.success(`Đã cập nhật nhà xe ${company.name}.`);
-    refresh();
-  }
-
-  function handleCompanyStatusUpdated(company: BusCompany) {
-    toast.success(
-      `Đã chuyển nhà xe ${company.name} sang trạng thái ${statusLabel(company.status)}.`,
-    );
     refresh();
   }
 
@@ -460,10 +152,6 @@ export function BusCompaniesManagement() {
         )}
       </Button>
     );
-  }
-
-  function openCompanyDetails(company: BusCompany) {
-    setSelectedCompanyId(company.busCompanyId);
   }
 
   const hasFilters = Boolean(
@@ -661,7 +349,7 @@ export function BusCompaniesManagement() {
                           </TableCell>
                           <TableCell>
                             <ResourceDetailAction
-                              onClick={() => openCompanyDetails(company)}
+                              href={`/bus-companies/${company.busCompanyId}`}
                               resourceName={company.name}
                             />
                           </TableCell>
@@ -716,7 +404,7 @@ export function BusCompaniesManagement() {
                       </dl>
                       <div className="flex justify-end border-t pt-3">
                         <ResourceDetailAction
-                          onClick={() => openCompanyDetails(company)}
+                          href={`/bus-companies/${company.busCompanyId}`}
                           resourceName={company.name}
                         />
                       </div>
@@ -738,16 +426,6 @@ export function BusCompaniesManagement() {
           </Card>
         </section>
       </div>
-      {selectedCompanyId !== null && (
-        <CompanyDetails
-          key={selectedCompanyId}
-          companyId={selectedCompanyId}
-          canUpdate={canUpdateCompanies}
-          onClose={() => setSelectedCompanyId(null)}
-          onStatusUpdated={handleCompanyStatusUpdated}
-          onUpdated={handleCompanyUpdated}
-        />
-      )}
       {canCreateCompany && createDialogOpen && (
         <CreateBusCompanyDialog
           onClose={() => setCreateDialogOpen(false)}
