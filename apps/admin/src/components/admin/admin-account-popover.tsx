@@ -10,7 +10,6 @@ import {
 import { Button } from '@/components/ui/action-button';
 import {
   Popover,
-  PopoverClose,
   PopoverContent,
   PopoverDescription,
   PopoverTitle,
@@ -126,8 +125,8 @@ export function AdminAccountPopover({
             </div>
           )}
         </div>
-        <div className="space-y-1 p-2">
-          {onLogout && (
+        {onLogout && (
+          <div className="p-2">
             <Button
               className="h-9 w-full cursor-pointer justify-start gap-2 rounded-lg font-medium text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40"
               variant="ghost"
@@ -142,18 +141,8 @@ export function AdminAccountPopover({
               )}
               <span>{signingOut ? 'Đang thoát…' : 'Đăng xuất'}</span>
             </Button>
-          )}
-          <PopoverClose
-            render={
-              <Button
-                className="h-8 w-full shrink-0 cursor-pointer text-xs text-slate-600"
-                variant="outline"
-              />
-            }
-          >
-            Đóng
-          </PopoverClose>
-        </div>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
