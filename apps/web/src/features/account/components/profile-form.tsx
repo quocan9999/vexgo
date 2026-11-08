@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi, CustomerProfile, ApiError } from '../services/customer.api';
 import {
@@ -17,6 +18,8 @@ import { useRouter } from 'next/navigation';
 
 export const ProfileForm: React.FC = () => {
   const router = useRouter();
+  const t = useTranslations('account.profile');
+  const locale = useLocale();
   const { accessToken, isHydrated, executeWithAuth } = useAuthSession();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,7 +42,7 @@ export const ProfileForm: React.FC = () => {
   useEffect(() => {
     if (!isHydrated) return;
     if (!accessToken) {
-      router.replace('/auth/login?next=/account/profile');
+      router.replace(`/${locale}/login?next=/account/profile`);
       return;
     }
 
@@ -56,7 +59,7 @@ export const ProfileForm: React.FC = () => {
         setCitizenId(data.citizenId || '');
       } catch (error: unknown) {
         if (error instanceof ApiError && error.status === 401) {
-          router.replace('/auth/login?next=/account/profile');
+          router.replace(`/${locale}/login?next=/account/profile`);
         } else {
           console.warn('Fetch profile error:', error);
         }
@@ -66,7 +69,7 @@ export const ProfileForm: React.FC = () => {
     };
 
     fetchProfile();
-  }, [accessToken, isHydrated, router, executeWithAuth]);
+  }, [accessToken, isHydrated, router, executeWithAuth, locale]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,26 +86,26 @@ export const ProfileForm: React.FC = () => {
         }),
       );
       setModalConfig({
-        title: 'Thành công',
-        message: 'Cập nhật thông tin tài khoản thành công!',
+        title: t('successTitle'),
+        message: t('updateSuccess'),
         variant: 'success',
       });
       setModalOpen(true);
     } catch (error: unknown) {
       if (error instanceof ApiError && error.status === 401) {
         setModalConfig({
-          title: 'Phiên đăng nhập hết hạn',
-          message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+          title: t('sessionExpiredTitle'),
+          message: t('sessionExpiredMessage'),
           variant: 'error',
         });
-        router.replace('/auth/login?next=/account/profile');
+        router.replace(`/${locale}/login?next=/account/profile`);
       } else {
         setModalConfig({
-          title: 'Có lỗi xảy ra',
+          title: t('errorTitle'),
           message:
             error instanceof Error
               ? error.message
-              : 'Không thể cập nhật thông tin lúc này.',
+              : t('updateFailed'),
           variant: 'error',
         });
       }
@@ -116,7 +119,7 @@ export const ProfileForm: React.FC = () => {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 flex flex-col items-center justify-center min-h-[400px]">
         <p className="text-slate-500 font-medium">
-          Đang chuyển đến trang đăng nhập...
+          {t('redirecting')}
         </p>
       </div>
     );
@@ -126,7 +129,7 @@ export const ProfileForm: React.FC = () => {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 flex flex-col items-center justify-center min-h-[400px]">
         <RefreshCw className="w-8 h-8 text-slate-300 animate-spin mb-4" />
-        <p className="text-slate-500 font-medium">Đang tải thông tin...</p>
+        <p className="text-slate-500 font-medium">{t('loading')}</p>
       </div>
     );
   }
@@ -135,7 +138,7 @@ export const ProfileForm: React.FC = () => {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 flex flex-col items-center justify-center min-h-[400px]">
         <p className="text-red-500 font-medium">
-          Không thể tải thông tin. Vui lòng thử lại sau.
+          {t('loadError')}
         </p>
       </div>
     );
@@ -145,10 +148,10 @@ export const ProfileForm: React.FC = () => {
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 md:p-8">
       <div className="mb-8 border-b border-slate-100 pb-4">
         <h2 className="text-xl md:text-2xl font-black text-slate-900">
-          Thông tin tài khoản
+          {t('title')}
         </h2>
         <p className="text-sm text-slate-500 mt-1 font-medium">
-          Quản lý thông tin hồ sơ để bảo mật tài khoản
+          {t('subtitle')}
         </p>
       </div>
 
@@ -162,11 +165,11 @@ export const ProfileForm: React.FC = () => {
             type="button"
             className="px-6 py-2 border border-slate-300 rounded-full text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
           >
-            Chọn ảnh
+            {t('choosePhoto')}
           </button>
           <div className="text-center text-xs text-slate-500 max-w-[180px]">
-            <p>Dung lượng file tối đa 1 MB</p>
-            <p>Định dạng: JPEG, .PNG</p>
+            <p>{t('fileLimit')}</p>
+            <p>{t('fileFormat')}</p>
           </div>
         </div>
 
@@ -176,7 +179,7 @@ export const ProfileForm: React.FC = () => {
             {/* Phone Number (Read only) */}
             <div>
               <label className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-2">
-                <Phone className="w-4 h-4 text-slate-400" /> Số điện thoại
+                <Phone className="w-4 h-4 text-slate-400" /> {t('phoneLabel')}
               </label>
               <input
                 type="text"
@@ -185,21 +188,21 @@ export const ProfileForm: React.FC = () => {
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-500 font-medium cursor-not-allowed"
               />
               <p className="text-xs text-slate-400 mt-1">
-                Số điện thoại không thể thay đổi.
+                {t('phoneLockedHint')}
               </p>
             </div>
 
             {/* Full Name */}
             <div>
               <label className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-2">
-                <User className="w-4 h-4 text-slate-400" /> Họ và tên
+                <User className="w-4 h-4 text-slate-400" /> {t('fullNameLabel')}
               </label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 required
-                placeholder="Nhập họ và tên"
+                placeholder={t('fullNamePlaceholder')}
                 className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 font-medium hover:border-slate-300 focus:border-brand focus:ring-1 focus:ring-brand transition-colors outline-none"
               />
             </div>
@@ -207,13 +210,13 @@ export const ProfileForm: React.FC = () => {
             {/* Email */}
             <div>
               <label className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-2">
-                <Mail className="w-4 h-4 text-slate-400" /> Email
+                <Mail className="w-4 h-4 text-slate-400" /> {t('emailLabel')}
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Nhập địa chỉ email"
+                placeholder={t('emailPlaceholder')}
                 className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 font-medium hover:border-slate-300 focus:border-brand focus:ring-1 focus:ring-brand transition-colors outline-none"
               />
             </div>
@@ -222,7 +225,7 @@ export const ProfileForm: React.FC = () => {
               {/* Date of Birth */}
               <div>
                 <label className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-slate-400" /> Ngày sinh
+                  <Calendar className="w-4 h-4 text-slate-400" /> {t('dobLabel')}
                 </label>
                 <input
                   type="date"
@@ -235,16 +238,16 @@ export const ProfileForm: React.FC = () => {
               {/* Citizen ID (CCCD) */}
               <div>
                 <label className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-slate-400" /> Số CCCD
+                  <CreditCard className="w-4 h-4 text-slate-400" /> {t('citizenIdLabel')}
                 </label>
                 <input
                   type="text"
                   value={citizenId}
                   onChange={(e) => setCitizenId(e.target.value)}
-                  placeholder="Nhập 12 số CCCD"
+                  placeholder={t('citizenIdPlaceholder')}
                   maxLength={12}
                   pattern="\d{12}"
-                  title="CCCD phải bao gồm đúng 12 chữ số"
+                  title={t('citizenIdHint')}
                   className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 font-medium hover:border-slate-300 focus:border-brand focus:ring-1 focus:ring-brand transition-colors outline-none"
                 />
               </div>
@@ -262,7 +265,7 @@ export const ProfileForm: React.FC = () => {
               ) : (
                 <Save className="w-5 h-5" />
               )}
-              {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+              {isSaving ? t('saving') : t('saveChanges')}
             </button>
           </div>
         </form>

@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Ticket, Star, QrCode, Clock, Trash2, Loader2 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { ProfileSidebar } from '@/features/account/components/profile-sidebar';
 import { useAuthSession } from '@/features/auth/auth-session';
 import {
@@ -62,45 +63,48 @@ function formatDeparture(isoString: string | null): string {
   }
 }
 
-function formatPrice(amount: number): string {
+function formatPrice(amount: number, locale: string = 'vi'): string {
+  if (locale === 'en') {
+    return `${new Intl.NumberFormat('en-US').format(amount)} VND`;
+  }
   return `${new Intl.NumberFormat('vi-VN').format(amount)}đ`;
 }
 
-function renderStatusBadge(status: string | null) {
+function renderStatusBadge(status: string | null, t: (key: any) => string) {
   if (!status) return null;
   const s = status.toUpperCase();
   if (s === 'DA_THANH_TOAN' || s === 'THANH_CONG' || s === 'HOAN_TAT') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 whitespace-nowrap">
-        Đã thanh toán
+        {t('statusPaid')}
       </span>
     );
   }
   if (s === 'HOAN_TIEN') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 whitespace-nowrap">
-        Đã hoàn tiền
+        {t('statusRefunded')}
       </span>
     );
   }
   if (s === 'CHO_THANH_TOAN' || s === 'CHO_XU_LY') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
-        Chờ thanh toán
+        {t('statusPending')}
       </span>
     );
   }
   if (s === 'DA_HUY' || s === 'HUY' || s === 'THAT_BAI') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 whitespace-nowrap">
-        Đã hủy
+        {t('statusCancelled')}
       </span>
     );
   }
   if (s === 'HET_HAN' || s === 'EXPIRED') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 whitespace-nowrap">
-        Hết hạn
+        {t('statusExpired')}
       </span>
     );
   }
@@ -113,6 +117,8 @@ function renderStatusBadge(status: string | null) {
 
 export default function CustomerActivityPage() {
   const router = useRouter();
+  const t = useTranslations('account.tickets');
+  const locale = useLocale();
   const { accessToken, isHydrated, executeWithAuth } = useAuthSession();
 
   const [bookings, setBookings] = useState<BookingItem[]>([]);
@@ -453,17 +459,17 @@ export default function CustomerActivityPage() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-                    Lịch sử mua vé
+                    {t('pageTitle')}
                   </h2>
                   <p className="text-sm text-slate-500 mt-1 font-medium">
-                    Theo dõi và quản lý lịch sử các chuyến đi của bạn
+                    {t('pageSubtitle')}
                   </p>
                 </div>
                 <Link
-                  href="/"
+                  href={`/${locale}`}
                   className="bg-accent hover:bg-accent-hover text-white px-5 py-2 rounded-full text-sm font-black shadow-sm transition-colors shrink-0"
                 >
-                  Đặt vé mới
+                  {t('bookNew')}
                 </Link>
               </div>
 
@@ -476,10 +482,10 @@ export default function CustomerActivityPage() {
                     </div>
                     <div>
                       <h3 className="font-extrabold text-amber-950 text-sm">
-                        Bạn đang có {pendingPaymentBookings.length} đơn đặt vé chờ thanh toán
+                        {t('pendingBannerTitle', { count: pendingPaymentBookings.length })}
                       </h3>
                       <p className="text-[12px] text-amber-800">
-                        Vui lòng hoàn tất thanh toán trước khi thời gian giữ ghế kết thúc để không bị hủy vé tự động.
+                        {t('pendingBannerDesc')}
                       </p>
                     </div>
                   </div>
@@ -498,21 +504,21 @@ export default function CustomerActivityPage() {
                           <div className="text-xs sm:text-sm">
                             <div className="font-bold text-amber-950 flex flex-wrap items-center gap-2">
                               <span>
-                                Đơn <strong>{target.bookingCode}</strong>
+                                {t('bookingCode')} <strong>{target.bookingCode}</strong>
                               </span>
                               {countdownStr && (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900">
-                                  Còn {countdownStr} giữ ghế
+                                  {t('expiresIn')} {countdownStr}
                                 </span>
                               )}
                             </div>
                             <p className="text-xs text-amber-800 mt-1">
-                              {target.route || 'Chuyến xe'}
+                              {target.route || t('tripRoute')}
                               {target.seatNumbers?.length
-                                ? ` · Ghế: ${target.seatNumbers.join(', ')}`
+                                ? ` · ${t('seats')}: ${target.seatNumbers.join(', ')}`
                                 : ''}
-                              {' — '}Tổng tiền:{' '}
-                              <strong>{formatPrice(target.totalAmount)}</strong>
+                              {' — '}{t('totalPrice')}:{' '}
+                              <strong>{formatPrice(target.totalAmount, locale)}</strong>
                             </p>
                           </div>
                           <button
@@ -521,16 +527,16 @@ export default function CustomerActivityPage() {
                               const draft = createPaymentDraftFromBooking(target);
                               if (draft) {
                                 router.push(
-                                  `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                                  `/${locale}/payment?draftId=${encodeURIComponent(draft.id)}`,
                                 );
                               } else {
-                                router.push(`/invoice/${target.bookingId}`);
+                                router.push(`/${locale}/invoice/${target.bookingId}`);
                               }
                             }}
                             className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-extrabold transition-colors shadow-sm cursor-pointer shrink-0"
                           >
                             <QrCode className="w-3.5 h-3.5" />
-                            <span>Tiếp tục thanh toán</span>
+                            <span>{t('continuePayment')}</span>
                           </button>
                         </div>
                       );
@@ -550,7 +556,7 @@ export default function CustomerActivityPage() {
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <span>Chuyến sắp đi</span>
+                  <span>{t('tabUpcoming')}</span>
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       activeTab === 'upcoming'
@@ -571,7 +577,7 @@ export default function CustomerActivityPage() {
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <span>Lịch sử chuyến</span>
+                  <span>{t('tabPast')}</span>
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       activeTab === 'history'
@@ -592,7 +598,7 @@ export default function CustomerActivityPage() {
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <span>Tất cả vé</span>
+                  <span>{t('tabAll')}</span>
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       activeTab === 'all'
@@ -612,11 +618,11 @@ export default function CustomerActivityPage() {
               >
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Mã vé
+                    {t('ticketCode')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Nhập Mã vé"
+                    placeholder={t('filterCode')}
                     value={codeFilter}
                     onChange={(e) => setCodeFilter(e.target.value)}
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-accent transition-colors"
@@ -624,7 +630,7 @@ export default function CustomerActivityPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Thời gian
+                    {t('time')}
                   </label>
                   <input
                     type="date"
@@ -635,11 +641,11 @@ export default function CustomerActivityPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Tuyến đường
+                    {t('route')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Nhập tuyến đường"
+                    placeholder={t('filterRoute')}
                     value={routeFilter}
                     onChange={(e) => setRouteFilter(e.target.value)}
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-accent transition-colors"
@@ -647,17 +653,17 @@ export default function CustomerActivityPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Trạng thái
+                    {t('status')}
                   </label>
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-accent bg-white text-slate-500 transition-colors"
                   >
-                    <option value="">Tất cả</option>
-                    <option value="DA_THANH_TOAN">Đã thanh toán</option>
-                    <option value="CHO_THANH_TOAN">Chờ thanh toán</option>
-                    <option value="DA_HUY">Đã hủy</option>
+                    <option value="">{t('allStatuses')}</option>
+                    <option value="DA_THANH_TOAN">{t('statusPaid')}</option>
+                    <option value="CHO_THANH_TOAN">{t('statusPending')}</option>
+                    <option value="DA_HUY">{t('statusCancelled')}</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -665,7 +671,7 @@ export default function CustomerActivityPage() {
                     type="submit"
                     className="w-full lg:w-auto px-6 py-2 border border-slate-300 rounded-full text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors h-[38px] cursor-pointer"
                   >
-                    Tìm
+                    {t('filterButton')}
                   </button>
                 </div>
               </form>
@@ -676,25 +682,25 @@ export default function CustomerActivityPage() {
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
-                        Mã vé
+                        {t('ticketCode')}
                       </th>
                       <th className="px-2 sm:px-3 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Số vé
+                        {t('ticketCount')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Tuyến đường
+                        {t('route')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Ngày đi
+                        {t('date')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Số tiền
+                        {t('totalPrice')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Thanh toán
+                        {t('payment')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Thao tác
+                        {t('actions')}
                       </th>
                     </tr>
                   </thead>
@@ -706,7 +712,7 @@ export default function CustomerActivityPage() {
                           className="px-4 py-10 text-center text-slate-500 font-medium whitespace-nowrap"
                         >
                           <div className="w-7 h-7 border-3 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                          Đang tải danh sách vé...
+                          {t('loadingTickets')}
                         </td>
                       </tr>
                     ) : viewState === 'error' ? (
@@ -720,7 +726,7 @@ export default function CustomerActivityPage() {
                             onClick={handleRetry}
                             className="mt-3 rounded-full border border-red-200 px-5 py-2 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 cursor-pointer"
                           >
-                            Thử lại
+                            {t('retry')}
                           </button>
                         </td>
                       </tr>
@@ -732,25 +738,19 @@ export default function CustomerActivityPage() {
                               <Ticket className="w-7 h-7" />
                             </div>
                             <h3 className="text-base font-bold text-slate-800 mb-1.5">
-                              {activeTab === 'upcoming'
-                                ? 'Hiện tại bạn chưa có chuyến xe nào sắp đi'
-                                : activeTab === 'history'
-                                  ? 'Chưa có lịch sử chuyến đi nào'
-                                  : 'Chưa có vé xe nào phù hợp'}
+                              {t('emptyTitle')}
                             </h3>
                             <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-                              {activeTab === 'upcoming'
-                                ? 'Các vé xe bạn mới đặt và chuẩn bị khởi hành sẽ hiển thị tại đây để bạn tiện lấy mã QR lên xe.'
-                                : 'Các chuyến xe đã đi hoặc đã hủy của bạn sẽ được lưu trữ tại đây.'}
+                              {t('emptyDesc')}
                             </p>
                             <div className="flex flex-wrap items-center justify-center gap-3">
                               {activeTab === 'upcoming' ? (
                                 <>
                                   <Link
-                                    href="/"
+                                    href={`/${locale}`}
                                     className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-accent text-white text-xs font-black hover:bg-accent-hover transition-colors shadow-2xs"
                                   >
-                                    <span>Tìm chuyến & Đặt vé ngay</span>
+                                    <span>{t('findTripsNow')}</span>
                                   </Link>
                                   {pastBookings.length > 0 && (
                                     <button
@@ -759,17 +759,17 @@ export default function CustomerActivityPage() {
                                       className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
                                     >
                                       <span>
-                                        Xem lịch sử mua vé ({pastBookings.length})
+                                        {t('viewPurchaseHistory', { count: pastBookings.length })}
                                       </span>
                                     </button>
                                   )}
                                 </>
                               ) : (
                                 <Link
-                                  href="/"
+                                  href={`/${locale}`}
                                   className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-accent text-white text-xs font-black hover:bg-accent-hover transition-colors shadow-2xs"
                                 >
-                                  <span>Đặt vé mới</span>
+                                  <span>{t('bookNew')}</span>
                                 </Link>
                               )}
                             </div>
@@ -812,9 +812,9 @@ export default function CustomerActivityPage() {
                           >
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-accent whitespace-nowrap">
                               <Link
-                                href={`/invoice/${row.bookingId}`}
+                                href={`/${locale}/invoice/${row.bookingId}`}
                                 className="hover:underline flex items-center justify-center gap-1"
-                                title="Bấm để xem chi tiết vé điện tử"
+                                title={t('viewTicket')}
                               >
                                 {row.bookingCode}
                               </Link>
@@ -826,13 +826,13 @@ export default function CustomerActivityPage() {
                               {row.seatNumbers &&
                                 row.seatNumbers.length > 0 && (
                                   <span className="text-[11px] text-slate-500 block">
-                                    Ghế: {row.seatNumbers.join(', ')}
+                                    {t('seats')}: {row.seatNumbers.join(', ')}
                                   </span>
                                 )}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap text-left sm:text-center">
                               <span className="font-bold text-slate-900 block">
-                                {row.route || 'Đang cập nhật'}
+                                {row.route || '...'}
                               </span>
                               {row.busCompanyName && (
                                 <span className="text-[11px] text-slate-500 block">
@@ -844,10 +844,10 @@ export default function CustomerActivityPage() {
                               {formatDeparture(row.departureTime)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-slate-900 border-l border-slate-100 whitespace-nowrap">
-                              {formatPrice(row.totalAmount)}
+                              {formatPrice(row.totalAmount, locale)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium border-l border-slate-100 whitespace-nowrap">
-                              {renderStatusBadge(effectiveBadgeStatus)}
+                              {renderStatusBadge(effectiveBadgeStatus, t)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5">
@@ -859,28 +859,28 @@ export default function CustomerActivityPage() {
                                         createPaymentDraftFromBooking(row);
                                       if (draft) {
                                         router.push(
-                                          `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                                          `/${locale}/payment?draftId=${encodeURIComponent(draft.id)}`,
                                         );
                                       } else {
                                         router.push(
-                                          `/invoice/${row.bookingId}`,
+                                          `/${locale}/invoice/${row.bookingId}`,
                                         );
                                       }
                                     }}
                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-                                    title="Mở lại mã QR để thanh toán đơn đặt vé"
+                                    title={t('continuePayment')}
                                   >
                                     <QrCode className="w-3.5 h-3.5" />
-                                    <span>Thanh toán</span>
+                                    <span>{t('payNow')}</span>
                                   </button>
                                 )}
                                 <Link
-                                  href={`/invoice/${row.bookingId}`}
+                                  href={`/${locale}/invoice/${row.bookingId}`}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-                                  title="Mở cuống vé điện tử"
+                                  title={t('viewTicket')}
                                 >
                                   <Ticket className="w-3.5 h-3.5 text-amber-400" />
-                                  <span>Xem vé</span>
+                                  <span>{t('viewTicket')}</span>
                                 </Link>
 
                                 {canReview &&
@@ -912,11 +912,11 @@ export default function CustomerActivityPage() {
                                           });
                                         }}
                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                                        title="Xem lại nhận xét, chỉnh sửa hoặc xóa đánh giá"
+                                        title={t('viewReview')}
                                       >
                                         <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                                         <span>
-                                          Xem đánh giá
+                                          {t('viewReview')}
                                           {customerReviews[row.tripId!]?.rating
                                             ? ` (${customerReviews[row.tripId!].rating}★)`
                                             : ''}
@@ -949,17 +949,16 @@ export default function CustomerActivityPage() {
                                         })
                                       }
                                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-extrabold transition-colors shadow-2xs cursor-pointer"
-                                      title="Đánh giá chất lượng chuyến đi (trong vòng 7 ngày)"
+                                      title={t('reviewTrip')}
                                     >
                                       <Star className="w-3.5 h-3.5 fill-slate-900 text-slate-900" />
-                                      <span>Đánh giá</span>
+                                      <span>{t('reviewTrip')}</span>
                                     </button>
                                   ) : (
                                     <span
                                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 text-slate-400 text-[11px] font-medium"
-                                      title="Chuyến xe đã kết thúc quá 7 ngày, đã hết thời hạn gửi đánh giá"
                                     >
-                                      Hết hạn đánh giá
+                                      {t('reviewExpired')}
                                     </span>
                                   ))}
                               </div>
@@ -986,7 +985,7 @@ export default function CustomerActivityPage() {
                   </select>
                 </div>
                 <div className="text-sm font-medium text-slate-600">
-                  Tổng số: {meta.totalItems}
+                  {t('totalTickets', { total: meta.totalItems })}
                 </div>
                 <div className="flex gap-1">
                   <button

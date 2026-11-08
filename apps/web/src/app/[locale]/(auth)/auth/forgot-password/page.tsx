@@ -1,4 +1,4 @@
-import ForgotPasswordPage, { metadata } from '../../forgot-password/page';
+import ForgotPasswordPage, { generateMetadata } from '../../forgot-password/page';
 
-export { metadata };
+export { generateMetadata };
 export default ForgotPasswordPage;

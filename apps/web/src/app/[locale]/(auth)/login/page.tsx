@@ -3,22 +3,25 @@ import { AuthPageShell } from '@/features/auth/components/auth-page-shell';
 import { LoginForm } from '@/features/auth/components/login-form';
 import { Bus } from 'lucide-react';
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams?: Promise<{ next?: string; redirect?: string }>;
 }) {
+  const t = await getTranslations('auth.login');
+  const locale = await getLocale();
   const resolvedParams = searchParams ? await searchParams : {};
   const nextTarget = resolvedParams.next || resolvedParams.redirect;
   const registerHref = nextTarget
-    ? `/register?next=${encodeURIComponent(nextTarget)}`
-    : '/register';
+    ? `/${locale}/register?next=${encodeURIComponent(nextTarget)}`
+    : `/${locale}/register`;
 
   return (
     <AuthPageShell>
       <div className="mb-10 flex flex-col items-center">
-        <Link href="/" className="inline-flex items-center gap-3 mb-6 group">
+        <Link href={`/${locale}`} className="inline-flex items-center gap-3 mb-6 group">
           <div className="bg-slate-700 border border-slate-600 p-2 rounded-xl group-hover:scale-105 transition-transform shadow-md shadow-slate-700/20">
             <Bus className="w-6 h-6 text-white" />
           </div>
@@ -27,17 +30,17 @@ export default async function LoginPage({
             <span className="text-[#FFB300]">Go</span>
           </span>
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 text-center">Đăng nhập tài khoản</h1>
-        <p className="text-slate-500 text-sm mt-2 text-center">Chào mừng bạn quay trở lại Vex Go</p>
+        <h1 className="text-2xl font-bold text-slate-900 text-center">{t('title')}</h1>
+        <p className="text-slate-500 text-sm mt-2 text-center">{t('subtitle')}</p>
       </div>
 
-      <Suspense fallback={<div className="p-8 text-center text-slate-400">Đang tải...</div>}>
+      <Suspense fallback={<div className="p-8 text-center text-slate-400">{t('loading')}</div>}>
         <LoginForm />
       </Suspense>
       <p className="mt-10 text-center text-sm text-slate-600">
-        Chưa có tài khoản?{' '}
+        {t('noAccount')}{' '}
         <Link href={registerHref} className="font-semibold text-[#E50012] hover:text-red-800 transition-colors underline underline-offset-4 decoration-2 decoration-red-200 hover:decoration-[#E50012]">
-          Đăng ký ngay miễn phí
+          {t('registerNow')}
         </Link>
       </p>
     </AuthPageShell>
