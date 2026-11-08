@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import crypto from 'node:crypto';
 import { Prisma } from '../generated/prisma/client.js';
@@ -13,8 +14,13 @@ import {
   type ChatbotResponse,
 } from './orchestrator/ai-chatbot-orchestrator.service.js';
 import type { SendMessageDto } from './dto/send-message.dto.js';
+import type { AiChatbotHandoffDto } from './dto/ai-chatbot-handoff.dto.js';
 import { assertAiSessionAccess } from './ai-session-access.js';
 import { AiChatbotSettingsService } from './admin/ai-chatbot-settings.service.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+import { SupportChatService } from '../support-chat/support-chat.service.js';
+import { SupportChatGateway } from '../support-chat/support-chat.gateway.js';
+import { CHAT_EVENTS } from '../support-chat/constants/chat-events.constants.js';
 
 export interface DefaultSuggestion {
   id: string;
@@ -62,6 +68,8 @@ export class AiChatbotService {
     private readonly orchestrator: AiChatbotOrchestratorService,
     private readonly prisma: PrismaService,
     @Optional() private readonly settingsService?: AiChatbotSettingsService,
+    @Optional() private readonly supportChatService?: SupportChatService,
+    @Optional() private readonly chatGateway?: SupportChatGateway,
   ) {}
 
   /**
@@ -401,6 +409,236 @@ export class AiChatbotService {
       createdAt: session.createdAt,
       messages: session.messages,
     };
+  }
+
+  /**
+   * Chuyển giao phiên hội thoại AI sang cuộc trò chuyện CSKH với nhà xe
+   * Tái sử dụng module SupportChat, kiểm tra quyền, idempotency và phát realtime socket
+   */
+  async handoffToSupportChat(
+    sessionToken: string,
+    dto: AiChatbotHandoffDto,
+    principal?: AuthPrincipal,
+  ) {
+    // 1. Kiểm tra sessionToken
+    const session = await this.prisma.aiChatSession.findUnique({
+      where: { sessionToken },
+    });
+    if (!session) {
+      throw new NotFoundException({
+        error: 'SESSION_NOT_FOUND',
+        message: 'Không tìm thấy phiên hội thoại AI.',
+      });
+    }
+
+    // 2. Bắt buộc đăng nhập tài khoản khách hàng để kết nối CSKH
+    if (
+      !principal ||
+      !principal.roles?.includes('KHACH_HANG') ||
+      !principal.taiKhoanId
+    ) {
+      throw new ForbiddenException({
+        error: 'AUTHENTICATION_REQUIRED',
+        message:
+          'Vui lòng đăng nhập tài khoản khách hàng để kết nối với nhân viên hỗ trợ.',
+      });
+    }
+
+    // 3. Kiểm tra quyền sở hữu phiên
+    if (session.khachHangId !== null) {
+      await assertAiSessionAccess(
+        this.prisma,
+        session.khachHangId,
+        principal.taiKhoanId,
+      );
+    }
+
+    // 4. Kiểm tra Idempotency bằng requestId
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify({
+          action: 'handoff',
+          sessionToken,
+          nhaXeId: dto.nhaXeId,
+          clientNote: dto.clientNote?.trim() || '',
+        }),
+      )
+      .digest('hex');
+
+    const existingReq = await this.prisma.aiChatRequest.findUnique({
+      where: { requestId: dto.requestId },
+    });
+
+    if (existingReq) {
+      if (existingReq.payloadHash !== payloadHash) {
+        throw new ConflictException({
+          error: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+          message: 'Mã requestId đã tồn tại nhưng có dữ liệu yêu cầu khác.',
+        });
+      }
+      if (existingReq.status === 'COMPLETED' && existingReq.responsePayload) {
+        return existingReq.responsePayload as {
+          conversationId: number;
+          status: string;
+          created: boolean;
+        };
+      }
+      if (existingReq.status === 'PROCESSING') {
+        throw new ConflictException({
+          error: 'REQUEST_IN_PROGRESS',
+          message:
+            'Yêu cầu chuyển giao đang được xử lý. Vui lòng thử lại sau vài giây.',
+        });
+      }
+    }
+
+    // 5. Kiểm tra nhà xe hợp lệ và đang hoạt động
+    const nhaXe = await this.prisma.nhaXe.findUnique({
+      where: { nhaXeId: dto.nhaXeId },
+      select: { nhaXeId: true, tenNhaXe: true, trangThai: true },
+    });
+    if (!nhaXe || nhaXe.trangThai !== 'HOAT_DONG') {
+      throw new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe hoặc nhà xe hiện không hoạt động.',
+      });
+    }
+
+    // 6. Đăng ký record AiChatRequest (PROCESSING)
+    await this.prisma.aiChatRequest.upsert({
+      where: { requestId: dto.requestId },
+      create: {
+        requestId: dto.requestId,
+        payloadHash,
+        status: 'PROCESSING',
+        sessionToken,
+        taiKhoanId: principal.taiKhoanId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+      update: {
+        payloadHash,
+        status: 'PROCESSING',
+      },
+    });
+
+    try {
+      // 7. Lấy tóm tắt các trao đổi gần nhất trong phiên AI (chỉ lấy USER và ASSISTANT)
+      const recentMessages = await this.prisma.aiChatMessage.findMany({
+        where: { sessionId: session.id },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 4,
+      });
+
+      const transcriptLines = recentMessages
+        .reverse()
+        .map((m) => `[${m.role === 'USER' ? 'Khách' : 'AI'}]: ${m.content}`)
+        .join('\n');
+
+      const handoffNote = dto.clientNote
+        ? `\nGhi chú của khách: ${dto.clientNote}`
+        : '';
+      let messageContent = `[Yêu cầu hỗ trợ từ Trợ lý AI VexGo]\nKhách hàng yêu cầu hỗ trợ trực tiếp từ nhân viên nhà xe.${handoffNote}`;
+      if (transcriptLines.length > 0) {
+        messageContent += `\n\nLịch sử trao đổi gần nhất với AI:\n${transcriptLines}`;
+      }
+      if (messageContent.length > 1900) {
+        messageContent = messageContent.substring(0, 1900) + '...';
+      }
+
+      // 8. Tái sử dụng SupportChatService để tạo hoặc mở lại cuộc trò chuyện
+      if (!this.supportChatService) {
+        throw new ServiceUnavailableException({
+          error: 'SUPPORT_CHAT_UNAVAILABLE',
+          message: 'Dịch vụ chat hỗ trợ hiện không khả dụng.',
+        });
+      }
+
+      const result = await this.supportChatService.createConversation(
+        principal,
+        {
+          nhaXeId: dto.nhaXeId,
+          tieuDe: `Hỗ trợ từ Chatbot AI - ${nhaXe.tenNhaXe}`,
+          tinNhanDauTien: messageContent,
+          clientMessageId: dto.requestId,
+        },
+      );
+
+      const responseData = {
+        conversationId: result.conversation.cuocTroChuyenId,
+        status: result.conversation.trangThai,
+        created: result.isNew,
+      };
+
+      // 9. Cập nhật AiChatRequest thành COMPLETED
+      await this.prisma.aiChatRequest.update({
+        where: { requestId: dto.requestId },
+        data: {
+          status: 'COMPLETED',
+          responsePayload: responseData,
+        },
+      });
+
+      // 10. Phát socket realtime sau khi commit DB
+      if (this.chatGateway) {
+        try {
+          if (result.isNew) {
+            if (typeof this.chatGateway.emitConversationNew === 'function') {
+              await this.chatGateway.emitConversationNew(result.conversation);
+            } else {
+              this.chatGateway.server
+                ?.to(`company_${result.conversation.nhaXeId}`)
+                .emit(CHAT_EVENTS.CONVERSATION_NEW, result.conversation);
+            }
+          }
+
+          if (result.firstMessage) {
+            if (typeof this.chatGateway.emitMessageNew === 'function') {
+              await this.chatGateway.emitMessageNew(
+                result.firstMessage,
+                result.conversation,
+              );
+            } else {
+              this.chatGateway.server
+                ?.to(`conversation_${result.conversation.cuocTroChuyenId}`)
+                .emit(CHAT_EVENTS.MESSAGE_NEW, result.firstMessage);
+              this.chatGateway.server
+                ?.to(`company_${result.conversation.nhaXeId}`)
+                .emit(CHAT_EVENTS.MESSAGE_NEW, {
+                  ...result.firstMessage,
+                  cuocTroChuyen: {
+                    cuocTroChuyenId: result.conversation.cuocTroChuyenId,
+                    tieuDe: result.conversation.tieuDe,
+                    khachHang: result.conversation.khachHang,
+                  },
+                });
+            }
+          }
+        } catch {
+          // Socket emission best-effort
+        }
+      }
+
+      return responseData;
+    } catch (error) {
+      if (
+        !(error instanceof ConflictException) &&
+        !(error instanceof ForbiddenException) &&
+        !(error instanceof NotFoundException)
+      ) {
+        await this.prisma.aiChatRequest
+          .update({
+            where: { requestId: dto.requestId },
+            data: {
+              status: 'FAILED',
+              errorMessage:
+                error instanceof Error ? error.message : 'Unknown error',
+            },
+          })
+          .catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   /**

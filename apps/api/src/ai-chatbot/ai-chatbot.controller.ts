@@ -16,6 +16,7 @@ import { OptionalPrincipal } from '../auth/decorators/current-principal.decorato
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { AiChatbotService } from './ai-chatbot.service.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
+import { AiChatbotHandoffDto } from './dto/ai-chatbot-handoff.dto.js';
 import { ApiErrorResponseDto } from '../common/swagger/api-response-envelope.dto.js';
 
 @ApiTags('Trợ lý ảo AI (AI Chatbot)')
@@ -81,6 +82,51 @@ export class AiChatbotController {
       sessionToken,
       principal?.taiKhoanId,
     );
+  }
+
+  @Post('sessions/:sessionToken/handoff')
+  @OptionalAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Chuyển giao phiên hội thoại AI sang chat với nhân viên CSKH nhà xe',
+    description:
+      'Tạo hoặc kết nối lại cuộc trò chuyện trong module support-chat và chuyển tóm tắt trao đổi với AI cho nhân viên tư vấn. Yêu cầu đăng nhập tài khoản khách hàng.',
+  })
+  @ApiParam({
+    name: 'sessionToken',
+    description: 'Mã định danh phiên hội thoại AI (UUID)',
+    example: 'c2e4293e-2b5d-4f1a-8c65-0d2d3e9501a2',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Chuyển giao thành công sang cuộc trò chuyện CSKH.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Yêu cầu đăng nhập tài khoản khách hàng hoặc không có quyền truy cập phiên.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy phiên AI hoặc không tìm thấy nhà xe.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'RequestId đã tồn tại với payload khác hoặc đang được xử lý.',
+    type: ApiErrorResponseDto,
+  })
+  async handoffSession(
+    @Param('sessionToken', new ParseUUIDPipe()) sessionToken: string,
+    @Body() dto: AiChatbotHandoffDto,
+    @OptionalPrincipal() principal?: AuthPrincipal,
+  ) {
+    const data = await this.chatbotService.handoffToSupportChat(
+      sessionToken,
+      dto,
+      principal,
+    );
+    return { data };
   }
 
   @Get('requests/:requestId')

@@ -5,6 +5,7 @@ import { TicketsModule } from '../tickets/tickets.module.js';
 import { ShipmentsModule } from '../shipments/shipments.module.js';
 import { PromotionsModule } from '../promotions/promotions.module.js';
 import { LocationsModule } from '../locations/locations.module.js';
+import { SupportChatModule } from '../support-chat/support-chat.module.js';
 import { AiChatbotController } from './ai-chatbot.controller.js';
 import { AiChatbotService } from './ai-chatbot.service.js';
 import { EmbeddingProviderService } from './embedding/embedding-provider.service.js';
@@ -25,6 +26,7 @@ import { AiChatbotSettingsService } from './admin/ai-chatbot-settings.service.js
     ShipmentsModule,
     PromotionsModule,
     LocationsModule,
+    SupportChatModule,
   ],
   controllers: [
     AiChatbotController,
