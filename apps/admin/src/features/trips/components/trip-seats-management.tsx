@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -37,9 +39,9 @@ import type {
 } from '../types/trip';
 
 const tripSeatStatusPresentation = {
-  TRONG: { label: 'Trống', variant: 'success' },
-  DANG_GIU: { label: 'Đang giữ', variant: 'warning' },
-  DA_DAT: { label: 'Đã đặt', variant: 'destructive' },
+  TRONG: { label: 'Available', variant: 'success' },
+  DANG_GIU: { label: 'Held', variant: 'warning' },
+  DA_DAT: { label: 'Booked', variant: 'destructive' },
 } satisfies Record<
   TripSeatStatus,
   {
@@ -50,20 +52,20 @@ const tripSeatStatusPresentation = {
 
 const tripSeatMapStatusPresentation = {
   TRONG: {
-    label: 'Trống',
+    label: 'Available',
     icon: CheckCircle2,
     className: 'border-emerald-300/90 bg-emerald-50/90 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs hover:scale-[1.03] transition-transform',
     badgeVariant: 'outline',
   },
   DANG_GIU: {
-    label: 'Đang giữ',
+    label: 'Held',
     icon: Clock3,
     className:
       'border-amber-300/90 bg-amber-50/90 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 shadow-2xs hover:scale-[1.03] transition-transform',
     badgeVariant: 'warning',
   },
   DA_DAT: {
-    label: 'Đã đặt',
+    label: 'Booked',
     icon: Ticket,
     className: 'border-slate-200 bg-slate-100/90 text-slate-500 dark:bg-slate-800/80 dark:text-slate-400 dark:border-slate-700 shadow-2xs opacity-85',
     badgeVariant: 'secondary',
@@ -95,7 +97,14 @@ function formatCount(value: number) {
 }
 
 export function TripSeatStatusBadge({ status }: { status: TripSeatStatus }) {
-  const { label, variant } = tripSeatStatusPresentation[status];
+  const tTrips = useTranslations('trips');
+  const { variant } = tripSeatStatusPresentation[status];
+  const label =
+    status === 'TRONG'
+      ? tTrips('seatStatusAvailable')
+      : status === 'DANG_GIU'
+        ? tTrips('seatStatusHeld')
+        : tTrips('seatStatusBooked');
 
   return (
     <Badge data-status={status} variant={variant}>
@@ -184,14 +193,15 @@ function getTripSeatFloorMaps(seats: TripSeat[]): TripSeatFloorMap[] {
 }
 
 function TripSeatsLoading() {
+  const tTrips = useTranslations('trips');
   return (
     <div
       aria-busy="true"
-      aria-label="Đang tải thông tin ghế chuyến"
+      aria-label={tTrips('loadingSeats')}
       className="space-y-4"
       role="status"
     >
-      <span className="sr-only">Đang tải thông tin chuyến xe và danh sách ghế…</span>
+      <span className="sr-only">{tTrips('loadingSeats')}</span>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
           <Card className="h-auto gap-3 py-4" key={index}>
@@ -229,13 +239,15 @@ export function TripSeatsManagement({
   initialTrip?: Trip;
   initialSeats?: TripSeatsResponse;
 }) {
+  const tTrips = useTranslations('trips');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canRead = can('trip:read');
   const validTripId = Number.isSafeInteger(tripId) && tripId > 0;
 
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
     if (!validTripId) {
-      return { status: 'error', message: 'Mã chuyến xe không hợp lệ.' };
+      return { status: 'error', message: 'Invalid trip ID' };
     }
     if (initialTrip && initialSeats) {
       return { status: 'success', trip: initialTrip, seatsData: initialSeats };
@@ -246,7 +258,7 @@ export function TripSeatsManagement({
   const [refreshCount, setRefreshCount] = useState(0);
 
   const currentWorkspace: WorkspaceState = !validTripId
-    ? { status: 'error', message: 'Mã chuyến xe không hợp lệ.' }
+    ? { status: 'error', message: 'Invalid trip ID' }
     : workspace;
 
   function refresh() {
@@ -279,7 +291,7 @@ export function TripSeatsManagement({
           const message =
             error instanceof Error
               ? error.message
-              : 'Không thể tải dữ liệu ghế chuyến.';
+              : tTrips('cannotLoadSeats');
           setWorkspace({ status: 'error', message, isNotFound });
         }
       });
@@ -299,16 +311,16 @@ export function TripSeatsManagement({
                 variant="secondary"
               >
                 <ArrowLeft aria-hidden="true" />
-                Danh sách chuyến
+                {tTrips('backToTrips')}
               </Button>
             }
-            eyebrow="QUẢN LÝ VẬN HÀNH"
-            title="Ghế chuyến xe"
+            eyebrow={tTrips('eyebrow')}
+            title={tTrips('seatMapPageTitle')}
             titleId="trip-seats-title"
           />
           <Card className="h-auto gap-0 py-0">
             <ResourceState error>
-              Bạn không có quyền xem thông tin ghế chuyến xe.
+              {tTrips('noPermissionViewSeats')}
             </ResourceState>
           </Card>
         </div>
@@ -328,7 +340,7 @@ export function TripSeatsManagement({
       variant="secondary"
     >
       <ArrowLeft aria-hidden="true" />
-      Danh sách chuyến
+      {tTrips('backToTrips')}
     </Button>
   );
 
@@ -336,8 +348,8 @@ export function TripSeatsManagement({
     <SuperAdminLayout
       activeSection="trips"
       breadcrumbs={[
-        { label: 'Quản lý chuyến xe', href: '/trips' },
-        { label: 'Sơ đồ ghế chuyến' },
+        { label: tTrips('tripsTitle'), href: '/trips' },
+        { label: tTrips('seatMapBreadcrumb') },
       ]}
     >
       <div className="admin-page-content space-y-5">
@@ -352,15 +364,15 @@ export function TripSeatsManagement({
                 variant="outline"
               >
                 <RefreshCw aria-hidden="true" />
-                Làm mới
+                {tCommon('refresh')}
               </Button>
             </div>
           }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
+          eyebrow={tTrips('eyebrow')}
           title={
             currentWorkspace.status === 'success'
-              ? 'Ghế chuyến ' + currentWorkspace.trip.code
-              : 'Ghế chuyến xe'
+              ? tTrips('seatMapPageTitleWithCode', { code: currentWorkspace.trip.code })
+              : tTrips('seatMapPageTitle')
           }
           titleId="trip-seats-title"
         />
@@ -373,7 +385,7 @@ export function TripSeatsManagement({
               <div className="grid justify-items-center gap-4">
                 <p className="m-0">
                   {currentWorkspace.isNotFound
-                    ? 'Không tìm thấy chuyến xe hoặc bạn không có quyền truy cập.'
+                    ? tTrips('tripNotFoundOrNoPermission')
                     : currentWorkspace.message}
                 </p>
                 {currentWorkspace.isNotFound ? (
@@ -381,7 +393,7 @@ export function TripSeatsManagement({
                 ) : (
                   <Button onClick={refresh} type="button" variant="secondary">
                     <RefreshCw aria-hidden="true" />
-                    Thử lại
+                    {tCommon('retry')}
                   </Button>
                 )}
               </div>
@@ -393,9 +405,9 @@ export function TripSeatsManagement({
           <>
             <Card className="h-auto gap-0 py-0">
               <CardHeader className="border-b p-4 sm:p-5">
-                <CardTitle className="text-base">Thông tin chuyến xe</CardTitle>
+                <CardTitle className="text-base">{tTrips('tripInfoTitle')}</CardTitle>
                 <CardDescription>
-                  Thông tin tuyến, thời gian khởi hành và phương tiện phục vụ.
+                  {tTrips('seatMapDescription')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-4">
@@ -404,7 +416,7 @@ export function TripSeatsManagement({
                     <Route aria-hidden="true" size={17} />
                   </span>
                   <div className="min-w-0">
-                    <p className="mb-1 text-xs text-muted-foreground">Tuyến xe</p>
+                    <p className="mb-1 text-xs text-muted-foreground">{tTrips('colRoute')}</p>
                     <p className="m-0 break-words text-sm font-semibold text-foreground">
                       <span className="font-mono">
                         {currentWorkspace.trip.route.code}
@@ -422,7 +434,7 @@ export function TripSeatsManagement({
                   </span>
                   <div className="min-w-0">
                     <p className="mb-1 text-xs text-muted-foreground">
-                      Khởi hành
+                      {tTrips('departureLabel')}
                     </p>
                     <p className="m-0 text-sm font-semibold text-foreground">
                       {formatTime(currentWorkspace.trip.departureTime)}
@@ -437,7 +449,7 @@ export function TripSeatsManagement({
                     <BusFront aria-hidden="true" size={17} />
                   </span>
                   <div className="min-w-0">
-                    <p className="mb-1 text-xs text-muted-foreground">Xe phục vụ</p>
+                    <p className="mb-1 text-xs text-muted-foreground">{tTrips('colVehicle')}</p>
                     <p className="m-0 break-all font-mono text-sm font-semibold text-foreground">
                       {currentWorkspace.trip.vehicle.licensePlate}
                     </p>
@@ -452,7 +464,7 @@ export function TripSeatsManagement({
                   </span>
                   <div className="min-w-0">
                     <p className="mb-2 text-xs text-muted-foreground">
-                      Trạng thái chuyến
+                      {tTrips('tripStatus')}
                     </p>
                     <TripStatusBadge status={currentWorkspace.trip.status} />
                   </div>
@@ -461,37 +473,37 @@ export function TripSeatsManagement({
             </Card>
 
             <section
-              aria-label="Tổng quan số lượng ghế"
+              aria-label={tTrips('seatOverviewAria')}
               className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
             >
               {[
                 {
-                  label: 'Tổng số ghế',
+                  label: tTrips('totalSeatsCount'),
                   value: currentWorkspace.seatsData.meta.total,
                   icon: Armchair,
                   iconTone: 'bg-blue-50 text-blue-600 border border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
-                  detail: 'Theo cấu hình chuyến',
+                  detail: tTrips('metricTotalSeatsDetail'),
                 },
                 {
-                  label: 'Ghế trống',
+                  label: tTrips('availableSeatsCount'),
                   value: currentWorkspace.seatsData.meta.available,
                   icon: CheckCircle2,
                   iconTone: 'bg-emerald-50 text-emerald-600 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
-                  detail: 'Có thể đặt ngay',
+                  detail: tTrips('metricAvailableSeatsDetail'),
                 },
                 {
-                  label: 'Đang giữ',
+                  label: tTrips('heldSeatsCount'),
                   value: currentWorkspace.seatsData.meta.held,
                   icon: Clock3,
                   iconTone: 'bg-amber-50 text-amber-600 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
-                  detail: 'Đang được giữ tạm thời',
+                  detail: tTrips('metricHeldSeatsDetail'),
                 },
                 {
-                  label: 'Đã đặt',
+                  label: tTrips('bookedSeatsCount'),
                   value: currentWorkspace.seatsData.meta.booked,
                   icon: Ticket,
                   iconTone: 'bg-rose-50 text-rose-600 border border-rose-200/80 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
-                  detail: 'Đã có khách xác nhận',
+                  detail: tTrips('metricBookedSeatsDetail'),
                 },
               ].map((metric) => {
                 const Icon = metric.icon;
@@ -529,13 +541,13 @@ export function TripSeatsManagement({
             <Card className="h-auto gap-0 py-0">
               <CardHeader className="flex flex-col gap-4 border-b p-4 sm:p-5 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 space-y-1">
-                  <CardTitle className="text-base">Sơ đồ ghế chuyến</CardTitle>
+                  <CardTitle className="text-base">{tTrips('seatMapTitle')}</CardTitle>
                   <CardDescription className="max-w-3xl leading-relaxed">
-                    Vị trí ghế theo sơ đồ 2D đã lưu của xe, kèm trạng thái trên chuyến.
+                    {tTrips('seatMapDescription')}
                   </CardDescription>
                 </div>
                 <div
-                  aria-label="Lọc theo trạng thái ghế"
+                  aria-label={tTrips('filterByStatusAria')}
                   className="flex flex-wrap gap-2"
                   role="group"
                 >
@@ -546,7 +558,7 @@ export function TripSeatsManagement({
                     type="button"
                     variant={statusFilter === '' ? 'default' : 'outline'}
                   >
-                    Tất cả ({formatCount(currentWorkspace.seatsData.meta.total)})
+                    {tCommon('all')} ({formatCount(currentWorkspace.seatsData.meta.total)})
                   </Button>
                   <Button
                     aria-pressed={statusFilter === 'TRONG'}
@@ -555,7 +567,7 @@ export function TripSeatsManagement({
                     type="button"
                     variant={statusFilter === 'TRONG' ? 'default' : 'outline'}
                   >
-                    Trống ({formatCount(currentWorkspace.seatsData.meta.available)})
+                    {tTrips('seatStatusAvailable')} ({formatCount(currentWorkspace.seatsData.meta.available)})
                   </Button>
                   <Button
                     aria-pressed={statusFilter === 'DANG_GIU'}
@@ -566,7 +578,7 @@ export function TripSeatsManagement({
                       statusFilter === 'DANG_GIU' ? 'default' : 'outline'
                     }
                   >
-                    Đang giữ ({formatCount(currentWorkspace.seatsData.meta.held)})
+                    {tTrips('seatStatusHeld')} ({formatCount(currentWorkspace.seatsData.meta.held)})
                   </Button>
                   <Button
                     aria-pressed={statusFilter === 'DA_DAT'}
@@ -575,25 +587,25 @@ export function TripSeatsManagement({
                     type="button"
                     variant={statusFilter === 'DA_DAT' ? 'default' : 'outline'}
                   >
-                    Đã đặt ({formatCount(currentWorkspace.seatsData.meta.booked)})
+                    {tTrips('seatStatusBooked')} ({formatCount(currentWorkspace.seatsData.meta.booked)})
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 p-4 sm:p-5">
                 <p className="m-0 text-xs text-muted-foreground" aria-live="polite">
-                  Đang hiển thị {formatCount(currentWorkspace.seatsData.data.length)} ghế
+                  {tTrips('showingSeatsCount', { count: formatCount(currentWorkspace.seatsData.data.length) })}
                 </p>
 
                 {currentWorkspace.seatsData.data.length === 0 ? (
                   <ResourceState>
                     {statusFilter
-                      ? 'Không có ghế nào ở trạng thái này.'
-                      : 'Chuyến xe chưa có dữ liệu ghế.'}
+                      ? tTrips('noSeatsInStatus')
+                      : tTrips('noSeatDataForTrip')}
                   </ResourceState>
                 ) : (
                   <div className="space-y-4">
                     <div
-                      aria-label="Chú thích trạng thái ghế"
+                      aria-label={tTrips('seatStatusLegendAria')}
                       className="flex flex-wrap gap-2"
                       role="list"
                     >
@@ -611,7 +623,7 @@ export function TripSeatsManagement({
                             variant={presentation.badgeVariant}
                           >
                             <StatusIcon aria-hidden="true" />
-                            {presentation.label}
+                            {status === 'TRONG' ? tTrips('seatStatusAvailable') : status === 'DANG_GIU' ? tTrips('seatStatusHeld') : tTrips('seatStatusBooked')}
                           </Badge>
                         );
                       })}
@@ -620,7 +632,7 @@ export function TripSeatsManagement({
                     <div className="grid gap-4 xl:grid-cols-2">
                       {seatFloorMaps.map(({ floor, seats, height }) => {
                         const floorLabel =
-                          floor === 2 ? 'Tầng trên' : 'Tầng dưới';
+                          floor === 2 ? tTrips('floorUpper') : tTrips('floorLower');
                         const headingId = `trip-seat-floor-${floor}`;
 
                         return (
@@ -637,7 +649,7 @@ export function TripSeatsManagement({
                                 {floorLabel}
                               </h3>
                               <Badge variant="secondary">
-                                {formatCount(seats.length)} ghế
+                                {tTrips('seatsCountBadge', { count: formatCount(seats.length) })}
                               </Badge>
                             </div>
 
@@ -646,17 +658,17 @@ export function TripSeatsManagement({
                                 <div className="grid h-12 grid-cols-3 items-center rounded-t-2xl border-x border-t border-slate-300/80 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-card px-4 text-[11px] font-semibold text-slate-700 dark:text-slate-300 shadow-2xs">
                                   <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 px-2 py-0.5 text-blue-700 dark:text-blue-300 justify-self-start">
                                     <BusFront aria-hidden="true" className="size-3.5 text-blue-600 dark:text-blue-400" />
-                                    Tài xế
+                                    {tTrips('driver')}
                                   </span>
                                   <span className="justify-self-center font-bold tracking-wider uppercase text-slate-400">
-                                    ĐẦU XE
+                                    {tTrips('busFront')}
                                   </span>
                                   <span className="justify-self-end text-slate-500 whitespace-nowrap">
-                                    Cửa lên ➔
+                                    {tTrips('entryDoorIndicator')}
                                   </span>
                                 </div>
                                 <div
-                                  aria-label={`Sơ đồ ghế ${floorLabel.toLowerCase()}`}
+                                  aria-label={tTrips('seatMapForFloor', { floor: floorLabel })}
                                   className="relative overflow-hidden rounded-b-2xl border-x border-b border-slate-300/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 shadow-inner"
                                   role="list"
                                   style={{

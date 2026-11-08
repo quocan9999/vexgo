@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -47,23 +49,24 @@ import type { Trip, TripLookupOptionsState, TripStatus } from '../types/trip';
 import { TripFormDialog } from './trip-form-dialog';
 import '../trips.css';
 
-export function tripStatusLabel(status: TripStatus) {
+export function tripStatusLabel(status: TripStatus, t?: (key: any) => string) {
   switch (status) {
     case 'CHUA_KHOI_HANH':
-      return 'Chưa khởi hành';
+      return t ? t('statusScheduled') : 'Scheduled';
     case 'DANG_CHAY':
-      return 'Đang chạy';
+      return t ? t('statusInTransit') : 'In Transit';
     case 'HOAN_THANH':
-      return 'Hoàn thành';
+      return t ? t('statusCompleted') : 'Completed';
     case 'DA_HUY':
-      return 'Đã hủy';
+      return t ? t('statusCancelled') : 'Cancelled';
   }
 }
 
 export function TripStatusBadge({ status }: { status: TripStatus }) {
+  const tTrips = useTranslations('trips');
   return (
     <ResourceStatusBadge tone={status === 'DANG_CHAY' ? 'active' : 'muted'}>
-      {tripStatusLabel(status)}
+      {tripStatusLabel(status, tTrips)}
     </ResourceStatusBadge>
   );
 }
@@ -126,6 +129,8 @@ export function TripWorkspace({
   onUpdated,
   onDeleted,
 }: TripWorkspaceProps) {
+  const tTrips = useTranslations('trips');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canRead = can('trip:read');
   const canUpdate = can('trip:update');
@@ -171,14 +176,14 @@ export function TripWorkspace({
       const updated = await updateTripStatus(tripId, statusTarget);
       setStatusDialogOpen(false);
       setDetail({ status: 'success', trip: updated });
-      toast.success('Chuyến xe đã hoàn thành.');
+      toast.success(tTrips('tripCompletedSuccess'));
       onUpdated?.(updated);
     } catch (err: unknown) {
       if (
         err instanceof TripApiError &&
         err.code === 'TRIP_STATUS_TRANSITION_NOT_ALLOWED'
       ) {
-        toast.error('Trạng thái chuyến đã thay đổi. Dữ liệu đã được làm mới.');
+        toast.error(tTrips('tripStatusChangedNotice'));
         setRetryCount((c) => c + 1);
         getTripById(tripId)
           .then((latest) => onUpdated?.(latest, { silent: true }))
@@ -187,7 +192,7 @@ export function TripWorkspace({
         toast.error(
           err instanceof Error
             ? err.message
-            : 'Không thể cập nhật trạng thái chuyến xe.',
+            : tTrips('cannotUpdateStatus'),
         );
       }
     } finally {
@@ -208,21 +213,21 @@ export function TripWorkspace({
       const updated = await cancelTrip(tripId);
       setCancelDialogOpen(false);
       setDetail({ status: 'success', trip: updated });
-      toast.success(`Đã hủy chuyến ${updated.code}.`);
+      toast.success(tTrips('tripCancelledSuccess', { code: updated.code }));
       onUpdated?.(updated, { silent: true });
     } catch (err: unknown) {
       if (
         err instanceof TripApiError &&
         err.code === 'TRIP_STATUS_TRANSITION_NOT_ALLOWED'
       ) {
-        toast.error('Trạng thái chuyến đã thay đổi. Dữ liệu đã được làm mới.');
+        toast.error(tTrips('tripStatusChangedNotice'));
         setRetryCount((c) => c + 1);
         getTripById(tripId)
           .then((latest) => onUpdated?.(latest, { silent: true }))
           .catch(() => {});
       } else {
         toast.error(
-          err instanceof Error ? err.message : 'Không thể hủy chuyến xe.',
+          err instanceof Error ? err.message : tTrips('cannotCancelTrip'),
         );
       }
     } finally {
@@ -238,7 +243,7 @@ export function TripWorkspace({
     try {
       const deleted = await deleteTrip(tripId);
       setDeleteDialogOpen(false);
-      toast.success(`Đã xóa chuyến ${deleted.code}.`);
+      toast.success(tTrips('tripDeletedSuccess', { code: deleted.code }));
       if (onDeleted) {
         onDeleted();
       } else if (typeof window !== 'undefined') {
@@ -253,7 +258,7 @@ export function TripWorkspace({
         }
       } else {
         toast.error(
-          err instanceof Error ? err.message : 'Không thể xóa chuyến xe.',
+          err instanceof Error ? err.message : tTrips('cannotDeleteTrip'),
         );
       }
     } finally {
@@ -274,13 +279,13 @@ export function TripWorkspace({
     setApplyingTemplate(true);
     try {
       const res = await applyRouteTemplate(tripId);
-      toast.success(res.message);
+      toast.success(tTrips('templateAppliedSuccess'));
       setApplyTemplateOpen(false);
       loadTripStops();
       setRetryCount((c) => c + 1);
     } catch (err: unknown) {
       toast.error(
-        err instanceof Error ? err.message : 'Không thể áp dụng khuôn lộ trình.',
+        err instanceof Error ? err.message : tTrips('cannotApplyTemplate'),
       );
     } finally {
       setApplyingTemplate(false);
@@ -303,7 +308,7 @@ export function TripWorkspace({
           const message =
             error instanceof Error
               ? error.message
-              : 'Không thể tải thông tin chuyến xe.';
+              : tTrips('cannotLoadTrip');
           setDetail({
             status: 'error',
             message,
@@ -339,9 +344,9 @@ export function TripWorkspace({
     <SuperAdminLayout
       activeSection="trips"
       breadcrumbs={[
-        { label: 'Vận hành', href: '/trips' },
-        { label: 'Chuyến xe', href: '/trips' },
-        { label: trip ? trip.code : `Chuyến #${tripId}` },
+        { label: tCommon('operations'), href: '/trips' },
+        { label: tTrips('tripsTitle'), href: '/trips' },
+        { label: trip ? trip.code : `#${tripId}` },
       ]}
     >
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
@@ -359,7 +364,7 @@ export function TripWorkspace({
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Danh sách chuyến
+                {tTrips('backToTrips')}
               </Button>
 
               {canRead && trip && (
@@ -370,7 +375,7 @@ export function TripWorkspace({
                     variant="outline"
                   >
                     <Ticket aria-hidden="true" className="size-4" />
-                    Xem ghế chuyến
+                    {tTrips('viewSeats')}
                   </Button>
                   <Button
                     nativeButton={false}
@@ -378,7 +383,7 @@ export function TripWorkspace({
                     variant="outline"
                   >
                     <Users aria-hidden="true" className="size-4" />
-                    Hành khách (Manifest)
+                    {tTrips('manifestPassengers')}
                   </Button>
                 </>
               )}
@@ -386,19 +391,19 @@ export function TripWorkspace({
               {canUpdate && trip && trip.status === 'CHUA_KHOI_HANH' && (
                 <Button onClick={() => setEditOpen(true)} variant="outline">
                   <Pencil aria-hidden="true" />
-                  Chỉnh sửa
+                  {tCommon('edit')}
                 </Button>
               )}
 
               {canUpdate && trip && trip.status === 'DANG_CHAY' && (
                 <Button onClick={() => openStatusDialog('HOAN_THANH')}>
-                  Hoàn thành chuyến
+                  {tTrips('completeTrip')}
                 </Button>
               )}
 
               {canCancel && trip && trip.status === 'CHUA_KHOI_HANH' && (
                 <Button onClick={openCancelDialog} variant="outline">
-                  Hủy chuyến
+                  {tTrips('cancelTrip')}
                 </Button>
               )}
 
@@ -410,7 +415,7 @@ export function TripWorkspace({
                     variant="destructive"
                   >
                     <Trash2 aria-hidden="true" />
-                    Xóa chuyến
+                    {tTrips('deleteTrip')}
                   </Button>
                 )}
 
@@ -420,13 +425,13 @@ export function TripWorkspace({
               />
             </div>
           }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
-          title={trip ? `Chi tiết chuyến ${trip.code}` : 'Chi tiết chuyến xe'}
+          eyebrow={tTrips('eyebrow')}
+          title={trip ? tTrips('tripWorkspaceTitleWithCode', { code: trip.code }) : tTrips('tripWorkspaceTitle')}
           titleId="trip-workspace-title"
         />
 
         {detail.status === 'loading' && (
-          <ResourceState loading>Đang tải thông tin chuyến xe…</ResourceState>
+          <ResourceState loading>{tTrips('loadingTripInfo')}</ResourceState>
         )}
 
         {detail.status === 'error' && (
@@ -440,10 +445,10 @@ export function TripWorkspace({
                 }}
                 variant="outline"
               >
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button nativeButton={false} render={<Link href="/trips" />}>
-                Về danh sách chuyến
+                {tTrips('backToTripsButton')}
               </Button>
             </div>
           </ResourceState>
@@ -477,7 +482,7 @@ export function TripWorkspace({
                       <span className="admin-data-mono text-foreground font-medium">
                         {formatTime(trip.departureTime)}
                       </span>
-                      <span>ngày {formatDate(trip.departureDate)}</span>
+                      <span className="tabular-nums">{formatDate(trip.departureDate)}</span>
                     </p>
                   </div>
                 </div>
@@ -493,24 +498,24 @@ export function TripWorkspace({
                   <div className="flex items-center gap-2">
                     <RouteIcon className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Tuyến xe vận hành
+                      {tTrips('operatingRoute')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Mã tuyến xe</dt>
+                      <dt>{tTrips('routeCode')}</dt>
                       <dd className="admin-data-mono font-semibold text-foreground">
                         {trip.route.code}
                       </dd>
                     </div>
                     <div>
-                      <dt>Điểm khởi hành</dt>
+                      <dt>{tTrips('originPoint')}</dt>
                       <dd className="font-medium text-foreground">{trip.route.origin}</dd>
                     </div>
                     <div>
-                      <dt>Điểm kết thúc</dt>
+                      <dt>{tTrips('destinationPoint')}</dt>
                       <dd className="font-medium text-foreground">
                         {trip.route.destination}
                       </dd>
@@ -525,26 +530,26 @@ export function TripWorkspace({
                   <div className="flex items-center gap-2">
                     <BusFront className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Xe phục vụ
+                      {tTrips('assignedVehicle')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Biển số xe</dt>
+                      <dt>{tTrips('licensePlate')}</dt>
                       <dd className="admin-data-mono font-semibold text-foreground">
                         {trip.vehicle.licensePlate}
                       </dd>
                     </div>
                     <div>
-                      <dt>Loại xe</dt>
+                      <dt>{tTrips('vehicleType')}</dt>
                       <dd className="font-medium text-foreground">
                         {trip.vehicle.vehicleType.name}
                       </dd>
                     </div>
                     <div>
-                      <dt>Trạng thái phương tiện</dt>
+                      <dt>{tTrips('vehicleStatus')}</dt>
                       <dd>
                         <ResourceStatusBadge
                           tone={
@@ -552,10 +557,10 @@ export function TripWorkspace({
                           }
                         >
                           {trip.vehicle.status === 'HOAT_DONG'
-                            ? 'Hoạt động'
+                            ? tTrips('statusOperating')
                             : trip.vehicle.status === 'BAO_TRI'
-                              ? 'Bảo trì'
-                              : 'Không xác định'}
+                              ? tTrips('statusMaintenance')
+                              : tTrips('statusUnknown')}
                         </ResourceStatusBadge>
                       </dd>
                     </div>
@@ -569,31 +574,31 @@ export function TripWorkspace({
                   <div className="flex items-center gap-2">
                     <Boxes className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Thông tin gửi hàng
+                      {tTrips('cargoInfo')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Nhận gửi hàng</dt>
-                      <dd>{trip.acceptsShipments ? 'Có' : 'Không'}</dd>
+                      <dt>{tTrips('acceptsCargo')}</dt>
+                      <dd>{trip.acceptsShipments ? tCommon('yes') : tCommon('no')}</dd>
                     </div>
                   </dl>
                   <h5 className="pt-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Sức chứa hàng
+                    {tTrips('cargoCapacityTitle')}
                   </h5>
                   <dl className="mt-2 grid grid-cols-3 gap-2 rounded-lg border bg-muted/40 p-2.5 text-center [&_dt]:text-[11px] [&_dt]:text-muted-foreground [&_dd]:font-bold [&_dd]:text-foreground">
                     <div>
-                      <dt>Xe máy</dt>
+                      <dt>{tTrips('motorbikes')}</dt>
                       <dd>{trip.cargoCapacity.motorbikes}</dd>
                     </div>
                     <div>
-                      <dt>Hàng cồng kềnh</dt>
+                      <dt>{tTrips('bulkyCargo')}</dt>
                       <dd>{trip.cargoCapacity.bulkyCargo}</dd>
                     </div>
                     <div>
-                      <dt>Hàng nhẹ</dt>
+                      <dt>{tTrips('lightCargo')}</dt>
                       <dd>{trip.cargoCapacity.lightCargo}</dd>
                     </div>
                   </dl>
@@ -609,7 +614,7 @@ export function TripWorkspace({
                     <div className="flex items-center gap-2">
                       <Ticket className="size-4 text-muted-foreground" />
                       <CardTitle className="text-base font-semibold">
-                        Tình trạng ghế chuyến
+                        {tTrips('seatStatusTitle')}
                       </CardTitle>
                     </div>
                     {canRead && (
@@ -619,7 +624,7 @@ export function TripWorkspace({
                         size="sm"
                         variant="outline"
                       >
-                        Mở sơ đồ ghế chi tiết
+                        {tTrips('openSeatMap')}
                       </Button>
                     )}
                   </div>
@@ -630,25 +635,25 @@ export function TripWorkspace({
                       <span className="trips-seat-card__count">
                         {trip.seatSummary.total}
                       </span>
-                      <span className="trips-seat-card__label">Tổng số ghế</span>
+                      <span className="trips-seat-card__label">{tTrips('totalSeatsCount')}</span>
                     </div>
                     <div className="trips-seat-card trips-seat-card--available">
                       <span className="trips-seat-card__count">
                         {trip.seatSummary.available}
                       </span>
-                      <span className="trips-seat-card__label">Ghế trống</span>
+                      <span className="trips-seat-card__label">{tTrips('availableSeatsCount')}</span>
                     </div>
                     <div className="trips-seat-card trips-seat-card--held">
                       <span className="trips-seat-card__count">
                         {trip.seatSummary.held}
                       </span>
-                      <span className="trips-seat-card__label">Đang giữ</span>
+                      <span className="trips-seat-card__label">{tTrips('heldSeatsCount')}</span>
                     </div>
                     <div className="trips-seat-card trips-seat-card--booked">
                       <span className="trips-seat-card__count">
                         {trip.seatSummary.booked}
                       </span>
-                      <span className="trips-seat-card__label">Đã đặt</span>
+                      <span className="trips-seat-card__label">{tTrips('bookedSeatsCount')}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -663,11 +668,11 @@ export function TripWorkspace({
                     <div className="flex items-center gap-2">
                       <RouteIcon className="size-4 text-primary" />
                       <CardTitle className="text-base font-semibold">
-                        Điểm đón / trả theo giờ ({tripStops.length})
+                        {tTrips('hourlyStops', { count: tripStops.length })}
                       </CardTitle>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Lộ trình đón, trả và trạm nghỉ của chuyến xe
+                      {tTrips('routeStopsSubtitle')}
                     </p>
                   </div>
 
@@ -678,14 +683,14 @@ export function TripWorkspace({
                         size="sm"
                         variant="outline"
                       >
-                        Áp dụng khuôn mẫu
+                        {tTrips('applyTemplate')}
                       </Button>
                       <Button
                         onClick={() => setStopsEditorOpen(true)}
                         size="sm"
                         variant="outline"
                       >
-                        Chỉnh sửa lộ trình
+                        {tTrips('editRoute')}
                       </Button>
                     </div>
                   )}
@@ -695,20 +700,20 @@ export function TripWorkspace({
                 {trip.thieuDiem && (
                   <Alert className="mb-4" variant="destructive">
                     <AlertCircle className="size-4" />
-                    <AlertTitle>Thiếu điểm đón / trả</AlertTitle>
+                    <AlertTitle>{tTrips('missingStopsAlertTitle')}</AlertTitle>
                     <AlertDescription className="text-xs">
-                      Chuyến xe đang thiếu điểm đón hoặc điểm trả! Vui lòng cấu hình lộ trình.
+                      {tTrips('missingStopsAlertDesc')}
                     </AlertDescription>
                   </Alert>
                 )}
 
                 {loadingStops ? (
                   <p className="py-4 text-center text-xs text-muted-foreground">
-                    Đang tải điểm đón trả…
+                    {tTrips('loadingStops')}
                   </p>
                 ) : tripStops.length === 0 ? (
                   <p className="py-6 text-center text-xs text-muted-foreground italic">
-                    Chưa có điểm đón/trả nào được gán cho chuyến này.
+                    {tTrips('noStopsAssigned')}
                   </p>
                 ) : (
                   <div className="grid gap-2">
@@ -729,22 +734,22 @@ export function TripWorkspace({
                             }
                           >
                             {stop.loaiDiem === 'DON'
-                              ? 'ĐÓN'
+                              ? tTrips('stopPickupBadge')
                               : stop.loaiDiem === 'TRA'
-                                ? 'TRẢ'
-                                : 'NGHỈ'}
+                                ? tTrips('stopDropoffBadge')
+                                : tTrips('stopRestBadge')}
                           </Badge>
                           <span className="truncate font-medium text-foreground">
-                            {stop.diemDonTra?.tenDiem ?? `Điểm #${stop.diemDonTraId}`}
+                            {stop.diemDonTra?.tenDiem ?? `#${stop.diemDonTraId}`}
                           </span>
                           {stop.phuPhi > 0 && (
                             <span className="admin-data-mono text-[11px] text-muted-foreground">
-                              (+{Number(stop.phuPhi).toLocaleString('vi-VN')}đ)
+                              (+{Number(stop.phuPhi).toLocaleString('vi-VN')} ₫)
                             </span>
                           )}
                           {(stop.veCount ?? 0) > 0 && (
                             <Badge className="text-[10px] font-semibold" variant="warning">
-                              {stop.veCount} vé
+                              {tTrips('ticketsCount', { count: stop.veCount ?? 0 })}
                             </Badge>
                           )}
                         </div>
@@ -762,19 +767,19 @@ export function TripWorkspace({
             <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
               <CardHeader className="p-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">
-                  Thông tin hệ thống
+                  {tTrips('systemInfoTitle')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <dl className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2">
                   <div>
-                    <dt className="text-muted-foreground">Ngày tạo hồ sơ chuyến</dt>
+                    <dt className="text-muted-foreground">{tTrips('tripCreatedAt')}</dt>
                     <dd className="mt-1 font-medium text-foreground tabular-nums">
                       {formatTimestamp(trip.createdAt)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-muted-foreground">Cập nhật lần cuối</dt>
+                    <dt className="text-muted-foreground">{tTrips('lastUpdated')}</dt>
                     <dd className="mt-1 font-medium text-foreground tabular-nums">
                       {formatTimestamp(trip.updatedAt)}
                     </dd>
@@ -795,7 +800,7 @@ export function TripWorkspace({
               setEditOpen(false);
               setDetail({ status: 'success', trip: saved });
               onUpdated?.(saved);
-              toast.success(`Đã cập nhật chuyến ${saved.code}.`);
+              toast.success(tTrips('tripUpdatedSuccess', { code: saved.code }));
             }}
             routeOptions={routeOptions ?? { status: 'success', options: [] }}
             trip={trip}
@@ -813,22 +818,22 @@ export function TripWorkspace({
               setRetryCount((c) => c + 1);
             }}
             targetId={tripId}
-            title={`Điểm đón / trả chuyến: ${trip.code}`}
+            title={tTrips('tripStopsModalTitle', { code: trip.code })}
           />
         )}
 
         {applyTemplateOpen && trip && (
           <ResourceConfirmation
             busy={applyingTemplate}
-            description="Hệ thống sẽ sao chép toàn bộ điểm đón, trả và trạm nghỉ từ khuôn mẫu tuyến xe tương ứng và tính toán giờ dự kiến theo giờ khởi hành chuyến. Các điểm hiện tại chưa có vé đặt sẽ được thay thế."
+            description={tTrips('applyTemplateConfirmDesc')}
             onClose={() => setApplyTemplateOpen(false)}
-            title={`Áp dụng khuôn lộ trình cho chuyến ${trip.code}?`}
+            title={tTrips('applyTemplateConfirmTitle', { code: trip.code })}
           >
             <Button disabled={applyingTemplate} onClick={handleConfirmApplyTemplate}>
               {applyingTemplate && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-              {applyingTemplate ? 'Đang áp dụng…' : 'Áp dụng khuôn mẫu'}
+              {applyingTemplate ? tTrips('applyingTemplate') : tTrips('applyTemplate')}
             </Button>
           </ResourceConfirmation>
         )}
@@ -836,15 +841,15 @@ export function TripWorkspace({
         {statusDialogOpen && statusTarget && trip && (
           <ResourceConfirmation
             busy={statusSubmitting}
-            description={`Chuyến xe ${trip.code} sẽ chuyển sang trạng thái Hoàn thành và kết thúc hành trình.`}
+            description={tTrips('completeTripConfirmDesc', { code: trip.code })}
             onClose={() => setStatusDialogOpen(false)}
-            title="Hoàn thành chuyến xe?"
+            title={tTrips('completeTripConfirmTitle')}
           >
             <Button disabled={statusSubmitting} onClick={handleConfirmStatus}>
               {statusSubmitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-              {statusSubmitting ? 'Đang cập nhật…' : 'Hoàn thành chuyến'}
+              {statusSubmitting ? tTrips('completingTrip') : tTrips('completeTrip')}
             </Button>
           </ResourceConfirmation>
         )}
@@ -852,9 +857,9 @@ export function TripWorkspace({
         {cancelDialogOpen && trip && (
           <ResourceConfirmation
             busy={cancelSubmitting}
-            description={`Chuyến ${trip.route.origin} → ${trip.route.destination}, khởi hành ${formatTime(trip.departureTime)} ngày ${formatDate(trip.departureDate)}, sẽ chuyển sang Đã hủy. Thao tác này không xóa dữ liệu chuyến xe và ghế chuyến.`}
+            description={tTrips('cancelTripConfirmDesc', { origin: trip.route.origin, destination: trip.route.destination, time: formatTime(trip.departureTime), date: formatDate(trip.departureDate) })}
             onClose={() => setCancelDialogOpen(false)}
-            title={`Hủy chuyến ${trip.code}?`}
+            title={tTrips('cancelTripConfirmTitle', { code: trip.code })}
           >
             <Button
               disabled={cancelSubmitting}
@@ -864,7 +869,7 @@ export function TripWorkspace({
               {cancelSubmitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-              {cancelSubmitting ? 'Đang hủy…' : 'Hủy chuyến'}
+              {cancelSubmitting ? tTrips('cancellingTrip') : tTrips('cancelTrip')}
             </Button>
           </ResourceConfirmation>
         )}
@@ -872,9 +877,9 @@ export function TripWorkspace({
         {deleteDialogOpen && trip && (
           <ResourceConfirmation
             busy={deleteSubmitting}
-            description="Chỉ chuyến chưa khởi hành hoặc đã hủy và chưa từng phát sinh vé, vận đơn hay đánh giá mới xóa được; giữ chỗ còn hiệu lực cũng sẽ chặn thao tác. Ghế chuyến và giữ chỗ đã hết hạn sẽ bị xóa cùng chuyến. Thao tác này không thể hoàn tác."
+            description={tTrips('deleteTripConfirmDesc')}
             onClose={() => setDeleteDialogOpen(false)}
-            title={`Xóa chuyến ${trip.code}?`}
+            title={tTrips('deleteTripConfirmTitle', { code: trip.code })}
           >
             <Button
               disabled={deleteSubmitting}
@@ -884,7 +889,7 @@ export function TripWorkspace({
               {deleteSubmitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-              {deleteSubmitting ? 'Đang xóa…' : 'Xóa chuyến'}
+              {deleteSubmitting ? tTrips('deletingTrip') : tTrips('deleteTrip')}
             </Button>
           </ResourceConfirmation>
         )}
