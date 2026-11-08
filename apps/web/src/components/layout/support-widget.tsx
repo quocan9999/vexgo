@@ -28,6 +28,62 @@ import type {
   AiSuggestionItem,
 } from '@/features/ai-chatbot/types/ai-chatbot.types';
 
+function FormattedMessageText({ content, isUser }: { content: string; isUser: boolean }) {
+  if (isUser) {
+    return <span className="whitespace-pre-wrap">{content}</span>;
+  }
+
+  // Loại bỏ triệt để mọi mã tài liệu kỹ thuật, thẻ [DOC-...], 【DOC-...】 hoặc (Nguồn: ...)
+  const cleaned = content
+    .replace(/[【\[]\s*DOC-[A-Z0-9_-]+\s*[】\]]/gi, '')
+    .replace(/【[^】]*】/g, '')
+    .replace(/\(\s*Nguồn:[^)]*\)/gi, '')
+    .trim();
+
+  const lines = cleaned.split('\n');
+
+  return (
+    <div className="space-y-1.5 leading-relaxed">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={idx} className="h-1.5" />;
+        }
+
+        // Xử lý dòng gạch đầu dòng (- hoặc * )
+        const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ');
+        const textContent = isBullet ? trimmed.slice(2) : line;
+
+        // Parse định dạng in đậm **text**
+        const parts = textContent.split(/(\*\*[^*]+\*\*)/g);
+
+        const renderedLine = parts.map((part, pIdx) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            const boldText = part.slice(2, -2);
+            return (
+              <strong key={pIdx} className="font-semibold text-slate-900">
+                {boldText}
+              </strong>
+            );
+          }
+          return <React.Fragment key={pIdx}>{part}</React.Fragment>;
+        });
+
+        if (isBullet) {
+          return (
+            <div key={idx} className="flex items-start gap-1.5 pl-0.5">
+              <span className="text-emerald-600 font-bold mt-0.5 select-none text-[10px]">•</span>
+              <div className="flex-1">{renderedLine}</div>
+            </div>
+          );
+        }
+
+        return <div key={idx}>{renderedLine}</div>;
+      })}
+    </div>
+  );
+}
+
 export const SupportWidget: React.FC = () => {
   // Quản lý trạng thái mở/đóng độc lập cho 2 nút nổi (F-02)
   const [isBotOpen, setIsBotOpen] = useState(false);
@@ -45,7 +101,6 @@ export const SupportWidget: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<AiSuggestionItem[]>([]);
-  const [expandedCitationId, setExpandedCitationId] = useState<string | number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -286,15 +341,17 @@ export const SupportWidget: React.FC = () => {
             </div>
             <div className="flex items-center gap-1">
               <button
+                type="button"
                 onClick={() => setIsBotOpen(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
                 aria-label="Thu nhỏ"
               >
                 <Minimize2 className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setIsBotOpen(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors"
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
                 aria-label="Đóng"
               >
                 <X className="w-4 h-4" />
@@ -336,13 +393,13 @@ export const SupportWidget: React.FC = () => {
                 >
                   {/* Bong bóng nội dung chính */}
                   <div
-                    className={`p-3 rounded-2xl text-xs shadow-xs leading-relaxed whitespace-pre-wrap ${
+                    className={`p-3 rounded-2xl text-xs shadow-xs leading-relaxed ${
                       msg.sender === 'user'
                         ? 'bg-emerald-600 text-white rounded-tr-xs font-medium'
                         : 'bg-white border border-slate-200/80 text-slate-800 rounded-tl-xs'
                     }`}
                   >
-                    {msg.text}
+                    <FormattedMessageText content={msg.text} isUser={msg.sender === 'user'} />
                   </div>
 
                   {/* 1. HIỂN THỊ DANH SÁCH THẺ CHUYẾN XE GỢI Ý (SUGGESTED TRIPS) */}
@@ -397,53 +454,7 @@ export const SupportWidget: React.FC = () => {
                     </div>
                   )}
 
-                  {/* 2. HIỂN THỊ DANH SÁCH TRÍCH DẪN NGUỒN (CITATIONS) */}
-                  {msg.citations && msg.citations.length > 0 && (
-                    <div className="w-full mt-1">
-                      <button
-                        onClick={() =>
-                          setExpandedCitationId((prev) =>
-                            prev === msg.id ? null : msg.id,
-                          )
-                        }
-                        className="text-[10px] text-slate-500 hover:text-emerald-700 flex items-center gap-1 font-medium bg-slate-100/80 px-2 py-1 rounded-md transition-colors"
-                      >
-                        <BookOpen className="w-3 h-3 text-emerald-600" />
-                        {msg.citations.length} điều khoản chính sách trích dẫn
-                        <ChevronDown
-                          className={`w-3 h-3 transition-transform ${
-                            expandedCitationId === msg.id ? 'rotate-180' : ''
-                          }`}
-                        />
-                      </button>
-
-                      {expandedCitationId === msg.id && (
-                        <div className="mt-1.5 p-2 bg-emerald-50/70 border border-emerald-200/60 rounded-xl space-y-1.5 text-[11px] animate-in fade-in duration-150">
-                          {msg.citations.map((cite, idx) => (
-                            <div
-                              key={idx}
-                              className="border-b border-emerald-100 pb-1.5 last:border-0 last:pb-0"
-                            >
-                              <div className="flex items-center justify-between font-semibold text-emerald-900">
-                                <span>{cite.title}</span>
-                                <span className="text-[10px] text-emerald-600 bg-white px-1.5 py-0.2 rounded border border-emerald-200">
-                                  {cite.relevanceScore}% phù hợp
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-slate-600 mt-0.5">
-                                {cite.hierarchyPath}
-                              </p>
-                              <span className="text-[9px] font-mono text-slate-400">
-                                [{cite.documentCode}]
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 3. NÚT CHUYỂN TIẾP NHÂN VIÊN (HUMAN HANDOFF) */}
+                  {/* 2. NÚT CHUYỂN TIẾP NHÂN VIÊN (HUMAN HANDOFF) */}
                   {msg.requiresHumanHandoff && (
                     <div className="w-full mt-1.5 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
                       <div className="flex items-center gap-1.5 text-amber-800 text-[11px]">

@@ -75,7 +75,9 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 - Feature frontend SHOULD theo cấu trúc `features/<feature>/` với `components/`, `services/`, `types/` và `hooks/` khi cần. Nếu feature có service, MUST gọi API qua service thay vì rải `fetch` trong React component.
 - Component tập trung vào render, state UI, form, tương tác và các trạng thái loading/error/empty/success. MUST NOT nhúng business logic backend vào component.
 - Mock/fixture được phép khi dựng UI. Feature chỉ hoàn thành khi nguồn dữ liệu chính đi theo luồng UI → API thật → backend → Prisma → MySQL; MUST NOT coi giao diện chạy bằng fixture JSON là feature full-stack hoàn chỉnh.
-- Giao diện Admin và Customer MUST NOT hiển thị ID số nội bộ hoặc enum mã kỹ thuật thô (`NGUOI_GUI`, `CHO_XU_LY`, v.v.) trong các combobox, dropdown, badge hoặc bảng dữ liệu; luôn map sang nhãn tiếng Việt thân thiện với người dùng. Các danh sách chọn địa điểm, trạm bến có quy mô lớn MUST hỗ trợ tìm kiếm khi gõ (Searchable Combobox). Mọi phụ phí dịch vụ MUST ghi rõ số tiền cụ thể.
+- Giao diện Admin và Customer MUST NOT hiển thị ID số nội bộ hoặc enum mã kỹ thuật thô (`NGUOI_GUI`, `CHO_XU_LY`, `CHINH_SACH_HOAN_HUY`, `GLOBAL`, `PHAN_TRAM`, v.v.) trong các combobox, dropdown, badge, bảng dữ liệu hoặc dialog; LUÔN BẮT BUỘC map sang nhãn tiếng Việt tự nhiên thân thiện với người dùng (ví dụ: `Chính sách hoàn huỷ`, `Hành lý xách tay`, `Toàn hệ thống`).
+- Mọi trường enum hoặc mã phân loại khi đưa lên giao diện MUST có từ điển ánh xạ tường minh (`Record<Enum, string>`).
+- Các danh sách chọn địa điểm, trạm bến có quy mô lớn MUST hỗ trợ tìm kiếm khi gõ (Searchable Combobox). Mọi phụ phí dịch vụ MUST ghi rõ số tiền cụ thể.
 
 
 ## 5. Business rules và dữ liệu

@@ -115,7 +115,8 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     ? tenantLandingPath
     : scope === 'platform' &&
         requiredPermissions !== null &&
-        !pathname.startsWith('/reviews')
+        !pathname.startsWith('/reviews') &&
+        !pathname.startsWith('/ai-knowledge')
       ? '/'
       : scope === 'platform' &&
           requiredPlatformPermissions !== null &&
