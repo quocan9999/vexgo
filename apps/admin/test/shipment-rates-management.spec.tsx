@@ -11,6 +11,7 @@ import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { canAccessTenantPath } from '@/features/admin-auth/services/admin-access';
 import { ShipmentRatesManagement } from '@/features/shipments/components/shipment-rates-management';
+import { ShipmentRateWorkspace } from '@/features/shipments/components/shipment-rate-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
@@ -298,7 +299,7 @@ describe('ShipmentRatesManagement', () => {
     });
   });
 
-  it('opens detail sheet and toggles shipment rate status', async () => {
+  it('links to dedicated workspace and toggles shipment rate status', async () => {
     const api = installApi();
 
     render(<ShipmentRatesManagement />);
@@ -306,15 +307,18 @@ describe('ShipmentRatesManagement', () => {
     const detailBtn = (
       await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' })
     )[0]!;
-    fireEvent.click(detailBtn);
+    expect(
+      detailBtn.getAttribute('href') ||
+        detailBtn.closest('a')?.getAttribute('href'),
+    ).toBe('/shipments/rates/10');
 
-    const detailSheet = await screen.findByRole('dialog', {
-      name: 'Chi tiết mức cước gửi hàng',
-    });
-    expect(within(detailSheet).getByText('0 → 5 kg')).toBeTruthy();
+    cleanup();
+    render(<ShipmentRateWorkspace rateId={10} initialRate={sampleRate} />);
+
+    expect(await screen.findByText('0 → 5 kg')).toBeTruthy();
 
     fireEvent.click(
-      within(detailSheet).getByRole('button', { name: 'Tạm ngưng' }),
+      await screen.findByRole('button', { name: 'Tạm ngưng' }),
     );
 
     const confirmDialog = await screen.findByRole('alertdialog', {

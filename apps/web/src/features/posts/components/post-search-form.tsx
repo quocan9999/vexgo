@@ -138,7 +138,7 @@ export const PostSearchForm: React.FC = () => {
                 <input
                   type="date"
                   min={todayStr}
-                  value={selectedPrice}
+                  value={selectedPrice || todayStr}
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val && val < todayStr) {

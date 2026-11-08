@@ -1,11 +1,11 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ArrowUpDown, Bus, Pencil } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
-  ResourceSheet,
   ResourceState,
   ResourceCreateAction,
   ResourceRefreshAction,
@@ -31,7 +31,6 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { getVehicleTypeById } from '../services/vehicle-type-service';
 import type { VehicleType, VehicleTypeSortKey } from '../types/vehicle-type';
 import { useVehicleTypes } from '../hooks/use-vehicle-types';
 import { VehicleTypeFormDialog } from './vehicle-type-form-dialog';
@@ -46,175 +45,6 @@ function timestampFormat(value: string) {
   })
     .format(new Date(value))
     .replaceAll('/', '-');
-}
-
-type DetailState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'success'; vehicleType: VehicleType };
-
-function VehicleTypeDetails({
-  vehicleTypeId,
-  onClose,
-  onUpdated,
-}: {
-  vehicleTypeId: number;
-  onClose: () => void;
-  onUpdated: (vehicleType: VehicleType) => void;
-}) {
-  const { can } = useAdminPermissions();
-  const canUpdate = can('vehicle-type:update');
-  const [detailState, setDetailState] = useState<DetailState>({
-    status: 'loading',
-  });
-  const [retryCount, setRetryCount] = useState(0);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let current = true;
-    getVehicleTypeById(vehicleTypeId, controller.signal)
-      .then((vehicleType) => {
-        if (current) setDetailState({ status: 'success', vehicleType });
-      })
-      .catch((requestError: unknown) => {
-        if (current && !controller.signal.aborted) {
-          setDetailState({
-            status: 'error',
-            message:
-              requestError instanceof TypeError
-                ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-                : requestError instanceof Error
-                  ? requestError.message
-                  : 'Không thể tải thông tin loại xe.',
-          });
-        }
-      });
-
-    return () => {
-      current = false;
-      controller.abort();
-    };
-  }, [retryCount, vehicleTypeId]);
-
-  function handleVehicleTypeUpdated(vehicleType: VehicleType) {
-    setDetailState({ status: 'success', vehicleType });
-    setEditDialogOpen(false);
-    onUpdated(vehicleType);
-  }
-
-  return (
-    <ResourceSheet
-      busy={detailState.status === 'loading'}
-      onClose={onClose}
-      title="Chi tiết loại xe"
-      description="Thông tin loại xe và sức chứa hàng mặc định."
-    >
-      {detailState.status === 'loading' && (
-        <ResourceState loading>Đang tải thông tin loại xe…</ResourceState>
-      )}
-      {detailState.status === 'error' && (
-        <ResourceState error>
-          <p>{detailState.message}</p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setDetailState({ status: 'loading' });
-              setRetryCount((count) => count + 1);
-            }}
-          >
-            Thử lại
-          </Button>
-        </ResourceState>
-      )}
-      {detailState.status === 'success' && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-4 border-b pb-6">
-            <span
-              aria-hidden
-              className="grid size-12 shrink-0 place-items-center rounded-[var(--admin-radius-panel)] bg-accent text-primary"
-            >
-              <Bus size={24} />
-            </span>
-            <div className="min-w-0">
-              <h3 className="break-words text-base font-semibold">
-                {detailState.vehicleType.name}
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Loại xe{' '}
-                <span className="admin-data-mono">
-                  #{detailState.vehicleType.vehicleTypeId}
-                </span>
-              </p>
-            </div>
-          </div>
-          <dl className="grid grid-cols-2 gap-4 text-[13px]">
-            <div className="col-span-2">
-              <dt className="mb-1 text-xs text-muted-foreground">Mô tả</dt>
-              <dd className="whitespace-pre-wrap break-words">
-                {detailState.vehicleType.description || 'Chưa có mô tả'}
-              </dd>
-            </div>
-            <div>
-              <dt className="mb-1 text-xs text-muted-foreground">Ngày tạo</dt>
-              <dd>{timestampFormat(detailState.vehicleType.createdAt)}</dd>
-            </div>
-            <div>
-              <dt className="mb-1 text-xs text-muted-foreground">
-                Cập nhật lần cuối
-              </dt>
-              <dd>{timestampFormat(detailState.vehicleType.updatedAt)}</dd>
-            </div>
-          </dl>
-          <section aria-label="Sức chứa hàng mặc định">
-            <h3 className="mb-4 text-sm font-semibold">
-              Sức chứa hàng mặc định
-            </h3>
-            <dl className="grid grid-cols-3 gap-3 rounded-[var(--admin-radius-panel)] border bg-muted/40 p-4">
-              {(
-                [
-                  ['Xe máy', detailState.vehicleType.motorbikeCapacityDefault],
-                  [
-                    'Hàng cồng kềnh',
-                    detailState.vehicleType.bulkyCargoCapacityDefault,
-                  ],
-                  [
-                    'Hàng nhẹ',
-                    detailState.vehicleType.lightCargoCapacityDefault,
-                  ],
-                ] as const
-              ).map(([label, value]) => (
-                <div key={label}>
-                  <dt className="mb-2 text-xs text-muted-foreground">
-                    {label}
-                  </dt>
-                  <dd className="text-lg font-semibold tabular-nums">
-                    {value.toLocaleString('vi-VN')}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-          {canUpdate && (
-            <div className="flex justify-end border-t pt-4">
-              <Button onClick={() => setEditDialogOpen(true)}>
-                <Pencil aria-hidden />
-                Chỉnh sửa
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-      {editDialogOpen && canUpdate && detailState.status === 'success' && (
-        <VehicleTypeFormDialog
-          key={vehicleTypeId}
-          onClose={() => setEditDialogOpen(false)}
-          onSaved={handleVehicleTypeUpdated}
-          vehicleType={detailState.vehicleType}
-        />
-      )}
-    </ResourceSheet>
-  );
 }
 
 function sortLabel(
@@ -232,6 +62,7 @@ function sortLabel(
 }
 
 export function VehicleTypesManagement() {
+  const router = useRouter();
   const { can } = useAdminPermissions();
   const canCreate = can('vehicle-type:create');
   const {
@@ -248,9 +79,6 @@ export function VehicleTypesManagement() {
     sortVehicleTypes,
     updateSearch,
   } = useVehicleTypes();
-  const [selectedVehicleTypeId, setSelectedVehicleTypeId] = useState<
-    number | null
-  >(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const items = vehicleTypePage?.data ?? [];
   function sortButton(label: string, field: VehicleTypeSortKey) {
@@ -383,10 +211,13 @@ export function VehicleTypesManagement() {
                               </TableCell>
                               <TableCell>
                                 <ResourceDetailAction
-                                  resourceName={`loại xe ${item.name}`}
+                                  href={`/vehicle-types/${item.vehicleTypeId}`}
                                   onClick={() =>
-                                    setSelectedVehicleTypeId(item.vehicleTypeId)
+                                    router.push(
+                                      `/vehicle-types/${item.vehicleTypeId}`,
+                                    )
                                   }
+                                  resourceName={`loại xe ${item.name}`}
                                 />
                               </TableCell>
                             </TableRow>
@@ -457,10 +288,13 @@ export function VehicleTypesManagement() {
                           </dl>
                           <div className="flex justify-end border-t pt-3">
                             <ResourceDetailAction
-                              resourceName={`loại xe ${item.name}`}
+                              href={`/vehicle-types/${item.vehicleTypeId}`}
                               onClick={() =>
-                                setSelectedVehicleTypeId(item.vehicleTypeId)
+                                router.push(
+                                  `/vehicle-types/${item.vehicleTypeId}`,
+                                )
                               }
+                              resourceName={`loại xe ${item.name}`}
                             />
                           </div>
                         </Card>
@@ -482,17 +316,6 @@ export function VehicleTypesManagement() {
           </Card>
         </section>
       </div>
-      {selectedVehicleTypeId !== null && (
-        <VehicleTypeDetails
-          key={selectedVehicleTypeId}
-          vehicleTypeId={selectedVehicleTypeId}
-          onClose={() => setSelectedVehicleTypeId(null)}
-          onUpdated={(item) => {
-            toast.success(`Đã cập nhật loại xe ${item.name}.`);
-            refresh();
-          }}
-        />
-      )}
       {createDialogOpen && canCreate && (
         <VehicleTypeFormDialog
           onClose={() => setCreateDialogOpen(false)}

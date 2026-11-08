@@ -6,10 +6,9 @@ import {
   CalendarDays,
   ChartNoAxesCombined,
   ChevronRight,
-  LoaderCircle,
   Database,
   Headphones,
-  LogOut,
+  LayoutDashboard,
   MapPinned,
   Menu,
   Package,
@@ -34,6 +33,7 @@ import {
 import { Button } from '@/components/ui/action-button';
 import { AdminSidebarLink } from '@/components/admin/admin-sidebar-link';
 import { AdminAccountPopover } from '@/components/admin/admin-account-popover';
+import { AdminLanguageSwitcher } from '@/components/admin/admin-language-switcher';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
@@ -56,6 +56,11 @@ import {
 } from '@/features/admin-auth/services/admin-auth';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 
+export type BreadcrumbItem = {
+  label: string;
+  href?: string;
+};
+
 type SuperAdminLayoutProps = {
   activeSection:
     | 'overview'
@@ -75,7 +80,29 @@ type SuperAdminLayoutProps = {
     | 'rbac'
     | 'tenant-rbac'
     | 'support-chat';
+  breadcrumbs?: BreadcrumbItem[];
   children: ReactNode;
+};
+
+const BREADCRUMB_SECTION_LABELS: Record<string, string> = {
+  overview: 'Tổng quan hệ thống',
+  'bus-companies': 'Quản lý nhà xe',
+  'admin-accounts': 'Quản lý tài khoản Admin',
+  rbac: 'Phân quyền nền tảng',
+  'tenant-rbac': 'Phân quyền nội bộ',
+  'vehicle-types': 'Quản lý loại xe',
+  vehicles: 'Danh sách xe',
+  routes: 'Quản lý tuyến xe',
+  stations: 'Bến bãi & Điểm đón trả',
+  'fare-prices': 'Bảng giá vé',
+  trips: 'Quản lý chuyến xe',
+  customers: 'Quản lý khách hàng',
+  'support-chat': 'Hỗ trợ khách hàng',
+  reviews: 'Đánh giá & Phản hồi',
+  'booking-management': 'Quản lý đặt vé & vé',
+  promotions: 'Quản lý khuyến mãi',
+  shipments: 'Danh sách phiếu gửi hàng',
+  'revenue-reports': 'Báo cáo doanh thu',
 };
 
 const ADMIN_ROLE_LABELS: Record<string, string> = {
@@ -222,8 +249,40 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   },
 };
 
+type NavClusterKey = 'operations' | 'fleet' | 'commercial' | 'customer';
+
+interface NavCluster {
+  key: NavClusterKey;
+  label: string;
+  sections: AdminOperationSection[];
+}
+
+const OPERATION_CLUSTERS: NavCluster[] = [
+  {
+    key: 'operations',
+    label: 'Điều độ & Bán vé',
+    sections: ['trips', 'booking-management', 'shipments'],
+  },
+  {
+    key: 'fleet',
+    label: 'Đội xe & Tuyến đường',
+    sections: ['routes', 'stations', 'vehicles', 'vehicle-types'],
+  },
+  {
+    key: 'commercial',
+    label: 'Kinh doanh & Bảng giá',
+    sections: ['fare-prices', 'promotions', 'revenue-reports'],
+  },
+  {
+    key: 'customer',
+    label: 'Khách hàng & Dịch vụ',
+    sections: ['customers', 'support-chat', 'reviews'],
+  },
+];
+
 export function SuperAdminLayout({
   activeSection,
+  breadcrumbs,
   children,
 }: SuperAdminLayoutProps) {
   const router = useRouter();
@@ -381,23 +440,51 @@ export function SuperAdminLayout({
               {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
             </p>
             <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
-              {tenantScope
-                ? accessibleOperationSections.map((item) => {
-                    const { icon, label } =
-                      OPERATION_NAVIGATION_DETAILS[item.section];
-                    return (
-                      <AdminSidebarLink
-                        active={activeSection === item.section}
-                        href={item.href}
-                        icon={icon()}
-                        key={item.section}
-                        label={label}
-                        onClick={closeMobileNavigation}
-                        tooltipEnabled={sidebarTooltipEnabled}
-                      />
+              {tenantScope ? (
+                <>
+                  <div className="sidebar-cluster-links mb-2">
+                    <AdminSidebarLink
+                      active={activeSection === 'overview'}
+                      href="/"
+                      icon={<LayoutDashboard size={18} />}
+                      label="Tổng quan"
+                      onClick={closeMobileNavigation}
+                      tooltipEnabled={sidebarTooltipEnabled}
+                    />
+                  </div>
+                  {OPERATION_CLUSTERS.map((cluster) => {
+                    const clusterItems = accessibleOperationSections.filter(
+                      (item) => cluster.sections.includes(item.section),
                     );
-                  })
-                : platformScope && (
+                    if (clusterItems.length === 0) return null;
+
+                    return (
+                      <div key={cluster.key} className="sidebar-nav-cluster">
+                        <p className="sidebar-cluster-label">
+                          {cluster.label}
+                        </p>
+                        <div className="sidebar-cluster-links">
+                          {clusterItems.map((item) => {
+                            const { icon, label } =
+                              OPERATION_NAVIGATION_DETAILS[item.section];
+                            return (
+                              <AdminSidebarLink
+                                active={activeSection === item.section}
+                                href={item.href}
+                                icon={icon()}
+                                key={item.section}
+                                label={label}
+                                onClick={closeMobileNavigation}
+                                tooltipEnabled={sidebarTooltipEnabled}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : platformScope && (
                     <>
                       <AdminSidebarLink
                         active={activeSection === 'overview'}
@@ -509,8 +596,14 @@ export function SuperAdminLayout({
                 <Menu aria-hidden="true" size={20} />
               </Button>
               <div className={headerStyles.context}>
-                <span
+                <Link
                   className={headerStyles.workspace}
+                  href={tenantScope ? (firstAccessibleTenantPath ?? '/') : '/'}
+                  aria-label={
+                    tenantScope
+                      ? `Nhà xe ${tenantBusCompanyName}`
+                      : 'Khu vực quản trị nền tảng'
+                  }
                   title={
                     tenantScope ? tenantBusCompanyName : 'Quản trị nền tảng'
                   }
@@ -519,7 +612,7 @@ export function SuperAdminLayout({
                   <span>
                     {tenantScope ? tenantBusCompanyName : 'Nền tảng VexGo'}
                   </span>
-                </span>
+                </Link>
                 <nav
                   className={headerStyles.breadcrumb}
                   aria-label="Vị trí hiện tại"
@@ -531,57 +624,59 @@ export function SuperAdminLayout({
                         : 'Vận hành'
                       : 'Quản trị'}
                   </span>
-                  <ChevronRight aria-hidden="true" size={14} />
-                  <span className={headerStyles.current} aria-current="page">
-                    {sectionLabel}
-                  </span>
+                  <ChevronRight aria-hidden="true" size={14} className={headerStyles.separator} />
+                  {breadcrumbs && breadcrumbs.length > 0 ? (
+                    breadcrumbs.map((crumb, idx) => {
+                      const isLast = idx === breadcrumbs.length - 1;
+                      return (
+                        <span key={`${crumb.label}-${idx}`} className="inline-flex items-center gap-2">
+                          {idx > 0 && (
+                            <ChevronRight aria-hidden="true" size={14} className={headerStyles.separator} />
+                          )}
+                          {crumb.href && !isLast ? (
+                            <Link href={crumb.href} className={headerStyles.breadcrumbLink}>
+                              {crumb.label}
+                            </Link>
+                          ) : (
+                            <span className={headerStyles.current} aria-current={isLast ? 'page' : undefined}>
+                              {crumb.label}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className={headerStyles.current} aria-current="page">
+                      {activeSection === 'overview'
+                        ? tenantScope
+                          ? 'Tổng quan vận hành'
+                          : 'Tổng quan hệ thống'
+                        : (BREADCRUMB_SECTION_LABELS[activeSection] ?? sectionLabel)}
+                    </span>
+                  )}
                 </nav>
               </div>
             </div>
             <div className={headerStyles.account}>
-              {sidebarViewport === 'mobile' && (
-                <AdminAccountPopover
-                  className={headerStyles.mobileAccount}
-                  fullName={session.fullName}
-                  roleLabel={roleLabel}
-                />
-              )}
-              <span
-                role="img"
-                aria-label={`Tài khoản ${session.fullName}`}
-                className={headerStyles.avatar}
-              >
-                {session.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') ||
-                  'V'}
-              </span>
-              <div className={headerStyles.identity}>
-                <span className={headerStyles.name} title={session.fullName}>
-                  {session.fullName}
-                </span>
-                <span className={headerStyles.role} title={roleLabel}>
-                  {roleLabel}
-                </span>
-              </div>
-              <span className={headerStyles.divider} aria-hidden="true" />
-              <Button
+              <AdminLanguageSwitcher />
+              <AdminAccountPopover
+                fullName={session.fullName}
+                roleLabel={roleLabel}
+                email={session.email}
+                phoneNumber={session.phoneNumber}
+                onLogout={() => void logout()}
+                signingOut={signingOut}
+              />
+              <button
+                type="button"
+                className="sr-only"
                 aria-label="Đăng xuất"
-                variant="ghost"
                 disabled={signingOut}
                 aria-busy={signingOut}
-                className={headerStyles.logout}
                 onClick={() => void logout()}
               >
-                {signingOut ? (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    size={18}
-                    className="motion-safe:animate-spin"
-                  />
-                ) : (
-                  <LogOut aria-hidden="true" size={18} />
-                )}
-                <span>{signingOut ? 'Đang thoát…' : 'Đăng xuất'}</span>
-              </Button>
+                Đăng xuất
+              </button>
             </div>
           </div>
         </header>

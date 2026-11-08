@@ -7,10 +7,10 @@ import { toast } from 'sonner';
 import {
   ResourceConfirmation,
   ResourceNotice,
-  ResourceSheet,
+  ResourceModalDialog,
   ResourceState,
 } from '@/components/admin/resource-ui';
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { Button } from '@/components/ui/action-button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -126,19 +126,20 @@ function VehicleSeatEditDialog({
   }
 
   return (
-    <ResourceSheet
+    <ResourceModalDialog
       busy={submitting}
       description="Cập nhật số ghế và ghi chú vị trí đã lưu cho xe."
       onClose={closeDialog}
       preventDismiss={submitting}
       title={'Chỉnh sửa ghế ' + seat.seatNumber}
+      size="md"
     >
-      <ResourceSheetForm
+      <ResourceModalForm
         ref={formRef}
         noValidate
         onSubmit={submit}
         footer={
-          <div className="flex shrink-0 justify-end gap-2 border-t bg-background/95 px-4 py-4 sm:px-6">
+          <div className="-mx-5 -mb-5 flex shrink-0 justify-end gap-2 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6">
             <Button
               disabled={submitting}
               onClick={closeDialog}
@@ -204,8 +205,8 @@ function VehicleSeatEditDialog({
           </FieldError>
         </Field>
         {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
-      </ResourceSheetForm>
-    </ResourceSheet>
+      </ResourceModalForm>
+    </ResourceModalDialog>
   );
 }
 
@@ -479,7 +480,13 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
       : 1;
 
   return (
-    <SuperAdminLayout activeSection="vehicles">
+    <SuperAdminLayout
+      activeSection="vehicles"
+      breadcrumbs={[
+        { label: 'Danh sách xe', href: '/vehicles' },
+        { label: 'Cấu hình ghế xe' },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6 vehicle-seats-page">
         <AdminPageHeader
           actions={

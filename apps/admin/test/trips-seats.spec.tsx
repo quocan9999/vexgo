@@ -172,7 +172,6 @@ describe('TripSeatsManagement Workspace', () => {
       />,
     );
 
-    expect(html).toContain('QUẢN LÝ VẬN HÀNH');
     expect(html).toContain('Ghế chuyến FUTA-CX-001');
     expect(html).toContain('Danh sách chuyến');
     expect(html).toContain('href="/trips"');

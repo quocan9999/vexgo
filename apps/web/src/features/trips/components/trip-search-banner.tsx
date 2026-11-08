@@ -8,6 +8,10 @@ export function TripSearchBanner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(new Date());
+
   const [activeSearchTab, setActiveSearchTab] = useState<'BUY' | 'RENT'>('BUY');
   const [selectedProvince, setSelectedProvince] = useState(
     searchParams.get('from') || searchParams.get('origin') || '',
@@ -17,7 +21,10 @@ export function TripSearchBanner() {
   );
   const [selectedType, setSelectedType] = useState('');
   const [selectedPrice, setSelectedPrice] = useState(
-    searchParams.get('departureDate') || searchParams.get('date') || '',
+    searchParams.get('departureDate') ||
+      searchParams.get('date') ||
+      searchParams.get('price') ||
+      todayStr,
   );
   const [tripType, setTripType] = useState<'one-way' | 'round-trip'>(
     searchParams.get('tripType') === 'round-trip' || !!searchParams.get('returnDate')
@@ -40,7 +47,10 @@ export function TripSearchBanner() {
         searchParams.get('to') || searchParams.get('destination') || '',
       );
       setSelectedPrice(
-        searchParams.get('departureDate') || searchParams.get('date') || '',
+        searchParams.get('departureDate') ||
+          searchParams.get('date') ||
+          searchParams.get('price') ||
+          todayStr,
       );
       setTripType(
         searchParams.get('tripType') === 'round-trip' || !!searchParams.get('returnDate')

@@ -3,11 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CustomersManagement } from '@/features/customers/components/customers-management';
+import { CustomerWorkspace } from '@/features/customers/components/customer-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
+const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({
   usePathname: () => '/customers',
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: pushMock }),
 }));
 
 vi.mock('next/link', () => ({
@@ -99,6 +101,18 @@ function installApi(options: {
       });
     }
 
+    if (url.includes('/api/v1/customers/101/transactions')) {
+      return response({
+        data: [],
+        meta: {
+          page: 1,
+          pageSize: 10,
+          totalItems: 0,
+          totalPages: 0,
+        },
+      });
+    }
+
     if (url.includes('/api/v1/customers/101')) {
       return response({ data: options.detailCustomer ?? mockCustomerDetail });
     }
@@ -147,6 +161,7 @@ describe('Customer Directory & Detail (/customers)', () => {
 
   afterEach(() => {
     cleanup();
+    pushMock.mockClear();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -211,35 +226,16 @@ describe('Customer Directory & Detail (/customers)', () => {
     expect(retryButton).toBeTruthy();
   });
 
-  it('opens customer detail sheet with complete account and metadata upon clicking detail action', async () => {
+  it('navigates to customer detail page upon clicking detail action', async () => {
     installApi();
     render(<CustomersManagement />);
 
     const detailButtons = await screen.findAllByRole('button', { name: /xem chi tiết/i });
     expect(detailButtons.length).toBeGreaterThan(0);
+    expect(detailButtons[0].getAttribute('href')).toBe('/customers/101');
+
     fireEvent.click(detailButtons[0]);
-
-    const sheet = await screen.findByRole('dialog', { name: 'Chi tiết khách hàng' });
-    expect(sheet).toBeTruthy();
-
-    expect(within(sheet).getByText(/KH000101/)).toBeTruthy();
-    expect(within(sheet).getByText('Nguyễn Văn A')).toBeTruthy();
-    expect(within(sheet).getByText('+84901234567')).toBeTruthy();
-    expect(within(sheet).getByText('15-05-1995')).toBeTruthy();
-    expect(within(sheet).getByText('Nam')).toBeTruthy();
-    expect(within(sheet).getByText('079195000001')).toBeTruthy();
-    expect(within(sheet).getByText('123 Đường Lê Lợi, TP.HCM')).toBeTruthy();
-    expect(within(sheet).getByText('150')).toBeTruthy();
-    expect(within(sheet).getByText(/201/)).toBeTruthy();
-    expect(within(sheet).getByText('Đã xác thực')).toBeTruthy();
-
-    // Close detail sheet
-    const closeButton = within(sheet).getByRole('button', { name: 'Đóng' });
-    fireEvent.click(closeButton);
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Chi tiết khách hàng' })).toBeNull();
-    });
+    expect(pushMock).toHaveBeenCalledWith('/customers/101');
   });
 
   it('supports sorting columns with accessible aria-sort direction', async () => {
@@ -259,18 +255,15 @@ describe('Customer Directory & Detail (/customers)', () => {
     });
   });
 
-  it('allows locking customer account with reason and date validation from detail sheet', async () => {
+  it('allows locking customer account with reason and date validation from detail workspace', async () => {
     const { requests } = installApi();
-    render(<CustomersManagement />);
+    render(<CustomerWorkspace customerId={101} />);
 
-    const detailButtons = await screen.findAllByRole('button', { name: /xem chi tiết/i });
-    fireEvent.click(detailButtons[0]);
-
-    const sheet = await screen.findByRole('dialog', { name: 'Chi tiết khách hàng' });
-    expect(sheet).toBeTruthy();
+    // Wait for customer to load
+    expect(await screen.findByText('KH000101')).toBeTruthy();
 
     // Find and click 'Khóa tài khoản' button
-    const lockBtn = within(sheet).getByRole('button', { name: 'Khóa tài khoản' });
+    const lockBtn = screen.getByRole('button', { name: 'Khóa tài khoản' });
     fireEvent.click(lockBtn);
 
     // Dialog appears
@@ -303,15 +296,13 @@ describe('Customer Directory & Detail (/customers)', () => {
     expect(patchReq?.url).toContain('/api/v1/customers/101/status');
   });
 
-  it('allows permanent lock without date input', async () => {
+  it('allows permanent lock without date input on detail workspace', async () => {
     const { requests } = installApi();
-    render(<CustomersManagement />);
+    render(<CustomerWorkspace customerId={101} />);
 
-    const detailButtons = await screen.findAllByRole('button', { name: /xem chi tiết/i });
-    fireEvent.click(detailButtons[0]);
+    expect(await screen.findByText('KH000101')).toBeTruthy();
 
-    const sheet = await screen.findByRole('dialog', { name: 'Chi tiết khách hàng' });
-    const lockBtn = within(sheet).getByRole('button', { name: 'Khóa tài khoản' });
+    const lockBtn = screen.getByRole('button', { name: 'Khóa tài khoản' });
     fireEvent.click(lockBtn);
 
     const confirmDialog = await screen.findByRole('alertdialog');

@@ -469,62 +469,72 @@ export default function CustomerActivityPage() {
 
               {/* Banner nhắc đơn đặt vé chờ thanh toán */}
               {pendingPaymentBookings.length > 0 && (
-                <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50/90 p-4 shadow-2xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-full bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
-                        <Clock className="w-4 h-4" />
-                      </div>
-                      <div className="text-xs sm:text-sm">
-                        <div className="font-extrabold text-amber-950 flex flex-wrap items-center gap-2">
-                          <span>
-                            Bạn đang có {pendingPaymentBookings.length} đơn đặt vé chờ thanh toán
-                          </span>
-                          {formatCountdown(
-                            pendingPaymentBookings[0].paymentExpiresAt,
-                            nowMs,
-                          ) && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900">
-                              Còn{' '}
-                              {formatCountdown(
-                                pendingPaymentBookings[0].paymentExpiresAt,
-                                nowMs,
-                              )}{' '}
-                              giữ ghế
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-amber-800 mt-1">
-                          Đơn <strong>{pendingPaymentBookings[0].bookingCode}</strong> (
-                          {pendingPaymentBookings[0].route || 'Chuyến xe'}
-                          {pendingPaymentBookings[0].seatNumbers?.length
-                            ? ` · Ghế: ${pendingPaymentBookings[0].seatNumbers.join(', ')}`
-                            : ''}
-                          ) — Tổng tiền:{' '}
-                          <strong>
-                            {formatPrice(pendingPaymentBookings[0].totalAmount)}
-                          </strong>
-                        </p>
-                      </div>
+                <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50/90 p-4 shadow-2xs space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4" />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const target = pendingPaymentBookings[0];
-                        const draft = createPaymentDraftFromBooking(target);
-                        if (draft) {
-                          router.push(
-                            `/payment?draftId=${encodeURIComponent(draft.id)}`,
-                          );
-                        } else {
-                          router.push(`/invoice/${target.bookingId}`);
-                        }
-                      }}
-                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-extrabold transition-colors shadow-sm cursor-pointer shrink-0"
-                    >
-                      <QrCode className="w-4 h-4" />
-                      <span>Tiếp tục thanh toán ngay</span>
-                    </button>
+                    <div>
+                      <h3 className="font-extrabold text-amber-950 text-sm">
+                        Bạn đang có {pendingPaymentBookings.length} đơn đặt vé chờ thanh toán
+                      </h3>
+                      <p className="text-[12px] text-amber-800">
+                        Vui lòng hoàn tất thanh toán trước khi thời gian giữ ghế kết thúc để không bị hủy vé tự động.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-amber-200/80 border-t border-amber-200/80 pt-2">
+                    {pendingPaymentBookings.map((target) => {
+                      const countdownStr = formatCountdown(
+                        target.paymentExpiresAt,
+                        nowMs,
+                      );
+                      return (
+                        <div
+                          key={target.bookingId}
+                          className="pt-2.5 pb-2.5 first:pt-1 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="text-xs sm:text-sm">
+                            <div className="font-bold text-amber-950 flex flex-wrap items-center gap-2">
+                              <span>
+                                Đơn <strong>{target.bookingCode}</strong>
+                              </span>
+                              {countdownStr && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900">
+                                  Còn {countdownStr} giữ ghế
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-amber-800 mt-1">
+                              {target.route || 'Chuyến xe'}
+                              {target.seatNumbers?.length
+                                ? ` · Ghế: ${target.seatNumbers.join(', ')}`
+                                : ''}
+                              {' — '}Tổng tiền:{' '}
+                              <strong>{formatPrice(target.totalAmount)}</strong>
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const draft = createPaymentDraftFromBooking(target);
+                              if (draft) {
+                                router.push(
+                                  `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                                );
+                              } else {
+                                router.push(`/invoice/${target.bookingId}`);
+                              }
+                            }}
+                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-extrabold transition-colors shadow-sm cursor-pointer shrink-0"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                            <span>Tiếp tục thanh toán</span>
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

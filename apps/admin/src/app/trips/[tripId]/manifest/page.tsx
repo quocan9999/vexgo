@@ -14,7 +14,13 @@ export default async function TripManifestPage({ params }: TripManifestPageProps
 
   return (
     <AdminSessionGuard>
-      <SuperAdminLayout activeSection="trips">
+      <SuperAdminLayout
+        activeSection="trips"
+        breadcrumbs={[
+          { label: 'Quản lý chuyến xe', href: '/trips' },
+          { label: 'Danh sách hành khách' },
+        ]}
+      >
         <TripManifestView tripId={tripId} />
       </SuperAdminLayout>
     </AdminSessionGuard>

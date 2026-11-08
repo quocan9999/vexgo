@@ -16,13 +16,35 @@ Auth follow-up (24/10/2026): login uses canonical Field/Input/Button, retains it
 
 Platform dashboard implementation (24/10/2026): the user subsequently authorized replacing the prototype. `/` now uses real platform-only company/administrator aggregates through the guarded overview API, four KPIs, six-month onboarding bars, a missing-administrator action list and recent company table/mobile cards. Canonical Card/Button/Table/Badge/Resource states; no new primitive/chart engine. Counts are current snapshot values; only onboarding is time-bucketed. Fixed bar plot geometry is a data-visualization exception. Fixture fallback, fixture file, old global dashboard stylesheet and unmeasured health label were removed. Contract and verification limits: PLATFORM_DASHBOARD.md. Status: implemented, pending user smoke; API/DB/browser runtime not verified.
 
-Platform overview refinement: use one divided summary surface with three metric groups (companies with status breakdown, administrators, companies needing administration), rather than four equal cards. Follow-up detail is conditional on a positive need count; zero does not get an extra empty panel. Recent companies and onboarding share the main row; dates/account eligibility details remain available where useful without repeating explanatory paragraphs. Keep snapshot time beside Refresh; remove repeated bottom navigation. This is a presentation refinement over the initial four-KPI composition above; API semantics are unchanged.
+Platform overview refinement: use three elevated metric Cards with soft pastel icon containers, large tabular numbers and status breakdown pills. Recent companies and onboarding share the main row with enhanced bar geometry and company avatar initials. FilterToolbar uses compact 11px uppercase labels, streamlined search and 38px select triggers across all CRUD views. API semantics and contracts are unchanged.
+
+Platform Command Center & Bento Grid upgrade (08/11/2026): Upgraded Super Admin Dashboard to Bento Grid 8:4 layout with Context Command Bar (scope chip, live status, auto-refresh 30s/60s/Off, timestamp, ResourceRefreshAction). Main 8-column area hosts Recent Companies and Onboarding Chart; 4-column side area hosts Administrator attention alert list (with full-coverage positive fallback) and Platform Quick Actions shortcuts (`/bus-companies`, `/admin-accounts`, `/rbac`, `/reviews`). Synchronized design rhythm with Tenant Operational Dashboard.
+
+Tenant Operational Dashboard (08/11/2026): Added dedicated Dispatch & Operations Dashboard at `/` for tenant-scoped admin sessions. Four operational KPI metric Cards (Today Trips, Seat Load Factor % with progress bar, Cargo Shipments, Estimated Daily Revenue), real-time Auto-Refresh toggle (30s/60s/Off), Urgent Dispatch Alerts card (expiring booking reservations, unassigned cargo waybills, low occupancy departing trips), Upcoming Trips schedule table with quick seat-map shortcuts, and 1-click Dispatch Quick Actions. Distinguishes real-time operations command center from retrospective financial revenue analytics (`/revenue-reports`).
+
+Forms, Dialogs & Detail Sheets refinement: canonical Input, Textarea, Select, Field, Combobox, Dialog, AlertDialog, and Sheet primitives use card background surfaces, subtle 2xs/xl shadows, Sapphire focus halos (`focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15`), 13px bold field labels, and frosted glass/blurred backdrop overlays. Mobile drawer navigation preserves deep navy branding. API semantics and accessibility contracts are strictly preserved.
+
+Specialized Workspaces refinement: Seat map workspaces (`/vehicles/:id/seats`, `/trips/:id/seats`) feature realistic coach cabin outlines with cockpit driver compartments, radial corridor canvas patterns, and status-colored seat nodes with tactile hover scales. Revenue reports (`/revenue-reports`) replace solid blue blocks with elevated gradient-tinted KPI cards, pastel icon containers, drop-shadow SVG chart lines, and frosted tooltips. Support chat (`/support-chat`) adopts modern master-detail card panels, gradient customer avatars, and rounded sapphire/card message bubbles. All real-time, optimistic-mutation, and test contracts are preserved.
+
+Responsive Verification (Phase 5): Desktop (1440px) and Mobile (375px) layouts verified across auth, shell, tables, sheets, and specialized workspaces using Chrome DevTools. Desktop maintains 252px deep navy navigation, multi-column metrics, and expanded data tables. Mobile switches to collapsible drawer navigation, full-width sheets (100vw), vertical filter stacks, and card-based data representations without horizontal scroll leakage.
+
+Breadcrumb Navigation & Header Refinement: Redundant uppercase eyebrows and duplicate visual page titles were eliminated from page bodies to reclaim vertical real estate. The sticky header breadcrumb navigation is the canonical location indicator, featuring interactive workspace links, contextual group indicators, precise screen names (`BREADCRUMB_SECTION_LABELS`), and hierarchical multi-segment support for nested routes. Screen-reader headings (`h1.sr-only`) and accessibility landmark contracts are strictly preserved.
+
+Dedicated Detail Pages Pattern: All resource inspection and management workflows have completed full migration from transient slide-out drawers (sheets) to canonical, deep-linkable Dedicated Detail Pages with Bento Grid layouts across all 11 modules:
+- Platform & Administration: `/bus-companies/:id` (`BusCompanyWorkspace`), `/admin-accounts/:id` (`AdminAccountWorkspace`), `/shipments/rates/:id` (`ShipmentRateWorkspace`).
+- Vehicles & Network: `/vehicles/:id` (`VehicleWorkspace`), `/vehicle-types/:id` (`VehicleTypeWorkspace`), `/routes/:id` (`RouteWorkspace`), `/stations/:id` (`StationWorkspace`).
+- Operations & Logistics: `/trips/:id` (`TripWorkspace`), `/shipments/:id` (`ShipmentWorkspace`), `/fare-prices/:id` (`FarePriceWorkspace`), `/customers/:id` (`CustomerWorkspace`).
+Each workspace features a prominent Hero Card (identity badge, primary metric, status badges, contextual action buttons: Back, Edit dialog, Status toggle alertdialog, Refresh), multi-panel Bento Grid cards, reactive state synchronization, and hierarchical breadcrumb integration. Standard forms and destructive alerts remain in focused dialogs.
+
+Dedicated Create Pages & Centered Modal Dialogs Pattern: Slide-over right drawers (sheets) have been eliminated from all resource creation and modification workflows due to spatial constraints. The system standardizes on two canonical patterns:
+- Dedicated Create Pages (`/vehicles/create`, `/trips/create`, `/shipments/create`): Used for complex workflows requiring interactive visual canvas editors (e.g. coach cabin seat layouts) or multi-point itinerary route timelines. These pages utilize 2-column widescreen layouts with real-time preview and deep-linking capabilities.
+- Centered Modal Dialogs (`ResourceModalDialog`): Used for standard create/edit forms with semantic width tiers: `md` (448px, seat edits, role assignment), `lg` (512px, bus companies, routes, vehicle types, fare prices), `xl` (576px, shipment rates, stations, admin accounts, trip edits), `2xl` (672px, promotions 2-column grid), and `3xl` (768px, stop list itinerary matrix). Form layouts use `ResourceModalForm` to pin non-shrinking action footers outside scrollable fields with `max-h-[90vh]` boundary protection.
 
 Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY_INVENTORY.md). Historical baseline registry rows below do not establish current usage or approval. Mounted legacy primitives, unconsumed branches, disconnected files and test dependencies are listed separately in that report.
 
 RBAC cleanup (24/10/2026): shared role selector and permission matrix now use canonical presentation exclusively; their legacy branches and exclusive stylesheet were removed. Optional resource appearance props remain for existing callers. Existing presentation tests were adapted but not executed; this cleanup does not establish runtime approval.
 
-Sheet form layout (24/10/2026): `components/admin/resource-sheet-form.tsx` owns bounded form height, independently scrolling fields and a non-shrinking footer outside the field viewport. Use it inside ResourceSheet for form actions that must remain visible; do not put sticky/fixed action bars over the field scroll area. It retains a native form element, form refs, submit semantics and feature-owned footer content. Eleven current forms use it; user visual verification is pending.
+Modal form layout: `components/admin/resource-modal-form.tsx` (`ResourceModalForm`) owns bounded form height, independently scrolling fields and a non-shrinking footer outside the field viewport. Use it inside `ResourceModalDialog` for form actions that must remain visible; do not put sticky/fixed action bars over the field scroll area. It retains a native form element, form refs, submit semantics and feature-owned footer content.
 
 The target is a unified shadcn/ui system using the existing `base-nova` configuration and Base UI foundation, customized for VexGo. This document defines the target contract; it does not claim existing CSS/components already implement it. The first complete migration slice is `/vehicles`. Review that slice before expanding to other routes.
 
@@ -32,11 +54,11 @@ Authority: current user scope and repository security/API rules → this design 
 
 ## Typography
 
-- Font family: Inter through `--font-sans`, configured in the Admin root layout.
+- Font family: Plus Jakarta Sans with Inter fallback through `--font-sans`, configured in the Admin root layout.
 - Use JetBrains Mono through `--admin-font-mono` for visible, exact identifiers users copy or compare:
   - resource codes and visible IDs, including employee/customer/account IDs, vehicle type IDs, and citizen ID numbers;
   - ticket/booking/waybill references, vehicle plates, seat codes, and permission keys.
-- Keep names, contact details, labels, dates, amounts, and explanatory text in Inter.
+- Keep names, contact details, labels, dates, amounts, and explanatory text in Plus Jakarta Sans / Inter.
 - Apply the semantic roles below across Admin. Table body text defaults to 13px.
 - Primary line-height ratios are `1.2`, `1.35`, and `1.5`; role-specific ratios in the table keep section, helper, and compact table text aligned with the proposal.
 - Use weight primitives 400, 500, 600, and 700. Prefer the role weight token when applying a semantic type role.
@@ -156,26 +178,26 @@ The following values are the light-theme target for the pilot, not a claim that 
 
 | Role / shadcn semantic name              | Target                            | Existing Admin alias / migration action                                             |
 | ---------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
-| `background`                             | `#f6f8fb` canvas                  | `--admin-canvas`; keep app canvas separate from cards                               |
-| `foreground`                             | `#17243b`                         | `--admin-ink`                                                                       |
-| `card`, `popover`                        | `#ffffff`                         | `--admin-surface` becomes a surface alias, not canvas                               |
-| `card-foreground`, `popover-foreground`  | `#1c2e48`                         | `--admin-text-strong`                                                               |
-| `primary` / `primary-foreground`         | `#1e40af` / `#ffffff`             | `--admin-blue`; hover `#18368f`                                                     |
-| `secondary` / `secondary-foreground`     | `#ffffff` / `#1c2e48`             | Secondary/outline actions keep a visible border                                     |
-| `muted` / `muted-foreground`             | `#f1f5f9` / `#5d6d84`             | Muted surface and readable secondary copy                                           |
-| `accent` / `accent-foreground`           | `#eff5ff` / `#1e40af`             | `--admin-blue-soft`; hover/selection                                                |
-| `border`                                 | `#e4e9f1`                         | `--admin-border`, separators                                                        |
-| `input`                                  | `#738096`                         | Visible interactive boundary; distinct from decorative separators                   |
-| `ring`                                   | `#1e40af`                         | 2px visible focus indicator with 2px offset where layout allows                     |
-| `destructive` / `destructive-foreground` | `#a63732` / `#ffffff`             | `--admin-danger`                                                                    |
-| `sidebar` / `sidebar-foreground`         | `#14233d` / `#e2e8f0`             | `--admin-navy`                                                                      |
-| `sidebar-accent` / foreground            | `#263f64` / `#ffffff`             | Active item also has marker/`aria-current`                                          |
-| `sidebar-primary` / foreground           | `#1e40af` / `#ffffff`             | Brand/action accent                                                                 |
-| `sidebar-border` / `sidebar-ring`        | `#334155` / `#93c5fd`             | Divider and focus on dark surface                                                   |
-| `chart-1`                                | `#1e40af`                         | Revenue series; distinguish series with labels/line styles as needed                |
-| Success foreground / soft / border       | `#166534` / `#f0f8f3` / `#d3eadc` | Explicit success tokens; do not reuse a low-contrast decorative green as small text |
-| Warning foreground / soft / border       | `#92400e` / `#fffbeb` / `#fde68a` | Explicit warning tokens                                                             |
-| Danger foreground / soft / border        | `#a63732` / `#fef2f2` / `#fecaca` | Error/critical state                                                                |
+| `background`                             | `#f8fafc` canvas                  | `--admin-canvas`; Slate-50 canvas separate from cards                               |
+| `foreground`                             | `#0f172a`                         | `--admin-ink`; Slate-900 high contrast text                                        |
+| `card`, `popover`                        | `#ffffff`                         | `--admin-surface` surface alias, with `--admin-shadow-sm` elevation                 |
+| `card-foreground`, `popover-foreground`  | `#1e293b`                         | `--admin-text-strong`                                                               |
+| `primary` / `primary-foreground`         | `#2563eb` / `#ffffff`             | `--admin-blue` Sapphire Blue; hover `#1d4ed8`, active `#1e40af`                     |
+| `secondary` / `secondary-foreground`     | `#ffffff` / `#1e293b`             | Secondary/outline actions keep visible border and soft shadow                       |
+| `muted` / `muted-foreground`             | `#f1f5f9` / `#64748b`             | Muted surface and readable secondary copy                                           |
+| `accent` / `accent-foreground`           | `#eff6ff` / `#2563eb`             | `--admin-blue-soft`; hover/selection                                                |
+| `border`                                 | `#e2e8f0`                         | `--admin-border`, separators                                                        |
+| `input`                                  | `#cbd5e1`                         | Visible interactive boundary; distinct from decorative separators                   |
+| `ring`                                   | `#2563eb`                         | 2px visible focus indicator with 2px offset where layout allows                     |
+| `destructive` / `destructive-foreground` | `#dc2626` / `#ffffff`             | `--admin-danger`                                                                    |
+| `sidebar` / `sidebar-foreground`         | `#0f172a` / `#94a3b8`             | `--admin-navy` Deep Slate luxury enterprise background                              |
+| `sidebar-accent` / foreground            | `#1e293b` / `#ffffff`             | Active item marker `#3b82f6` with soft glow / `aria-current`                        |
+| `sidebar-primary` / foreground           | `#2563eb` / `#ffffff`             | Brand/action accent                                                                 |
+| `sidebar-border` / `sidebar-ring`        | `#1e293b` / `#3b82f6`             | Divider and focus on dark surface                                                   |
+| `chart-1`                                | `#2563eb`                         | Revenue series; distinguish series with labels/line styles as needed                |
+| Success foreground / soft / border       | `#059669` / `#ecfdf5` / `#a7f3d0` | Explicit success tokens (Emerald 600)                                               |
+| Warning foreground / soft / border       | `#d97706` / `#fffbeb` / `#fde68a` | Explicit warning tokens (Amber 600)                                                 |
+| Danger foreground / soft / border        | `#dc2626` / `#fef2f2` / `#fecaca` | Error/critical state (Red 600)                                                      |
 | Neutral foreground / soft / border       | `#475569` / `#f1f5f9` / `#cbd5e1` | Neutral state, not every unrecognized domain enum                                   |
 
 Unneeded chart colors are added when a real chart needs multiple series, rather than inventing data or categories. Unknown CSS names such as `--admin-text-default` must be resolved by intended role; do not introduce an alias merely to silence an undefined-variable search.
@@ -314,13 +336,22 @@ Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and 
 
 `/booking-management` booking/ticket lists use canonical Tabs, Table/Card and Resource patterns. Shared DateRangeFilter and LabeledSelectFilter now expose opt-in appearance=resource; legacy remains default for unmigrated consumers. These adapters share state/callbacks and existing Base UI engine, and are removed after the last legacy consumer migrates. List and detail CSS removed after consumer inventory. Booking/ticket detail routes now compose canonical information cards, linked records, refund groups and history; presentation approved on 24/10/2026. Booking list approved on 24/10/2026. Support chat presentation approved by the user on 24/10/2026. See ledger for evidence and skipped checks.
 
-### Shell geometry and navigation
+### Shell geometry and navigation (Sapphire Midnight Redesign)
 
 - Desktop sidebar width 252px, collapsed/tablet rail 76px; tablet rail applies from 701–1180px. Mobile ≤700px uses a left Sheet up to 320px wide, leaving at least 32px of backdrop.
-- Sidebar padding 24px top / 16px inline; 24px between brand and divider, then 16px before the scroll region. Navigation rows have a minimum 44px height, 8px control radius and 4px row gap. Navigation owns vertical scrolling; the brand remains visible.
+- Sapphire Midnight Visuals: Sidebar features deep Slate Navy gradient surface (`linear-gradient(180deg, #0b1120 0%, #0d1527 50%, #090e1a 100%)`) with delicate boundary border (`border-r border-white/[0.08]`).
+- Information Architecture: Operational navigation is organized into 4 semantic clusters:
+  1. *Điều độ & Bán vé*: Chuyến xe (`/trips`), Quản lý phiếu đặt vé & vé (`/booking-management`), Gửi hàng (`/shipments`).
+  2. *Đội xe & Tuyến đường*: Tuyến xe (`/routes`), Bến bãi & Điểm đón trả (`/stations`), Danh sách xe (`/vehicles`), Loại xe (`/vehicle-types`).
+  3. *Kinh doanh & Bảng giá*: Bảng giá vé (`/fare-prices`), Khuyến mãi (`/promotions`), Báo cáo doanh thu (`/revenue-reports`).
+  4. *Khách hàng & Dịch vụ*: Khách hàng (`/customers`), Chăm sóc khách hàng (`/support-chat`), Đánh giá & Phản hồi (`/reviews`).
+- Active State: Sapphire Glow Pill with soft light indigo gradient (`linear-gradient(90deg, rgba(37,99,235,0.18), rgba(37,99,235,0.08))`), thin border (`border-blue-500/25`), and bright icon tint (`text-blue-400` with drop-shadow).
+- Navigation Purity: Left sidebar is exclusively dedicated to operational routing; the redundant bottom user profile card was removed in favor of the unified Header User Dropdown Popover.
+- Collapsed Rail Mode: Centers squircle icon action pills (44x44px, radius 10px), centers brand mark, preserves subtle cluster separation dividers, and employs shared Base UI Tooltips on hover/focus.
 - Sidebar link focus outline must sit inside the link bounds so the scroll container cannot clip it. Collapsed desktop and tablet rail links use the shared Tooltip on hover and keyboard focus, with Escape dismissal and a portal outside the scroll clip. Expanded desktop and mobile Sheet links keep visible labels and disable the tooltip. Do not add native title tooltips alongside this primitive.
 - Header inner minimum height 68px desktop / 64px mobile, plus the 1px border; its centered 1510px maximum container and page-inline padding align with page content. Header styling is isolated in `features/super-admin-layout/components/admin-header.module.css`. Show authenticated scope, current section and account identity; truncate long text. Do not add a tenant switcher to tenant scope.
-- On mobile <=700px, the avatar is a 44px account-info button opening a shared Popover with full authenticated name and role labels. Content wraps and scrolls within available viewport space. Close button, Escape and outside press dismiss it; focus uses the Base UI return behavior. Switching to tablet/desktop removes the mobile popover. Desktop identity presentation and direct logout remain separate header controls.
+- Header User Dropdown Popover (Option 1): Unified `AdminAccountPopover` on both desktop and mobile viewports. On the Header bar, displays an interactive Avatar trigger button (initial, online presence dot `#10b981`, and chevron) minimizing horizontal footprint. Clicking opens a rich popover card showing authenticated full name, styled role badge, contact info (email/phone), and a prominent red Logout action. A screen-reader/keyboard-accessible logout button is retained for assistive technology and automated test contracts.
+- Header Language Switcher: Placed adjacent to the account avatar popover with `var(--admin-space-2)` spacing, `AdminLanguageSwitcher` provides an interactive language selector pill (`Languages` icon, current locale badge "VI" / "EN", and chevron). Clicking opens a compact popover menu to switch between Tiếng Việt and English with clean active states and checkmark indicators; light dismiss on outside click and Escape.
 - Mobile Sheet uses the canonical focus/scroll-lock engine, closes on link selection, Escape/backdrop, and returns focus to the menu trigger. Returning to desktop closes the mobile overlay. Desktop collapse preference keeps its existing storage behavior.
 - Logout executes immediately without confirmation (user decision). Disable the action while pending, guard repeated requests and use bottom-right error toast. No feature content or API authorization rules are changed by the shell migration.
 

@@ -11,7 +11,9 @@ import {
   RefreshCw,
   SearchX,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRef, type ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/action-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -21,6 +23,13 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/status-badge';
 import {
   Sheet,
@@ -30,6 +39,64 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+
+export type ResourceModalDialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
+
+const MODAL_SIZE_CLASSES: Record<ResourceModalDialogSize, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
+};
+
+export function ResourceModalDialog({
+  children,
+  title,
+  description,
+  size = 'lg',
+  busy = false,
+  preventDismiss = false,
+  onClose,
+}: {
+  children: ReactNode;
+  title: string;
+  description?: string;
+  size?: ResourceModalDialogSize;
+  busy?: boolean;
+  preventDismiss?: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog
+      open
+      onOpenChange={(open, event) => {
+        if (!open && preventDismiss) event.cancel();
+        else if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        aria-busy={busy}
+        className={cn(
+          MODAL_SIZE_CLASSES[size],
+          'flex max-h-[90vh] flex-col gap-0 p-0 overflow-hidden',
+        )}
+        showCloseButton={!preventDismiss}
+      >
+        <DialogHeader className="border-b px-5 py-4 sm:px-6">
+          <DialogTitle>{title}</DialogTitle>
+          {description && (
+            <DialogDescription className="mt-1">{description}</DialogDescription>
+          )}
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function ResourceSheet({
   children,
@@ -178,10 +245,28 @@ export function ResourceRefreshAction({
 export function ResourceDetailAction({
   resourceName,
   onClick,
+  href,
 }: {
   resourceName: string;
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
 }) {
+  if (href) {
+    return (
+      <Button
+        aria-label={`Xem chi tiết ${resourceName}`}
+        nativeButton={false}
+        onClick={onClick}
+        render={<Link href={href} />}
+        size="sm"
+        variant="ghost"
+      >
+        <Eye aria-hidden />
+        Xem chi tiết
+      </Button>
+    );
+  }
+
   return (
     <Button
       aria-label={`Xem chi tiết ${resourceName}`}
@@ -236,14 +321,24 @@ export function ResourceState({
   const Icon = loading ? LoaderCircle : error ? CircleAlert : SearchX;
   return (
     <div
-      className="grid min-h-52 place-content-center justify-items-center gap-4 p-6 text-center text-sm text-muted-foreground"
+      className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground"
       role={error ? 'alert' : 'status'}
     >
-      <Icon
-        aria-hidden
-        className={loading ? 'size-6 motion-safe:animate-spin' : 'size-7'}
-      />
-      {children}
+      <div
+        className={
+          error
+            ? 'grid size-12 place-items-center rounded-2xl bg-rose-50 text-rose-600 shadow-2xs'
+            : loading
+              ? 'grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600 shadow-2xs'
+              : 'grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-500 shadow-2xs'
+        }
+      >
+        <Icon
+          aria-hidden
+          className={loading ? 'size-6 motion-safe:animate-spin' : 'size-6'}
+        />
+      </div>
+      <div className="max-w-md space-y-1.5 leading-relaxed">{children}</div>
     </div>
   );
 }
@@ -300,14 +395,14 @@ export function ResourcePagination({
   const first = page ? (page - 1) * Math.max(1, pageSize) + 1 : 0;
   const last = page ? Math.min(page * Math.max(1, pageSize), count) : 0;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-t p-4 text-[13px] text-muted-foreground sm:px-5">
-      <span aria-live="polite">
+    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border bg-slate-50/40 p-3.5 text-[13px] text-muted-foreground sm:px-5">
+      <span aria-live="polite" className="text-slate-600">
         Hiển thị{' '}
-        <strong className="text-foreground">
+        <strong className="font-semibold text-foreground">
           {first}–{last}
         </strong>{' '}
         trong{' '}
-        <strong className="text-foreground">
+        <strong className="font-semibold text-foreground">
           {count.toLocaleString('vi-VN')}
         </strong>{' '}
         {summaryLabel}
@@ -316,27 +411,31 @@ export function ResourcePagination({
         aria-label={`Phân trang ${summaryLabel}`}
         className="flex items-center gap-3"
       >
-        <span>
-          Trang <strong className="text-foreground">{page}</strong> / {pages}
+        <span className="text-slate-600">
+          Trang <strong className="font-semibold text-foreground">{page}</strong> / {pages}
         </span>
-        <Button
-          aria-label="Trang trước"
-          disabled={disabled || page <= 1}
-          onClick={() => onPageChange(Math.max(1, page - 1))}
-          size="icon-sm"
-          variant="outline"
-        >
-          <ChevronLeft aria-hidden />
-        </Button>
-        <Button
-          aria-label="Trang sau"
-          disabled={disabled || page >= pages}
-          onClick={() => onPageChange(page + 1)}
-          size="icon-sm"
-          variant="outline"
-        >
-          <ChevronRight aria-hidden />
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            aria-label="Trang trước"
+            className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
+            disabled={disabled || page <= 1}
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            size="icon-sm"
+            variant="outline"
+          >
+            <ChevronLeft aria-hidden className="size-4" />
+          </Button>
+          <Button
+            aria-label="Trang sau"
+            className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
+            disabled={disabled || page >= pages}
+            onClick={() => onPageChange(page + 1)}
+            size="icon-sm"
+            variant="outline"
+          >
+            <ChevronRight aria-hidden className="size-4" />
+          </Button>
+        </div>
       </nav>
     </div>
   );

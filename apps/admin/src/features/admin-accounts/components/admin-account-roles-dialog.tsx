@@ -1,6 +1,6 @@
 'use client';
 
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import {
   ResourceConfirmation,
   ResourceNotice,
-  ResourceSheet,
+  ResourceModalDialog,
   ResourceState,
 } from '@/components/admin/resource-ui';
 import { Button } from '@/components/ui/action-button';
@@ -189,18 +189,19 @@ export function AdminAccountRolesDialog({
 
   return (
     <>
-      <ResourceSheet
+      <ResourceModalDialog
         busy={submitting || roles.status === 'loading'}
         description={`Chọn các vai trò nhà xe từ danh mục hiện tại cho ${account.fullName}.`}
         preventDismiss={submitting}
         title="Gán vai trò tài khoản"
         onClose={onClose}
+        size="md"
       >
-          <ResourceSheetForm
+          <ResourceModalForm
             noValidate
             onSubmit={handleSubmit}
             footer={
-              <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+              <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
                 <Button
                   disabled={submitting}
                   onClick={onClose}
@@ -278,8 +279,8 @@ export function AdminAccountRolesDialog({
               )}
               </div>
             </FieldSet>
-          </ResourceSheetForm>
-      </ResourceSheet>
+          </ResourceModalForm>
+      </ResourceModalDialog>
 
       {revokeConfirmationOpen && (
         <ResourceConfirmation

@@ -1,11 +1,22 @@
 import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RouteDetails } from '../src/features/routes/components/routes-management';
 import { getRouteById, updateRouteStatus } from '../src/features/routes/services/route-service';
 import type { Route } from '../src/features/routes/types/route';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>{children}</a>
+  ),
+}));
 
 vi.mock('lucide-react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('lucide-react')>()),
@@ -54,8 +65,8 @@ describe('Route status interaction', () => {
   it('sends the target status once on immediate double click', async () => {
     vi.mocked(updateRouteStatus).mockImplementation(() => new Promise(() => {}));
     renderDetails();
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
+    const pauseButton = await screen.findByRole('button', { name: 'Tạm ngưng tuyến' });
+    fireEvent.click(pauseButton);
     const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' });
     const confirmButton = within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' });
     await act(async () => {
@@ -71,32 +82,30 @@ describe('Route status interaction', () => {
   it('keeps confirmation open and detail unchanged after API error', async () => {
     vi.mocked(updateRouteStatus).mockRejectedValue(new Error('Máy chủ từ chối cập nhật.'));
     renderDetails();
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
+    const pauseButton = await screen.findByRole('button', { name: 'Tạm ngưng tuyến' });
+    fireEvent.click(pauseButton);
     const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
     await expectOperationToast('error', 'Máy chủ từ chối cập nhật.');
     expect(screen.getByText('Đang hoạt động')).toBeTruthy();
-    expect(detail.isConnected).toBe(true);
   });
 
   it('closes confirmation, keeps detail open, applies backend status, and refreshes list after success', async () => {
     vi.mocked(updateRouteStatus).mockResolvedValue({ ...activeRoute, status: 'TAM_NGUNG' });
     const { onUpdated } = renderDetails();
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
+    const pauseButton = await screen.findByRole('button', { name: 'Tạm ngưng tuyến' });
+    fireEvent.click(pauseButton);
     const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' })).toBeNull());
-    expect(screen.getByRole('dialog', { name: 'Thông tin tuyến xe' })).toBeTruthy();
-    expect(within(screen.getByRole('dialog', { name: 'Thông tin tuyến xe' })).getByText('Tạm ngưng')).toBeTruthy();
+    expect(screen.getByText('Tạm ngưng')).toBeTruthy();
     expect(onUpdated).toHaveBeenCalledWith({ ...activeRoute, status: 'TAM_NGUNG' });
   });
 
   it('keeps status read-only in the edit form', async () => {
     renderDetails();
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(await within(detail).findByRole('button', { name: 'Chỉnh sửa' }));
+    const editButton = await screen.findByRole('button', { name: 'Chỉnh sửa' });
+    fireEvent.click(editButton);
     const editDialog = await screen.findByRole('dialog', { name: 'Chỉnh sửa tuyến xe' });
     expect(within(editDialog).queryByLabelText(/Trạng thái/)).toBeNull();
     expect(within(editDialog).getByLabelText('Điểm đi *')).toHaveProperty('value', 'TP.HCM');

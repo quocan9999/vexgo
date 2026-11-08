@@ -1,10 +1,24 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BusCompaniesManagement } from '@/features/bus-companies/components/bus-companies-management';
+import { BusCompanyWorkspace } from '@/features/bus-companies/components/bus-company-workspace';
 import {
   setAdminTestSession,
 } from './admin-auth-test-session';
+
+vi.mock('next/link', () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 const state = vi.hoisted(() => ({
   loading: false,
@@ -87,12 +101,14 @@ describe('platform bus-company UI permissions', () => {
 
     expect(screen.getByRole('heading', { name: 'Quản lý nhà xe' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Thêm nhà xe' })).toBeNull();
-    fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/ })[0]!);
+    const link = screen.getAllByRole('button', { name: /Xem chi tiết/ })[0]!;
+    expect(link.getAttribute('href') || link.closest('a')?.getAttribute('href')).toBe('/bus-companies/10');
 
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin nhà xe' });
-    expect(within(detail).getByRole('heading', { name: 'Phương Trang' })).toBeTruthy();
-    expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
-    expect(within(detail).queryByRole('button', { name: 'Tạm ngưng nhà xe' })).toBeNull();
+    cleanup();
+    render(<BusCompanyWorkspace companyId={10} />);
+    expect(await screen.findByRole('heading', { name: 'Phương Trang' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tạm ngưng nhà xe' })).toBeNull();
   });
 
   it('shows create and update actions only for their matching platform permissions', async () => {
@@ -102,26 +118,27 @@ describe('platform bus-company UI permissions', () => {
       'bus-company:update',
     ]);
     render(<BusCompaniesManagement />);
-
     expect(screen.getByRole('button', { name: 'Thêm nhà xe' })).toBeTruthy();
-    fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/ })[0]!);
 
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin nhà xe' });
-    expect(await within(detail).findByRole('button', { name: 'Chỉnh sửa' })).toBeTruthy();
-    expect(await within(detail).findByRole('button', { name: 'Tạm ngưng nhà xe' })).toBeTruthy();
+    cleanup();
+    setPlatformPermissions([
+      'bus-company:read',
+      'bus-company:update',
+    ]);
+    render(<BusCompanyWorkspace companyId={10} />);
+    expect(await screen.findByRole('button', { name: 'Chỉnh sửa' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Tạm ngưng nhà xe' })).toBeTruthy();
   });
 
   it('closes status confirmation when update permission is revoked', async () => {
     setPlatformPermissions(['bus-company:read', 'bus-company:update']);
-    const view = render(<BusCompaniesManagement />);
+    const view = render(<BusCompanyWorkspace companyId={10} />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/ })[0]!);
-    const detail = await screen.findByRole('dialog', { name: 'Thông tin nhà xe' });
-    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng nhà xe' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng nhà xe' }));
     expect(await screen.findByRole('heading', { name: 'Tạm ngưng nhà xe này?' })).toBeTruthy();
 
     setPlatformPermissions(['bus-company:read']);
-    view.rerender(<BusCompaniesManagement />);
+    view.rerender(<BusCompanyWorkspace companyId={10} />);
 
     expect(screen.queryByRole('heading', { name: 'Tạm ngưng nhà xe này?' })).toBeNull();
     expect(state.updateBusCompanyStatus).not.toHaveBeenCalled();

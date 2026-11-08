@@ -1,15 +1,15 @@
 import type { ComponentProps, ReactNode } from 'react';
 
-type ResourceSheetFormProps = Omit<ComponentProps<'form'>, 'className'> & {
+type ResourceModalFormProps = Omit<ComponentProps<'form'>, 'className'> & {
   footer: ReactNode;
 };
 
-/** Keeps actions outside the field scroll area in a ResourceSheet body. */
-export function ResourceSheetForm({
+/** Giữ các nút thao tác nằm bên ngoài vùng cuộn dữ liệu trong ResourceModalDialog. */
+export function ResourceModalForm({
   children,
   footer,
   ...props
-}: ResourceSheetFormProps) {
+}: ResourceModalFormProps) {
   return (
     <form className="flex h-full min-h-0 flex-col gap-5" {...props}>
       <div className="-mx-1 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-1 py-1">
@@ -19,3 +19,5 @@ export function ResourceSheetForm({
     </form>
   );
 }
+
+export type { ResourceModalFormProps };

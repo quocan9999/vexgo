@@ -603,11 +603,11 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                 <ShieldCheck className="size-4" />
               </span>
               <CardTitle className="text-sm font-bold">
-                Phụ phí đặc biệt & Miễn cước xách tay
+                Phụ phí dịch vụ bảo quản &amp; Miễn cước xách tay
               </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Quy định phụ phí bảo quản đặc biệt và định mức hành lý xách tay miễn phí.
+              Quy định phụ phí dịch vụ bảo quản đặc biệt (Dễ vỡ, Giá trị cao khi gửi hàng bưu kiện) và định mức hành lý xách tay miễn phí khi đi xe.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3.5">

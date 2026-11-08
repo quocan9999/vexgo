@@ -27,6 +27,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
 import { SupportChatModule } from './support-chat/support-chat.module.js';
 import { RevenueReportsModule } from './revenue-reports/revenue-reports.module.js';
 import { PlatformDashboardModule } from './platform-dashboard/platform-dashboard.module.js';
+import { TenantDashboardModule } from './tenant-dashboard/tenant-dashboard.module.js';
 import { MediaModule } from './media/media.module.js';
 import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module.js';
 
@@ -67,6 +68,7 @@ import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module.js';
     SupportChatModule,
     RevenueReportsModule,
     PlatformDashboardModule,
+    TenantDashboardModule,
     StationsModule,
     MediaModule,
     AiChatbotModule,

@@ -56,10 +56,7 @@ import type {
   ShipmentRateStatus,
   SortDirection,
 } from '../types/shipment-rate';
-import {
-  formatWeightBand,
-  ShipmentRateDetailSheet,
-} from './shipment-rate-detail-sheet';
+import { formatWeightBand } from './shipment-rate-workspace';
 import { ShipmentRateFormDialog } from './shipment-rate-form-dialog';
 import { LuggagePackagesManagement } from './luggage-packages-management';
 
@@ -123,8 +120,6 @@ export function ShipmentRatesManagement() {
   const [formOptions, setFormOptions] =
     useState<ShipmentRateOptionsState>(INITIAL_OPTIONS);
   const [optionsReloadTick, setOptionsReloadTick] = useState(0);
-  const [selectedRate, setSelectedRate] = useState<ShipmentRate | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [formOpen, setFormOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ShipmentRate | null>(null);
@@ -202,51 +197,11 @@ export function ShipmentRatesManagement() {
     setFormOpen(true);
   }, [canCreate]);
 
-  const handleOpenDetail = useCallback((item: ShipmentRate) => {
-    setSelectedRate(item);
-    setDetailOpen(true);
-  }, []);
-
-  const handleOpenEdit = useCallback(
-    (item: ShipmentRate) => {
-      if (!canUpdate) return;
-      setDetailOpen(false);
-      setEditingRate(item);
-      setFormMode('edit');
-      setFormOpen(true);
-    },
-    [canUpdate],
-  );
-
   const handleRateSaved = useCallback(
     (saved: ShipmentRate, message: string) => {
       setFormOpen(false);
       setEditingRate(null);
-      setSelectedRate((current) =>
-        current?.rateId === saved.rateId ? saved : current,
-      );
       toast.success(message);
-      refresh();
-    },
-    [refresh],
-  );
-
-  const handleRateChanged = useCallback(
-    (updated: ShipmentRate, message?: string) => {
-      setSelectedRate(updated);
-      if (message) {
-        toast.success(message);
-        refresh();
-      }
-    },
-    [refresh],
-  );
-
-  const handleDetailMissing = useCallback(
-    (message: string) => {
-      setDetailOpen(false);
-      setSelectedRate(null);
-      toast.error(message);
       refresh();
     },
     [refresh],
@@ -300,7 +255,13 @@ export function ShipmentRatesManagement() {
   }
 
   return (
-    <SuperAdminLayout activeSection="shipments">
+    <SuperAdminLayout
+      activeSection="shipments"
+      breadcrumbs={[
+        { label: 'Danh sách phiếu gửi hàng', href: '/shipments' },
+        { label: 'Bảng giá cước' },
+      ]}
+    >
       <div className="admin-page-content admin-ui space-y-6">
         <nav
           aria-label="Chuyển đổi loại bảng giá"
@@ -359,7 +320,7 @@ export function ShipmentRatesManagement() {
             )}
           >
             <Luggage className="size-4" />
-            Cước gói hành lý kèm vé (Size S, M, L, XL)
+            Gói quy chuẩn &amp; Phụ phí dịch vụ (Dễ vỡ, Giá trị cao)
           </button>
         </div>
 
@@ -367,12 +328,12 @@ export function ShipmentRatesManagement() {
           <div className="space-y-4">
             <div>
               <AdminPageHeader
-                eyebrow="HÀNH LÝ KÝ GỬI XE KHÁCH"
-                title="Cấu hình gói hành lý kèm vé xe"
+                eyebrow="QUY CHUẨN GÓI &amp; PHỤ PHÍ DỊCH VỤ"
+                title="Cấu hình gói kích thước &amp; Phụ phí bảo quản"
                 titleId="luggage-rates-title"
               />
               <p className="mt-2 text-[13px] text-muted-foreground">
-                Thiết lập mức cước 4 gói kích thước quy chuẩn (Size S, M, L, XL), phương tiện và phụ phí ký gửi cho hành khách khi đặt vé xe. Mặc định áp dụng toàn nhà xe hoặc tùy chỉnh riêng theo từng tuyến.
+                Thiết lập mức cước 4 gói kích thước quy chuẩn (Size S, M, L, XL), phương tiện và phụ phí dịch vụ bảo quản (Dễ vỡ, Giá trị cao) áp dụng cho cả gửi hàng bưu kiện và hành lý ký gửi. Mặc định áp dụng toàn nhà xe hoặc tùy chỉnh riêng theo từng tuyến.
               </p>
             </div>
             <LuggagePackagesManagement canUpdate={canUpdate} />
@@ -400,6 +361,19 @@ export function ShipmentRatesManagement() {
                 Thiết lập đơn giá gửi hàng theo tuyến xe, loại hàng hóa, nấc khối
                 lượng và thời gian hiệu lực.
               </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/40 px-3.5 py-2.5 text-xs text-muted-foreground">
+              <span>
+                💡 <strong>Mẹo:</strong> Phụ phí dịch vụ bảo quản đặc biệt (Hàng dễ vỡ, Giá trị cao) được cấu hình tập trung tại tab <strong>Gói quy chuẩn &amp; Phụ phí dịch vụ</strong>.
+              </span>
+              <button
+                type="button"
+                onClick={() => setRateTab('luggage')}
+                className="shrink-0 font-bold text-primary hover:underline cursor-pointer"
+              >
+                Chuyển đến cấu hình phụ phí →
+              </button>
             </div>
 
             <section
@@ -598,8 +572,8 @@ export function ShipmentRatesManagement() {
                         </TableCell>
                         <TableCell>
                           <ResourceDetailAction
+                            href={`/shipments/rates/${item.rateId}`}
                             resourceName={item.route.code}
-                            onClick={() => handleOpenDetail(item)}
                           />
                         </TableCell>
                       </TableRow>
@@ -627,8 +601,8 @@ export function ShipmentRatesManagement() {
                         </h3>
                       </div>
                       <ResourceDetailAction
+                        href={`/shipments/rates/${item.rateId}`}
                         resourceName={item.route.code}
-                        onClick={() => handleOpenDetail(item)}
                       />
                     </div>
                     <p className="text-lg font-semibold tabular-nums">
@@ -691,16 +665,6 @@ export function ShipmentRatesManagement() {
         </section>
         </>
         )}
-
-        <ShipmentRateDetailSheet
-          open={detailOpen}
-          rate={selectedRate}
-          canEdit={canUpdate}
-          onClose={() => setDetailOpen(false)}
-          onEdit={handleOpenEdit}
-          onChanged={handleRateChanged}
-          onMissing={handleDetailMissing}
-        />
 
         {((formMode === 'create' && canCreate) ||
           (formMode === 'edit' && canUpdate)) && (

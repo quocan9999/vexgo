@@ -101,7 +101,16 @@ function getCapacityGroupHint(
   ) {
     return 'HANG_CONG_KENH';
   }
-  if (normalized.includes('HÀNG NHẸ') || normalized === 'HANG_NHE') {
+  if (
+    normalized.includes('VALI') ||
+    normalized.includes('BALO') ||
+    normalized.includes('HÀNH LÝ') ||
+    normalized.includes('HANH LY') ||
+    normalized.includes('THÙNG') ||
+    normalized.includes('THUNG') ||
+    normalized.includes('HÀNG NHẸ') ||
+    normalized === 'HANG_NHE'
+  ) {
     return 'HANG_NHE';
   }
   return effectiveUnitWeight.greaterThanOrEqualTo(20) &&
@@ -311,8 +320,17 @@ export class CargoPricingService {
       }
 
       const inferredGroup = getCapacityGroupHint(item.physicalType, unitWeight);
+      const isVehicleOrExplicitBulky =
+        item.physicalType !== undefined &&
+        (normalizeText(item.physicalType).includes('XE MÁY') ||
+          normalizeText(item.physicalType).includes('MOTORCYCLE') ||
+          normalizeText(item.physicalType).includes('XE ĐẠP') ||
+          normalizeText(item.physicalType).includes('BICYCLE') ||
+          normalizeText(item.physicalType).includes('CỒNG KỀNH') ||
+          normalizeText(item.physicalType).includes('CONG KENH'));
+
       const groupHint =
-        item.physicalType !== undefined ||
+        isVehicleOrExplicitBulky ||
         (item.loaiHangHoaId === undefined && item.categoryName === undefined)
           ? inferredGroup
           : undefined;

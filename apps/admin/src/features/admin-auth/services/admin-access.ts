@@ -219,10 +219,21 @@ export function canAccessShipmentRates(session: AdminSession | null): boolean {
   );
 }
 
+export function canAccessTenantDashboard(session: AdminSession | null): boolean {
+  return (
+    session !== null &&
+    getAdminAccessScope(session) === 'tenant' &&
+    getFirstAccessibleAdminPath(session) !== null
+  );
+}
+
 export function canAccessTenantPath(
   session: AdminSession | null,
   pathname: string,
 ): boolean {
+  if (pathname === '/' || pathname === '') {
+    return canAccessTenantDashboard(session);
+  }
   if (matchesPath(pathname, '/support-chat')) {
     return canAccessSupportChat(session);
   }

@@ -5,7 +5,13 @@ import { ShipmentCreateView } from '@/features/shipments/components/shipment-cre
 export default function ShipmentCreatePage() {
   return (
     <AdminSessionGuard>
-      <SuperAdminLayout activeSection="shipments">
+      <SuperAdminLayout
+        activeSection="shipments"
+        breadcrumbs={[
+          { label: 'Danh sách phiếu gửi hàng', href: '/shipments' },
+          { label: 'Tạo phiếu gửi hàng' },
+        ]}
+      >
         <ShipmentCreateView />
       </SuperAdminLayout>
     </AdminSessionGuard>

@@ -269,7 +269,14 @@ export function PlatformTenantRbacManagement({
   );
 
   return (
-    <SuperAdminLayout activeSection="rbac">
+    <SuperAdminLayout
+      activeSection="rbac"
+      breadcrumbs={[
+        { label: 'Phân quyền nền tảng', href: '/rbac' },
+        { label: 'Nhà xe đối tác', href: '/rbac/tenants' },
+        { label: 'Cấu hình phân quyền' },
+      ]}
+    >
       <div
         aria-busy={loading || saving}
         className="admin-page-content admin-ui space-y-6"

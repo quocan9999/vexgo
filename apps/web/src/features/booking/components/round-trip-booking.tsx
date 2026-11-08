@@ -1487,7 +1487,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     return Math.min(rawRoundTripFare, baseDiscount);
   })();
 
-  const totalFare = Math.max(0, rawRoundTripFare - promotionDiscountAmount) + luggageFee;
+  const totalFare = Math.max(0, rawRoundTripFare - promotionDiscountAmount);
   const departureDateLabel = departureDate
     ? departureDate.split('-').reverse().join('/')
     : outboundPost.createdAt;
@@ -2620,8 +2620,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-600">Cước hàng</span>
-              <strong className="text-red-600 text-sm">
+              <div>
+                <span className="font-bold text-slate-600 block">Cước hàng dự tính</span>
+                <span className="text-[11px] text-amber-600 font-medium block">Thanh toán tại bến khi gửi, không cộng vào tiền vé</span>
+              </div>
+              <strong className="text-amber-700 text-sm font-bold">
                 {luggageFee > 0 ? `${luggageFee.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
               </strong>
             </div>

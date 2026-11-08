@@ -562,8 +562,8 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const quotedTicketTotal = promotionQuote ? Number(promotionQuote.finalTotal) : null;
   const totalFare =
     quotedTicketTotal !== null && Number.isFinite(quotedTicketTotal)
-      ? quotedTicketTotal + luggageFee
-      : unitPriceWithSurcharges * selectedSeats.length + luggageFee;
+      ? quotedTicketTotal
+      : unitPriceWithSurcharges * selectedSeats.length;
   const isPromotionQuotePending =
     Boolean(activePromotionCode) && promotionStatus === 'loading';
   const totalFareText = isPromotionQuotePending
@@ -2374,8 +2374,11 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-600">Cước hàng</span>
-              <strong className={luggageFee > 0 ? "text-red-600 text-sm font-bold" : "text-slate-600 text-xs"}>
+              <div>
+                <span className="font-bold text-slate-600 block">Cước hàng dự tính</span>
+                <span className="text-[11px] text-amber-600 font-medium block">Thanh toán tại bến khi gửi, không cộng vào tiền vé</span>
+              </div>
+              <strong className={luggageFee > 0 ? "text-amber-700 text-sm font-bold" : "text-slate-600 text-xs"}>
                 {luggageFee > 0 ? `${luggageFee.toLocaleString('vi-VN')}đ` : 'Máy chủ xác định theo bảng cước tuyến'}
               </strong>
             </div>

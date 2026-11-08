@@ -322,46 +322,11 @@ function TicketSearchForm() {
               Tra cứu vé &amp; Hành trình đặt chỗ
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Nhập số điện thoại và mã vé để xem chi tiết thông tin chuyến xe
+              Nhập mã vé và số điện thoại để xem chi tiết thông tin chuyến xe
             </p>
           </div>
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              Số điện thoại <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <Phone
-                className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
-                  phoneError ? 'text-rose-500' : 'text-slate-400'
-                }`}
-              />
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (phoneError) setPhoneError(null);
-                  if (generalError) setGeneralError(null);
-                }}
-                placeholder="Vui lòng nhập số điện thoại"
-                disabled={isLoading}
-                className={`w-full h-12 pl-12 pr-4 rounded-xl border ${
-                  phoneError
-                    ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15'
-                    : 'border-slate-300 focus:border-[#f05123] focus:ring-2 focus:ring-[#f05123]/15'
-                } transition-all text-slate-800 font-medium placeholder:text-slate-400 disabled:bg-slate-50`}
-              />
-            </div>
-            {phoneError && (
-              <p className="mt-1.5 text-xs font-medium text-rose-600 flex items-center gap-1.5 animate-in fade-in duration-150">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>{phoneError}</span>
-              </p>
-            )}
-          </div>
-
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
               Mã vé xe <span className="text-rose-500">*</span>
@@ -393,6 +358,41 @@ function TicketSearchForm() {
               <p className="mt-1.5 text-xs font-medium text-rose-600 flex items-center gap-1.5 animate-in fade-in duration-150">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{ticketCodeError}</span>
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Số điện thoại <span className="text-rose-500">*</span>
+            </label>
+            <div className="relative">
+              <Phone
+                className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
+                  phoneError ? 'text-rose-500' : 'text-slate-400'
+                }`}
+              />
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (phoneError) setPhoneError(null);
+                  if (generalError) setGeneralError(null);
+                }}
+                placeholder="Vui lòng nhập số điện thoại"
+                disabled={isLoading}
+                className={`w-full h-12 pl-12 pr-4 rounded-xl border ${
+                  phoneError
+                    ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15'
+                    : 'border-slate-300 focus:border-[#f05123] focus:ring-2 focus:ring-[#f05123]/15'
+                } transition-all text-slate-800 font-medium placeholder:text-slate-400 disabled:bg-slate-50`}
+              />
+            </div>
+            {phoneError && (
+              <p className="mt-1.5 text-xs font-medium text-rose-600 flex items-center gap-1.5 animate-in fade-in duration-150">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{phoneError}</span>
               </p>
             )}
           </div>
@@ -772,10 +772,11 @@ function TicketSearchForm() {
                           ))}
                         </ul>
                         {typeof ticket.cargoFee === 'number' && ticket.cargoFee > 0 && (
-                          <p className="text-[11px] text-slate-500 pt-0.5">
-                            Phụ phí hành lý ký gửi:{' '}
+                          <div className="text-[11px] text-slate-500 pt-0.5">
+                            <span>Phụ phí hành lý ký gửi: </span>
                             <strong className="text-slate-800">{formatCurrency(ticket.cargoFee)}</strong>
-                          </p>
+                            <span className="text-amber-600 block">(Thanh toán trực tiếp tại bến khi gửi hàng)</span>
+                          </div>
                         )}
                       </div>
                     ) : (

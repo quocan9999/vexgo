@@ -37,7 +37,7 @@ import { SuperAdminLayout } from '@/features/super-admin-layout/components/super
 import { useTripLookupOptions } from '../hooks/use-trip-lookup-options';
 import { useTrips } from '../hooks/use-trips';
 import type { TripSortKey } from '../types/trip';
-import { TripDetailSheet, tripStatusLabel } from './trip-detail-sheet';
+import { tripStatusLabel } from './trip-detail-sheet';
 import { TripFormDialog } from './trip-form-dialog';
 
 const STATUS_OPTIONS: FilterOption[] = [
@@ -109,7 +109,6 @@ export function TripsManagement() {
   const { routeOptions, vehicleOptions, retryRoutes, retryVehicles } =
     useTripLookupOptions();
 
-  const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   function sortButton(label: string, field: TripSortKey) {
@@ -159,7 +158,9 @@ export function TripsManagement() {
                 <ResourceCreateAction
                   label="Thêm chuyến"
                   onClick={() => {
-                    setCreateOpen(true);
+                    if (typeof window !== 'undefined') {
+                      window.location.assign('/trips/create');
+                    }
                   }}
                 />
               )}
@@ -415,7 +416,7 @@ export function TripsManagement() {
                               </TableCell>
                               <TableCell>
                                 <ResourceDetailAction
-                                  onClick={() => setSelectedTripId(trip.tripId)}
+                                  href={`/trips/${trip.tripId}`}
                                   resourceName={`chuyến ${trip.code}`}
                                 />
                               </TableCell>
@@ -484,7 +485,7 @@ export function TripsManagement() {
                           </dl>
                           <div className="flex justify-end border-t pt-3">
                             <ResourceDetailAction
-                              onClick={() => setSelectedTripId(trip.tripId)}
+                              href={`/trips/${trip.tripId}`}
                               resourceName={`chuyến ${trip.code}`}
                             />
                           </div>
@@ -508,32 +509,6 @@ export function TripsManagement() {
           </div>
         </section>
       </div>
-
-      {selectedTripId !== null && (
-        <TripDetailSheet
-          initialTrip={items.find((t) => t.tripId === selectedTripId)}
-          key={selectedTripId}
-          onClose={() => setSelectedTripId(null)}
-          onNotFound={() => {
-            setSelectedTripId(null);
-            refresh();
-          }}
-          onDeleted={() => {
-            setSelectedTripId(null);
-            refresh();
-          }}
-          onRetryRouteOptions={retryRoutes}
-          onRetryVehicleOptions={retryVehicles}
-          onUpdated={(updated, options) => {
-            if (!options?.silent)
-              toast.success(`Đã cập nhật chuyến ${updated.code}.`);
-            refresh();
-          }}
-          routeOptions={routeOptions}
-          tripId={selectedTripId}
-          vehicleOptions={vehicleOptions}
-        />
-      )}
 
       {createOpen && (
         <TripFormDialog
