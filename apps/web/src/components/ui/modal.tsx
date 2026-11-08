@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useId } from 'react';
+import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 
 export interface ModalProps {
@@ -21,6 +22,13 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 'lg',
   showCloseButton = true,
 }) => {
+  let t: (key: string) => string = (k) => (k === 'closeModal' ? 'Đóng modal' : k === 'closeDialog' ? 'Hộp thoại' : k);
+  try {
+    const intlT = useTranslations('common');
+    t = intlT;
+  } catch {
+    // fallback
+  }
   const titleId = useId();
   useEffect(() => {
     if (isOpen) {
@@ -51,7 +59,7 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
-        aria-label={title ? undefined : 'Hộp thoại'}
+        aria-label={title ? undefined : t('closeDialog')}
         className={`w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -65,7 +73,7 @@ export const Modal: React.FC<ModalProps> = ({
               <button
                 onClick={onClose}
                 className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition-colors ml-auto cursor-pointer"
-                aria-label="Đóng modal"
+                aria-label={t('closeModal')}
               >
                 <X className="w-6 h-6" />
               </button>

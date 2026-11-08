@@ -1587,7 +1587,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             {invoice.promotionCode && (
               <>
                 <div className="info-line">
-                  <span>{t('discount')} ({invoice.promotionCode})</span>
+                  <span>{t('promoCode')}</span>
                   <strong>{invoice.promotionCode}</strong>
                 </div>
                 <div className="info-line">

@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   User,
   Bus,
@@ -280,6 +280,7 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
 
 export const CustomerHeader: React.FC = () => {
   const t = useTranslations('header');
+  const locale = useLocale();
   const router = useRouter();
   const rawPathname = usePathname() || '/';
   const pathname = stripLocale(rawPathname);
@@ -495,7 +496,7 @@ export const CustomerHeader: React.FC = () => {
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 cursor-pointer"
-            aria-label={getMobileMenuLabel(mobileMenuOpen)}
+            aria-label={getMobileMenuLabel(mobileMenuOpen, locale)}
             aria-expanded={mobileMenuOpen}
             aria-controls="customer-mobile-menu"
           >
@@ -580,16 +581,16 @@ export const CustomerHeader: React.FC = () => {
               <div className="flex items-center gap-2 min-w-0">
                 <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                 <span className="font-semibold text-amber-950 truncate">
-                  Bạn đang có đơn đặt vé
+                  {t('draftNotice')}
                   {friendlyCode ? (
                     <> <strong className="font-mono text-amber-900">{friendlyCode}</strong></>
                   ) : routeName ? (
-                    <> chuyến <strong className="text-amber-900">{routeName}</strong></>
+                    <> {t('draftTrip')} <strong className="text-amber-900">{routeName}</strong></>
                   ) : null}{' '}
-                  đang chờ thanh toán
+                  {t('draftPending')}
                 </span>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900 shrink-0">
-                  Còn {mm}:{ss}
+                  {t('draftRemaining', { time: `${mm}:${ss}` })}
                 </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -598,12 +599,12 @@ export const CustomerHeader: React.FC = () => {
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-extrabold transition-colors shadow-2xs"
                 >
                   <QrCode className="w-3.5 h-3.5" />
-                  <span>Tiếp tục thanh toán</span>
+                  <span>{t('continuePaymentAction')}</span>
                 </Link>
                 <button
                   type="button"
                   onClick={() => setDismissedDraftId(visibleDraftInfo.draft.id)}
-                  title="Ẩn thông báo này"
+                  title={t('draftDismiss')}
                   className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-amber-100 transition-colors cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />

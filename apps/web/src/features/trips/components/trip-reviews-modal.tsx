@@ -378,8 +378,9 @@ export function TripReviewsModal({
                   {locale === 'vi' ? 'Chưa có nhận xét nào phù hợp' : 'No matching reviews'}
                 </h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Hành khách sau khi hoàn thành chuyến đi trên hệ thống VexGo sẽ
-                  được gửi đánh giá và nhận xét trải nghiệm tại đây.
+                  {locale === 'vi'
+                    ? 'Hành khách sau khi hoàn thành chuyến đi trên hệ thống VexGo sẽ được gửi đánh giá và nhận xét trải nghiệm tại đây.'
+                    : 'Passengers who completed trips on VexGo can submit their reviews and feedback here.'}
                 </p>
               </div>
             ) : (

@@ -91,7 +91,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (val && val < todayStr) {
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+        title: t('departureDatePastError'),
       });
       setSelectedPrice(todayStr);
     }
@@ -108,7 +108,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (val && val < todayStr) {
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+        title: t('returnDatePastError'),
       });
       setReturnDate(minAllowed);
       return;
@@ -116,7 +116,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (selectedPrice && val && selectedPrice > val) {
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày đi không được lớn hơn ngày về',
+        title: t('returnDateBeforeDepError'),
       });
       setReturnDate(minAllowed);
     }
@@ -131,7 +131,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đi và điểm đến để tìm chuyến xe',
+        title: t('selectOriginAndDestError'),
       });
       return;
     }
@@ -140,7 +140,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đi để tiếp tục',
+        title: t('selectOriginError'),
       });
       return;
     }
@@ -149,7 +149,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đến để tiếp tục',
+        title: t('selectDestError'),
       });
       return;
     }
@@ -158,7 +158,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Điểm đi và điểm đến không được trùng nhau',
+        title: t('sameOriginDestError'),
       });
       return;
     }
@@ -167,7 +167,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+        title: t('departureDatePastError'),
       });
       setSelectedPrice(todayStr);
       return;
@@ -176,14 +176,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (tripType === 'round-trip') {
       if (!returnDate) {
         if (e) e.preventDefault();
-        setReturnDateAlert({ isOpen: true, title: 'Vui lòng chọn ngày về' });
+        setReturnDateAlert({ isOpen: true, title: t('selectReturnDateError') });
         return;
       }
       if (returnDate < todayStr) {
         if (e) e.preventDefault();
         setReturnDateAlert({
           isOpen: true,
-          title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+          title: t('returnDatePastError'),
         });
         setReturnDate(selectedPrice || todayStr);
         return;
@@ -192,7 +192,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         if (e) e.preventDefault();
         setReturnDateAlert({
           isOpen: true,
-          title: 'Ngày đi không được lớn hơn ngày về',
+          title: t('returnDateBeforeDepError'),
         });
         return;
       }

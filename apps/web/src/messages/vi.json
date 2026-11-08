@@ -32,7 +32,13 @@
     "contactOperator": "Liên hệ",
     "details": "Chi tiết",
     "save": "Lưu",
-    "error": "Đã xảy ra lỗi"
+    "error": "Đã xảy ra lỗi",
+    "actions": "Thao tác",
+    "closeDialog": "Đóng hộp thoại",
+    "closeModal": "Đóng modal",
+    "previousPage": "Trang trước",
+    "nextPage": "Trang sau",
+    "selectValuePlaceholder": "--- Chọn giá trị ---"
   },
   "header": {
     "home": "Trang chủ",
@@ -58,7 +64,15 @@
     "loyaltyPoints": "Điểm VexPoint",
     "activePaymentDraft": "Đơn đặt vé chưa hoàn tất",
     "paymentCountdown": "Thời gian thanh toán còn lại",
-    "continuePayment": "Thanh toán ngay"
+    "continuePayment": "Thanh toán ngay",
+    "draftNotice": "Bạn đang có đơn đặt vé",
+    "draftTrip": "chuyến",
+    "draftPending": "đang chờ thanh toán",
+    "draftRemaining": "Còn {time}",
+    "draftDismiss": "Ẩn thông báo này",
+    "continuePaymentAction": "Tiếp tục thanh toán",
+    "menuOpen": "Mở menu",
+    "menuClose": "Đóng menu"
   },
   "footer": {
     "aboutVexgo": "Về VexGo",
@@ -109,7 +123,41 @@
     "popularRoutes": "Tuyến đường phổ biến",
     "promotions": "Ưu đãi nổi bật",
     "departureDatePastError": "Ngày đi không được nhỏ hơn ngày hiện tại",
-    "returnDateBeforeDepError": "Ngày về không được nhỏ hơn ngày đi"
+    "returnDateBeforeDepError": "Ngày về không được nhỏ hơn ngày đi",
+    "newsTitle": "TIN TỨC MỚI",
+    "newsSubtitle": "Cập nhật những thông tin mới từ VexGo",
+    "viewAllNews": "Xem tất cả tin tức",
+    "readDetails": "Chi tiết",
+    "selectOriginAndDestError": "Vui lòng chọn điểm đi và điểm đến để tìm chuyến xe",
+    "selectOriginError": "Vui lòng chọn điểm đi để tiếp tục",
+    "selectDestError": "Vui lòng chọn điểm đến để tiếp tục",
+    "sameOriginDestError": "Điểm đi và điểm đến không được trùng nhau",
+    "selectReturnDateError": "Vui lòng chọn ngày về",
+    "ecosystem": {
+      "badge": "Hệ sinh thái dịch vụ VexGo",
+      "heading": "Không chỉ là đặt vé. Cả hành trình trong tay bạn.",
+      "subheading": "VexGo kết nối hành khách với các nhà xe liên tỉnh uy tín, giúp việc tìm chuyến, đặt vé và gửi hàng trở nên đơn giản, tiện lợi trên cùng một nền tảng.",
+      "networkTitle": "Kết nối nhiều nhà xe",
+      "networkDesc": "Mạng lưới đối tác xe khách rộng khắp, đa dạng tuyến đường liên tỉnh và nhiều khung giờ di chuyển mỗi ngày.",
+      "networkAction": "Xem lịch trình",
+      "bookingTitle": "Đặt vé dễ dàng",
+      "bookingDesc": "Tra cứu giờ xe, chọn vị trí ngồi thực tế trên sơ đồ xe, thanh toán an toàn và nhận vé điện tử tức thì.",
+      "bookingAction": "Tìm chuyến ngay",
+      "shippingTitle": "Gửi hàng liên tỉnh",
+      "shippingDesc": "Vận chuyển bưu phẩm, hàng hóa siêu tốc theo các tuyến xe khách chạy liên tục, giao nhận ngay trong ngày.",
+      "shippingAction": "Tạo đơn gửi hàng",
+      "trackingTitle": "Tra cứu và quản lý",
+      "trackingDesc": "Kiểm tra thông tin vé, theo dõi mã vận đơn bưu kiện và chủ động hủy vé hoàn tiền trực tuyến minh bạch.",
+      "trackingAction": "Tra cứu vé",
+      "step1Title": "Tìm chuyến xe",
+      "step1Sub": "Chọn điểm đi & ngày đi",
+      "step2Title": "Chọn chỗ ngồi",
+      "step2Sub": "Sơ đồ tầng trên & dưới",
+      "step3Title": "Thanh toán vé",
+      "step3Sub": "QR chuyển khoản / Ví",
+      "step4Title": "Lên xe an toàn",
+      "step4Sub": "Xuất trình vé điện tử"
+    }
   },
   "search": {
     "tripList": "Danh sách chuyến xe",
@@ -227,7 +275,15 @@
     "sameDepartureTime": "Cùng giờ khởi hành",
     "seatsLeft": "Còn {count} chỗ trống",
     "fareLabel": "Giá vé",
-    "chooseThisTrip": "Chọn chuyến này"
+    "chooseThisTrip": "Chọn chuyến này",
+    "departureOfficeFallback": "Bến xe / Văn phòng xuất phát",
+    "arrivalOfficeFallback": "Bến xe / Văn phòng đến nơi",
+    "transferPolicyTitle": "Chính sách xe trung chuyển",
+    "transferPolicyDesc": "Hành khách chọn điểm hẹn trung chuyển sẽ được xe đón đưa đến bến xuất phát hoặc đón từ bến kết nối về điểm hẹn. Vui lòng giữ điện thoại để tài xế trung chuyển liên hệ trước khi đón.",
+    "transferPickupHeading": "Điểm đón trung chuyển ({count})",
+    "transferDropoffHeading": "Điểm trả trung chuyển ({count})",
+    "tripNoteTitle": "Lưu ý:",
+    "seeMore": "xem thêm"
   },
   "booking": {
     "stepSelectTrip": "Chọn chuyến",
@@ -478,7 +534,10 @@
     "paymentFee": "Phí thanh toán",
     "maxSeatsPerTrip": "Tối đa 5 ghế/chuyến",
     "tripInfoOutbound": "Thông tin chuyến đi (Chiều đi)",
-    "tripInfoReturn": "Thông tin chuyến đi (Chiều về)"
+    "tripInfoReturn": "Thông tin chuyến đi (Chiều về)",
+    "swapRoutes": "Đổi chiều tuyến",
+    "returnDatePastError": "Ngày về không được nhỏ hơn ngày hiện tại",
+    "securePayment": "Thanh toán an toàn"
   },
   "lookup": {
     "lookupTitle": "Tra cứu thông tin đặt vé",
@@ -1566,7 +1625,7 @@
     "subtitle": "Tra cứu mã vé, thông tin chuyến xe, điểm đón trả và tình trạng thanh toán",
     "back": "Quay lại",
     "print": "In hóa đơn",
-    "download": "Tải về",
+    "download": "Tải vé PDF",
     "copy": "Sao chép",
     "copied": "Đã sao chép!",
     "orderCode": "Mã đơn hàng:",
@@ -1586,7 +1645,7 @@
     "vehicleType": "Loại xe",
     "route": "Tuyến đường",
     "departureTime": "Giờ khởi hành",
-    "seats": "Ghế đã chọn",
+    "seats": "vé",
     "pickupPoint": "Điểm đón",
     "dropoffPoint": "Điểm trả",
     "ticketList": "Danh sách vé điện tử",
@@ -1612,7 +1671,8 @@
     "cancelNotice": "Vé đã hủy không còn hiệu lực lên xe.",
     "loadingInvoice": "Đang tải hóa đơn...",
     "invoiceNotFound": "Không tìm thấy hóa đơn",
-    "invoiceNotFoundDesc": "Mã đơn hàng không tồn tại hoặc đã bị xóa."
+    "invoiceNotFoundDesc": "Mã đơn hàng không tồn tại hoặc đã bị xóa.",
+    "promoCode": "Mã khuyến mãi"
   },
   "content": {
     "about": {
@@ -1684,5 +1744,17 @@
       "sendAnother": "Gửi yêu cầu khác",
       "errorFailed": "Gửi yêu cầu thất bại. Vui lòng thử lại sau."
     }
+  },
+  "locations": {
+    "placeholder": "Chọn địa điểm",
+    "loading": "Đang tải địa điểm…",
+    "notFound": "Không tìm thấy. Thử tên tỉnh, thành phố hoặc bến xe khác.",
+    "clearLocation": "Xóa địa điểm",
+    "openList": "Mở danh sách địa điểm",
+    "popularHeading": "Địa điểm nổi bật",
+    "provincesHeading": "Tỉnh / Thành phố",
+    "districtsHeading": "Quận / Huyện / TP trực thuộc",
+    "stationsHeading": "Bến xe / Điểm đón trả",
+    "retry": "Thử lại"
   }
 }

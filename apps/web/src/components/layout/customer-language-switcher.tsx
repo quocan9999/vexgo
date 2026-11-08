@@ -131,7 +131,11 @@ export function CustomerLanguageSwitcher({
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label={`Đổi ngôn ngữ (đang chọn: ${currentLang.label})`}
+        aria-label={
+          currentLocale === 'en'
+            ? `Change language (current: ${currentLang.label})`
+            : `Đổi ngôn ngữ (đang chọn: ${currentLang.label})`
+        }
         className="flex items-center gap-1.5 p-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 transition-all text-sm font-semibold text-slate-100 px-3 cursor-pointer select-none"
       >
         <Globe className="w-4 h-4 text-slate-200" />
@@ -146,7 +150,7 @@ export function CustomerLanguageSwitcher({
       {open && (
         <div
           role="listbox"
-          aria-label="Lựa chọn ngôn ngữ"
+          aria-label={currentLocale === 'en' ? 'Select language' : 'Lựa chọn ngôn ngữ'}
           className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 py-1.5 text-slate-800 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right"
         >
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">

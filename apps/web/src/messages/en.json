@@ -32,7 +32,13 @@
     "contactOperator": "Contact",
     "details": "Details",
     "save": "Save",
-    "error": "An error occurred"
+    "error": "An error occurred",
+    "actions": "Actions",
+    "closeDialog": "Close dialog",
+    "closeModal": "Close modal",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "selectValuePlaceholder": "--- Select value ---"
   },
   "header": {
     "home": "Home",
@@ -58,7 +64,15 @@
     "loyaltyPoints": "VexPoints",
     "activePaymentDraft": "Incomplete Booking",
     "paymentCountdown": "Remaining payment time",
-    "continuePayment": "Pay Now"
+    "continuePayment": "Pay Now",
+    "draftNotice": "You have a pending booking",
+    "draftTrip": "trip",
+    "draftPending": "awaiting payment",
+    "draftRemaining": "{time} remaining",
+    "draftDismiss": "Dismiss this notice",
+    "continuePaymentAction": "Continue Payment",
+    "menuOpen": "Open menu",
+    "menuClose": "Close menu"
   },
   "footer": {
     "aboutVexgo": "About VexGo",
@@ -109,7 +123,41 @@
     "popularRoutes": "Popular Routes",
     "promotions": "Hot Deals",
     "departureDatePastError": "Departure date cannot be in the past",
-    "returnDateBeforeDepError": "Return date cannot be earlier than departure date"
+    "returnDateBeforeDepError": "Return date cannot be earlier than departure date",
+    "newsTitle": "LATEST NEWS",
+    "newsSubtitle": "Stay updated with the latest news from VexGo",
+    "viewAllNews": "View all news",
+    "readDetails": "Details",
+    "selectOriginAndDestError": "Please select both departure and destination to find trips",
+    "selectOriginError": "Please select departure point to continue",
+    "selectDestError": "Please select destination point to continue",
+    "sameOriginDestError": "Departure and destination points cannot be the same",
+    "selectReturnDateError": "Please select return date",
+    "ecosystem": {
+      "badge": "VexGo Service Ecosystem",
+      "heading": "More than just booking. Your entire journey in hand.",
+      "subheading": "VexGo connects passengers with reputable intercity coach operators, making search, ticketing, and freight delivery seamless on a single platform.",
+      "networkTitle": "Connecting multiple operators",
+      "networkDesc": "An extensive network of coach partners across intercity routes with convenient schedules daily.",
+      "networkAction": "View schedules",
+      "bookingTitle": "Easy ticket booking",
+      "bookingDesc": "Search departure times, pick seats on real vehicle layouts, pay securely and receive instant e-tickets.",
+      "bookingAction": "Search trips now",
+      "shippingTitle": "Interprovincial cargo delivery",
+      "shippingDesc": "Express parcel shipping on frequent bus routes with same-day drop-off and pickup.",
+      "shippingAction": "Create freight order",
+      "trackingTitle": "Tracking and management",
+      "trackingDesc": "Verify tickets, trace parcel waybills, and cancel tickets with transparent online refunds.",
+      "trackingAction": "Look up tickets",
+      "step1Title": "Find trips",
+      "step1Sub": "Select route & date",
+      "step2Title": "Choose seats",
+      "step2Sub": "Upper & lower deck layouts",
+      "step3Title": "Pay for ticket",
+      "step3Sub": "Bank QR / E-wallets",
+      "step4Title": "Board safely",
+      "step4Sub": "Show e-ticket at station"
+    }
   },
   "search": {
     "tripList": "Trip List",
@@ -227,7 +275,15 @@
     "sameDepartureTime": "Same departure time",
     "seatsLeft": "{count} seats left",
     "fareLabel": "Ticket fare",
-    "chooseThisTrip": "Choose this trip"
+    "chooseThisTrip": "Choose this trip",
+    "departureOfficeFallback": "Departure station / Office",
+    "arrivalOfficeFallback": "Arrival station / Office",
+    "transferPolicyTitle": "Transfer Shuttle Policy",
+    "transferPolicyDesc": "Passengers selecting transfer points will be shuttled to the main station or picked up from the terminal. Please keep your phone reachable for the driver before pickup.",
+    "transferPickupHeading": "Transfer Pick-up Points ({count})",
+    "transferDropoffHeading": "Transfer Drop-off Points ({count})",
+    "tripNoteTitle": "Note:",
+    "seeMore": "see more"
   },
   "booking": {
     "stepSelectTrip": "Select Trip",
@@ -478,7 +534,10 @@
     "paymentFee": "Payment fee",
     "maxSeatsPerTrip": "Up to 5 seats/trip",
     "tripInfoOutbound": "Trip details (Outbound trip)",
-    "tripInfoReturn": "Trip details (Return trip)"
+    "tripInfoReturn": "Trip details (Return trip)",
+    "swapRoutes": "Swap departure and destination",
+    "returnDatePastError": "Return date cannot be earlier than today",
+    "securePayment": "Secure Payment"
   },
   "lookup": {
     "lookupTitle": "Look Up Ticket Information",
@@ -1566,7 +1625,7 @@
     "subtitle": "Lookup ticket codes, trip details, pickup/drop-off points, and payment status",
     "back": "Back",
     "print": "Print Invoice",
-    "download": "Download",
+    "download": "Download PDF Ticket",
     "copy": "Copy",
     "copied": "Copied!",
     "orderCode": "Order Code:",
@@ -1586,7 +1645,7 @@
     "vehicleType": "Vehicle Type",
     "route": "Route",
     "departureTime": "Departure Time",
-    "seats": "Selected Seats",
+    "seats": "tickets",
     "pickupPoint": "Pickup Point",
     "dropoffPoint": "Drop-off Point",
     "ticketList": "Electronic Tickets",
@@ -1612,7 +1671,8 @@
     "cancelNotice": "Cancelled tickets are no longer valid for boarding.",
     "loadingInvoice": "Loading invoice...",
     "invoiceNotFound": "Invoice not found",
-    "invoiceNotFoundDesc": "This booking order does not exist or has been removed."
+    "invoiceNotFoundDesc": "This booking order does not exist or has been removed.",
+    "promoCode": "Promo Code"
   },
   "content": {
     "about": {
@@ -1684,5 +1744,17 @@
       "sendAnother": "Submit Another Request",
       "errorFailed": "Failed to submit request. Please try again later."
     }
+  },
+  "locations": {
+    "placeholder": "Select location",
+    "loading": "Loading locations…",
+    "notFound": "Not found. Try another city, province or station name.",
+    "clearLocation": "Clear location",
+    "openList": "Open location list",
+    "popularHeading": "Popular destinations",
+    "provincesHeading": "Provinces / Cities",
+    "districtsHeading": "Districts / Towns",
+    "stationsHeading": "Bus stations / Pick-up points",
+    "retry": "Retry"
   }
 }

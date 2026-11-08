@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { Modal } from './modal';
 import { Button } from './button';
 import { AlertTriangle, Info } from 'lucide-react';
@@ -24,11 +25,20 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   title,
   message,
-  confirmText = 'Xác nhận',
-  cancelText = 'Hủy bỏ',
+  confirmText,
+  cancelText,
   type = 'warning',
   isLoading = false,
 }) => {
+  let t: (key: string) => string = (k) => (k === 'confirm' ? 'Xác nhận' : k === 'cancel' ? 'Hủy bỏ' : k);
+  try {
+    const intlT = useTranslations('common');
+    t = intlT;
+  } catch {
+    // fallback
+  }
+  const effectiveConfirmText = confirmText ?? t('confirm');
+  const effectiveCancelText = cancelText ?? t('cancel');
   const icons = {
     danger: <AlertTriangle className="w-12 h-12 text-rose-600" />,
     warning: <AlertTriangle className="w-12 h-12 text-amber-600" />,
@@ -57,7 +67,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             onClick={onClose}
             disabled={isLoading}
           >
-            {cancelText}
+            {effectiveCancelText}
           </Button>
 
           <Button
@@ -67,7 +77,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             onClick={onConfirm}
             isLoading={isLoading}
           >
-            {confirmText}
+            {effectiveConfirmText}
           </Button>
         </div>
       </div>

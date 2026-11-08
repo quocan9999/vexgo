@@ -2,6 +2,7 @@
 'use client';
 
 import React, { forwardRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { ChevronDown, AlertCircle } from 'lucide-react';
 
 export interface SelectOption {
@@ -23,7 +24,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
       label,
       options,
       error,
-      placeholder = '--- Chọn giá trị ---',
+      placeholder,
       isRequired = false,
       className = '',
       id,
@@ -31,6 +32,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     },
     ref
   ) => {
+    let t: (key: string) => string = (k) => (k === 'selectValuePlaceholder' ? '--- Chọn giá trị ---' : k);
+    try {
+      const intlT = useTranslations('common');
+      t = intlT;
+    } catch {
+      // fallback
+    }
+    const effectivePlaceholder = placeholder ?? t('selectValuePlaceholder');
     const selectId = id || label ? label?.toLowerCase().replace(/\s+/g, '-') : undefined;
 
     return (
@@ -53,7 +62,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             `}
             {...props}
           >
-            {placeholder && <option value="">{placeholder}</option>}
+            {effectivePlaceholder && <option value="">{effectivePlaceholder}</option>}
             {options.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}

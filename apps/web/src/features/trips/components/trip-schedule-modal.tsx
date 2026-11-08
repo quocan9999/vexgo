@@ -243,14 +243,14 @@ export function TripScheduleModal({
                         {trip.departureTime}
                       </span>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-green-100 text-green-800">
-                        Đón khách
+                        {t('pickup')}
                       </span>
                     </div>
                     <p className="font-bold text-slate-800 mt-1">
                       {trip.pickupPoint || trip.origin}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {trip.pickupAddress || 'Bến xe / Văn phòng xuất phát'}
+                      {trip.pickupAddress || t('departureOfficeFallback')}
                     </p>
                   </div>
                   <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
@@ -259,14 +259,14 @@ export function TripScheduleModal({
                         {trip.arrivalTime}
                       </span>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-800">
-                        Trả khách
+                        {t('dropoff')}
                       </span>
                     </div>
                     <p className="font-bold text-slate-800 mt-1">
                       {trip.dropoffPoint || trip.destination}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {trip.dropoffAddress || 'Bến xe / Văn phòng đến nơi'}
+                      {trip.dropoffAddress || t('arrivalOfficeFallback')}
                     </p>
                   </div>
                 </div>
@@ -281,12 +281,9 @@ export function TripScheduleModal({
                   <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
                     <Info size={16} className="text-blue-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold">Chính sách xe trung chuyển</p>
+                      <p className="font-bold">{t('transferPolicyTitle')}</p>
                       <p className="mt-0.5 text-blue-800 leading-relaxed">
-                        Hành khách chọn điểm hẹn trung chuyển sẽ được xe đón đưa
-                        đến bến xuất phát hoặc đón từ bến kết nối về điểm hẹn. Vui
-                        lòng giữ điện thoại để tài xế trung chuyển liên hệ trước
-                        khi đón.
+                        {t('transferPolicyDesc')}
                       </p>
                     </div>
                   </div>
@@ -296,7 +293,7 @@ export function TripScheduleModal({
                     <div className="space-y-2.5">
                       <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                         <span className="size-2 rounded-full bg-green-500" />
-                        Điểm đón trung chuyển ({transferPickups.length})
+                        {t('transferPickupHeading', { count: transferPickups.length })}
                       </h3>
                       <div className="grid gap-2.5">
                         {transferPickups.map((point) => (
@@ -344,7 +341,7 @@ export function TripScheduleModal({
                     <div className="space-y-2.5">
                       <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                         <span className="size-2 rounded-full bg-red-500" />
-                        Điểm trả trung chuyển ({transferDropoffs.length})
+                        {t('transferDropoffHeading', { count: transferDropoffs.length })}
                       </h3>
                       <div className="grid gap-2.5">
                         {transferDropoffs.map((point) => (

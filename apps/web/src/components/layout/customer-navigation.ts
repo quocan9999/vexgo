@@ -21,6 +21,9 @@ export function isAccountNavigationItemActive(item: AccountNavigationItem, pathn
   return item.href === normalized || item.aliases.some((alias) => alias === normalized);
 }
 
-export function getMobileMenuLabel(isOpen: boolean) {
+export function getMobileMenuLabel(isOpen: boolean, locale: string = 'vi') {
+  if (locale === 'en') {
+    return isOpen ? 'Close menu' : 'Open menu';
+  }
   return isOpen ? 'Đóng menu' : 'Mở menu';
 }

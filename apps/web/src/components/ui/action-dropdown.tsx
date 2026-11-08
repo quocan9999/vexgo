@@ -3,6 +3,7 @@
 // /src/common/components/ui/ActionDropdown.tsx
 import React, { useCallback, useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { MoreVertical } from 'lucide-react';
 
 export interface ActionMenuItem {
@@ -25,6 +26,13 @@ export const ActionDropdown: React.FC<ActionDropdownProps> = ({
   align = 'right',
   className = '',
 }) => {
+  let t: (key: string) => string = (k) => (k === 'actions' ? 'Thao tác' : k);
+  try {
+    const intlT = useTranslations('common');
+    t = intlT;
+  } catch {
+    // fallback
+  }
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left?: number; right?: number }>({
     top: 0,
@@ -124,7 +132,7 @@ export const ActionDropdown: React.FC<ActionDropdownProps> = ({
         type="button"
         onClick={handleToggle}
         className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors focus:outline-none cursor-pointer"
-        aria-label="Thao tác"
+        aria-label={t('actions')}
       >
         <MoreVertical className="w-4 h-4" />
       </button>

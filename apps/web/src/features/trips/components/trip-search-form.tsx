@@ -214,14 +214,14 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
               onClick={() => setService('trip')}
               className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-extrabold transition ${service === 'trip' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
-              <Bus className="size-4" /> Đặt vé
+              <Bus className="size-4" /> {tBooking('tabBus')}
             </button>
             <button
               type="button"
               onClick={() => setService('shipment')}
               className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-extrabold transition ${service === 'shipment' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
-              <PackageCheck className="size-4" /> Gửi hàng
+              <PackageCheck className="size-4" /> {tBooking('tabFreight')}
             </button>
           </div>
           <div className="flex items-center gap-6 pr-2 text-xs font-bold text-slate-500 md:pr-4">
@@ -233,7 +233,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
                 onChange={() => setRoundTrip(false)}
                 className="size-4 accent-brand"
               />{' '}
-              Một chiều
+              {tBooking('oneWay')}
             </label>
             <label className="inline-flex items-center gap-2">
               <input
@@ -243,20 +243,20 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
                 onChange={() => setRoundTrip(true)}
                 className="size-4 accent-brand"
               />{' '}
-              Khứ hồi
+              {tBooking('roundTrip')}
             </label>
           </div>
         </div>
         <div className="grid gap-3 pt-4 lg:grid-cols-[1fr_auto_1fr_1fr_112px_auto] lg:items-end">
           <div className="space-y-1.5">
             <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
-              <MapPin className="size-3.5 text-brand" /> Điểm đi
+              <MapPin className="size-3.5 text-brand" /> {tBooking('origin')}
             </span>
             <LocationPicker
               value={origin}
               onChange={setOrigin}
               onSelectOption={setFromOption}
-              placeholder="Chọn điểm đi"
+              placeholder={tBooking('originPlaceholder')}
             />
           </div>
           <button
@@ -268,25 +268,25 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
               setFromOption(toOption);
               setToOption(temp);
             }}
-            aria-label="Đổi chiều tuyến"
+            aria-label={tBooking('swapRoutes')}
             className="hidden size-11 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-brand transition hover:bg-slate-100 lg:grid"
           >
             <ArrowRightLeft className="size-5" />
           </button>
           <div className="space-y-1.5">
             <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
-              <MapPin className="size-3.5 text-rose-500" /> Điểm đến
+              <MapPin className="size-3.5 text-rose-500" /> {tBooking('destination')}
             </span>
             <LocationPicker
               value={destination}
               onChange={setDestination}
               onSelectOption={setToOption}
-              placeholder="Chọn điểm đến"
+              placeholder={tBooking('destinationPlaceholder')}
             />
           </div>
           <label className="space-y-1.5">
             <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
-              <CalendarDays className="size-3.5 text-brand" /> Ngày đi
+              <CalendarDays className="size-3.5 text-brand" /> {tBooking('departureDate')}
             </span>
             <input
               type="date"
@@ -297,7 +297,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
                 if (e.target.value && e.target.value < todayStr) {
                   setAlertConfig({
                     isOpen: true,
-                    title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+                    title: tBooking('departureDatePastError'),
                   });
                   setDate(todayStr);
                 }
@@ -307,7 +307,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
           </label>
           <label className="space-y-1.5">
             <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
-              <Users className="size-3.5 text-brand" /> Số ghế
+              <Users className="size-3.5 text-brand" /> {tBooking('ticketQuantity')}
             </span>
             <input
               type="number"
@@ -321,14 +321,14 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
             />
           </label>
           <Button variant="accent" className="h-12 rounded-lg px-6">
-            <Search className="size-4" /> Tìm chuyến
+            <Search className="size-4" /> {tBooking('searchBuses')}
           </Button>
         </div>
         {roundTrip ? (
           <div className="mt-3 max-w-xs">
             <label className="space-y-1.5">
               <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
-                <CalendarDays className="size-3.5 text-brand" /> Ngày về
+                <CalendarDays className="size-3.5 text-brand" /> {tBooking('returnDate')}
               </span>
               <input
                 type="date"
@@ -340,13 +340,13 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
                   if (e.target.value && e.target.value < todayStr) {
                     setAlertConfig({
                       isOpen: true,
-                      title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+                      title: tBooking('returnDatePastError'),
                     });
                     setReturnDate(minDate);
                   } else if (date && e.target.value && date > e.target.value) {
                     setAlertConfig({
                       isOpen: true,
-                      title: 'Ngày đi không được lớn hơn ngày về',
+                      title: tBooking('returnDateBeforeDepError'),
                     });
                     setReturnDate(minDate);
                   }

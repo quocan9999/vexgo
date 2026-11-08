@@ -3,6 +3,7 @@
 
 import React, { useId } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, AlertCircle, HelpCircle, CheckCircle2, X } from 'lucide-react';
 
 export interface ConfirmModalProps {
@@ -20,12 +21,22 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   isOpen,
   title,
   message,
-  confirmText = 'Xác nhận',
-  cancelText = 'Hủy bỏ',
+  confirmText,
+  cancelText,
   variant = 'danger',
   onConfirm,
   onClose,
 }) => {
+  let t: (key: string) => string = (k) =>
+    k === 'confirm' ? 'Xác nhận' : k === 'cancel' ? 'Hủy bỏ' : k === 'closeDialog' ? 'Đóng hộp thoại' : k;
+  try {
+    const intlT = useTranslations('common');
+    t = intlT;
+  } catch {
+    // fallback
+  }
+  const effectiveConfirmText = confirmText ?? t('confirm');
+  const effectiveCancelText = cancelText ?? t('cancel');
   const titleId = useId();
   if (!isOpen) return null;
 
@@ -86,7 +97,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Đóng hộp thoại"
+          aria-label={t('closeDialog')}
           className="absolute right-4 top-4 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
@@ -108,7 +119,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             onClick={onClose}
             className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
           >
-            {cancelText}
+            {effectiveCancelText}
           </button>
           <button
             type="button"
@@ -118,7 +129,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             }}
             className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer ${getButtonClass()}`}
           >
-            {confirmText}
+            {effectiveConfirmText}
           </button>
         </div>
       </div>
