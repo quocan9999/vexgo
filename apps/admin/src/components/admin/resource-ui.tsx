@@ -140,6 +140,7 @@ export function ResourceConfirmation({
   children,
   footer,
   busy = false,
+  cancelLabel = 'Hủy',
   onClose,
 }: {
   title: string;
@@ -147,6 +148,7 @@ export function ResourceConfirmation({
   children: ReactNode;
   footer?: ReactNode;
   busy?: boolean;
+  cancelLabel?: string;
   onClose: () => void;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -171,7 +173,7 @@ export function ResourceConfirmation({
             ref={cancelRef}
             variant="outline"
           >
-            Hủy
+            {cancelLabel}
           </Button>
         )}
       </AlertDialogContent>
@@ -222,9 +224,11 @@ export function ResourceCreateAction({
 export function ResourceRefreshAction({
   loading,
   onClick,
+  label = 'Làm mới',
 }: {
   loading: boolean;
   onClick: () => void;
+  label?: string;
 }) {
   return (
     <Button
@@ -237,7 +241,7 @@ export function ResourceRefreshAction({
         aria-hidden
         className={loading ? 'motion-safe:animate-spin' : undefined}
       />
-      Làm mới
+      {label}
     </Button>
   );
 }
@@ -246,15 +250,20 @@ export function ResourceDetailAction({
   resourceName,
   onClick,
   href,
+  label = 'Xem chi tiết',
+  ariaLabel,
 }: {
   resourceName: string;
   onClick?: () => void;
   href?: string;
+  label?: string;
+  ariaLabel?: string;
 }) {
+  const fullAriaLabel = ariaLabel ?? `${label} ${resourceName}`;
   if (href) {
     return (
       <Button
-        aria-label={`Xem chi tiết ${resourceName}`}
+        aria-label={fullAriaLabel}
         nativeButton={false}
         onClick={onClick}
         render={<Link href={href} />}
@@ -262,20 +271,20 @@ export function ResourceDetailAction({
         variant="ghost"
       >
         <Eye aria-hidden />
-        Xem chi tiết
+        {label}
       </Button>
     );
   }
 
   return (
     <Button
-      aria-label={`Xem chi tiết ${resourceName}`}
+      aria-label={fullAriaLabel}
       onClick={onClick}
       size="sm"
       variant="ghost"
     >
       <Eye aria-hidden />
-      Xem chi tiết
+      {label}
     </Button>
   );
 }
@@ -380,6 +389,12 @@ export function ResourcePagination({
   summaryLabel,
   totalItems,
   totalPages,
+  showingLabel = 'Hiển thị',
+  ofLabel = 'trong',
+  pageLabel = 'Trang',
+  prevPageLabel = 'Trang trước',
+  nextPageLabel = 'Trang sau',
+  locale = 'vi-VN',
 }: {
   currentPage: number;
   disabled?: boolean;
@@ -388,6 +403,12 @@ export function ResourcePagination({
   summaryLabel: string;
   totalItems: number;
   totalPages: number;
+  showingLabel?: string;
+  ofLabel?: string;
+  pageLabel?: string;
+  prevPageLabel?: string;
+  nextPageLabel?: string;
+  locale?: string;
 }) {
   const count = Math.max(0, totalItems);
   const pages = Math.max(0, totalPages);
@@ -397,26 +418,26 @@ export function ResourcePagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border bg-slate-50/40 p-3.5 text-[13px] text-muted-foreground sm:px-5">
       <span aria-live="polite" className="text-slate-600">
-        Hiển thị{' '}
+        {showingLabel}{' '}
         <strong className="font-semibold text-foreground">
           {first}–{last}
         </strong>{' '}
-        trong{' '}
+        {ofLabel}{' '}
         <strong className="font-semibold text-foreground">
-          {count.toLocaleString('vi-VN')}
+          {count.toLocaleString(locale)}
         </strong>{' '}
         {summaryLabel}
       </span>
       <nav
-        aria-label={`Phân trang ${summaryLabel}`}
+        aria-label={`${pageLabel} ${summaryLabel}`}
         className="flex items-center gap-3"
       >
         <span className="text-slate-600">
-          Trang <strong className="font-semibold text-foreground">{page}</strong> / {pages}
+          {pageLabel} <strong className="font-semibold text-foreground">{page}</strong> / {pages}
         </span>
         <div className="flex items-center gap-1.5">
           <Button
-            aria-label="Trang trước"
+            aria-label={prevPageLabel}
             className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
             disabled={disabled || page <= 1}
             onClick={() => onPageChange(Math.max(1, page - 1))}
@@ -426,7 +447,7 @@ export function ResourcePagination({
             <ChevronLeft aria-hidden className="size-4" />
           </Button>
           <Button
-            aria-label="Trang sau"
+            aria-label={nextPageLabel}
             className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
             disabled={disabled || page >= pages}
             onClick={() => onPageChange(page + 1)}

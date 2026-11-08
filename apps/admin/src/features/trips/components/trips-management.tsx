@@ -38,31 +38,7 @@ import { useTranslations } from 'next-intl';
 import { useTripLookupOptions } from '../hooks/use-trip-lookup-options';
 import { useTrips } from '../hooks/use-trips';
 import type { TripSortKey } from '../types/trip';
-import { tripStatusLabel } from './trip-detail-sheet';
 import { TripFormDialog } from './trip-form-dialog';
-
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'CHUA_KHOI_HANH', label: 'Chưa khởi hành' },
-  { value: 'DANG_CHAY', label: 'Đang chạy' },
-  { value: 'HOAN_THANH', label: 'Hoàn thành' },
-  { value: 'DA_HUY', label: 'Đã hủy' },
-];
-
-const TIME_RANGE_OPTIONS: FilterOption[] = [
-  { value: 'early-morning', label: 'Sáng sớm (00:00 - 06:00)' },
-  { value: 'morning', label: 'Buổi sáng (06:00 - 12:00)' },
-  { value: 'afternoon', label: 'Buổi chiều (12:00 - 18:00)' },
-  { value: 'evening', label: 'Buổi tối (18:00 - 24:00)' },
-];
-
-const SORT_OPTIONS: FilterOption[] = [
-  { value: 'departureDate', label: 'Ngày khởi hành' },
-  { value: 'departureTime', label: 'Giờ khởi hành' },
-  { value: 'code', label: 'Chuyến xe' },
-  { value: 'status', label: 'Trạng thái' },
-  { value: 'createdAt', label: 'Ngày tạo' },
-  { value: 'updatedAt', label: 'Cập nhật' },
-];
 
 function formatDate(dateStr: string) {
   try {
@@ -83,6 +59,7 @@ function formatTime(timeStr: string) {
 export function TripsManagement() {
   const tTrips = useTranslations('trips');
   const tCommon = useTranslations('common');
+  const tVehicleTypes = useTranslations('vehicleTypes');
   const {
     tripPage,
     error,
@@ -114,11 +91,49 @@ export function TripsManagement() {
 
   const [createOpen, setCreateOpen] = useState(false);
 
+  function getTripStatusLabel(tripStatus: string) {
+    switch (tripStatus) {
+      case 'CHUA_KHOI_HANH':
+        return tTrips('statusScheduled');
+      case 'DANG_CHAY':
+        return tTrips('statusInTransit');
+      case 'HOAN_THANH':
+        return tTrips('statusCompleted');
+      case 'DA_HUY':
+        return tTrips('statusCancelled');
+      default:
+        return tripStatus;
+    }
+  }
+
+  const statusOptions: FilterOption[] = [
+    { value: 'CHUA_KHOI_HANH', label: tTrips('statusScheduled') },
+    { value: 'DANG_CHAY', label: tTrips('statusInTransit') },
+    { value: 'HOAN_THANH', label: tTrips('statusCompleted') },
+    { value: 'DA_HUY', label: tTrips('statusCancelled') },
+  ];
+
+  const timeRangeOptions: FilterOption[] = [
+    { value: 'early-morning', label: tTrips('earlyMorning') },
+    { value: 'morning', label: tTrips('morning') },
+    { value: 'afternoon', label: tTrips('afternoon') },
+    { value: 'evening', label: tTrips('evening') },
+  ];
+
+  const sortOptions: FilterOption[] = [
+    { value: 'departureDate', label: tTrips('colDepartureDate') },
+    { value: 'departureTime', label: tTrips('colDepartureTime') },
+    { value: 'code', label: tTrips('colTrip') },
+    { value: 'status', label: tTrips('colStatus') },
+    { value: 'createdAt', label: tCommon('createdAt') },
+    { value: 'updatedAt', label: tCommon('updatedAt') },
+  ];
+
   function sortButton(label: string, field: TripSortKey) {
     const selected = sortBy === field;
     return (
       <Button
-        aria-label={`Sắp xếp theo ${label}`}
+        aria-label={`${tCommon('sortBy')} ${label}`}
         className="-ml-3 font-semibold"
         size="sm"
         variant="ghost"
@@ -167,10 +182,14 @@ export function TripsManagement() {
                   }}
                 />
               )}
-              <ResourceRefreshAction loading={loading} onClick={refresh} />
+              <ResourceRefreshAction
+                loading={loading}
+                onClick={refresh}
+                label={tCommon('refresh')}
+              />
             </div>
           }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
+          eyebrow={tTrips('eyebrow')}
           title={tTrips('tripsTitle')}
           titleId="trips-title"
         />
@@ -187,17 +206,18 @@ export function TripsManagement() {
                 onChange={updateSearch}
                 placeholder={tTrips('searchPlaceholder')}
                 value={searchInput}
+                clearLabel={tCommon('clearSearch')}
               />
               <div className="min-w-0 flex-[1_1_180px] sm:flex-[1_1_200px]">
                 <label
                   className="mb-2 block text-[13px] font-semibold"
                   htmlFor="trip-filter-origin"
                 >
-                  Điểm đi
+                  {tTrips('originLabel')}
                 </label>
                 <LocationPicker
                   id="trip-filter-origin"
-                  placeholder="Tất cả điểm đi"
+                  placeholder={tTrips('originAll')}
                   value={origin}
                   onChange={updateOrigin}
                   excludeValue={destination}
@@ -208,55 +228,55 @@ export function TripsManagement() {
                   className="mb-2 block text-[13px] font-semibold"
                   htmlFor="trip-filter-destination"
                 >
-                  Điểm đến
+                  {tTrips('destinationLabel')}
                 </label>
                 <LocationPicker
                   id="trip-filter-destination"
-                  placeholder="Tất cả điểm đến"
+                  placeholder={tTrips('destinationAll')}
                   value={destination}
                   onChange={updateDestination}
                   excludeValue={origin}
                 />
               </div>
               <DateRangeFilter
-                label="Ngày khởi hành"
-                title="Khoảng ngày khởi hành"
-                emptyValueLabel="Tất cả ngày"
-                fromLabel="Từ ngày"
-                toLabel="Đến ngày"
+                label={tTrips('departureDateLabel')}
+                title={tTrips('departureDateRangeTitle')}
+                emptyValueLabel={tTrips('allDates')}
+                fromLabel={tTrips('fromDate')}
+                toLabel={tTrips('toDate')}
                 value={departureDateRange}
                 onApply={updateDepartureDateRange}
               />
               <SelectFilter
-                allLabel="Tất cả khung giờ"
-                label="Giờ khởi hành"
+                allLabel={tTrips('allTimeRanges')}
+                label={tTrips('departureTimeLabel')}
                 onChange={updateTimeRange}
-                options={TIME_RANGE_OPTIONS}
+                options={timeRangeOptions}
                 value={timeRange}
               />
               <SelectFilter
-                allLabel="Tất cả trạng thái"
-                label="Trạng thái"
+                allLabel={tTrips('allStatuses')}
+                label={tTrips('colStatus')}
                 onChange={updateStatus}
-                options={STATUS_OPTIONS}
+                options={statusOptions}
                 value={status}
               />
             </FilterToolbar>
 
             <div className="flex items-end gap-3 border-b p-4 min-[901px]:hidden">
               <SelectFilter
-                allLabel="Ngày khởi hành (mặc định)"
-                label="Sắp xếp chuyến theo"
+                allLabel={tTrips('colDepartureDate')}
+                label={tCommon('sortBy')}
                 onChange={(value) =>
                   sortTrips((value || 'departureDate') as TripSortKey)
                 }
-                options={SORT_OPTIONS}
+                options={sortOptions}
                 value={sortBy}
               />
               <Button
-                aria-label={`Đổi thứ tự sắp xếp, hiện tại ${
-                  sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'
-                }`}
+                aria-label={tCommon('toggleSortOrder', {
+                  order: sortDirection === 'asc' ? tCommon('ascending') : tCommon('descending'),
+                })}
                 onClick={() => sortTrips(sortBy)}
                 type="button"
                 variant="outline"
@@ -266,19 +286,21 @@ export function TripsManagement() {
                 ) : (
                   <ArrowDown aria-hidden="true" size={15} />
                 )}
-                {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                {sortDirection === 'asc'
+                  ? tCommon('sortAscending')
+                  : tCommon('sortDescending')}
               </Button>
             </div>
 
             {loading && !tripPage && (
-              <ResourceTableSkeleton resourceLabel="chuyến xe" />
+              <ResourceTableSkeleton resourceLabel={tTrips('resourceLabel')} />
             )}
 
             {error && (
               <ResourceState error>
                 <p>{error}</p>
                 <Button onClick={refresh} type="button" variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
@@ -287,8 +309,8 @@ export function TripsManagement() {
               <ResourceState>
                 <p>
                   {hasFilters
-                    ? 'Không tìm thấy chuyến xe phù hợp.'
-                    : 'Chưa có chuyến xe trong hệ thống.'}
+                    ? tTrips('noMatch')
+                    : tTrips('emptyList')}
                 </p>
               </ResourceState>
             )}
@@ -303,7 +325,7 @@ export function TripsManagement() {
                     >
                       <Table className="text-[13px]">
                         <TableCaption className="sr-only">
-                          Danh sách chuyến xe
+                          {tTrips('tableCaption')}
                         </TableCaption>
                         <TableHeader>
                           <TableRow>
@@ -317,7 +339,7 @@ export function TripsManagement() {
                               }
                               scope="col"
                             >
-                              {sortButton('Chuyến xe', 'code')}
+                              {sortButton(tTrips('colTrip'), 'code')}
                             </TableHead>
                             <TableHead
                               aria-sort={
@@ -329,7 +351,7 @@ export function TripsManagement() {
                               }
                               scope="col"
                             >
-                              {sortButton('Ngày khởi hành', 'departureDate')}
+                              {sortButton(tTrips('colDepartureDate'), 'departureDate')}
                             </TableHead>
                             <TableHead
                               aria-sort={
@@ -341,11 +363,11 @@ export function TripsManagement() {
                               }
                               scope="col"
                             >
-                              {sortButton('Giờ khởi hành', 'departureTime')}
+                              {sortButton(tTrips('colDepartureTime'), 'departureTime')}
                             </TableHead>
-                            <TableHead scope="col">Xe</TableHead>
-                            <TableHead scope="col">Nhận gửi hàng</TableHead>
-                            <TableHead scope="col">Sức chứa hàng</TableHead>
+                            <TableHead scope="col">{tTrips('colVehicle')}</TableHead>
+                            <TableHead scope="col">{tTrips('colAcceptsShipments')}</TableHead>
+                            <TableHead scope="col">{tTrips('colCargoCapacity')}</TableHead>
                             <TableHead
                               aria-sort={
                                 sortBy === 'status'
@@ -356,9 +378,11 @@ export function TripsManagement() {
                               }
                               scope="col"
                             >
-                              {sortButton('Trạng thái', 'status')}
+                              {sortButton(tTrips('colStatus'), 'status')}
                             </TableHead>
-                            <TableHead scope="col"></TableHead>
+                            <TableHead scope="col">
+                              <span className="sr-only">{tCommon('actions')}</span>
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -390,19 +414,19 @@ export function TripsManagement() {
                                 </span>
                               </TableCell>
                               <TableCell>
-                                {trip.acceptsShipments ? 'Có' : 'Không'}
+                                {trip.acceptsShipments ? tCommon('yes') : tCommon('no')}
                               </TableCell>
                               <TableCell>
                                 <div className="grid gap-1 text-xs">
                                   <span>
-                                    Xe máy: {trip.cargoCapacity.motorbikes}
+                                    {tVehicleTypes('motorbike')}: {trip.cargoCapacity.motorbikes}
                                   </span>
                                   <span>
-                                    Hàng cồng kềnh:{' '}
+                                    {tVehicleTypes('bulkyCargo')}:{' '}
                                     {trip.cargoCapacity.bulkyCargo}
                                   </span>
                                   <span>
-                                    Hàng nhẹ: {trip.cargoCapacity.lightCargo}
+                                    {tVehicleTypes('lightCargo')}: {trip.cargoCapacity.lightCargo}
                                   </span>
                                 </div>
                               </TableCell>
@@ -414,12 +438,13 @@ export function TripsManagement() {
                                       : 'muted'
                                   }
                                 >
-                                  {tripStatusLabel(trip.status)}
+                                  {getTripStatusLabel(trip.status)}
                                 </ResourceStatusBadge>
                               </TableCell>
                               <TableCell>
                                 <ResourceDetailAction
                                   href={`/trips/${trip.tripId}`}
+                                  label={tCommon('viewDetails')}
                                   resourceName={`chuyến ${trip.code}`}
                                 />
                               </TableCell>
@@ -446,19 +471,19 @@ export function TripsManagement() {
                                 trip.status === 'DANG_CHAY' ? 'active' : 'muted'
                               }
                             >
-                              {tripStatusLabel(trip.status)}
+                              {getTripStatusLabel(trip.status)}
                             </ResourceStatusBadge>
                           </div>
                           <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                             <div>
-                              <dt>Khởi hành</dt>
+                              <dt>{tTrips('departureLabel')}</dt>
                               <dd>
                                 {formatTime(trip.departureTime)} -{' '}
                                 {formatDate(trip.departureDate)}
                               </dd>
                             </div>
                             <div>
-                              <dt>Xe</dt>
+                              <dt>{tTrips('colVehicle')}</dt>
                               <dd>
                                 <span className="admin-data-mono">
                                   {trip.vehicle.licensePlate}
@@ -467,21 +492,21 @@ export function TripsManagement() {
                               </dd>
                             </div>
                             <div>
-                              <dt>Nhận gửi hàng</dt>
-                              <dd>{trip.acceptsShipments ? 'Có' : 'Không'}</dd>
+                              <dt>{tTrips('colAcceptsShipments')}</dt>
+                              <dd>{trip.acceptsShipments ? tCommon('yes') : tCommon('no')}</dd>
                             </div>
                             <div className="col-span-2">
-                              <dt>Sức chứa hàng</dt>
+                              <dt>{tTrips('colCargoCapacity')}</dt>
                               <dd className="grid gap-1 text-xs">
                                 <span>
-                                  Xe máy: {trip.cargoCapacity.motorbikes}
+                                  {tVehicleTypes('motorbike')}: {trip.cargoCapacity.motorbikes}
                                 </span>
                                 <span>
-                                  Hàng cồng kềnh:{' '}
+                                  {tVehicleTypes('bulkyCargo')}:{' '}
                                   {trip.cargoCapacity.bulkyCargo}
                                 </span>
                                 <span>
-                                  Hàng nhẹ: {trip.cargoCapacity.lightCargo}
+                                  {tVehicleTypes('lightCargo')}: {trip.cargoCapacity.lightCargo}
                                 </span>
                               </dd>
                             </div>
@@ -489,6 +514,7 @@ export function TripsManagement() {
                           <div className="flex justify-end border-t pt-3">
                             <ResourceDetailAction
                               href={`/trips/${trip.tripId}`}
+                              label={tCommon('viewDetails')}
                               resourceName={`chuyến ${trip.code}`}
                             />
                           </div>
@@ -503,9 +529,14 @@ export function TripsManagement() {
                   disabled={loading}
                   onPageChange={changePage}
                   pageSize={tripPage.meta.pageSize}
-                  summaryLabel="chuyến xe"
+                  summaryLabel={tTrips('resourceLabel')}
                   totalItems={tripPage.meta.totalItems}
                   totalPages={tripPage.meta.totalPages}
+                  showingLabel={tCommon('showing')}
+                  ofLabel={tCommon('of')}
+                  pageLabel={tCommon('page')}
+                  prevPageLabel={tCommon('prevPage')}
+                  nextPageLabel={tCommon('nextPage')}
                 />
               </>
             )}
@@ -520,7 +551,7 @@ export function TripsManagement() {
           onRetryVehicleOptions={retryVehicles}
           onSaved={(created) => {
             setCreateOpen(false);
-            toast.success(`Đã tạo chuyến ${created.code}.`);
+            toast.success(tTrips('createdSuccess', { code: created.code }));
             refresh();
           }}
           routeOptions={routeOptions}

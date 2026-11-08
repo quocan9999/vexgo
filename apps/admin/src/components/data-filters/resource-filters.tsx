@@ -29,12 +29,14 @@ export function SearchInput({
   value,
   onChange,
   className,
+  clearLabel = 'Xóa nội dung tìm kiếm',
 }: {
   label: string;
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  clearLabel?: string;
 }) {
   const id = useId();
   return (
@@ -60,7 +62,7 @@ export function SearchInput({
         />
         {value && (
           <Button
-            aria-label="Xóa nội dung tìm kiếm"
+            aria-label={clearLabel}
             className="absolute right-1 top-1/2 -translate-y-1/2 size-7 text-muted-foreground hover:text-foreground"
             onClick={() => onChange('')}
             size="icon-sm"

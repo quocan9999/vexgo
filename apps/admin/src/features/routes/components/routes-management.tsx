@@ -46,23 +46,6 @@ import { RouteWorkspace, RouteDetails } from './route-workspace';
 export { RouteWorkspace, RouteDetails };
 import type { RouteStopItem } from '@/features/stops/types/stop';
 
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'HOAT_DONG', label: 'Đang hoạt động' },
-  { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
-];
-const SORT_OPTIONS: FilterOption[] = [
-  { value: 'code', label: 'Mã tuyến' },
-  { value: 'origin', label: 'Điểm đi' },
-  { value: 'destination', label: 'Điểm đến' },
-  { value: 'status', label: 'Trạng thái' },
-  { value: 'createdAt', label: 'Ngày tạo' },
-  { value: 'updatedAt', label: 'Cập nhật' },
-];
-
-function statusLabel(status: RouteStatus) {
-  return status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng';
-}
-
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
@@ -73,14 +56,6 @@ function timestampFormat(value: string) {
   })
     .format(new Date(value))
     .replaceAll('/', '-');
-}
-
-function RouteBadge({ status }: { status: RouteStatus }) {
-  return (
-    <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
-      {statusLabel(status)}
-    </ResourceStatusBadge>
-  );
 }
 
 export function RoutesManagement() {
@@ -110,10 +85,39 @@ export function RoutesManagement() {
   const [createOpen, setCreateOpen] = useState(false);
   const items = routePage?.data ?? [];
   const hasFilters = Boolean(searchInput.trim() || status);
+
+  function statusLabel(routeStatus: RouteStatus) {
+    return routeStatus === 'HOAT_DONG'
+      ? tRoutes('statusActive')
+      : tRoutes('statusSuspended');
+  }
+
+  function RouteBadge({ status }: { status: RouteStatus }) {
+    return (
+      <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
+        {statusLabel(status)}
+      </ResourceStatusBadge>
+    );
+  }
+
+  const statusOptions: FilterOption[] = [
+    { value: 'HOAT_DONG', label: tRoutes('statusActive') },
+    { value: 'TAM_NGUNG', label: tRoutes('statusSuspended') },
+  ];
+
+  const sortOptions: FilterOption[] = [
+    { value: 'code', label: tRoutes('colCode') },
+    { value: 'origin', label: tRoutes('colOrigin') },
+    { value: 'destination', label: tRoutes('colDestination') },
+    { value: 'status', label: tRoutes('colStatus') },
+    { value: 'createdAt', label: tRoutes('colCreatedAt') },
+    { value: 'updatedAt', label: tRoutes('colUpdatedAt') },
+  ];
+
   function sortButton(label: string, field: RouteSortKey) {
     return (
       <Button
-        aria-label={`Sắp xếp theo ${label}`}
+        aria-label={`${tCommon('sortBy')} ${label}`}
         className="-ml-3"
         size="sm"
         variant="ghost"
@@ -136,7 +140,7 @@ export function RoutesManagement() {
     <SuperAdminLayout activeSection="routes">
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
-          eyebrow="QUẢN LÝ VẬN HÀNH"
+          eyebrow={tRoutes('eyebrow')}
           title={tRoutes('routesTitle')}
           titleId="routes-title"
           actions={
@@ -147,7 +151,11 @@ export function RoutesManagement() {
                   onClick={() => setCreateOpen(true)}
                 />
               )}
-              <ResourceRefreshAction loading={loading} onClick={refresh} />
+              <ResourceRefreshAction
+                loading={loading}
+                onClick={refresh}
+                label={tCommon('refresh')}
+              />
             </div>
           }
         />
@@ -155,26 +163,27 @@ export function RoutesManagement() {
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label={tRoutes('routesTitle')}
+                label={tRoutes('searchLabel')}
                 value={searchInput}
                 onChange={updateSearch}
                 placeholder={tRoutes('searchPlaceholder')}
+                clearLabel={tCommon('clearSearch')}
               />
               <SelectFilter
                 label={tRoutes('routeStatus')}
-                allLabel="Tất cả trạng thái"
+                allLabel={tRoutes('allStatuses')}
                 value={status}
-                options={STATUS_OPTIONS}
+                options={statusOptions}
                 onChange={updateStatus}
               />
             </FilterToolbar>
             <div className="border-b p-4 md:hidden">
               <div className="flex items-end gap-3">
                 <SelectFilter
-                  label="Sắp xếp theo"
-                  allLabel="Mã tuyến"
+                  label={tCommon('sortBy')}
+                  allLabel={tRoutes('colCode')}
                   value={sortBy === 'code' ? '' : sortBy}
-                  options={SORT_OPTIONS.filter(
+                  options={sortOptions.filter(
                     (option) => option.value !== 'code',
                   )}
                   onChange={(value) => {
@@ -184,7 +193,9 @@ export function RoutesManagement() {
                 />
                 <Button
                   variant="outline"
-                  aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                  aria-label={tCommon('toggleSortOrder', {
+                    order: sortDirection === 'asc' ? tCommon('ascending') : tCommon('descending'),
+                  })}
                   onClick={() => sortRoutes(sortBy)}
                 >
                   {sortDirection === 'asc' ? (
@@ -192,18 +203,20 @@ export function RoutesManagement() {
                   ) : (
                     <ArrowDown aria-hidden />
                   )}
-                  {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                  {sortDirection === 'asc'
+                    ? tCommon('sortAscending')
+                    : tCommon('sortDescending')}
                 </Button>
               </div>
             </div>
             {loading && !routePage && (
-              <ResourceTableSkeleton resourceLabel="tuyến xe" />
+              <ResourceTableSkeleton resourceLabel={tRoutes('resourceLabel')} />
             )}
             {error && (
               <ResourceState error>
                 <p>{error}</p>
                 <Button variant="outline" onClick={refresh}>
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
@@ -211,8 +224,8 @@ export function RoutesManagement() {
               <ResourceState>
                 <p>
                   {hasFilters
-                    ? 'Không tìm thấy tuyến xe phù hợp.'
-                    : 'Chưa có tuyến xe trong hệ thống.'}
+                    ? tRoutes('noMatch')
+                    : tRoutes('emptyList')}
                 </p>
                 {hasFilters && (
                   <Button
@@ -222,7 +235,7 @@ export function RoutesManagement() {
                       updateStatus('');
                     }}
                   >
-                    Xóa bộ lọc
+                    {tCommon('clearFilters')}
                   </Button>
                 )}
               </ResourceState>
@@ -234,19 +247,19 @@ export function RoutesManagement() {
                     <div className="hidden md:block">
                       <Table className="min-w-[1080px]">
                         <TableCaption className="sr-only">
-                          Danh sách tuyến xe
+                          {tRoutes('tableCaption')}
                         </TableCaption>
                         <TableHeader>
                           <TableRow>
                             {(
                               [
-                                { key: 'code', label: 'Mã tuyến' },
-                                { key: 'origin', label: 'Điểm đi' },
-                                { key: 'destination', label: 'Điểm đến' },
-                                { key: null, label: 'Nhà xe' },
-                                { key: 'status', label: 'Trạng thái' },
-                                { key: 'createdAt', label: 'Ngày tạo' },
-                                { key: 'updatedAt', label: 'Cập nhật' },
+                                { key: 'code', label: tRoutes('colCode') },
+                                { key: 'origin', label: tRoutes('colOrigin') },
+                                { key: 'destination', label: tRoutes('colDestination') },
+                                { key: null, label: tRoutes('colOperator') },
+                                { key: 'status', label: tRoutes('colStatus') },
+                                { key: 'createdAt', label: tRoutes('colCreatedAt') },
+                                { key: 'updatedAt', label: tRoutes('colUpdatedAt') },
                               ] as const
                             ).map((column) => (
                               <TableHead
@@ -268,7 +281,7 @@ export function RoutesManagement() {
                               </TableHead>
                             ))}
                             <TableHead scope="col">
-                              <span className="sr-only">Thao tác</span>
+                              <span className="sr-only">{tCommon('actions')}</span>
                             </TableHead>
                           </TableRow>
                         </TableHeader>
@@ -305,6 +318,7 @@ export function RoutesManagement() {
                               <TableCell>
                                 <ResourceDetailAction
                                   href={`/routes/${route.routeId}`}
+                                  label={tCommon('viewDetails')}
                                   resourceName={`tuyến ${route.code}`}
                                 />
                               </TableCell>
@@ -327,29 +341,30 @@ export function RoutesManagement() {
                           </p>
                           <dl className="grid grid-cols-2 gap-3 text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-muted-foreground">
                             <div>
-                              <dt>Nhà xe</dt>
+                              <dt>{tRoutes('colOperator')}</dt>
                               <dd>{route.busCompany.name}</dd>
                             </div>
                             <div>
-                              <dt>Thời gian chạy</dt>
+                              <dt>{tRoutes('duration')}</dt>
                               <dd>
                                 {route.durationMinutes === null
-                                  ? 'Chưa thiết lập'
-                                  : `${route.durationMinutes} phút`}
+                                  ? tRoutes('notSet')
+                                  : tRoutes('durationMinutes', { minutes: route.durationMinutes })}
                               </dd>
                             </div>
                             <div>
-                              <dt>Ngày tạo</dt>
+                              <dt>{tRoutes('colCreatedAt')}</dt>
                               <dd>{timestampFormat(route.createdAt)}</dd>
                             </div>
                             <div>
-                              <dt>Cập nhật</dt>
+                              <dt>{tRoutes('colUpdatedAt')}</dt>
                               <dd>{timestampFormat(route.updatedAt)}</dd>
                             </div>
                           </dl>
                           <div className="flex justify-end border-t pt-3">
                             <ResourceDetailAction
                               href={`/routes/${route.routeId}`}
+                              label={tCommon('viewDetails')}
                               resourceName={`tuyến ${route.code}`}
                             />
                           </div>
@@ -363,9 +378,14 @@ export function RoutesManagement() {
                   disabled={loading}
                   onPageChange={changePage}
                   pageSize={routePage.meta.pageSize}
-                  summaryLabel="tuyến xe"
+                  summaryLabel={tRoutes('resourceLabel')}
                   totalItems={routePage.meta.totalItems}
                   totalPages={routePage.meta.totalPages}
+                  showingLabel={tCommon('showing')}
+                  ofLabel={tCommon('of')}
+                  pageLabel={tCommon('page')}
+                  prevPageLabel={tCommon('prevPage')}
+                  nextPageLabel={tCommon('nextPage')}
                 />
               </>
             )}
@@ -378,7 +398,7 @@ export function RoutesManagement() {
           onClose={() => setCreateOpen(false)}
           onSaved={(route) => {
             setCreateOpen(false);
-            toast.success(`Đã thêm tuyến ${route.code}.`);
+            toast.success(tRoutes('createdSuccess', { code: route.code }));
             refresh();
           }}
         />

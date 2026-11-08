@@ -25,12 +25,24 @@ const mockAdminSession = vi.hoisted(() => ({
 }));
 
 import viMessages from '../src/messages/vi.json';
+import enMessages from '../src/messages/en.json';
+
+let currentTestLocale = 'vi';
+
+export function setTestLocale(locale: 'vi' | 'en') {
+  currentTestLocale = locale;
+}
+
+export function getTestLocale() {
+  return currentTestLocale;
+}
 
 vi.mock('next-intl', () => ({
   useTranslations: (namespace?: string) => {
     return (key: string, values?: Record<string, any>) => {
       const keys = namespace ? `${namespace}.${key}`.split('.') : key.split('.');
-      let val: any = viMessages;
+      const messages = currentTestLocale === 'en' ? enMessages : viMessages;
+      let val: any = messages;
       for (const k of keys) {
         val = val?.[k];
       }
@@ -46,8 +58,19 @@ vi.mock('next-intl', () => ({
       return key;
     };
   },
-  useLocale: () => 'vi',
-  NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
+  useLocale: () => currentTestLocale,
+  NextIntlClientProvider: ({
+    locale,
+    children,
+  }: {
+    locale?: string;
+    children: React.ReactNode;
+  }) => {
+    if (locale === 'en' || locale === 'vi') {
+      currentTestLocale = locale;
+    }
+    return children;
+  },
 }));
 
 vi.mock('@/features/admin-auth/hooks/use-admin-session', () => {
@@ -70,6 +93,7 @@ function publishAdminTestSession(state: TestSessionState) {
 }
 
 export function resetAdminTestSession() {
+  currentTestLocale = 'vi';
   publishAdminTestSession({
     status: 'authenticated',
     session: platformSession,
