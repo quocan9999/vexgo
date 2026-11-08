@@ -89,8 +89,28 @@ function formatDisplayTimestamp(value: string | null | undefined) {
     .replaceAll('/', '-');
 }
 
-function displayStatusLabel(status: string) {
-  return status === 'CHO_THAN_TOAN' ? 'Chờ thanh toán' : statusLabel(status);
+function getBookingStatusDisplay(
+  status: string,
+  tBookings: (key: any) => string,
+) {
+  switch (status) {
+    case 'CHO_THANH_TOAN':
+    case 'CHO_THAN_TOAN':
+      return tBookings('statusPendingPayment');
+    case 'DA_THANH_TOAN':
+      return tBookings('statusPaid');
+    case 'HOAN_THANH':
+      return tBookings('statusCompleted');
+    case 'DA_HUY':
+    case 'HUY':
+      return tBookings('statusCancelled');
+    case 'DA_DAT':
+      return tBookings('statusConfirmed');
+    case 'THAT_BAI':
+      return tBookings('statusFailed');
+    default:
+      return statusLabel(status);
+  }
 }
 
 function dateRangeValue(
@@ -142,6 +162,7 @@ function getSessionKey(authState: ReturnType<typeof useAdminSession>) {
 
 export function BookingManagement() {
   const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryString = searchParams.toString();
@@ -360,35 +381,40 @@ export function BookingManagement() {
     activeState.departureFrom ||
     activeState.departureTo,
   );
-  const statusOptions =
+  const statusOptions = (
     urlState.tab === 'bookings'
       ? BOOKING_STATUS_OPTIONS
-      : TICKET_STATUS_OPTIONS;
+      : TICKET_STATUS_OPTIONS
+  ).map(({ value }) => ({
+    value,
+    label: getBookingStatusDisplay(value, tBookings),
+  }));
   const sortOptions: Array<{
     value: BookingManagementSortKey;
     label: string;
   }> =
     urlState.tab === 'bookings'
       ? [
-          { value: 'bookedAt', label: 'Ngày đặt' },
-          { value: 'departureTime', label: 'Khởi hành' },
-          { value: 'totalTicketAmount', label: 'Tiền vé ban đầu' },
+          { value: 'bookedAt', label: tBookings('sortBookedAt') },
+          { value: 'departureTime', label: tBookings('sortDepartureTime') },
+          { value: 'totalTicketAmount', label: tBookings('sortTotalTicketAmount') },
         ]
       : [
-          { value: 'bookedAt', label: 'Ngày đặt' },
-          { value: 'departureTime', label: 'Khởi hành' },
-          { value: 'ticketPrice', label: 'Giá thực tế' },
+          { value: 'bookedAt', label: tBookings('sortBookedAt') },
+          { value: 'departureTime', label: tBookings('sortDepartureTime') },
+          { value: 'ticketPrice', label: tBookings('sortTicketPrice') },
         ];
 
   return (
     <SuperAdminLayout activeSection="booking-management">
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
-          eyebrow="QUẢN LÝ VẬN HÀNH"
+          eyebrow={tBookings('eyebrow')}
           title={tBookings('bookingsTitle')}
           titleId="booking-management-title"
           actions={
             <ResourceRefreshAction
+              label={tCommon('refresh')}
               loading={loading}
               onClick={() => setRetryKey((key) => key + 1)}
             />
@@ -406,7 +432,7 @@ export function BookingManagement() {
             className="min-w-0 gap-4"
           >
             <TabsList
-              aria-label="Loại dữ liệu đặt vé"
+              aria-label={tBookings('tabListAria')}
               activateOnFocus
               className="w-full sm:w-fit"
             >
@@ -427,6 +453,7 @@ export function BookingManagement() {
             >
               <FilterToolbar>
                 <SearchInput
+                  clearLabel={tCommon('clearSearch')}
                   label={
                     urlState.tab === 'bookings'
                       ? tBookings('searchBookings')
@@ -436,12 +463,16 @@ export function BookingManagement() {
                     searchDirty.current = true;
                     setSearchDraft(value.slice(0, 100));
                   }}
-                  placeholder="Tìm mã, tên khách hoặc số điện thoại…"
+                  placeholder={tBookings('searchPlaceholder')}
                   value={searchDraft}
                 />
                 <SelectFilter
-                  allLabel="Tất cả trạng thái"
-                  label="Trạng thái"
+                  allLabel={tBookings('allStatuses')}
+                  label={
+                    urlState.tab === 'bookings'
+                      ? tBookings('bookingStatusFilterLabel')
+                      : tBookings('ticketStatusFilterLabel')
+                  }
                   onChange={(value) =>
                     updateListState((current) => ({
                       ...current,
@@ -449,10 +480,7 @@ export function BookingManagement() {
                       page: 1,
                     }))
                   }
-                  options={statusOptions.map(({ value, label }) => ({
-                    value,
-                    label,
-                  }))}
+                  options={statusOptions}
                   value={activeState.status ?? ''}
                 />
                 <Button
@@ -462,12 +490,12 @@ export function BookingManagement() {
                   aria-controls="booking-extra-filters"
                   onClick={() => setExtraFiltersOpen((open) => !open)}
                 >
-                  {extraFiltersOpen ? 'Thu gọn' : 'Lọc nâng cao'}
+                  {extraFiltersOpen ? tBookings('collapseFilters') : tBookings('advancedFilters')}
                   {activeState.bookedFrom ||
                   activeState.bookedTo ||
                   activeState.departureFrom ||
                   activeState.departureTo
-                    ? ' · Có lọc ngày'
+                    ? tBookings('hasDateFilter')
                     : ''}
                 </Button>
                 <div
@@ -476,11 +504,11 @@ export function BookingManagement() {
                 >
                   <DateRangeFilter
                     appearance="resource"
-                    fromLabel="Ngày đặt từ"
-                    label="Ngày đặt"
+                    fromLabel={tBookings('bookedDateFrom')}
+                    label={tBookings('bookedDateLabel')}
                     onApply={(value) => changeDateRange('booked', value)}
-                    title="Ngày đặt"
-                    toLabel="Ngày đặt đến"
+                    title={tBookings('bookedDateLabel')}
+                    toLabel={tBookings('bookedDateTo')}
                     value={dateRangeValue(
                       activeState.bookedFrom,
                       activeState.bookedTo,
@@ -488,11 +516,11 @@ export function BookingManagement() {
                   />
                   <DateRangeFilter
                     appearance="resource"
-                    fromLabel="Khởi hành từ"
-                    label="Ngày khởi hành"
+                    fromLabel={tBookings('departureDateFrom')}
+                    label={tBookings('departureDateLabel')}
                     onApply={(value) => changeDateRange('departure', value)}
-                    title="Ngày khởi hành"
-                    toLabel="Khởi hành đến"
+                    title={tBookings('departureDateLabel')}
+                    toLabel={tBookings('departureDateTo')}
                     value={dateRangeValue(
                       activeState.departureFrom,
                       activeState.departureTo,
@@ -500,8 +528,8 @@ export function BookingManagement() {
                   />
                   <LabeledSelectFilter
                     appearance="resource"
-                    accessibleLabel="Số dòng mỗi trang"
-                    label="Số dòng"
+                    accessibleLabel={tBookings('rowsAriaLabel')}
+                    label={tBookings('rowsLabel')}
                     onChange={(value) =>
                       updateListState((current) => ({
                         ...current,
@@ -517,7 +545,7 @@ export function BookingManagement() {
                   />
                   <LabeledSelectFilter
                     appearance="resource"
-                    label="Sắp xếp theo"
+                    label={tBookings('sortByLabel')}
                     onChange={(value) =>
                       changeSort(value as BookingManagementSortKey)
                     }
@@ -532,7 +560,7 @@ export function BookingManagement() {
                     onClick={resetFilters}
                     type="button"
                   >
-                    Xóa bộ lọc
+                    {tBookings('clearFilters')}
                   </Button>
                 )}
               </FilterToolbar>
@@ -540,7 +568,9 @@ export function BookingManagement() {
               {loading && !resultPage && (
                 <ResourceTableSkeleton
                   resourceLabel={
-                    urlState.tab === 'bookings' ? 'phiếu đặt vé' : 'vé'
+                    urlState.tab === 'bookings'
+                      ? tBookings('resourceBookings')
+                      : tBookings('resourceTickets')
                   }
                 />
               )}
@@ -553,7 +583,7 @@ export function BookingManagement() {
                     onClick={() => setRetryKey((key) => key + 1)}
                     type="button"
                   >
-                    Thử lại
+                    {tCommon('retry')}
                   </Button>
                 </ResourceState>
               )}
@@ -565,12 +595,12 @@ export function BookingManagement() {
                   <ResourceState>
                     <p>
                       {resultPage.meta.totalItems > 0
-                        ? 'Trang hiện tại không có dữ liệu. Hãy quay về trang trước.'
+                        ? tBookings('emptyPageNoData')
                         : hasFilters
-                          ? 'Không tìm thấy kết quả phù hợp với bộ lọc.'
+                          ? tBookings('emptyFiltered')
                           : urlState.tab === 'bookings'
-                            ? 'Chưa có phiếu đặt vé trong nhà xe.'
-                            : 'Chưa có vé trong nhà xe.'}
+                            ? tBookings('emptyNoBookings')
+                            : tBookings('emptyNoTickets')}
                     </p>
                     {hasFilters && (
                       <Button
@@ -578,7 +608,7 @@ export function BookingManagement() {
                         onClick={resetFilters}
                         type="button"
                       >
-                        Xóa bộ lọc
+                        {tBookings('clearFilters')}
                       </Button>
                     )}
                   </ResourceState>
@@ -626,8 +656,15 @@ export function BookingManagement() {
                     updateListState((current) => ({ ...current, page }))
                   }
                   pageSize={resultPage.meta.pageSize}
+                  showingLabel={tCommon('showing')}
+                  ofLabel={tCommon('of')}
+                  pageLabel={tCommon('page')}
+                  prevPageLabel={tCommon('prevPage')}
+                  nextPageLabel={tCommon('nextPage')}
                   summaryLabel={
-                    urlState.tab === 'bookings' ? 'phiếu đặt vé' : 'vé'
+                    urlState.tab === 'bookings'
+                      ? tBookings('resourceBookings')
+                      : tBookings('resourceTickets')
                   }
                   totalItems={resultPage.meta.totalItems}
                   totalPages={resultPage.meta.totalPages}
@@ -685,10 +722,14 @@ function BookingTable({
   onSort: (sortBy: BookingManagementSortKey) => void;
   state: BookingManagementUrlState;
 }) {
+  const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   const sortState = state.bookings;
   return (
     <Table className="text-[13px]">
-      <TableCaption className="sr-only">Danh sách phiếu đặt vé</TableCaption>
+      <TableCaption className="sr-only">
+        {tBookings('bookingListAria')}
+      </TableCaption>
       <TableHeader>
         <TableRow>
           <TableHead
@@ -706,10 +747,10 @@ function BookingTable({
               direction={sortState.sortDirection}
               onClick={() => onSort('bookedAt')}
             >
-              Mã phiếu / Ngày đặt
+              {tBookings('colBookingCodeDate')}
             </SortHeader>
           </TableHead>
-          <TableHead scope="col">Khách hàng</TableHead>
+          <TableHead scope="col">{tBookings('colCustomer')}</TableHead>
           <TableHead
             aria-sort={
               sortState.sortBy === 'departureTime'
@@ -725,10 +766,10 @@ function BookingTable({
               direction={sortState.sortDirection}
               onClick={() => onSort('departureTime')}
             >
-              Chuyến xe
+              {tBookings('colTrip')}
             </SortHeader>
           </TableHead>
-          <TableHead scope="col">Số vé</TableHead>
+          <TableHead scope="col">{tBookings('colTicketCount')}</TableHead>
           <TableHead
             aria-sort={
               sortState.sortBy === 'totalTicketAmount'
@@ -744,12 +785,12 @@ function BookingTable({
               direction={sortState.sortDirection}
               onClick={() => onSort('totalTicketAmount')}
             >
-              Tiền vé ban đầu
+              {tBookings('colInitialAmount')}
             </SortHeader>
           </TableHead>
-          <TableHead scope="col">Trạng thái phiếu</TableHead>
+          <TableHead scope="col">{tBookings('colBookingStatus')}</TableHead>
           <TableHead scope="col">
-            <span className="sr-only">Chi tiết</span>
+            <span className="sr-only">{tCommon('actions')}</span>
           </TableHead>
         </TableRow>
       </TableHeader>
@@ -782,14 +823,20 @@ function BookingTable({
                   </small>
                 </>
               ) : (
-                <span title={item.tripIntegrity}>Chuyến chưa xác định</span>
+                <span title={item.tripIntegrity}>{tBookings('unknownTrip')}</span>
               )}
             </TableCell>
             <TableCell>
-              {item.activeTicketCount}/{item.ticketCount} còn hiệu lực
+              {tBookings('activeTicketCount', {
+                active: item.activeTicketCount,
+                total: item.ticketCount,
+              })}
               {item.isPartiallyCancelled && (
                 <small className="mt-1 block text-xs text-destructive">
-                  Hủy {item.cancelledTicketCount}/{item.ticketCount} vé
+                  {tBookings('cancelledTicketCount', {
+                    cancelled: item.cancelledTicketCount,
+                    total: item.ticketCount,
+                  })}
                 </small>
               )}
             </TableCell>
@@ -798,13 +845,16 @@ function BookingTable({
               <ResourceStatusBadge
                 tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
-                {displayStatusLabel(item.status)}
+                {getBookingStatusDisplay(item.status, tBookings)}
               </ResourceStatusBadge>
             </TableCell>
             <TableCell>
               <ResourceDetailAction
+                label={tCommon('viewDetails')}
                 onClick={() => onOpenDetail('bookings', item.bookingId, state)}
-                resourceName={`phiếu ${item.bookingCode}`}
+                resourceName={tBookings('viewBookingResource', {
+                  code: item.bookingCode,
+                })}
               />
             </TableCell>
           </TableRow>
@@ -825,15 +875,19 @@ function TicketTable({
   onSort: (sortBy: BookingManagementSortKey) => void;
   state: BookingManagementUrlState;
 }) {
+  const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   const sortState = state.tickets;
   return (
     <Table className="text-[13px]">
-      <TableCaption className="sr-only">Danh sách vé</TableCaption>
+      <TableCaption className="sr-only">
+        {tBookings('ticketListAria')}
+      </TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead scope="col">Mã vé</TableHead>
-          <TableHead scope="col">Phiếu đặt</TableHead>
-          <TableHead scope="col">Khách hàng</TableHead>
+          <TableHead scope="col">{tBookings('colTicketCode')}</TableHead>
+          <TableHead scope="col">{tBookings('colBooking')}</TableHead>
+          <TableHead scope="col">{tBookings('colCustomer')}</TableHead>
           <TableHead
             aria-sort={
               sortState.sortBy === 'departureTime'
@@ -849,10 +903,10 @@ function TicketTable({
               direction={sortState.sortDirection}
               onClick={() => onSort('departureTime')}
             >
-              Chuyến / Khởi hành
+              {tBookings('colTripDeparture')}
             </SortHeader>
           </TableHead>
-          <TableHead scope="col">Ghế</TableHead>
+          <TableHead scope="col">{tBookings('colSeat')}</TableHead>
           <TableHead
             aria-sort={
               sortState.sortBy === 'ticketPrice'
@@ -868,12 +922,12 @@ function TicketTable({
               direction={sortState.sortDirection}
               onClick={() => onSort('ticketPrice')}
             >
-              Giá thực tế
+              {tBookings('colActualPrice')}
             </SortHeader>
           </TableHead>
-          <TableHead scope="col">Trạng thái vé</TableHead>
+          <TableHead scope="col">{tBookings('colTicketStatus')}</TableHead>
           <TableHead scope="col">
-            <span className="sr-only">Chi tiết</span>
+            <span className="sr-only">{tCommon('actions')}</span>
           </TableHead>
         </TableRow>
       </TableHeader>
@@ -888,7 +942,7 @@ function TicketTable({
                 {item.ticketCode}
               </Link>
               <small className="mt-1 block text-xs text-muted-foreground">
-                Đặt {formatDisplayTimestamp(item.bookedAt)}
+                {tBookings('bookedPrefix')} {formatDisplayTimestamp(item.bookedAt)}
               </small>
             </TableHead>
             <TableCell>
@@ -917,7 +971,7 @@ function TicketTable({
                   </small>
                 </>
               ) : (
-                <span title={item.tripIntegrity}>Chuyến chưa xác định</span>
+                <span title={item.tripIntegrity}>{tBookings('unknownTrip')}</span>
               )}
             </TableCell>
             <TableCell className="admin-data-mono">
@@ -928,13 +982,16 @@ function TicketTable({
               <ResourceStatusBadge
                 tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
-                {displayStatusLabel(item.status)}
+                {getBookingStatusDisplay(item.status, tBookings)}
               </ResourceStatusBadge>
             </TableCell>
             <TableCell>
               <ResourceDetailAction
+                label={tCommon('viewDetails')}
                 onClick={() => onOpenDetail('tickets', item.ticketId, state)}
-                resourceName={`vé ${item.ticketCode}`}
+                resourceName={tBookings('viewTicketResource', {
+                  code: item.ticketCode,
+                })}
               />
             </TableCell>
           </TableRow>
@@ -953,9 +1010,11 @@ function BookingCards({
   onOpenDetail: OpenDetail;
   state: BookingManagementUrlState;
 }) {
+  const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   return (
     <ul
-      aria-label="Danh sách phiếu đặt vé dạng thẻ"
+      aria-label={tBookings('cardBookingAria')}
       className="grid gap-4 p-4 min-[901px]:hidden"
     >
       {items.map((item) => (
@@ -974,43 +1033,52 @@ function BookingCards({
               <ResourceStatusBadge
                 tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
-                {displayStatusLabel(item.status)}
+                {getBookingStatusDisplay(item.status, tBookings)}
               </ResourceStatusBadge>
             </div>
             <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words [&_a]:break-all">
               <div>
-                <dt>Điện thoại</dt>
+                <dt>{tBookings('customerPhone')}</dt>
                 <dd>{item.customer.phoneNumber}</dd>
               </div>
               <div>
-                <dt>Ngày đặt</dt>
+                <dt>{tBookings('bookedDateLabel')}</dt>
                 <dd>{formatDisplayTimestamp(item.bookedAt)}</dd>
               </div>
               <div>
-                <dt>Chuyến xe</dt>
+                <dt>{tBookings('colTrip')}</dt>
                 <dd>
                   {item.trip
                     ? `${item.trip.origin} → ${item.trip.destination}`
-                    : 'Chuyến chưa xác định'}
+                    : tBookings('unknownTrip')}
                 </dd>
               </div>
               <div>
-                <dt>Vé còn hiệu lực</dt>
+                <dt>{tBookings('colTicketCount')}</dt>
                 <dd>
-                  {item.activeTicketCount}/{item.ticketCount}
+                  {tBookings('activeTicketCount', {
+                    active: item.activeTicketCount,
+                    total: item.ticketCount,
+                  })}
                   {item.isPartiallyCancelled
-                    ? ` · Hủy ${item.cancelledTicketCount}/${item.ticketCount}`
+                    ? ` · ${tBookings('cancelledTicketCount', {
+                        cancelled: item.cancelledTicketCount,
+                        total: item.ticketCount,
+                      })}`
                     : ''}
                 </dd>
               </div>
               <div>
-                <dt>Tiền vé ban đầu</dt>
+                <dt>{tBookings('colInitialAmount')}</dt>
                 <dd>{formatVnd(item.initialTicketAmount)}</dd>
               </div>
             </dl>
             <ResourceDetailAction
+              label={tCommon('viewDetails')}
               onClick={() => onOpenDetail('bookings', item.bookingId, state)}
-              resourceName={`phiếu ${item.bookingCode}`}
+              resourceName={tBookings('viewBookingResource', {
+                code: item.bookingCode,
+              })}
             />
           </Card>
         </li>
@@ -1028,9 +1096,11 @@ function TicketCards({
   onOpenDetail: OpenDetail;
   state: BookingManagementUrlState;
 }) {
+  const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   return (
     <ul
-      aria-label="Danh sách vé dạng thẻ"
+      aria-label={tBookings('cardTicketAria')}
       className="grid gap-4 p-4 min-[901px]:hidden"
     >
       {items.map((item) => (
@@ -1049,12 +1119,12 @@ function TicketCards({
               <ResourceStatusBadge
                 tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
-                {displayStatusLabel(item.status)}
+                {getBookingStatusDisplay(item.status, tBookings)}
               </ResourceStatusBadge>
             </div>
             <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words [&_a]:break-all">
               <div>
-                <dt>Phiếu đặt</dt>
+                <dt>{tBookings('colBooking')}</dt>
                 <dd>
                   <Link
                     className="admin-data-mono"
@@ -1068,33 +1138,36 @@ function TicketCards({
                 </dd>
               </div>
               <div>
-                <dt>Điện thoại</dt>
+                <dt>{tBookings('customerPhone')}</dt>
                 <dd>{item.customer.phoneNumber}</dd>
               </div>
               <div>
-                <dt>Chuyến xe</dt>
+                <dt>{tBookings('colTrip')}</dt>
                 <dd>
                   {item.trip
                     ? `${item.trip.origin} → ${item.trip.destination}`
-                    : 'Chuyến chưa xác định'}
+                    : tBookings('unknownTrip')}
                 </dd>
               </div>
               <div>
-                <dt>Khởi hành</dt>
+                <dt>{tBookings('sortDepartureTime')}</dt>
                 <dd>{formatDisplayTimestamp(item.trip?.departureAt)}</dd>
               </div>
               <div>
-                <dt>Ghế</dt>
+                <dt>{tBookings('colSeat')}</dt>
                 <dd className="admin-data-mono">{item.seatNumber ?? '—'}</dd>
               </div>
               <div>
-                <dt>Giá thực tế</dt>
+                <dt>{tBookings('colActualPrice')}</dt>
                 <dd>{formatVnd(item.actualPrice)}</dd>
               </div>
             </dl>
             <ResourceDetailAction
+              label={tCommon('viewDetails')}
               onClick={() => onOpenDetail('tickets', item.ticketId, state)}
-              resourceName={`vé ${item.ticketCode}`}
+              resourceName={tBookings('viewTicketResource', {
+                code: item.ticketCode,
+              })}
             />
           </Card>
         </li>

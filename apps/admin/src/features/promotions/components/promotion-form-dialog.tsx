@@ -4,6 +4,7 @@ import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { AdminMoneyInput } from '@/components/admin/admin-money-input';
 import { ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Field, FieldLabel, FieldError } from '@/components/ui/field';
@@ -144,6 +145,8 @@ function mapServerFieldErrors(details: PromotionApiErrorDetail[]): FieldErrors {
 }
 
 export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
+  const tPromotions = useTranslations('promotions');
+  const tCommon = useTranslations('common');
   const submittingRef = useRef(false);
   const [codeLocked, setCodeLocked] = useState(
     Boolean(promotion && promotion.usageCount > 0),
@@ -179,7 +182,9 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
   const idPrefix = promotion
     ? `edit-promotion-${promotion.id}`
     : 'create-promotion';
-  const formTitle = promotion ? 'Chỉnh sửa khuyến mãi' : 'Thêm khuyến mãi';
+  const formTitle = promotion
+    ? tPromotions('formEditTitle')
+    : tPromotions('formCreateTitle');
 
   function focusFirstInvalidField(errors: FieldErrors) {
     const field = FIELD_NAMES.find((name) => errors[name]);
@@ -286,8 +291,8 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
       title={formTitle}
       description={
         promotion
-          ? 'Cập nhật điều kiện áp dụng của chương trình.'
-          : 'Thiết lập mã giảm giá và thời hạn áp dụng.'
+          ? tPromotions('editPromotion')
+          : tPromotions('createPromotion')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -305,7 +310,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
               type="button"
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button disabled={submitting} aria-busy={submitting} type="submit">
               {submitting && (
@@ -316,12 +321,10 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
                 />
               )}
               {submitting
-                ? promotion
-                  ? 'Đang lưu…'
-                  : 'Đang tạo…'
+                ? tCommon('saving')
                 : promotion
-                  ? 'Lưu thay đổi'
-                  : 'Tạo khuyến mãi'}
+                  ? tPromotions('formSubmitEdit')
+                  : tPromotions('formSubmitCreate')}
             </Button>
           </div>
         }
@@ -329,7 +332,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field className="sm:col-span-2">
             <FieldLabel htmlFor={`${idPrefix}-name`}>
-              Tên chương trình *
+              {tPromotions('formNameLabel')} *
           </FieldLabel>
           <Input
             id={`${idPrefix}-name`}
@@ -346,7 +349,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('name', `${idPrefix}-name-error`)}
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-code`}>Mã khuyến mãi *</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-code`}>{tPromotions('formCodeLabel')} *</FieldLabel>
           <Input
             autoCapitalize="characters"
             autoComplete="off"
@@ -365,13 +368,13 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('code', `${idPrefix}-code-error`)}
           {codeLocked && (
             <span className="text-xs text-muted-foreground">
-              Mã đã phát sinh sử dụng nên không thể thay đổi.
+              {tPromotions('formCodeLocked')}
             </span>
           )}
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-discountType`}>
-            Loại giảm giá *
+            {tPromotions('formDiscountType')} *
           </FieldLabel>
           <Select
             value={values.discountType || null}
@@ -387,24 +390,27 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
                   : undefined
               }
             >
-              <SelectValue placeholder="Chọn loại giảm giá">
+              <SelectValue placeholder={tPromotions('formDiscountType')}>
                 {values.discountType === 'PHAN_TRAM'
-                  ? 'Phần trăm'
+                  ? tPromotions('discountTypePercentage')
                   : values.discountType === 'SO_TIEN'
-                    ? 'Số tiền cố định'
+                    ? tPromotions('discountTypeFixed')
                     : null}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="PHAN_TRAM">Phần trăm</SelectItem>
-              <SelectItem value="SO_TIEN">Số tiền cố định</SelectItem>
+              <SelectItem value="PHAN_TRAM">{tPromotions('discountTypePercentage')}</SelectItem>
+              <SelectItem value="SO_TIEN">{tPromotions('discountTypeFixed')}</SelectItem>
             </SelectContent>
           </Select>
           {fieldError('discountType', `${idPrefix}-discountType-error`)}
         </Field>
         <Field className={values.discountType === 'PHAN_TRAM' ? '' : 'sm:col-span-2'}>
           <FieldLabel htmlFor={`${idPrefix}-discountValue`}>
-            Mức giảm {values.discountType === 'PHAN_TRAM' ? '(%)' : '(VND)'} *
+            {values.discountType === 'PHAN_TRAM'
+              ? tPromotions('formDiscountValuePercent')
+              : tPromotions('formDiscountValueFixed')}{' '}
+            *
           </FieldLabel>
           {values.discountType === 'SO_TIEN' ? (
             <AdminMoneyInput
@@ -446,7 +452,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         {values.discountType === 'PHAN_TRAM' && (
           <Field>
             <FieldLabel htmlFor={`${idPrefix}-maxDiscount`}>
-              Giảm tối đa (VND) *
+              {tPromotions('formMaxDiscount')} *
             </FieldLabel>
             <AdminMoneyInput
               appearance="resource"
@@ -468,7 +474,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         )}
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-minimumTicketAmount`}>
-            Giá trị vé tối thiểu (VND)
+            {tPromotions('formMinOrder')}
           </FieldLabel>
           <AdminMoneyInput
             appearance="resource"
@@ -490,7 +496,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           )}
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-startsOn`}>Bắt đầu *</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-startsOn`}>{tPromotions('formStartsOn')} *</FieldLabel>
           <Input
             id={`${idPrefix}-startsOn`}
             type="date"
@@ -506,7 +512,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('startsOn', `${idPrefix}-startsOn-error`)}
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-endsOn`}>Kết thúc *</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-endsOn`}>{tPromotions('formEndsOn')} *</FieldLabel>
           <Input
             id={`${idPrefix}-endsOn`}
             min={values.startsOn || undefined}
@@ -524,7 +530,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-usageLimit`}>
-            Số lượt tối đa *
+            {tPromotions('formUsageLimit')} *
           </FieldLabel>
           <Input
             id={`${idPrefix}-usageLimit`}
@@ -546,8 +552,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('usageLimit', `${idPrefix}-usageLimit-error`)}
           {promotion && (
             <span className="text-xs text-muted-foreground">
-              Đã sử dụng: {promotion.usageCount.toLocaleString('vi-VN')} lượt.
-              Số lượt đã dùng được ghi nhận tự động.
+              {tPromotions('usedCount')}: {promotion.usageCount.toLocaleString('vi-VN')}
             </span>
           )}
         </Field>

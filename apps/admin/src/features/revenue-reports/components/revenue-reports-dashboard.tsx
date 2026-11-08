@@ -35,7 +35,7 @@ import {
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/action-button';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   formatDateOnly,
   formatPeriod,
@@ -61,8 +61,9 @@ const SERVICE_LABELS: Record<RevenueReportServiceKind, string> = {
 };
 
 function DashboardLoading() {
+  const tReports = useTranslations('reports');
   return (
-    <div aria-label="Đang tải báo cáo doanh thu" className={styles.loadingGrid}>
+    <div aria-label={tReports('loadingTitle')} className={styles.loadingGrid}>
       <div aria-hidden="true" className={styles.metricGrid}>
         {Array.from({ length: 6 }, (_, index) => (
           <Card
@@ -78,27 +79,27 @@ function DashboardLoading() {
       </div>
       <Card
         role="region"
-        aria-label="Đang tải biểu đồ"
+        aria-label={tReports('loadingChart')}
         className={styles.chartPanel}
       >
         <Skeleton aria-hidden="true" className={styles.chartSkeleton} />
       </Card>
       <Card
         role="region"
-        aria-label="Đang tải cơ cấu doanh thu"
+        aria-label={tReports('loadingService')}
         className={styles.tablePanel}
       >
-        <ResourceTableSkeleton resourceLabel="cơ cấu doanh thu" />
+        <ResourceTableSkeleton resourceLabel={tReports('loadingService')} />
       </Card>
       <Card
         role="region"
-        aria-label="Đang tải báo cáo theo thời gian"
+        aria-label={tReports('loadingTime')}
         className={styles.tablePanel}
       >
-        <ResourceTableSkeleton resourceLabel="báo cáo theo thời gian" />
+        <ResourceTableSkeleton resourceLabel={tReports('loadingTime')} />
       </Card>
       <p className="sr-only" role="status" aria-live="polite">
-        Đang tải báo cáo doanh thu…
+        {tReports('loadingTitle')}…
       </p>
     </div>
   );
@@ -143,6 +144,7 @@ function MetricCard({
 
 export function RevenueReportsDashboard() {
   const tReports = useTranslations('reports');
+  const locale = useLocale();
   const {
     dateRange,
     error,
@@ -153,8 +155,15 @@ export function RevenueReportsDashboard() {
     updateDateRange,
     updateGroupBy,
   } = useRevenueReport();
+
+  const groupOptions = [
+    { value: 'day' as const, label: tReports('groupDay') },
+    { value: 'month' as const, label: tReports('groupMonth') },
+    { value: 'quarter' as const, label: tReports('groupQuarter') },
+  ];
+
   function showExportPlaceholder() {
-    toast.info('Tính năng xuất báo cáo đang được triển khai');
+    toast.info(tReports('exportPlaceholderToast'));
   }
 
   const periodSummary = report
@@ -165,11 +174,11 @@ export function RevenueReportsDashboard() {
           ? formatDateOnly(dateRange.from)
           : `${formatDateOnly(dateRange.from)} – ${formatDateOnly(dateRange.to)}`
         : dateRange.from
-          ? `Từ ${formatDateOnly(dateRange.from)}`
+          ? `${tReports('fromPrefix')}${formatDateOnly(dateRange.from)}`
           : dateRange.to
-            ? `Đến ${formatDateOnly(dateRange.to)}`
-            : `Tháng hiện tại`
-      : `Tháng hiện tại`;
+            ? `${tReports('toPrefix')}${formatDateOnly(dateRange.to)}`
+            : tReports('currentMonth')
+      : tReports('currentMonth');
 
   return (
     <SuperAdminLayout activeSection="revenue-reports">
@@ -184,51 +193,53 @@ export function RevenueReportsDashboard() {
                 variant="outline"
               >
                 <ArrowDownToLine aria-hidden="true" size={16} />
-                Xuất CSV
+                {tReports('exportCsv')}
               </Button>
             </div>
           }
-          eyebrow="BÁO CÁO NHÀ XE"
+          eyebrow={tReports('eyebrow')}
           title={tReports('reportsTitle')}
           titleId="revenue-report-title"
         />
 
         <Card
           role="region"
-          aria-label="Bộ lọc báo cáo doanh thu"
+          aria-label={tReports('filterPanelAria')}
           className={styles.filterPanel}
         >
           <div className={styles.filterControls}>
             <DateRangeFilter
               appearance="resource"
-              label="Thời gian báo cáo"
+              label={tReports('dateRangeLabel')}
               emptyValueLabel={
                 report && !dateRange
-                  ? `Tháng ${report.meta.fromDate.slice(5, 7)}/${report.meta.fromDate.slice(0, 4)}`
-                  : 'Tháng hiện tại'
+                  ? locale === 'en'
+                    ? `Month ${report.meta.fromDate.slice(5, 7)}/${report.meta.fromDate.slice(0, 4)}`
+                    : `Tháng ${report.meta.fromDate.slice(5, 7)}/${report.meta.fromDate.slice(0, 4)}`
+                  : tReports('currentMonth')
               }
               onApply={updateDateRange}
-              title="Lọc báo cáo theo ngày"
+              title={tReports('dateRangeTitle')}
               value={dateRange}
             />
             <LabeledSelectFilter
               appearance="resource"
-              label="Gom số liệu theo"
+              label={tReports('groupByLabel')}
               onChange={updateGroupBy}
-              options={GROUP_OPTIONS}
+              options={groupOptions}
               value={groupBy}
             />
           </div>
           <p aria-live="polite" className={styles.periodSummary}>
-            <span className={styles.periodLabel}>Kỳ đang xem</span>
+            <span className={styles.periodLabel}>{tReports('periodSummaryLabel')}</span>
             <span>
               {periodSummary}
               <span
-                aria-label="Theo giao dịch đã ghi nhận"
+                aria-label={tReports('recordedHint')}
                 className={styles.definitionHint}
                 role="note"
                 tabIndex={0}
-                title="Theo giao dịch đã ghi nhận"
+                title={tReports('recordedHint')}
               >
                 <Info aria-hidden="true" size={15} />
               </span>
@@ -243,13 +254,13 @@ export function RevenueReportsDashboard() {
             <ResourceState error>
               <h2 className="text-base font-semibold text-foreground">
                 {error.accessDenied
-                  ? 'Không có quyền truy cập'
-                  : 'Không tải được báo cáo'}
+                  ? tReports('accessDenied')
+                  : tReports('reportLoadError')}
               </h2>
               <p>{error.message}</p>
               {error.retryable && (
                 <Button onClick={retry} variant="outline">
-                  Thử lại
+                  {tReports('retry')}
                 </Button>
               )}
             </ResourceState>
@@ -274,6 +285,8 @@ function RevenueReportContent({
   groupBy: 'day' | 'month' | 'quarter';
   report: NonNullable<ReturnType<typeof useRevenueReport>['report']>['data'];
 }) {
+  const tReports = useTranslations('reports');
+  const locale = useLocale();
   const { totals, series, serviceBreakdown } = report;
   const noData =
     BigInt(totals.grossReceipts) === BigInt(0) &&
@@ -282,88 +295,117 @@ function RevenueReportContent({
     totals.soldTicketCount === 0 &&
     totals.issuedShipmentCount === 0;
 
+  const serviceLabels: Record<RevenueReportServiceKind, string> = {
+    ticket: tReports('serviceTicket'),
+    standaloneShipment: tReports('serviceStandaloneShipment'),
+    accompaniedShipment: tReports('serviceAccompaniedShipment'),
+  };
+
+  const groupUnitUpper =
+    groupBy === 'day'
+      ? tReports('dayUnitUpper')
+      : groupBy === 'month'
+        ? tReports('monthUnitUpper')
+        : tReports('quarterUnitUpper');
+
+  const groupUnit =
+    groupBy === 'day'
+      ? tReports('dayUnit')
+      : groupBy === 'month'
+        ? tReports('monthUnit')
+        : tReports('quarterUnit');
+
   return (
     <div className={styles.content}>
       {report.reconciliation.refundCount > 0 && (
         <ResourceNotice kind="info">
           <div>
             <h2 className="mb-2 text-base font-semibold">
-              Hoàn tiền cần đối soát nguồn thu
+              {tReports('reconciliationTitle')}
             </h2>
             <p>
-              {report.reconciliation.refundCount.toLocaleString('vi-VN')} khoản
-              hoàn thành công, tổng{' '}
-              {formatRevenueVnd(report.reconciliation.refundAmount)}, chưa được
-              trừ vào báo cáo vì thanh toán gốc chưa đủ điều kiện ghi nhận doanh
-              thu F12. Cần xác minh lịch sử thanh toán trước khi đối soát.
+              {tReports('reconciliationDescription', {
+                count: report.reconciliation.refundCount.toLocaleString(
+                  locale === 'en' ? 'en-US' : 'vi-VN',
+                ),
+                amount: formatRevenueVnd(report.reconciliation.refundAmount),
+              })}
             </p>
           </div>
         </ResourceNotice>
       )}
       <section
-        aria-label="Chỉ số doanh thu trong kỳ"
+        aria-label={tReports('trendChart')}
         className={styles.metricGrid}
       >
         <MetricCard
           icon={Wallet}
           primary
-          label="Doanh thu ròng"
-          note="Sau khi trừ tiền hoàn thành công"
+          label={tReports('netRevenueCard')}
+          note={tReports('netRevenueNote')}
           value={formatRevenueVnd(totals.netRevenue)}
         />
         <MetricCard
           icon={Ticket}
           tone="success"
-          label="Doanh thu vé"
-          note="Vé đã thu, sau tiền hoàn"
+          label={tReports('ticketRevenueCard')}
+          note={tReports('ticketRevenueNote')}
           value={formatRevenueVnd(totals.netTicketRevenue)}
         />
         <MetricCard
           icon={Package}
           tone="indigo"
-          label="Doanh thu gửi hàng"
-          note="Phí gửi hàng, sau tiền hoàn"
+          label={tReports('cargoRevenueCard')}
+          note={tReports('cargoRevenueNote')}
           value={formatRevenueVnd(totals.netShipmentRevenue)}
         />
         <MetricCard
           icon={ArrowDownLeft}
           tone="destructive"
-          label="Tiền đã hoàn"
-          note="Khoản hoàn tiền thành công trong kỳ"
+          label={tReports('refundAmountCard')}
+          note={tReports('refundAmountNote')}
           value={formatRevenueVnd(totals.refundAmount)}
         />
         <MetricCard
           icon={CircleCheck}
           tone="teal"
-          label="Thanh toán thành công"
-          note="Không gồm hoàn tiền, đơn 0đ hoặc đối soát"
-          value={totals.successfulPayments.toLocaleString('vi-VN')}
+          label={tReports('successfulPaymentsCard')}
+          note={tReports('successfulPaymentsNote')}
+          value={totals.successfulPayments.toLocaleString(
+            locale === 'en' ? 'en-US' : 'vi-VN',
+          )}
         />
         <Card
           role="region"
-          aria-label="Vé và vận đơn phát hành"
+          aria-label={tReports('volumeCardTitle')}
           className={`${styles.metricCard} ${styles.volumeCard}`}
         >
           <div className={styles.metricHeading}>
-            <h2 className={styles.metricLabel}>Vé & vận đơn phát hành</h2>
+            <h2 className={styles.metricLabel}>{tReports('volumeCardTitle')}</h2>
             <span className={styles.metricIcon}>
               <ChartNoAxesCombined aria-hidden="true" size={18} />
             </span>
           </div>
           <div className={styles.countPair}>
             <p>
-              <strong>{totals.soldTicketCount.toLocaleString('vi-VN')}</strong>
-              <span>Vé đã bán</span>
+              <strong>
+                {totals.soldTicketCount.toLocaleString(
+                  locale === 'en' ? 'en-US' : 'vi-VN',
+                )}
+              </strong>
+              <span>{tReports('soldTicketsLabel')}</span>
             </p>
             <p>
               <strong>
-                {totals.issuedShipmentCount.toLocaleString('vi-VN')}
+                {totals.issuedShipmentCount.toLocaleString(
+                  locale === 'en' ? 'en-US' : 'vi-VN',
+                )}
               </strong>
-              <span>Vận đơn đã phát</span>
+              <span>{tReports('issuedShipmentsLabel')}</span>
             </p>
           </div>
           <p className={styles.metricNote}>
-            Phát hành hoặc quyết toán trong kỳ, không phải số còn hiệu lực.
+            {tReports('volumeCardNote')}
           </p>
         </Card>
       </section>
@@ -376,16 +418,16 @@ function RevenueReportContent({
         <div className={styles.panelHeading}>
           <div>
             <p className={styles.panelEyebrow}>
-              THEO {groupByLabel(groupBy).toLocaleUpperCase('vi-VN')}
+              {tReports('chartEyebrow', { unit: groupUnitUpper })}
             </p>
-            <h2 id="revenue-trend-title">Biến động doanh thu ròng</h2>
+            <h2 id="revenue-trend-title">{tReports('chartTitle')}</h2>
           </div>
           <span
-            aria-label="Đường biểu diễn doanh thu ròng"
+            aria-label={tReports('chartAria')}
             className={styles.chartLegend}
           >
             <span aria-hidden="true" className={styles.legendLine} />
-            Doanh thu ròng
+            {tReports('chartLegend')}
           </span>
         </div>
         <RevenueReportChart groupBy={groupBy} series={series} />
@@ -398,21 +440,21 @@ function RevenueReportContent({
       >
         <div className={styles.panelHeading}>
           <div>
-            <p className={styles.panelEyebrow}>NGUỒN THU</p>
-            <h2 id="service-breakdown-title">Cơ cấu doanh thu dịch vụ</h2>
+            <p className={styles.panelEyebrow}>{tReports('serviceBreakdownEyebrow')}</p>
+            <h2 id="service-breakdown-title">{tReports('serviceBreakdownTitle')}</h2>
           </div>
         </div>
         <div className={styles.tableScroll}>
           <Table className="min-w-[680px] [&_td]:tabular-nums [&_td:not(:first-child)]:text-right [&_th:not(:first-child)]:text-right">
             <caption className="sr-only">
-              Doanh thu vé xe và gửi hàng trong kỳ
+              {tReports('serviceBreakdownCaption')}
             </caption>
             <TableHeader>
               <TableRow>
-                <TableHead scope="col">Nguồn thu</TableHead>
-                <TableHead scope="col">Tiền đã thu</TableHead>
-                <TableHead scope="col">Tiền hoàn</TableHead>
-                <TableHead scope="col">Doanh thu ròng</TableHead>
+                <TableHead scope="col">{tReports('colRevenueSource')}</TableHead>
+                <TableHead scope="col">{tReports('colGrossReceipts')}</TableHead>
+                <TableHead scope="col">{tReports('colRefundAmount')}</TableHead>
+                <TableHead scope="col">{tReports('colNetRevenue')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -422,7 +464,7 @@ function RevenueReportContent({
                     scope="row"
                     className="bg-transparent text-[13px] font-medium"
                   >
-                    {SERVICE_LABELS[line.kind]}
+                    {serviceLabels[line.kind]}
                   </TableHead>
                   <TableCell>{formatRevenueVnd(line.grossReceipts)}</TableCell>
                   <TableCell>{formatRevenueVnd(line.refundAmount)}</TableCell>
@@ -434,7 +476,7 @@ function RevenueReportContent({
                   scope="row"
                   className="bg-transparent text-[13px] font-medium"
                 >
-                  Tổng cộng
+                  {tReports('totalRow')}
                 </TableHead>
                 <TableCell>{formatRevenueVnd(totals.grossReceipts)}</TableCell>
                 <TableCell>{formatRevenueVnd(totals.refundAmount)}</TableCell>
@@ -452,24 +494,24 @@ function RevenueReportContent({
       >
         <div className={styles.panelHeading}>
           <div>
-            <p className={styles.panelEyebrow}>CÙNG DỮ LIỆU VỚI BIỂU ĐỒ</p>
-            <h2 id="revenue-period-title">Báo cáo theo thời gian</h2>
+            <p className={styles.panelEyebrow}>{tReports('timeBreakdownEyebrow')}</p>
+            <h2 id="revenue-period-title">{tReports('timeBreakdownTitle')}</h2>
           </div>
         </div>
         <div className={styles.tableScroll}>
           <Table className="min-w-[680px] [&_td]:tabular-nums [&_td:not(:first-child)]:text-right [&_th:not(:first-child)]:text-right">
             <caption className="sr-only">
-              Doanh thu theo từng {groupByLabel(groupBy)}
+              {tReports('timeBreakdownCaption', { unit: groupUnit })}
             </caption>
             <TableHeader>
               <TableRow>
-                <TableHead scope="col">Kỳ</TableHead>
-                <TableHead scope="col">Vé ròng</TableHead>
-                <TableHead scope="col">Gửi hàng ròng</TableHead>
-                <TableHead scope="col">Thu trước hoàn</TableHead>
-                <TableHead scope="col">Hoàn tiền</TableHead>
-                <TableHead scope="col">Ròng</TableHead>
-                <TableHead scope="col">Thanh toán thành công</TableHead>
+                <TableHead scope="col">{tReports('colPeriod')}</TableHead>
+                <TableHead scope="col">{tReports('colTicketNet')}</TableHead>
+                <TableHead scope="col">{tReports('colCargoNet')}</TableHead>
+                <TableHead scope="col">{tReports('colGrossBeforeRefund')}</TableHead>
+                <TableHead scope="col">{tReports('colRefund')}</TableHead>
+                <TableHead scope="col">{tReports('colNet')}</TableHead>
+                <TableHead scope="col">{tReports('colSuccessfulPayments')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -479,9 +521,9 @@ function RevenueReportContent({
                     colSpan={7}
                     className="h-40 whitespace-normal text-center [&_strong]:block [&_span]:mt-2 [&_span]:block [&_span]:text-muted-foreground"
                   >
-                    <strong>Chưa có giao dịch trong kỳ báo cáo</strong>
+                    <strong>{tReports('emptyTitle')}</strong>
                     <span>
-                      Thử chọn khoảng ngày khác để xem doanh thu đã ghi nhận.
+                      {tReports('emptyDescription')}
                     </span>
                   </TableCell>
                 </TableRow>
@@ -492,7 +534,7 @@ function RevenueReportContent({
                       scope="row"
                       className="bg-transparent text-[13px] font-medium"
                     >
-                      {formatPeriod(item.period, groupBy)}
+                      {formatPeriod(item.period, groupBy, locale)}
                     </TableHead>
                     <TableCell>
                       {formatRevenueVnd(item.netTicketRevenue)}
@@ -506,7 +548,9 @@ function RevenueReportContent({
                     <TableCell>{formatRevenueVnd(item.refundAmount)}</TableCell>
                     <TableCell>{formatRevenueVnd(item.netRevenue)}</TableCell>
                     <TableCell>
-                      {item.successfulPayments.toLocaleString('vi-VN')}
+                      {item.successfulPayments.toLocaleString(
+                        locale === 'en' ? 'en-US' : 'vi-VN',
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

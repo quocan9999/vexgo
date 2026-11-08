@@ -5,6 +5,7 @@ import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Field, FieldLabel, FieldError } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -152,6 +153,8 @@ export function FarePriceFormDialog({
   onSaved,
   onNotFound,
 }: FarePriceFormDialogProps) {
+  const tFare = useTranslations('farePrices');
+  const tCommon = useTranslations('common');
   const editing = farePrice !== undefined;
   const idPrefix = editing
     ? `edit-fare-price-${farePrice.farePriceId}`
@@ -350,11 +353,11 @@ export function FarePriceFormDialog({
   }
   return (
     <ResourceModalDialog
-      title={editing ? 'Chỉnh sửa bảng giá' : 'Thêm bảng giá'}
+      title={editing ? tFare('formEditTitle') : tFare('formCreateTitle')}
       description={
         editing
-          ? 'Cập nhật giá niêm yết và thời gian hiệu lực của bảng giá.'
-          : 'Thiết lập giá vé theo tuyến, loại xe và thời gian hiệu lực.'
+          ? tFare('formEditDesc')
+          : tFare('formCreateDesc')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -368,7 +371,7 @@ export function FarePriceFormDialog({
         footer={
           <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button disabled={submitting} variant="outline" onClick={closeDialog}>
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button
               disabled={submitting || routeUnavailable || vehicleTypeUnavailable}
@@ -380,11 +383,11 @@ export function FarePriceFormDialog({
               )}
               {submitting
                 ? editing
-                  ? 'Đang lưu…'
-                  : 'Đang tạo…'
+                  ? tFare('formSubmittingEdit')
+                  : tFare('formSubmittingCreate')
                 : editing
-                  ? 'Lưu thay đổi'
-                  : 'Tạo bảng giá'}
+                  ? tFare('formSubmitEdit')
+                  : tFare('formSubmitCreate')}
             </Button>
           </div>
         }
@@ -397,7 +400,7 @@ export function FarePriceFormDialog({
             </p>
             <p className="text-xs text-muted-foreground">
               {farePrice.vehicleType.name} ·{' '}
-              {farePrice.status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng'}
+              {farePrice.status === 'HOAT_DONG' ? tFare('statusActive') : tFare('statusSuspended')}
             </p>
           </div>
         )}
@@ -405,8 +408,8 @@ export function FarePriceFormDialog({
           <>
             {selectField(
               'routeId',
-              'Tuyến xe',
-              'Chọn tuyến xe',
+              tFare('route'),
+              tFare('formRoutePlaceholder'),
               routeRows.map((row) => ({
                 value: String(row.id),
                 label: row.label,
@@ -415,12 +418,12 @@ export function FarePriceFormDialog({
             )}
             {routeOptions.status === 'loading' && (
               <p className="text-xs text-muted-foreground" role="status">
-                Đang tải danh sách tuyến xe…
+                {tFare('loadingFilters')}
               </p>
             )}
             {routeOptions.status === 'error' && (
               <ResourceNotice kind="error">
-                <p>Không thể tải danh sách tuyến xe.</p>
+                <p>{tFare('failedFilters')}</p>
                 <Button
                   disabled={submitting}
                   className="mt-2"
@@ -428,19 +431,19 @@ export function FarePriceFormDialog({
                   size="sm"
                   onClick={onRetryRouteOptions}
                 >
-                  Thử lại tuyến xe
+                  {tFare('retryRoute')}
                 </Button>
               </ResourceNotice>
             )}
             {routeOptions.status === 'success' && routeRows.length === 0 && (
               <ResourceNotice kind="error">
-                Chưa có tuyến xe để tạo bảng giá.
+                {tFare('failedFilters')}
               </ResourceNotice>
             )}
             {selectField(
               'vehicleTypeId',
-              'Loại xe',
-              'Chọn loại xe',
+              tFare('vehicleType'),
+              tFare('formVehicleTypePlaceholder'),
               vehicleTypeRows.map((row) => ({
                 value: String(row.id),
                 label: row.label,
@@ -449,12 +452,12 @@ export function FarePriceFormDialog({
             )}
             {vehicleTypeOptions.status === 'loading' && (
               <p className="text-xs text-muted-foreground" role="status">
-                Đang tải danh sách loại xe…
+                {tFare('loadingFilters')}
               </p>
             )}
             {vehicleTypeOptions.status === 'error' && (
               <ResourceNotice kind="error">
-                <p>Không thể tải danh sách loại xe.</p>
+                <p>{tFare('failedFilters')}</p>
                 <Button
                   disabled={submitting}
                   className="mt-2"
@@ -462,21 +465,21 @@ export function FarePriceFormDialog({
                   size="sm"
                   onClick={onRetryVehicleTypeOptions}
                 >
-                  Thử lại loại xe
+                  {tFare('retryVehicleType')}
                 </Button>
               </ResourceNotice>
             )}
             {vehicleTypeOptions.status === 'success' &&
               vehicleTypeRows.length === 0 && (
                 <ResourceNotice kind="error">
-                  Chưa có loại xe để tạo bảng giá.
+                  {tFare('failedFilters')}
                 </ResourceNotice>
               )}
           </>
         )}
         <Field data-invalid={Boolean(fieldErrors.listedPrice)}>
           <FieldLabel htmlFor={`${idPrefix}-listedPrice`}>
-            Giá niêm yết (VND) <span aria-hidden>*</span>
+            {tFare('formPriceLabel')} <span aria-hidden>*</span>
           </FieldLabel>
           <Input
             id={`${idPrefix}-listedPrice`}
@@ -503,7 +506,7 @@ export function FarePriceFormDialog({
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field data-invalid={Boolean(fieldErrors.validFrom)}>
             <FieldLabel htmlFor={`${idPrefix}-validFrom`}>
-              Hiệu lực từ <span aria-hidden>*</span>
+              {tFare('colValidFrom')} <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               id={`${idPrefix}-validFrom`}
@@ -525,7 +528,7 @@ export function FarePriceFormDialog({
           </Field>
           <Field data-invalid={Boolean(fieldErrors.validTo)}>
             <FieldLabel htmlFor={`${idPrefix}-validTo`}>
-              Hiệu lực đến
+              {tFare('colValidTo')}
             </FieldLabel>
             <Input
               id={`${idPrefix}-validTo`}
@@ -549,7 +552,7 @@ export function FarePriceFormDialog({
                 className="text-xs text-muted-foreground"
                 id={`${idPrefix}-validTo-hint`}
               >
-                Để trống nếu không giới hạn ngày kết thúc.
+                {tFare('unlimitedDate')}
               </p>
             )}
           </Field>
@@ -557,11 +560,11 @@ export function FarePriceFormDialog({
         {!editing &&
           selectField(
             'status',
-            'Trạng thái',
-            'Chọn trạng thái',
+            tFare('colStatus'),
+            tFare('filterStatus'),
             [
-              { value: 'HOAT_DONG', label: 'Hoạt động' },
-              { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
+              { value: 'HOAT_DONG', label: tFare('statusActive') },
+              { value: 'TAM_NGUNG', label: tFare('statusSuspended') },
             ],
             submitting,
           )}

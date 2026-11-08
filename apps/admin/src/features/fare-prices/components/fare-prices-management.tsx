@@ -105,6 +105,7 @@ function optionFilters(options: FarePriceOption[]): FilterOption[] {
 
 export function FarePricesManagement() {
   const tFare = useTranslations('farePrices');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canCreate = can('fare-price:create');
   const {
@@ -136,6 +137,42 @@ export function FarePricesManagement() {
     useState<FarePriceOptionsState>({ status: 'loading' });
   const [routeOptionsRetry, setRouteOptionsRetry] = useState(0);
   const [vehicleTypeOptionsRetry, setVehicleTypeOptionsRetry] = useState(0);
+
+  const statusOptions: FilterOption[] = [
+    { value: 'HOAT_DONG', label: tFare('statusActive') },
+    { value: 'TAM_NGUNG', label: tFare('statusSuspended') },
+  ];
+
+  const effectiveStateOptions: FilterOption[] = [
+    { value: 'CHUA_HIEU_LUC', label: tFare('statePending') },
+    { value: 'DANG_HIEU_LUC', label: tFare('stateActive') },
+    { value: 'HET_HIEU_LUC', label: tFare('stateExpired') },
+    { value: 'TAM_NGUNG', label: tFare('statusSuspended') },
+  ];
+
+  function getEffectiveStateLabel(state: FarePriceEffectiveState) {
+    switch (state) {
+      case 'CHUA_HIEU_LUC':
+        return tFare('statePending');
+      case 'DANG_HIEU_LUC':
+        return tFare('stateActive');
+      case 'HET_HIEU_LUC':
+        return tFare('stateExpired');
+      case 'TAM_NGUNG':
+        return tFare('statusSuspended');
+    }
+  }
+
+  function getFareStatusLabel(itemStatus: FarePrice['status']) {
+    return itemStatus === 'HOAT_DONG'
+      ? tFare('statusActive')
+      : tFare('statusSuspended');
+  }
+
+  function formatDisplayDateOnly(value: string | null) {
+    if (value === null) return tFare('unlimitedDate');
+    return formatDateOnly(value);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -184,7 +221,7 @@ export function FarePricesManagement() {
 
   function handleFarePriceCreated(farePrice: FarePrice) {
     setCreateDialogOpen(false);
-    toast.success(`Đã tạo bảng giá vé ${farePrice.route.code}.`);
+    toast.success(tFare('createdSuccess', { code: farePrice.route.code }));
     refresh();
   }
 
@@ -202,7 +239,7 @@ export function FarePricesManagement() {
     return (
       <Button
         className="-ml-3"
-        aria-label={`Sắp xếp theo ${label}`}
+        aria-label={`${tFare('sortBy')} ${label}`}
         size="sm"
         variant="ghost"
         onClick={() => sortFarePrices(field)}
@@ -223,14 +260,14 @@ export function FarePricesManagement() {
   function fareStatus(item: FarePrice) {
     return (
       <ResourceStatusBadge tone={statusTone(item.status)}>
-        {statusLabel(item.status)}
+        {getFareStatusLabel(item.status)}
       </ResourceStatusBadge>
     );
   }
   function effectiveStateBadge(item: FarePrice) {
     return (
       <ResourceStatusBadge tone={stateTone(item.effectiveState)}>
-        {EFFECTIVE_STATE_LABELS[item.effectiveState]}
+        {getEffectiveStateLabel(item.effectiveState)}
       </ResourceStatusBadge>
     );
   }
@@ -238,7 +275,7 @@ export function FarePricesManagement() {
     <SuperAdminLayout activeSection="fare-prices">
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <nav
-          aria-label="Chuyển đổi loại bảng giá"
+          aria-label={tFare('navPriceSwitchAria')}
           className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3"
         >
           <div className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/70 p-1.5 shadow-xs">
@@ -248,20 +285,20 @@ export function FarePricesManagement() {
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all"
             >
               <Ticket className="size-4" />
-              Bảng giá vé hành khách
+              {tFare('tabPassengerFares')}
             </Link>
             <Link
               href="/shipments/rates"
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-background/80 hover:text-foreground"
             >
               <Package className="size-4" />
-              Bảng giá cước gửi hàng
+              {tFare('tabCargoRates')}
             </Link>
           </div>
         </nav>
         <div>
           <AdminPageHeader
-            eyebrow="QUẢN LÝ VẬN HÀNH"
+            eyebrow={tFare('eyebrow')}
             title={tFare('farePricesTitle')}
             titleId="fare-prices-title"
             actions={
@@ -277,22 +314,22 @@ export function FarePricesManagement() {
             }
           />
           <p className="mt-2 text-[13px] text-muted-foreground">
-            Theo dõi giá vé theo tuyến, loại xe và thời gian hiệu lực.
+            {tFare('subtitle')}
           </p>
         </div>
         <section aria-busy={loading} aria-labelledby="fare-prices-title">
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label="Tìm bảng giá"
+                label={tFare('searchFarePrices')}
                 value={searchInput}
                 onChange={updateSearch}
-                placeholder="Tìm theo tuyến hoặc loại xe…"
+                placeholder={tFare('searchPlaceholder')}
               />
               {routeOptions.status === 'success' && (
                 <SelectFilter
-                  label="Tuyến xe"
-                  allLabel="Tất cả tuyến xe"
+                  label={tFare('route')}
+                  allLabel={tFare('filterRoute')}
                   value={routeId}
                   options={optionFilters(routeOptions.options)}
                   onChange={updateRoute}
@@ -300,25 +337,25 @@ export function FarePricesManagement() {
               )}
               {vehicleTypeOptions.status === 'success' && (
                 <SelectFilter
-                  label="Loại xe"
-                  allLabel="Tất cả loại xe"
+                  label={tFare('vehicleType')}
+                  allLabel={tFare('filterVehicleType')}
                   value={vehicleTypeId}
                   options={optionFilters(vehicleTypeOptions.options)}
                   onChange={updateVehicleType}
                 />
               )}
               <SelectFilter
-                label="Trạng thái"
-                allLabel="Tất cả trạng thái"
+                label={tFare('fareStatus')}
+                allLabel={tFare('filterStatus')}
                 value={status}
-                options={STATUS_OPTIONS}
+                options={statusOptions}
                 onChange={updateStatus}
               />
               <SelectFilter
-                label="Hiệu lực"
-                allLabel="Tất cả hiệu lực"
+                label={tFare('colEffectiveState')}
+                allLabel={tFare('filterEffectiveState')}
                 value={effectiveState}
-                options={EFFECTIVE_STATE_OPTIONS}
+                options={effectiveStateOptions}
                 onChange={updateEffectiveState}
               />
             </FilterToolbar>
@@ -328,14 +365,14 @@ export function FarePricesManagement() {
                 className="px-5 py-3 text-xs text-muted-foreground"
                 role="status"
               >
-                Đang tải bộ lọc tuyến xe và loại xe…
+                {tFare('loadingFilters')}
               </p>
             )}
             {(routeOptions.status === 'error' ||
               vehicleTypeOptions.status === 'error') && (
               <div className="p-4">
                 <ResourceNotice kind="error">
-                  <p>Không thể tải bộ lọc tuyến xe hoặc loại xe.</p>
+                  <p>{tFare('failedFilters')}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {routeOptions.status === 'error' && (
                       <Button
@@ -343,7 +380,7 @@ export function FarePricesManagement() {
                         size="sm"
                         onClick={retryRouteOptions}
                       >
-                        Thử tải lại tuyến xe
+                        {tFare('retryRoute')}
                       </Button>
                     )}
                     {vehicleTypeOptions.status === 'error' && (
@@ -352,7 +389,7 @@ export function FarePricesManagement() {
                         size="sm"
                         onClick={retryVehicleTypeOptions}
                       >
-                        Thử tải lại loại xe
+                        {tFare('retryVehicleType')}
                       </Button>
                     )}
                   </div>
@@ -362,13 +399,13 @@ export function FarePricesManagement() {
             <div className="border-b p-4 md:hidden">
               <div className="flex items-end gap-3">
                 <SelectFilter
-                  label="Sắp xếp theo"
-                  allLabel="Giá niêm yết"
+                  label={tFare('sortBy')}
+                  allLabel={tFare('colListedPrice')}
                   value={sortBy === 'listedPrice' ? '' : sortBy}
                   options={[
-                    { value: 'validFrom', label: 'Hiệu lực từ' },
-                    { value: 'validTo', label: 'Hiệu lực đến' },
-                    { value: 'status', label: 'Trạng thái' },
+                    { value: 'validFrom', label: tFare('colValidFrom') },
+                    { value: 'validTo', label: tFare('colValidTo') },
+                    { value: 'status', label: tFare('colStatus') },
                   ]}
                   onChange={(value) => {
                     const field = (value || 'listedPrice') as FarePriceSortKey;
@@ -377,7 +414,7 @@ export function FarePricesManagement() {
                 />
                 <Button
                   variant="outline"
-                  aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                  aria-label={`${tFare('sortBy')}, ${sortDirection === 'asc' ? tFare('sortAscending') : tFare('sortDescending')}`}
                   onClick={() => sortFarePrices(sortBy)}
                 >
                   {sortDirection === 'asc' ? (
@@ -385,18 +422,18 @@ export function FarePricesManagement() {
                   ) : (
                     <ArrowDown aria-hidden />
                   )}
-                  {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                  {sortDirection === 'asc' ? tFare('sortAscending') : tFare('sortDescending')}
                 </Button>
               </div>
             </div>
             {loading && !farePricePage && (
-              <ResourceTableSkeleton resourceLabel="bảng giá" />
+              <ResourceTableSkeleton resourceLabel={tFare('resourceLabel')} />
             )}
             {error && (
               <ResourceState error>
                 <p>{error}</p>
                 <Button variant="outline" onClick={refresh}>
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
@@ -404,12 +441,12 @@ export function FarePricesManagement() {
               <ResourceState>
                 <p>
                   {hasFilters
-                    ? 'Không tìm thấy bảng giá phù hợp với bộ lọc.'
-                    : 'Chưa có bảng giá nào.'}
+                    ? tFare('emptyFiltered')
+                    : tFare('emptyNoData')}
                 </p>
                 {hasFilters && (
                   <Button variant="outline" onClick={resetFilters}>
-                    Xóa bộ lọc
+                    {tCommon('clearFilters')}
                   </Button>
                 )}
               </ResourceState>
@@ -421,19 +458,19 @@ export function FarePricesManagement() {
                     <div className="hidden md:block">
                       <Table className="min-w-[1080px]">
                         <TableCaption className="sr-only">
-                          Danh sách bảng giá vé
+                          {tFare('tableCaption')}
                         </TableCaption>
                         <TableHeader>
                           <TableRow>
                             {(
                               [
-                                { key: null, label: 'Tuyến' },
-                                { key: null, label: 'Loại xe' },
-                                { key: 'listedPrice', label: 'Giá niêm yết' },
-                                { key: 'validFrom', label: 'Hiệu lực từ' },
-                                { key: 'validTo', label: 'Hiệu lực đến' },
-                                { key: 'status', label: 'Trạng thái' },
-                                { key: null, label: 'Hiệu lực hiện tại' },
+                                { key: null, label: tFare('colRoute') },
+                                { key: null, label: tFare('colVehicleType') },
+                                { key: 'listedPrice', label: tFare('colListedPrice') },
+                                { key: 'validFrom', label: tFare('colValidFrom') },
+                                { key: 'validTo', label: tFare('colValidTo') },
+                                { key: 'status', label: tFare('colStatus') },
+                                { key: null, label: tFare('colCurrentEffective') },
                               ] as const
                             ).map((column) => (
                               <TableHead
@@ -455,7 +492,7 @@ export function FarePricesManagement() {
                               </TableHead>
                             ))}
                             <TableHead scope="col">
-                              <span className="sr-only">Thao tác</span>
+                              <span className="sr-only">{tCommon('actions')}</span>
                             </TableHead>
                           </TableRow>
                         </TableHeader>
@@ -478,10 +515,10 @@ export function FarePricesManagement() {
                                 {formatPrice(item.listedPrice)}
                               </TableCell>
                               <TableCell>
-                                {formatDateOnly(item.validFrom)}
+                                {formatDisplayDateOnly(item.validFrom)}
                               </TableCell>
                               <TableCell>
-                                {formatDateOnly(item.validTo)}
+                                {formatDisplayDateOnly(item.validTo)}
                               </TableCell>
                               <TableCell>{fareStatus(item)}</TableCell>
                               <TableCell>{effectiveStateBadge(item)}</TableCell>
@@ -498,7 +535,7 @@ export function FarePricesManagement() {
                     </div>
                     <div
                       className="grid gap-4 p-4 md:hidden"
-                      aria-label="Danh sách bảng giá dạng thẻ"
+                      aria-label={tFare('cardListAria')}
                     >
                       {items.map((item) => (
                         <Card
@@ -518,23 +555,23 @@ export function FarePricesManagement() {
                           </p>
                           <dl className="grid grid-cols-2 gap-3 text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-muted-foreground">
                             <div className="col-span-2">
-                              <dt>Loại xe</dt>
+                              <dt>{tFare('colVehicleType')}</dt>
                               <dd>{item.vehicleType.name}</dd>
                             </div>
                             <div>
-                              <dt>Hiệu lực từ</dt>
-                              <dd>{formatDateOnly(item.validFrom)}</dd>
+                              <dt>{tFare('colValidFrom')}</dt>
+                              <dd>{formatDisplayDateOnly(item.validFrom)}</dd>
                             </div>
                             <div>
-                              <dt>Hiệu lực đến</dt>
-                              <dd>{formatDateOnly(item.validTo)}</dd>
+                              <dt>{tFare('colValidTo')}</dt>
+                              <dd>{formatDisplayDateOnly(item.validTo)}</dd>
                             </div>
                             <div>
-                              <dt>Trạng thái</dt>
+                              <dt>{tFare('colStatus')}</dt>
                               <dd>{fareStatus(item)}</dd>
                             </div>
                             <div>
-                              <dt>Hiệu lực hiện tại</dt>
+                              <dt>{tFare('colCurrentEffective')}</dt>
                               <dd>{effectiveStateBadge(item)}</dd>
                             </div>
                           </dl>
@@ -554,7 +591,7 @@ export function FarePricesManagement() {
                   disabled={loading}
                   onPageChange={changePage}
                   pageSize={farePricePage.meta.pageSize}
-                  summaryLabel="bảng giá"
+                  summaryLabel={tFare('resourceLabel')}
                   totalItems={farePricePage.meta.totalItems}
                   totalPages={farePricePage.meta.totalPages}
                 />

@@ -107,6 +107,7 @@ function canReactivate(promotion: Promotion): boolean {
 
 export function PromotionsManagement() {
   const tPromotions = useTranslations('promotions');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canCreate = can('promotion:create');
   const canUpdate = can('promotion:update');
@@ -137,18 +138,40 @@ export function PromotionsManagement() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const statusUpdatingRef = useRef(false);
 
+  const statusOptions: FilterOption[] = [
+    { value: 'HOAT_DONG', label: tPromotions('statusActive') },
+    { value: 'TAM_NGUNG', label: tPromotions('statusSuspended') },
+  ];
+
+  function getEffectiveLabel(effectiveState: PromotionEffectiveState): string {
+    switch (effectiveState) {
+      case 'UPCOMING':
+        return tPromotions('stateUpcoming');
+      case 'ACTIVE':
+        return tPromotions('stateActive');
+      case 'SUSPENDED':
+        return tPromotions('stateSuspended');
+      case 'EXPIRED':
+        return tPromotions('stateExpired');
+      case 'EXHAUSTED':
+        return tPromotions('stateExhausted');
+      case 'UNAVAILABLE':
+        return tPromotions('stateUnavailable');
+    }
+  }
+
   const items = promotionPage?.data ?? [];
   const hasFilters = Boolean(searchInput.trim() || status || dateRange);
 
   function handleCreated(promotion: Promotion) {
     setCreateDialogOpen(false);
-    toast.success(`Đã tạo khuyến mãi ${promotion.code}.`);
+    toast.success(tPromotions('toastCreated', { code: promotion.code }));
     refresh();
   }
 
   function handleUpdated(promotion: Promotion) {
     setEditingPromotion(null);
-    toast.success(`Đã cập nhật khuyến mãi ${promotion.code}.`);
+    toast.success(tPromotions('toastUpdated', { code: promotion.code }));
     refresh();
   }
 
@@ -156,7 +179,7 @@ export function PromotionsManagement() {
     if (!canUpdate) return null;
     return (
       <Button
-        aria-label={`Chỉnh sửa ${promotion.code}`}
+        aria-label={`${tCommon('edit')} ${promotion.code}`}
         onClick={() => {
           setEditingPromotion(promotion);
         }}
@@ -165,7 +188,7 @@ export function PromotionsManagement() {
         size="sm"
       >
         <Pencil aria-hidden="true" size={14} />
-        Chỉnh sửa
+        {tCommon('edit')}
       </Button>
     );
   }
@@ -193,7 +216,9 @@ export function PromotionsManagement() {
       );
       setStatusRequest(null);
       toast.success(
-        `Đã ${updated.status === 'HOAT_DONG' ? 'bật lại' : 'tạm ngưng'} khuyến mãi ${updated.code}.`,
+        updated.status === 'HOAT_DONG'
+          ? tPromotions('toastReactivated', { code: updated.code })
+          : tPromotions('toastSuspended', { code: updated.code }),
       );
       refresh();
     } catch (requestError: unknown) {
@@ -218,7 +243,7 @@ export function PromotionsManagement() {
     const selected = sortBy === field;
     return (
       <button
-        aria-label={`Sắp xếp theo ${label}`}
+        aria-label={`${tCommon('sort')} ${label}`}
         className="inline-flex min-h-10 items-center gap-2 text-xs font-semibold"
         onClick={() => sortPromotions(field)}
         type="button"
@@ -260,7 +285,9 @@ export function PromotionsManagement() {
       <ResourceStatusBadge
         tone={promotion.status === 'HOAT_DONG' ? 'active' : 'muted'}
       >
-        {promotion.status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng'}
+        {promotion.status === 'HOAT_DONG'
+          ? tPromotions('statusActive')
+          : tPromotions('statusSuspended')}
       </ResourceStatusBadge>
     );
   }
@@ -270,7 +297,7 @@ export function PromotionsManagement() {
       <ResourceStatusBadge
         tone={promotion.effectiveState === 'ACTIVE' ? 'active' : 'muted'}
       >
-        {EFFECTIVE_LABELS[promotion.effectiveState]}
+        {getEffectiveLabel(promotion.effectiveState)}
       </ResourceStatusBadge>
     );
   }
@@ -280,22 +307,20 @@ export function PromotionsManagement() {
     const nextStatus: PromotionStatus =
       promotion.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG';
     const disabled = nextStatus === 'HOAT_DONG' && !canReactivate(promotion);
+    const actionLabel =
+      nextStatus === 'TAM_NGUNG'
+        ? tPromotions('actionSuspend')
+        : tPromotions('actionReactivate');
     return (
       <Button
-        aria-label={`${nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng' : 'Bật lại'} ${promotion.code}`}
-
+        aria-label={`${actionLabel} ${promotion.code}`}
         disabled={disabled}
         onClick={() => openStatusRequest(promotion, nextStatus)}
-        title={
-          disabled
-            ? 'Không thể bật lại khuyến mãi đã hết hạn, hết lượt hoặc không khả dụng.'
-            : undefined
-        }
         type="button"
         variant="outline"
         size="sm"
       >
-        {nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng' : 'Bật lại'}
+        {actionLabel}
       </Button>
     );
   }
@@ -315,44 +340,44 @@ export function PromotionsManagement() {
               <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
-          eyebrow="ƯU ĐÃI NHÀ XE"
+          eyebrow={tPromotions('eyebrow')}
           title={tPromotions('promotionsTitle')}
           titleId="promotions-title"
         />
         <section
-          aria-label="Danh sách khuyến mãi"
+          aria-label={tPromotions('promotionsTitle')}
           className="overflow-hidden rounded-xl border bg-card shadow-sm"
         >
           <FilterToolbar>
             <SearchInput
-              label="Tìm khuyến mãi"
+              label={tPromotions('searchPromotions')}
               onChange={updateSearch}
-              placeholder="Tìm theo mã hoặc tên chương trình"
+              placeholder={tPromotions('searchPlaceholder')}
               value={searchInput}
             />
             <SelectFilter
-              allLabel="Tất cả trạng thái"
-              label="Lọc theo trạng thái"
+              allLabel={tPromotions('filterStatus')}
+              label={tPromotions('promotionStatus')}
               onChange={updateStatus}
-              options={STATUS_OPTIONS}
+              options={statusOptions}
               value={status}
             />
             <DateRangeFilter
               appearance="resource"
-              label="Thời hạn khuyến mãi"
-              title="Thời hạn khuyến mãi"
+              label={tPromotions('filterDateLabel')}
+              title={tPromotions('filterDateLabel')}
               onApply={updateDateRange}
               value={dateRange}
             />
           </FilterToolbar>
           {loading && !promotionPage && (
-            <ResourceTableSkeleton resourceLabel="khuyến mãi" />
+            <ResourceTableSkeleton resourceLabel={tPromotions('resourceLabel')} />
           )}
           {error && (
             <ResourceState error>
               <p>{error}</p>
               <Button onClick={refresh} type="button" variant="outline">
-                Thử lại
+                {tCommon('retry')}
               </Button>
             </ResourceState>
           )}
@@ -360,12 +385,12 @@ export function PromotionsManagement() {
             <ResourceState>
               <p>
                 {hasFilters
-                  ? 'Không tìm thấy khuyến mãi phù hợp với bộ lọc.'
-                  : 'Chưa có khuyến mãi nào.'}
+                  ? tPromotions('emptyFiltered')
+                  : tPromotions('emptyNoData')}
               </p>
               {hasFilters && (
                 <Button onClick={resetFilters} variant="outline">
-                  Xóa bộ lọc
+                  {tCommon('clearFilters')}
                 </Button>
               )}
             </ResourceState>
@@ -376,17 +401,17 @@ export function PromotionsManagement() {
                 aria-busy={loading}
                 className={`hidden lg:block ${loading ? 'opacity-60' : ''}`}
               >
-                <Table aria-label="Danh sách khuyến mãi">
+                <Table aria-label={tPromotions('promotionsTitle')}>
                   <TableHeader>
                     <TableRow>
-                      {tableHeader('Mã', 'code')}
-                      {tableHeader('Tên chương trình', 'name')}
-                      {tableHeader('Mức giảm')}
-                      {tableHeader('Thời hạn', 'endsOn')}
-                      {tableHeader('Lượt dùng', 'usageCount')}
-                      {tableHeader('Trạng thái', 'status')}
-                      {tableHeader('Hiệu lực')}
-                      {tableHeader('Thao tác')}
+                      {tableHeader(tPromotions('colCode'), 'code')}
+                      {tableHeader(tPromotions('colName'), 'name')}
+                      {tableHeader(tPromotions('colDiscount'))}
+                      {tableHeader(tPromotions('colValidity'), 'endsOn')}
+                      {tableHeader(tPromotions('colUsage'), 'usageCount')}
+                      {tableHeader(tPromotions('colStatus'), 'status')}
+                      {tableHeader(tPromotions('colEffective'))}
+                      {tableHeader(tCommon('actions'))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -411,7 +436,7 @@ export function PromotionsManagement() {
                             {formatDate(promotion.startsOn)}
                           </span>
                           <span className="block text-xs text-muted-foreground">
-                            đến {formatDate(promotion.endsOn)}
+                            – {formatDate(promotion.endsOn)}
                           </span>
                         </TableCell>
                         <TableCell>
@@ -432,7 +457,7 @@ export function PromotionsManagement() {
                 </Table>
               </div>
               <ul
-                aria-label="Danh sách khuyến mãi dạng thẻ"
+                aria-label={tPromotions('cardListAria')}
                 className="grid gap-4 p-4 lg:hidden"
               >
                 {items.map((promotion) => (
@@ -448,29 +473,29 @@ export function PromotionsManagement() {
                       </div>
                       <dl className="grid gap-3 text-[13px] [&>div]:grid [&>div]:grid-cols-[100px_minmax(0,1fr)] [&>div]:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                         <div>
-                          <dt>Mức giảm</dt>
+                          <dt>{tPromotions('colDiscount')}</dt>
                           <dd>{formatDiscount(promotion)}</dd>
                         </div>
                         <div>
-                          <dt>Thời hạn</dt>
+                          <dt>{tPromotions('colValidity')}</dt>
                           <dd>
                             {formatDate(promotion.startsOn)} –{' '}
                             {formatDate(promotion.endsOn)}
                           </dd>
                         </div>
                         <div>
-                          <dt>Lượt dùng</dt>
+                          <dt>{tPromotions('colUsage')}</dt>
                           <dd>
                             {promotion.usageCount.toLocaleString('vi-VN')} /{' '}
                             {promotion.usageLimit.toLocaleString('vi-VN')}
                           </dd>
                         </div>
                         <div>
-                          <dt>Trạng thái</dt>
+                          <dt>{tPromotions('colStatus')}</dt>
                           <dd>{statusBadge(promotion)}</dd>
                         </div>
                         <div>
-                          <dt>Hiệu lực</dt>
+                          <dt>{tPromotions('colEffective')}</dt>
                           <dd>{effectiveBadge(promotion)}</dd>
                         </div>
                       </dl>
@@ -487,7 +512,7 @@ export function PromotionsManagement() {
                 disabled={loading}
                 onPageChange={changePage}
                 pageSize={promotionPage.meta.pageSize}
-                summaryLabel="khuyến mãi"
+                summaryLabel={tPromotions('resourceLabel')}
                 totalItems={promotionPage.meta.totalItems}
                 totalPages={promotionPage.meta.totalPages}
               />
@@ -513,13 +538,13 @@ export function PromotionsManagement() {
         <ResourceConfirmation
           title={
             statusRequest.status === 'TAM_NGUNG'
-              ? 'Tạm ngưng khuyến mãi?'
-              : 'Bật lại khuyến mãi?'
+              ? tPromotions('confirmSuspendTitle')
+              : tPromotions('confirmReactivateTitle')
           }
           description={
             statusRequest.status === 'TAM_NGUNG'
-              ? `Khách hàng sẽ không thể sử dụng mã ${statusRequest.promotion.code} trong thời gian tạm ngưng.`
-              : `Khách hàng có thể sử dụng lại mã ${statusRequest.promotion.code} theo điều kiện hiện tại.`
+              ? tPromotions('confirmSuspendMessage', { code: statusRequest.promotion.code })
+              : tPromotions('confirmReactivateMessage', { code: statusRequest.promotion.code })
           }
           busy={statusUpdating}
           onClose={() => {
@@ -533,10 +558,10 @@ export function PromotionsManagement() {
             type="button"
           >
             {statusUpdating
-              ? 'Đang cập nhật…'
+              ? tCommon('saving')
               : statusRequest.status === 'TAM_NGUNG'
-                ? 'Tạm ngưng'
-                : 'Bật lại'}
+                ? tPromotions('actionSuspend')
+                : tPromotions('actionReactivate')}
           </Button>
         </ResourceConfirmation>
       )}

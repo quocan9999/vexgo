@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { CircleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/action-button';
 import { toast } from 'sonner';
@@ -53,6 +54,7 @@ function RestrictedAccount({
   conflict: boolean;
   localePrefix?: string;
 }) {
+  const tAuth = useTranslations('auth');
   const router = useRouter();
   const sessionState = useAdminSession();
   const [signingOut, setSigningOut] = useState(false);
@@ -64,7 +66,13 @@ function RestrictedAccount({
     setSigningOut(true);
     try {
       await signOutAdmin();
-      router.replace(localePrefix ? `${localePrefix}/login` : '/login');
+      const loginTarget = localePrefix ? `${localePrefix}/login` : '/login';
+      router.replace(loginTarget);
+      setTimeout(() => {
+        if (window.location.pathname !== loginTarget) {
+          window.location.replace(loginTarget);
+        }
+      }, 300);
     } catch (error) {
       toast.error(getAdminAuthErrorMessage(error));
       setSigningOut(false);
@@ -74,21 +82,21 @@ function RestrictedAccount({
   return (
     <main className="admin-ui session-error-page">
       <section className="session-error-card panel" aria-labelledby="admin-access-title">
-        <p className="login-eyebrow">VEXGO · TÀI KHOẢN QUẢN TRỊ</p>
-        <h1 id="admin-access-title">Tài khoản chưa có chức năng quản trị khả dụng</h1>
+        <p className="login-eyebrow">{tAuth('restrictedEyebrow')}</p>
+        <h1 id="admin-access-title">{tAuth('restrictedTitle')}</h1>
         <p>
           {conflict
-            ? 'Phạm vi vai trò của tài khoản chưa hợp lệ. Hãy liên hệ Super Admin để kiểm tra cấu hình.'
-            : 'Tài khoản đã đăng nhập nhưng hiện chưa được cấp chức năng trong Admin Web.'}
+            ? tAuth('restrictedConflict')
+            : tAuth('restrictedNoAccess')}
         </p>
-        {session && <p>Đang đăng nhập: {session.fullName}</p>}
+        {session && <p>{tAuth('loggedInAs', { name: session.fullName })}</p>}
         <Button
           disabled={signingOut}
           aria-busy={signingOut}
           onClick={logout}
           type="button"
         >
-          {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+          {signingOut ? tAuth('signingOut') : tAuth('signOut')}
         </Button>
       </section>
     </main>
@@ -96,6 +104,7 @@ function RestrictedAccount({
 }
 
 export function AdminSessionGuard({ children }: { children: ReactNode }) {
+  const tAuth = useTranslations('auth');
   const router = useRouter();
   const rawPathname = usePathname() || '/';
   const localePrefix = getLocalePrefix(rawPathname);
@@ -151,7 +160,12 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     if (authState.status === 'anonymous') {
       const loginTarget = localePrefix ? `${localePrefix}/login` : '/login';
       router.replace(loginTarget);
-      return;
+      const timer = setTimeout(() => {
+        if (window.location.pathname !== loginTarget) {
+          window.location.replace(loginTarget);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
     }
     if (authState.status !== 'authenticated') return;
 
@@ -160,11 +174,17 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
         ? `${localePrefix}${redirectPath === '/' ? '' : redirectPath}` || '/'
         : redirectPath;
       router.replace(target);
+      const timer = setTimeout(() => {
+        if (window.location.pathname !== target) {
+          window.location.replace(target);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [authState.status, localePrefix, pathname, redirectPath, router]);
 
   if (authState.status === 'checking') {
-    return <LoadingStatus message="Đang kiểm tra phiên quản trị…" />;
+    return <LoadingStatus message={tAuth('checkingSession')} />;
   }
 
   if (authState.status === 'error') {
@@ -178,25 +198,23 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
             <CircleAlert size={22} strokeWidth={1.75} />
           </span>
           <p className="session-error-card__eyebrow">
-            Yêu cầu xác minh chưa hoàn tất
+            {tAuth('errorEyebrow')}
           </p>
           <h1 id="session-error-title">
-            Chưa thể xác minh phiên đăng nhập
+            {tAuth('errorTitle')}
           </h1>
           <p className="session-error-card__message" role="alert">
-            Admin chưa thể xác minh phiên đăng nhập hiện tại. Hãy thử lại; nếu
-            lỗi vẫn tiếp diễn, kiểm tra chi tiết kỹ thuật hoặc liên hệ quản trị
-            viên.
+            {tAuth('errorMessage')}
           </p>
           <Button
             className="session-error-card__retry"
             onClick={() => void initializeAdminSession().catch(() => undefined)}
             type="button"
           >
-            Thử lại
+            {tAuth('retry')}
           </Button>
           <details className="session-error-card__details">
-            <summary>Chi tiết kỹ thuật</summary>
+            <summary>{tAuth('technicalDetails')}</summary>
             <p>{authState.message}</p>
           </details>
         </section>
@@ -205,7 +223,7 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
   }
 
   if (authState.status === 'anonymous') {
-    return <LoadingStatus message="Đang chuyển đến đăng nhập…" />;
+    return <LoadingStatus message={tAuth('redirectingLogin')} />;
   }
 
   if (
@@ -222,7 +240,7 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
   }
 
   if (redirectPath) {
-    return <LoadingStatus message="Đang mở khu vực phù hợp với tài khoản…" />;
+    return <LoadingStatus message={tAuth('redirectingArea')} />;
   }
 
   return children;

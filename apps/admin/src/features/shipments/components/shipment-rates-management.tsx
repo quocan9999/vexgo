@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useShipmentRates } from '../hooks/use-shipment-rates';
 import {
   getShipmentRateCargoTypeOptions,
@@ -90,6 +91,9 @@ const INITIAL_OPTIONS: ShipmentRateOptionsState = {
 };
 
 export function ShipmentRatesManagement() {
+  const tShipments = useTranslations('shipments');
+  const tFare = useTranslations('farePrices');
+  const tCommon = useTranslations('common');
   const {
     ratePage,
     error,
@@ -258,13 +262,13 @@ export function ShipmentRatesManagement() {
     <SuperAdminLayout
       activeSection="shipments"
       breadcrumbs={[
-        { label: 'Danh sách phiếu gửi hàng', href: '/shipments' },
-        { label: 'Bảng giá cước' },
+        { label: tShipments('shipmentsTitle'), href: '/shipments' },
+        { label: tShipments('ratesTitle') },
       ]}
     >
       <div className="admin-page-content admin-ui space-y-6">
         <nav
-          aria-label="Chuyển đổi loại bảng giá"
+          aria-label={tFare('navPriceSwitchAria')}
           className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-3"
         >
           <div className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/70 p-1.5 shadow-xs">
@@ -273,7 +277,7 @@ export function ShipmentRatesManagement() {
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-background/80 hover:text-foreground"
             >
               <Ticket className="size-4" />
-              Bảng giá vé hành khách
+              {tFare('tabPassengerFares')}
             </Link>
             <Link
               href="/shipments/rates"
@@ -281,7 +285,7 @@ export function ShipmentRatesManagement() {
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all"
             >
               <Package className="size-4" />
-              Bảng giá cước gửi hàng
+              {tFare('tabCargoRates')}
             </Link>
           </div>
 
@@ -290,7 +294,7 @@ export function ShipmentRatesManagement() {
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Về danh sách vận đơn
+            {tShipments('backToShipments')}
           </Link>
         </nav>
 
@@ -307,7 +311,7 @@ export function ShipmentRatesManagement() {
             )}
           >
             <Package className="size-4" />
-            Cước gửi hàng theo tuyến
+            {tShipments('tabRouteFreight')}
           </button>
           <button
             type="button"
@@ -320,7 +324,7 @@ export function ShipmentRatesManagement() {
             )}
           >
             <Luggage className="size-4" />
-            Gói quy chuẩn &amp; Phụ phí dịch vụ (Dễ vỡ, Giá trị cao)
+            {tShipments('tabLuggage')}
           </button>
         </div>
 
@@ -342,15 +346,15 @@ export function ShipmentRatesManagement() {
           <>
             <div>
               <AdminPageHeader
-                eyebrow="CẤU HÌNH CƯỚC VẬN CHUYỂN"
-                title="Quản lý bảng giá cước gửi hàng"
+                eyebrow={tShipments('ratesEyebrow')}
+                title={tShipments('ratesTitle')}
                 titleId="shipment-rates-title"
                 actions={
                   <div className="flex flex-wrap items-center gap-2">
                     <ResourceRefreshAction loading={loading} onClick={refresh} />
                     {canCreate && (
                       <ResourceCreateAction
-                        label="Thêm mức cước"
+                        label={tShipments('addRate')}
                         onClick={handleOpenCreate}
                       />
                     )}

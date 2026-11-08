@@ -51,6 +51,7 @@ const STATUS_FILTER_OPTIONS: FilterOption[] = [
 
 export function ShipmentsManagement() {
   const tShipments = useTranslations('shipments');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const {
     shipments,
@@ -71,6 +72,31 @@ export function ShipmentsManagement() {
   const { can } = useAdminPermissions();
   const canCreate = can('shipment:update');
 
+  const statusOptions: FilterOption[] = [
+    { value: 'MOI_TAO', label: tShipments('statusCreated') },
+    { value: 'DA_TIEP_NHAN', label: tShipments('statusReceived') },
+    { value: 'DANG_VAN_CHUYEN', label: tShipments('statusInTransit') },
+    { value: 'DA_GIAO', label: tShipments('statusDelivered') },
+    { value: 'DA_HUY', label: tShipments('statusCancelled') },
+  ];
+
+  function getShipmentStatusDisplay(shipmentStatus: ShipmentStatus): string {
+    switch (shipmentStatus) {
+      case 'MOI_TAO':
+        return tShipments('statusCreated');
+      case 'DA_TIEP_NHAN':
+        return tShipments('statusReceived');
+      case 'DANG_VAN_CHUYEN':
+        return tShipments('statusInTransit');
+      case 'DA_GIAO':
+        return tShipments('statusDelivered');
+      case 'DA_HUY':
+        return tShipments('statusCancelled');
+      default:
+        return SHIPMENT_STATUS_LABELS[shipmentStatus] ?? shipmentStatus;
+    }
+  }
+
   const isFiltered = Boolean(searchInput || status);
 
   return (
@@ -81,7 +107,7 @@ export function ShipmentsManagement() {
             <div className="flex items-center gap-2 [&>button]:min-w-[120px]">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Tạo đơn tại quầy"
+                  label={tShipments('createShipment')}
                   onClick={() => router.push('/shipments/create')}
                 />
               )}
@@ -89,41 +115,41 @@ export function ShipmentsManagement() {
                 variant="outline"
                 onClick={() => router.push('/shipments/rates')}
               >
-                Bảng giá cước
+                {tShipments('shipmentRates')}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setScanDialogOpen(true)}
               >
                 <ScanLine className="size-4" />
-                Quét mã
+                {tShipments('scanCode')}
               </Button>
               <ResourceRefreshAction loading={refreshing} onClick={refresh} />
             </div>
           }
-          eyebrow="QUẢN LÝ GỬI HÀNG"
+          eyebrow={tShipments('eyebrow')}
           title={tShipments('shipmentsTitle')}
           titleId="shipments-page-title"
         />
 
         <section className="min-w-0" aria-labelledby="shipments-table-heading">
           <h2 id="shipments-table-heading" className="sr-only">
-            Bảng danh sách phiếu gửi hàng
+            {tShipments('shipmentsTitle')}
           </h2>
 
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
             <FilterToolbar>
               <SearchInput
-                label="Tìm kiếm phiếu gửi hàng"
+                label={tShipments('searchShipments')}
                 onChange={setSearchInput}
-                placeholder="Tìm mã vận đơn, người gửi, người nhận..."
+                placeholder={tShipments('searchPlaceholder')}
                 value={searchInput}
               />
               <SelectFilter
-                allLabel="Tất cả trạng thái"
-                label="Trạng thái phiếu gửi"
+                allLabel={tShipments('allStatuses')}
+                label={tShipments('statusFilterLabel')}
                 onChange={(val) => setStatus(val as ShipmentStatus | '')}
-                options={STATUS_FILTER_OPTIONS}
+                options={statusOptions}
                 value={status}
               />
             </FilterToolbar>
@@ -132,20 +158,20 @@ export function ShipmentsManagement() {
               <ResourceState error>
                 <p>{error}</p>
                 <Button onClick={refresh} type="button" variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
 
             {loading && shipments.length === 0 ? (
-              <ResourceTableSkeleton resourceLabel="phiếu gửi hàng" />
+              <ResourceTableSkeleton resourceLabel={tShipments('resourceLabel')} />
             ) : shipments.length === 0 ? (
               error ? null : (
                 <ResourceState>
                   <p>
                     {isFiltered
-                      ? 'Không tìm thấy phiếu gửi hàng phù hợp với bộ lọc.'
-                      : 'Chưa có phiếu gửi hàng nào trong hệ thống nhà xe.'}
+                      ? tShipments('emptyFiltered')
+                      : tShipments('emptyNoData')}
                   </p>
                   {isFiltered && (
                     <Button
@@ -153,7 +179,7 @@ export function ShipmentsManagement() {
                       type="button"
                       variant="outline"
                     >
-                      Đặt lại bộ lọc
+                      {tShipments('resetFilters')}
                     </Button>
                   )}
                 </ResourceState>
@@ -166,19 +192,19 @@ export function ShipmentsManagement() {
                 >
                   <Table>
                     <caption className="sr-only">
-                      Danh sách phiếu gửi hàng
+                      {tShipments('shipmentsTitle')}
                     </caption>
                     <TableHeader>
                       <TableRow>
-                        <TableHead scope="col">Mã vận đơn</TableHead>
-                        <TableHead scope="col">Người gửi</TableHead>
-                        <TableHead scope="col">Tuyến / chuyến</TableHead>
-                        <TableHead scope="col">Điểm gửi</TableHead>
-                        <TableHead scope="col">Điểm nhận</TableHead>
-                        <TableHead scope="col">Trạng thái</TableHead>
-                        <TableHead scope="col">Ngày gửi</TableHead>
+                        <TableHead scope="col">{tShipments('colWaybill')}</TableHead>
+                        <TableHead scope="col">{tShipments('colSender')}</TableHead>
+                        <TableHead scope="col">{tShipments('colRouteTrip')}</TableHead>
+                        <TableHead scope="col">{tShipments('colOrigin')}</TableHead>
+                        <TableHead scope="col">{tShipments('colDestination')}</TableHead>
+                        <TableHead scope="col">{tShipments('colStatus')}</TableHead>
+                        <TableHead scope="col">{tShipments('colDate')}</TableHead>
                         <TableHead scope="col">
-                          <span className="sr-only">Thao tác</span>
+                          <span className="sr-only">{tCommon('actions')}</span>
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -207,7 +233,7 @@ export function ShipmentsManagement() {
                             </span>
                             <span className="block text-xs text-muted-foreground">
                               {shipment.carrier?.name} ·{' '}
-                              {shipment.trip?.code ?? 'Chưa phân chuyến'}
+                              {shipment.trip?.code ?? tShipments('unassignedTrip')}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -224,8 +250,7 @@ export function ShipmentsManagement() {
                             <ResourceStatusBadge
                               tone={getShipmentStatusTone(shipment.status)}
                             >
-                              {SHIPMENT_STATUS_LABELS[shipment.status] ??
-                                shipment.status}
+                              {getShipmentStatusDisplay(shipment.status)}
                             </ResourceStatusBadge>
                           </TableCell>
                           <TableCell>
@@ -234,7 +259,7 @@ export function ShipmentsManagement() {
                           <TableCell>
                             <ResourceDetailAction
                               href={`/shipments/${shipment.shipmentId}`}
-                              resourceName={`phiếu gửi ${shipment.waybillCode}`}
+                              resourceName={tShipments('viewDetailsResource', { code: shipment.waybillCode })}
                             />
                           </TableCell>
                         </TableRow>
@@ -246,7 +271,7 @@ export function ShipmentsManagement() {
                 {/* Mobile Card Fallback */}
                 <div
                   className="grid gap-4 p-4 min-[901px]:hidden"
-                  aria-label="Danh sách phiếu gửi hàng dạng thẻ"
+                  aria-label={tShipments('cardListAria')}
                   aria-busy={loading || refreshing}
                 >
                   {shipments.map((shipment) => (
@@ -263,34 +288,33 @@ export function ShipmentsManagement() {
                         <ResourceStatusBadge
                           tone={getShipmentStatusTone(shipment.status)}
                         >
-                          {SHIPMENT_STATUS_LABELS[shipment.status] ??
-                            shipment.status}
+                          {getShipmentStatusDisplay(shipment.status)}
                         </ResourceStatusBadge>
                       </div>
 
                       <dl className="grid gap-3 text-[13px] [&>div]:grid [&>div]:grid-cols-[90px_minmax(0,1fr)] [&>div]:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                         <div>
-                          <dt>Người gửi</dt>
+                          <dt>{tShipments('colSender')}</dt>
                           <dd>
                             {shipment.sender.fullName} (
                             <span>{shipment.sender.phoneNumber}</span>)
                           </dd>
                         </div>
                         <div>
-                          <dt>Tuyến / chuyến</dt>
+                          <dt>{tShipments('colRouteTrip')}</dt>
                           <dd>
                             {shipment.route
                               ? `${shipment.route.origin} → ${shipment.route.destination}`
                               : '—'}
-                            <p>{shipment.trip?.code ?? 'Chưa phân chuyến'}</p>
+                            <p>{shipment.trip?.code ?? tShipments('unassignedTrip')}</p>
                           </dd>
                         </div>
                         <div>
-                          <dt>Điểm gửi</dt>
+                          <dt>{tShipments('colOrigin')}</dt>
                           <dd>{shipment.originPoint.name}</dd>
                         </div>
                         <div>
-                          <dt>Điểm nhận</dt>
+                          <dt>{tShipments('colDestination')}</dt>
                           <dd>{shipment.destinationPoint.name}</dd>
                         </div>
                       </dl>
@@ -298,7 +322,7 @@ export function ShipmentsManagement() {
                       <div className="flex justify-end border-t pt-3">
                         <ResourceDetailAction
                           href={`/shipments/${shipment.shipmentId}`}
-                          resourceName={`phiếu gửi ${shipment.waybillCode}`}
+                          resourceName={tShipments('viewDetailsResource', { code: shipment.waybillCode })}
                         />
                       </div>
                     </Card>
@@ -310,7 +334,7 @@ export function ShipmentsManagement() {
                   disabled={loading || refreshing}
                   onPageChange={setPage}
                   pageSize={meta.pageSize}
-                  summaryLabel="phiếu gửi hàng"
+                  summaryLabel={tShipments('resourceLabel')}
                   totalItems={meta.totalItems}
                   totalPages={meta.totalPages}
                 />

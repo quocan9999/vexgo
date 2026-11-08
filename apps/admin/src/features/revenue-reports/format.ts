@@ -46,6 +46,7 @@ export function formatDateOnly(value: string): string {
 export function formatPeriod(
   value: string,
   groupBy: RevenueReportGroupBy,
+  locale?: string,
 ): string {
   if (groupBy === 'day') return formatDateOnly(value);
   if (groupBy === 'month') {
@@ -53,7 +54,8 @@ export function formatPeriod(
     return year && month ? `${month}/${year}` : value;
   }
   const match = /^(\d{4})-Q([1-4])$/.exec(value);
-  return match ? `Quý ${match[2]}/${match[1]}` : value;
+  if (!match) return value;
+  return locale === 'en' ? `Q${match[2]}/${match[1]}` : `Quý ${match[2]}/${match[1]}`;
 }
 
 export function formatReportRange(meta: RevenueReportMeta): string {
