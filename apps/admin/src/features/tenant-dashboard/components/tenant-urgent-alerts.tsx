@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/action-button';
+import { useTranslations } from 'next-intl';
 import type { UrgentAlerts } from '../types/tenant-dashboard';
 
 interface TenantUrgentAlertsProps {
@@ -18,6 +19,7 @@ interface TenantUrgentAlertsProps {
 }
 
 export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
+  const t = useTranslations('dashboard');
   const hasUrgentIssues =
     alerts.pendingBookingsCount > 0 ||
     alerts.unassignedShipmentsCount > 0 ||
@@ -34,14 +36,14 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
                   hasUrgentIssues ? 'text-amber-500' : 'text-emerald-500'
                 }`}
               />
-              Việc cần xử lý ngay
+              {t('urgentAlertsTitle')}
             </CardTitle>
             {hasUrgentIssues && (
               <span className="size-2 rounded-full bg-amber-500 animate-ping" />
             )}
           </div>
           <span className="text-[11px] text-muted-foreground font-medium">
-            Thời gian thực
+            {t('realtimeBadge')}
           </span>
         </div>
       </CardHeader>
@@ -53,9 +55,9 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
               <CheckCircle2 className="size-4" />
             </div>
             <div>
-              <p className="text-xs font-semibold">Vận hành ổn định</p>
+              <p className="text-xs font-semibold">{t('stableOperations')}</p>
               <p className="text-[11px] text-emerald-700/90 mt-0.5 leading-snug">
-                Không có vé giữ chỗ quá hạn hay kiện hàng chưa xếp. Mọi việc đang theo đúng kế hoạch.
+                {t('stableOperationsDesc')}
               </p>
             </div>
           </div>
@@ -70,10 +72,10 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-xs text-amber-900 truncate">
-                      {alerts.pendingBookingsCount} vé giữ chỗ chờ thanh toán
+                      {t('pendingBookingsAlert', { count: alerts.pendingBookingsCount })}
                     </p>
                     <p className="text-[11px] text-amber-800/85 mt-0.5 leading-tight">
-                      Cần thu tiền hoặc giải phóng ghế
+                      {t('pendingBookingsDesc')}
                     </p>
                   </div>
                 </div>
@@ -84,7 +86,7 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
                     ' text-xs h-7 px-2 gap-1 shrink-0 bg-white hover:bg-amber-100/50 border-amber-300 text-amber-900 font-medium'
                   }
                 >
-                  <span>Xử lý</span>
+                  <span>{t('handleAlert')}</span>
                   <ArrowRight className="size-3" />
                 </Link>
               </div>
@@ -99,10 +101,10 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-xs text-blue-900 truncate">
-                      {alerts.unassignedShipmentsCount} kiện hàng chưa gán xe
+                      {t('unassignedShipmentsAlert', { count: alerts.unassignedShipmentsCount })}
                     </p>
                     <p className="text-[11px] text-blue-800/85 mt-0.5 leading-tight">
-                      Hàng tại bãi chưa xếp lên chuyến
+                      {t('unassignedShipmentsDesc')}
                     </p>
                   </div>
                 </div>
@@ -113,7 +115,7 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
                     ' text-xs h-7 px-2 gap-1 shrink-0 bg-white hover:bg-blue-100/50 border-blue-300 text-blue-900 font-medium'
                   }
                 >
-                  <span>Xếp xe</span>
+                  <span>{t('assignVehicle')}</span>
                   <ArrowRight className="size-3" />
                 </Link>
               </div>
@@ -128,10 +130,10 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-xs text-rose-900 truncate">
-                      {alerts.departingSoonLowOccupancyCount} chuyến ghế &lt; 30%
+                      {t('lowOccupancyAlert', { count: alerts.departingSoonLowOccupancyCount })}
                     </p>
                     <p className="text-[11px] text-rose-800/85 mt-0.5 leading-tight">
-                      Khởi hành &lt; 2h nhưng ít khách
+                      {t('lowOccupancyDesc')}
                     </p>
                   </div>
                 </div>
@@ -142,7 +144,7 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
                     ' text-xs h-7 px-2 gap-1 shrink-0 bg-white hover:bg-rose-100/50 border-rose-300 text-rose-900 font-medium'
                   }
                 >
-                  <span>Xem</span>
+                  <span>{t('viewAlert')}</span>
                   <ArrowRight className="size-3" />
                 </Link>
               </div>

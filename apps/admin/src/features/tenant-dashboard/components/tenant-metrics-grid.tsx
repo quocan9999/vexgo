@@ -3,6 +3,7 @@
 import { Bus, Ticket, Package, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { formatVnd } from '@/features/booking-management/services/booking-management-format';
+import { useTranslations } from 'next-intl';
 import type { OperationalMetrics } from '../types/tenant-dashboard';
 
 interface TenantMetricsGridProps {
@@ -10,6 +11,7 @@ interface TenantMetricsGridProps {
 }
 
 export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
+  const t = useTranslations('dashboard');
   const formatNumber = (num: number) => num.toLocaleString('vi-VN');
 
   // Load factor progress color based on threshold
@@ -21,7 +23,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {/* 1. Chuyến xe hôm nay */}
+      {/* 1. {t('tripsToday')} */}
       <Card className="flex flex-col justify-between p-5.5 transition-all duration-200 hover:shadow-md hover:border-slate-300 border-border">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -36,30 +38,30 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
             <p className="text-[32px] font-bold leading-none tracking-tight tabular-nums text-foreground">
               {formatNumber(metrics.totalTripsToday)}
               <span className="text-xs font-normal text-muted-foreground ml-1.5 uppercase font-sans">
-                chuyến
+                {t('tripsUnit')}
               </span>
             </p>
           </div>
         </div>
         <div className="mt-4 pt-3 border-t border-border/80 text-xs text-muted-foreground flex flex-wrap items-center gap-1.5">
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-medium text-[11px]">
-            {metrics.preparingTrips} sắp chạy
+            {t('tripsPreparing', { count: metrics.preparingTrips })}
           </span>
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium text-[11px]">
-            {metrics.runningTrips} đang chạy
+            {t('tripsRunning', { count: metrics.runningTrips })}
           </span>
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium text-[11px]">
-            {metrics.completedTrips} đã xong
+            {t('tripsCompleted', { count: metrics.completedTrips })}
           </span>
           {metrics.cancelledTrips > 0 && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 font-medium text-[11px]">
-              {metrics.cancelledTrips} hủy
+              {t('tripsCancelled', { count: metrics.cancelledTrips })}
             </span>
           )}
         </div>
       </Card>
 
-      {/* 2. Vé & Tỷ lệ lấp đầy ghế */}
+      {/* 2. Vé & {t('seatLoadFactor')} */}
       <Card className="flex flex-col justify-between p-5.5 transition-all duration-200 hover:shadow-md hover:border-slate-300 border-border">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -76,7 +78,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
                 {metrics.loadFactorPercent}%
               </p>
               <span className="text-xs font-medium text-muted-foreground tabular-nums">
-                {formatNumber(metrics.bookedTicketsToday)} / {formatNumber(metrics.totalSeatsToday)} ghế
+                {t('bookedSeatsProgress', { booked: formatNumber(metrics.bookedTicketsToday), total: formatNumber(metrics.totalSeatsToday) })}
               </span>
             </div>
             {/* Accessible Progress bar */}
@@ -85,7 +87,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
               aria-valuenow={metrics.loadFactorPercent}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label={`Tỷ lệ lấp đầy ghế hôm nay ${metrics.loadFactorPercent}%`}
+              aria-label={t('loadFactorAria', { percent: metrics.loadFactorPercent })}
               className="h-2 w-full bg-slate-100 rounded-full overflow-hidden"
             >
               <div
@@ -96,16 +98,16 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
           </div>
         </div>
         <div className="mt-4 pt-3 border-t border-border/80 text-xs text-muted-foreground flex items-center justify-between">
-          <span>Khách đã đặt & giữ chỗ</span>
+          <span>{t('bookedAndHeld')}</span>
           <span className="font-medium text-foreground">
             {metrics.totalSeatsToday > 0
-              ? `${Math.max(0, metrics.totalSeatsToday - metrics.bookedTicketsToday)} ghế trống`
-              : '0 trống'}
+              ? t('availableSeats', { count: Math.max(0, metrics.totalSeatsToday - metrics.bookedTicketsToday) })
+              : t('availableSeats', { count: 0 })}
           </span>
         </div>
       </Card>
 
-      {/* 3. Bưu gửi & Hàng hóa */}
+      {/* 3. {t('cargoShipments')} */}
       <Card className="flex flex-col justify-between p-5.5 transition-all duration-200 hover:shadow-md hover:border-slate-300 border-border">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -120,7 +122,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
             <p className="text-[32px] font-bold leading-none tracking-tight tabular-nums text-foreground">
               {formatNumber(metrics.totalShipmentsToday)}
               <span className="text-xs font-normal text-muted-foreground ml-1.5 uppercase font-sans">
-                kiện
+                {t('packagesUnit')}
               </span>
             </p>
           </div>
@@ -129,18 +131,18 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
           {metrics.unassignedShipmentsToday > 0 ? (
             <span className="inline-flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px]">
               <AlertTriangle className="size-3.5 shrink-0" />
-              {metrics.unassignedShipmentsToday} kiện chưa xếp lên chuyến
+              {t('unassignedPackagesNotice', { count: metrics.unassignedShipmentsToday })}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-emerald-700 font-medium text-[11px]">
               <CheckCircle2 className="size-3.5" />
-              Toàn bộ kiện hàng đã có chuyến
+              {t('allPackagesAssigned')}
             </span>
           )}
         </div>
       </Card>
 
-      {/* 4. Doanh thu tạm tính hôm nay */}
+      {/* 4. {t('estimatedRevenue')} hôm nay */}
       <Card className="flex flex-col justify-between p-5.5 transition-all duration-200 hover:shadow-md hover:border-slate-300 border-border">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -158,7 +160,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
           </div>
         </div>
         <div className="mt-4 pt-3 border-t border-border/80 text-xs text-muted-foreground">
-          <span>Tiền vé & cước bưu gửi trong ca trực</span>
+          <span>{t('shiftRevenueNote')}</span>
         </div>
       </Card>
     </div>

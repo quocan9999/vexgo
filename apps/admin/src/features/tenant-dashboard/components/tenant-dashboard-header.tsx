@@ -41,9 +41,9 @@ export function TenantDashboardHeader({
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200/80 shadow-2xs">
           <Calendar className="size-3.5 text-slate-500" />
           <span>
-            Ca trực:{' '}
+            {t('shiftDuty')}:{' '}
             <strong className="font-semibold text-slate-900">
-              {businessDate ?? 'Hôm nay'}
+              {businessDate ?? t('today')}
             </strong>
           </span>
         </div>
@@ -57,7 +57,7 @@ export function TenantDashboardHeader({
       <div className="flex items-center gap-3 flex-wrap">
         <div
           role="radiogroup"
-          aria-label="Tần suất tự động làm mới"
+          aria-label={t('autoRefreshFrequency')}
           className="inline-flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-lg border border-border text-xs"
         >
           <span className="text-muted-foreground px-2 py-1 font-medium flex items-center gap-1">
@@ -88,7 +88,7 @@ export function TenantDashboardHeader({
 
         {lastUpdated && (
           <span className="text-xs text-muted-foreground hidden lg:inline-block tabular-nums">
-            Cập nhật: {formatTime(lastUpdated)}
+            {t('updatedAt')}: {formatTime(lastUpdated)}
           </span>
         )}
 

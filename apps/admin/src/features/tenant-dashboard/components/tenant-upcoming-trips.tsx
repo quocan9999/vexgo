@@ -13,32 +13,34 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/status-badge';
 import { buttonVariants } from '@/components/ui/action-button';
+import { useTranslations } from 'next-intl';
 import type { UpcomingTripItem } from '../types/tenant-dashboard';
 
 interface TenantUpcomingTripsProps {
   trips: UpcomingTripItem[];
 }
 
-function getTripStatusBadge(status: string) {
+function getTripStatusBadge(status: string, t: (key: any) => string) {
   switch (status) {
     case 'CHUA_KHOI_HANH':
       return (
         <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
-          Chưa xuất bến
+          {t('statusNotDeparted')}
         </Badge>
       );
     case 'DANG_CHAY':
-      return <Badge variant="warning">Đang di chuyển</Badge>;
+      return <Badge variant="warning">{t('statusInTransit')}</Badge>;
     case 'HOAN_THANH':
-      return <Badge variant="success">Hoàn thành</Badge>;
+      return <Badge variant="success">{t('statusCompleted')}</Badge>;
     case 'DA_HUY':
-      return <Badge variant="destructive">Đã hủy</Badge>;
+      return <Badge variant="destructive">{t('statusCancelled')}</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
 }
 
 export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
+  const t = useTranslations('dashboard');
   const getProgressColor = (percent: number) => {
     if (percent >= 80) return 'bg-emerald-500';
     if (percent >= 50) return 'bg-blue-500';
@@ -52,14 +54,14 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
           <div>
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold text-foreground">
-                Chuyến xe sắp khởi hành
+                {t('upcomingTripsTitle')}
               </CardTitle>
               <span className="inline-flex items-center justify-center size-5 text-xs font-semibold rounded-full bg-primary/10 text-primary">
                 {trips.length}
               </span>
             </div>
             <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Lịch khởi hành và tiến độ lấp đầy khách của các chuyến xe trong ngày
+              {t('upcomingTripsSubtitle')}
             </CardDescription>
           </div>
           <Link
@@ -69,7 +71,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
               ' text-xs h-7.5 px-2.5 gap-1 self-start sm:self-auto shrink-0'
             }
           >
-            <span>Tất cả chuyến</span>
+            <span>{t('allTrips')}</span>
             <ArrowUpRight className="size-3.5" />
           </Link>
         </CardHeader>
@@ -81,16 +83,16 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                 <Bus className="size-6" />
               </div>
               <p className="text-sm font-medium text-foreground">
-                Không có chuyến xe nào sắp xuất bến
+                {t('noUpcomingTrips')}
               </p>
               <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                Tất cả các chuyến xe trong ngày hôm nay đã xuất bến hoặc chưa có lịch trình chạy.
+                {t('noUpcomingTripsDesc')}
               </p>
               <Link
                 href="/trips"
                 className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' mt-4 text-xs'}
               >
-                Xem danh sách chuyến xe
+                {t('viewTripsList')}
               </Link>
             </div>
           ) : (
@@ -100,12 +102,12 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[100px]">Giờ chạy</TableHead>
-                      <TableHead>Tuyến đường</TableHead>
-                      <TableHead>Phương tiện</TableHead>
-                      <TableHead className="min-w-[150px]">Lấp đầy ghế</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
+                      <TableHead className="w-[100px]">{t('colDepartureTime')}</TableHead>
+                      <TableHead>{t('colRoute')}</TableHead>
+                      <TableHead>{t('colVehicle')}</TableHead>
+                      <TableHead className="min-w-[150px]">{t('colSeatLoad')}</TableHead>
+                      <TableHead>{t('colTripStatus')}</TableHead>
+                      <TableHead className="text-right">{t('colActions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -152,7 +154,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                                 {trip.loadFactorPercent}%
                               </span>
                               <span className="text-muted-foreground tabular-nums text-[11px]">
-                                {trip.bookedSeats}/{trip.totalSeats} ghế
+                                {t('bookedSeatsRatio', { booked: trip.bookedSeats, total: trip.totalSeats })}
                               </span>
                             </div>
                             <div
@@ -160,7 +162,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                               aria-valuenow={trip.loadFactorPercent}
                               aria-valuemin={0}
                               aria-valuemax={100}
-                              aria-label={`Lấp đầy chuyến ${trip.tripCode}: ${trip.loadFactorPercent}%`}
+                              aria-label={t('occupancyProgressAria', { code: trip.tripCode, percent: trip.loadFactorPercent })}
                               className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden"
                             >
                               <div
@@ -176,7 +178,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                         </TableCell>
 
                         {/* Trạng thái */}
-                        <TableCell>{getTripStatusBadge(trip.status)}</TableCell>
+                        <TableCell>{getTripStatusBadge(trip.status, t)}</TableCell>
 
                         {/* Thao tác */}
                         <TableCell className="text-right">
@@ -190,7 +192,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                               }
                             >
                               <Eye className="size-3.5" />
-                              <span>Sơ đồ</span>
+                              <span>{t('seatMap')}</span>
                             </Link>
                             <Link
                               href={`/trips/${trip.tripId}`}
@@ -222,7 +224,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                           ({trip.departureDate})
                         </span>
                       </div>
-                      {getTripStatusBadge(trip.status)}
+                      {getTripStatusBadge(trip.status, t)}
                     </div>
 
                     <div>
@@ -246,10 +248,10 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-foreground">
-                          {trip.loadFactorPercent}% lấp đầy
+                          {t('occupancyPercentLabel', { percent: trip.loadFactorPercent })}
                         </span>
                         <span className="text-muted-foreground">
-                          {trip.bookedSeats}/{trip.totalSeats} ghế
+                          {t('bookedSeatsRatio', { booked: trip.bookedSeats, total: trip.totalSeats })}
                         </span>
                       </div>
                       <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -273,7 +275,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                         }
                       >
                         <Eye className="size-3.5" />
-                        <span>Sơ đồ ghế</span>
+                        <span>{t('seatMapFull')}</span>
                       </Link>
                       <Link
                         href={`/trips/${trip.tripId}`}
