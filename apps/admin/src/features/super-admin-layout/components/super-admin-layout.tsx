@@ -326,6 +326,7 @@ export function SuperAdminLayout({
   const authState = useAdminSession();
   const tNav = useTranslations('nav');
   const tAuth = useTranslations('auth');
+  const tCommon = useTranslations('common');
 
   function getTranslatedSectionLabel(section: string): string {
     const key = SECTION_TRANSLATION_KEYS[section];
@@ -674,19 +675,19 @@ export function SuperAdminLayout({
                 >
                   <Building2 aria-hidden="true" size={15} />
                   <span>
-                    {tenantScope ? tenantBusCompanyName : 'Nền tảng VexGo'}
+                    {tenantScope ? tenantBusCompanyName : tCommon('vexgoPlatform')}
                   </span>
                 </Link>
                 <nav
                   className={headerStyles.breadcrumb}
-                  aria-label="Vị trí hiện tại"
+                  aria-label={tCommon('currentLocation')}
                 >
                   <span className={headerStyles.group}>
                     {tenantScope
                       ? activeSection === 'tenant-rbac'
-                        ? 'Quản trị'
-                        : 'Vận hành'
-                      : 'Quản trị'}
+                        ? tCommon('administration')
+                        : tCommon('operations')
+                      : tCommon('administration')}
                   </span>
                   <ChevronRight aria-hidden="true" size={14} className={headerStyles.separator} />
                   {breadcrumbs && breadcrumbs.length > 0 ? (

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { LabeledSelectFilter } from '@/components/data-filters/labeled-select-filter';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/status-badge';
@@ -24,7 +26,20 @@ type AdminRbacRoleSelectorProps<RoleName extends string> = {
   titleId: string;
 };
 
+
+const ROLE_DESC_KEYS: Record<string, string> = {
+  SUPER_ADMIN: 'roleDesc_SUPER_ADMIN',
+  NHA_XE_ADMIN: 'roleDesc_NHA_XE_ADMIN',
+  NHAN_VIEN_DIEU_HANH: 'roleDesc_NHAN_VIEN_DIEU_HANH',
+  NHAN_VIEN_BAN_VE: 'roleDesc_NHAN_VIEN_BAN_VE',
+  NHAN_VIEN_CSKH: 'roleDesc_NHAN_VIEN_CSKH',
+  NHAN_VIEN_PHU_XE: 'roleDesc_NHAN_VIEN_PHU_XE',
+  NHAN_VIEN_KINH_DOANH: 'roleDesc_NHAN_VIEN_KINH_DOANH',
+};
+
 export function AdminRbacRoleSelector<RoleName extends string>({
+  // hook
+
   disabled = false,
   dirtyRoleNames = new Set<string>(),
   onSelect,
@@ -34,6 +49,7 @@ export function AdminRbacRoleSelector<RoleName extends string>({
   title,
   titleId,
 }: AdminRbacRoleSelectorProps<RoleName>) {
+  const tRbac = useTranslations('rbac');
   return (
     <Card
       role="region"
@@ -85,17 +101,19 @@ export function AdminRbacRoleSelector<RoleName extends string>({
                 {role.roleName}
               </strong>
               <span className="text-xs text-muted-foreground">
-                {role.description ?? 'Chưa có mô tả vai trò.'}
+                {ROLE_DESC_KEYS[role.roleName]
+                  ? tRbac(ROLE_DESC_KEYS[role.roleName] as any)
+                  : (role.description ?? tRbac('noRoleDescription'))}
               </span>
               <span className="flex flex-wrap gap-2">
                 <Badge variant="secondary">
-                  {role.scope === 'platform' ? 'Platform' : 'Nhà xe'}
+                  {role.scope === 'platform' ? 'Platform' : tRbac('scopeOperator')}
                 </Badge>
                 {role.isProtected && (
-                  <Badge variant="secondary">Vai trò được bảo vệ</Badge>
+                  <Badge variant="secondary">{tRbac('protectedRole')}</Badge>
                 )}
                 {dirtyRoleNames.has(role.roleName) && (
-                  <Badge variant="warning">Chưa lưu</Badge>
+                  <Badge variant="warning">{tRbac('unsaved')}</Badge>
                 )}
               </span>
             </span>

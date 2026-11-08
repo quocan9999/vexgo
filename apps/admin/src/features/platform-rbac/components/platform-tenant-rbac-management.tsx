@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -77,6 +79,7 @@ export function PlatformTenantRbacManagement({
 }: {
   nhaXeIdParam: string;
 }) {
+  const tRbac = useTranslations('rbac');
   const nhaXeId = parseTenantId(nhaXeIdParam);
   const [tenantName, setTenantName] = useState(
     nhaXeId ? 'Nhà xe' : 'Nhà xe không hợp lệ',
@@ -370,7 +373,7 @@ export function PlatformTenantRbacManagement({
             >
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:break-all">
                 <div>
-                  <p className="eyebrow">PHẠM VI NHÀ XE</p>
+                  <p className="eyebrow">{tRbac('operatorScope')}</p>
                   <h2 className="admin-data-mono">{selectedRole.roleName}</h2>
                 </div>
                 <Badge
@@ -379,14 +382,14 @@ export function PlatformTenantRbacManagement({
                   }
                 >
                   {selectedRole.source === 'global'
-                    ? 'Kế thừa mặc định'
-                    : 'Override riêng'}
+                    ? tRbac('inheritsDefault')
+                    : tRbac('operatorOverrides')}
                 </Badge>
               </div>
               <div className="grid min-w-0 gap-4 lg:grid-cols-3 [&>section]:min-w-0 [&>section]:space-y-3 [&>section]:rounded-lg [&>section]:border [&>section]:p-4 [&_h3]:text-[13px] [&_h3]:font-semibold [&_p]:text-xs [&_p]:text-muted-foreground">
                 <section aria-labelledby="platform-tenant-rbac-default-title">
                   <h3 id="platform-tenant-rbac-default-title">
-                    Quyền mặc định
+                    {tRbac('defaultPermissions')}
                   </h3>
                   <PermissionKeyList
                     emptyLabel="Vai trò chưa có quyền mặc định."
@@ -395,10 +398,10 @@ export function PlatformTenantRbacManagement({
                 </section>
                 <section aria-labelledby="platform-tenant-rbac-override-title">
                   <h3 id="platform-tenant-rbac-override-title">
-                    Override của nhà xe
+                    {tRbac('operatorOverrides')}
                   </h3>
                   {selectedRole.overridePermissionKeys === null ? (
-                    <p>Chưa cấu hình override</p>
+                    <p>{tRbac('noOverridesConfigured')}</p>
                   ) : (
                     <PermissionKeyList
                       emptyLabel=""
@@ -408,7 +411,7 @@ export function PlatformTenantRbacManagement({
                 </section>
                 <section aria-labelledby="platform-tenant-rbac-effective-title">
                   <h3 id="platform-tenant-rbac-effective-title">
-                    Quyền đang áp dụng
+                    {tRbac('effectivePermissions')}
                   </h3>
                   <PermissionKeyList
                     emptyLabel="Vai trò hiện không có quyền."

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import {
   CheckCircle2,
   ChevronLeft,
@@ -224,12 +226,14 @@ export function ResourceCreateAction({
 export function ResourceRefreshAction({
   loading,
   onClick,
-  label = 'Làm mới',
+  label,
 }: {
   loading: boolean;
   onClick: () => void;
   label?: string;
 }) {
+  const tCommon = useTranslations('common');
+  const displayLabel = label ?? tCommon('refresh');
   return (
     <Button
       aria-busy={loading}
@@ -241,7 +245,7 @@ export function ResourceRefreshAction({
         aria-hidden
         className={loading ? 'motion-safe:animate-spin' : undefined}
       />
-      {label}
+      {displayLabel}
     </Button>
   );
 }
@@ -250,16 +254,20 @@ export function ResourceDetailAction({
   resourceName,
   onClick,
   href,
-  label = 'Xem chi tiết',
+  label,
   ariaLabel,
 }: {
-  resourceName: string;
+  resourceName?: string;
   onClick?: () => void;
   href?: string;
   label?: string;
   ariaLabel?: string;
 }) {
-  const fullAriaLabel = ariaLabel ?? `${label} ${resourceName}`;
+  const tCommon = useTranslations('common');
+  const resolvedLabel = label ?? tCommon('viewDetails');
+  const fullAriaLabel =
+    ariaLabel ??
+    (resourceName ? `${resolvedLabel} ${resourceName}` : resolvedLabel);
   if (href) {
     return (
       <Button
@@ -271,7 +279,7 @@ export function ResourceDetailAction({
         variant="ghost"
       >
         <Eye aria-hidden />
-        {label}
+        {resolvedLabel}
       </Button>
     );
   }
@@ -284,7 +292,7 @@ export function ResourceDetailAction({
       variant="ghost"
     >
       <Eye aria-hidden />
-      {label}
+      {resolvedLabel}
     </Button>
   );
 }
@@ -389,11 +397,11 @@ export function ResourcePagination({
   summaryLabel,
   totalItems,
   totalPages,
-  showingLabel = 'Hiển thị',
-  ofLabel = 'trong',
-  pageLabel = 'Trang',
-  prevPageLabel = 'Trang trước',
-  nextPageLabel = 'Trang sau',
+  showingLabel,
+  ofLabel,
+  pageLabel,
+  prevPageLabel,
+  nextPageLabel,
   locale = 'vi-VN',
 }: {
   currentPage: number;
@@ -410,6 +418,12 @@ export function ResourcePagination({
   nextPageLabel?: string;
   locale?: string;
 }) {
+  const tCommon = useTranslations('common');
+  const displayShowing = showingLabel ?? tCommon('showing');
+  const displayOf = ofLabel ?? tCommon('of');
+  const displayPage = pageLabel ?? tCommon('page');
+  const displayPrev = prevPageLabel ?? tCommon('prevPage');
+  const displayNext = nextPageLabel ?? tCommon('nextPage');
   const count = Math.max(0, totalItems);
   const pages = Math.max(0, totalPages);
   const page = count && pages ? Math.min(Math.max(1, currentPage), pages) : 0;
@@ -418,26 +432,26 @@ export function ResourcePagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border bg-slate-50/40 p-3.5 text-[13px] text-muted-foreground sm:px-5">
       <span aria-live="polite" className="text-slate-600">
-        {showingLabel}{' '}
+        {displayShowing}{' '}
         <strong className="font-semibold text-foreground">
           {first}–{last}
         </strong>{' '}
-        {ofLabel}{' '}
+        {displayOf}{' '}
         <strong className="font-semibold text-foreground">
           {count.toLocaleString(locale)}
         </strong>{' '}
         {summaryLabel}
       </span>
       <nav
-        aria-label={`${pageLabel} ${summaryLabel}`}
+        aria-label={`${displayPage} ${summaryLabel}`}
         className="flex items-center gap-3"
       >
         <span className="text-slate-600">
-          {pageLabel} <strong className="font-semibold text-foreground">{page}</strong> / {pages}
+          {displayPage} <strong className="font-semibold text-foreground">{page}</strong> / {pages}
         </span>
         <div className="flex items-center gap-1.5">
           <Button
-            aria-label={prevPageLabel}
+            aria-label={displayPrev}
             className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
             disabled={disabled || page <= 1}
             onClick={() => onPageChange(Math.max(1, page - 1))}
@@ -447,7 +461,7 @@ export function ResourcePagination({
             <ChevronLeft aria-hidden className="size-4" />
           </Button>
           <Button
-            aria-label={nextPageLabel}
+            aria-label={displayNext}
             className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
             disabled={disabled || page >= pages}
             onClick={() => onPageChange(page + 1)}

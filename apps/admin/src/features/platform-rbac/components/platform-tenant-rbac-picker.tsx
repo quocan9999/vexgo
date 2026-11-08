@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Building2, ChevronRight, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -25,6 +27,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function PlatformTenantRbacPicker() {
+  const tRbac = useTranslations('rbac');
   const [companies, setCompanies] = useState<BusCompanyFilterOption[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -70,8 +73,8 @@ export function PlatformTenantRbacPicker() {
     <SuperAdminLayout
       activeSection="rbac"
       breadcrumbs={[
-        { label: 'Phân quyền nền tảng', href: '/rbac' },
-        { label: 'Nhà xe đối tác' },
+        { label: tRbac('rbacTitle'), href: '/rbac' },
+        { label: tRbac('operatorsCount') },
       ]}
     >
       <div
@@ -79,8 +82,8 @@ export function PlatformTenantRbacPicker() {
         className="admin-page-content admin-ui space-y-6 [&>nav]:mt-0"
       >
         <AdminPageHeader
-          eyebrow="QUẢN TRỊ NỀN TẢNG"
-          title="Phân quyền theo nhà xe"
+          eyebrow={tRbac('eyebrowPlatform')}
+          title={tRbac('tenantTitle')}
           titleId="platform-tenant-rbac-title"
           actions={
             <ResourceRefreshAction loading={loading} onClick={retryLoading} />
@@ -96,13 +99,13 @@ export function PlatformTenantRbacPicker() {
             <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">
-                  CẤU HÌNH RIÊNG
+                  {tRbac('customConfig')}
                 </p>
                 <h2
                   id="tenant-rbac-picker-title"
                   className="text-base font-semibold"
                 >
-                  Chọn nhà xe
+                  {tRbac('selectBusCompany')}
                 </h2>
               </div>
               <Badge aria-live="polite" variant="secondary">
@@ -124,7 +127,7 @@ export function PlatformTenantRbacPicker() {
                     autoComplete="off"
                     id="platform-tenant-rbac-search"
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Tìm theo tên hoặc mã nhà xe"
+                    placeholder={tRbac('searchOperatorPlaceholder')}
                     type="search"
                     value={search}
                     className="pl-10"

@@ -28,7 +28,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Chuyến xe hôm nay
+              {t('tripsToday')}
             </h2>
             <div className="grid size-9.5 place-items-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shadow-2xs">
               <Bus className="size-4.5" />
@@ -66,7 +66,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Tỷ lệ lấp đầy ghế
+              {t('seatLoadFactor')}
             </h2>
             <div className="grid size-9.5 place-items-center rounded-xl bg-teal-50 text-teal-600 border border-teal-100 shadow-2xs">
               <Ticket className="size-4.5" />
@@ -112,7 +112,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Bưu gửi & Hàng hóa
+              {t('cargoShipments')}
             </h2>
             <div className="grid size-9.5 place-items-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100 shadow-2xs">
               <Package className="size-4.5" />
@@ -147,7 +147,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Doanh thu tạm tính
+              {t('estimatedRevenue')}
             </h2>
             <div className="grid size-9.5 place-items-center rounded-xl bg-violet-50 text-violet-600 border border-violet-100 shadow-2xs">
               <TrendingUp className="size-4.5" />

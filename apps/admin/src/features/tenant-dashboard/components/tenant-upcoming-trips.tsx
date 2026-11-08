@@ -196,13 +196,13 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                             </Link>
                             <Link
                               href={`/trips/${trip.tripId}`}
-                              title="Chi tiết chuyến"
+                              title={t('tripDetails')}
                               className={
                                 buttonVariants({ variant: 'ghost', size: 'sm' }) +
                                 ' h-7 px-2 text-xs'
                               }
                             >
-                              Chi tiết
+                              {t('tripDetails')}
                             </Link>
                           </div>
                         </TableCell>
@@ -284,7 +284,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                           ' h-8 text-xs px-3'
                         }
                       >
-                        Chi tiết
+                        {t('tripDetails')}
                       </Link>
                     </div>
                   </div>
