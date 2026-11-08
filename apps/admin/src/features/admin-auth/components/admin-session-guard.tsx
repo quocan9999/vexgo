@@ -33,7 +33,26 @@ function LoadingStatus({ message }: { message: string }) {
   );
 }
 
-function RestrictedAccount({ conflict }: { conflict: boolean }) {
+function stripLocale(pathname: string | null | undefined): string {
+  if (!pathname) return '/';
+  const match = pathname.match(/^\/(vi|en)(\/.*|$)/);
+  if (match) return match[2] || '/';
+  return pathname;
+}
+
+function getLocalePrefix(pathname: string | null | undefined): string {
+  if (!pathname) return '';
+  const match = pathname.match(/^\/(vi|en)(\/.*|$)/);
+  return match ? `/${match[1]}` : '';
+}
+
+function RestrictedAccount({
+  conflict,
+  localePrefix = '',
+}: {
+  conflict: boolean;
+  localePrefix?: string;
+}) {
   const router = useRouter();
   const sessionState = useAdminSession();
   const [signingOut, setSigningOut] = useState(false);
@@ -45,7 +64,7 @@ function RestrictedAccount({ conflict }: { conflict: boolean }) {
     setSigningOut(true);
     try {
       await signOutAdmin();
-      router.replace('/login');
+      router.replace(localePrefix ? `${localePrefix}/login` : '/login');
     } catch (error) {
       toast.error(getAdminAuthErrorMessage(error));
       setSigningOut(false);
@@ -78,7 +97,9 @@ function RestrictedAccount({ conflict }: { conflict: boolean }) {
 
 export function AdminSessionGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const rawPathname = usePathname() || '/';
+  const localePrefix = getLocalePrefix(rawPathname);
+  const pathname = stripLocale(rawPathname);
   const authState = useAdminSession();
   const session = authState.status === 'authenticated'
     ? authState.session
@@ -128,15 +149,19 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (authState.status === 'anonymous') {
-      router.replace('/login');
+      const loginTarget = localePrefix ? `${localePrefix}/login` : '/login';
+      router.replace(loginTarget);
       return;
     }
     if (authState.status !== 'authenticated') return;
 
     if (redirectPath && redirectPath !== pathname) {
-      router.replace(redirectPath);
+      const target = localePrefix
+        ? `${localePrefix}${redirectPath === '/' ? '' : redirectPath}` || '/'
+        : redirectPath;
+      router.replace(target);
     }
-  }, [authState.status, pathname, redirectPath, router]);
+  }, [authState.status, localePrefix, pathname, redirectPath, router]);
 
   if (authState.status === 'checking') {
     return <LoadingStatus message="Đang kiểm tra phiên quản trị…" />;
@@ -188,7 +213,12 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     scope === 'restricted' ||
     tenantHasNoAccessiblePage
   ) {
-    return <RestrictedAccount conflict={scope === 'conflict'} />;
+    return (
+      <RestrictedAccount
+        conflict={scope === 'conflict'}
+        localePrefix={localePrefix}
+      />
+    );
   }
 
   if (redirectPath) {
