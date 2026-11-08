@@ -12,6 +12,7 @@ import {
   ResourceState,
 } from '@/components/admin/resource-ui';
 import { Button } from '@/components/ui/action-button';
+import { useTranslations } from 'next-intl';
 import {
   FieldLabel,
   FieldLegend,
@@ -86,6 +87,8 @@ export function AdminAccountRolesDialog({
   onClose: () => void;
   onSaved: (account: AdminAccount) => void;
 }) {
+  const tAccounts = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
   const submittingRef = useRef(false);
   const [roles, setRoles] = useState<RoleOptionsState>({ status: 'loading' });
   const [selectedRoleNames, setSelectedRoleNames] = useState<
@@ -191,9 +194,9 @@ export function AdminAccountRolesDialog({
     <>
       <ResourceModalDialog
         busy={submitting || roles.status === 'loading'}
-        description={`Chọn các vai trò nhà xe từ danh mục hiện tại cho ${account.fullName}.`}
+        description={tAccounts('assignRolesModalDesc', { name: account.fullName })}
         preventDismiss={submitting}
-        title="Gán vai trò tài khoản"
+        title={tAccounts('assignRolesModalTitle')}
         onClose={onClose}
         size="md"
       >
@@ -208,7 +211,7 @@ export function AdminAccountRolesDialog({
                   type="button"
                   variant="outline"
                 >
-                  Hủy
+                  {tCommon('cancel')}
                 </Button>
                 <Button disabled={!canSubmit} type="submit">
                   {submitting && (
@@ -218,20 +221,20 @@ export function AdminAccountRolesDialog({
                       size={16}
                     />
                   )}
-                  {submitting ? 'Đang lưu…' : 'Lưu vai trò'}
+                  {submitting ? tAccounts('savingRoles') : tAccounts('saveRoles')}
                 </Button>
               </div>
             }
           >
             {error && <ResourceNotice kind="error">{error}</ResourceNotice>}
             {roles.status === 'loading' && (
-              <ResourceState loading>Đang tải danh mục vai trò…</ResourceState>
+              <ResourceState loading>{tCommon('loading')}</ResourceState>
             )}
             <FieldSet
               className="gap-3"
               disabled={submitting}
             >
-              <FieldLegend>Vai trò nhà xe</FieldLegend>
+              <FieldLegend>{tAccounts('tenantRolesLegend')}</FieldLegend>
               <div className="grid gap-2">
                 {roles.status === 'success' &&
                   roles.roles.map((role) => {

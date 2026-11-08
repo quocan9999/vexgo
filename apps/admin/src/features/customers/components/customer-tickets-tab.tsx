@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   ResourcePagination,
   ResourceStatusBadge,
@@ -47,30 +48,36 @@ function ticketStatusTone(status: string): 'active' | 'muted' {
   return 'muted';
 }
 
-function formatTicketStatus(status: string): string {
+function formatTicketStatus(
+  status: string,
+  tBookings: (key: string) => string,
+): string {
   switch (status) {
     case 'DA_THANH_TOAN':
-      return 'Đã thanh toán';
+      return tBookings('ticketStatusPaid');
     case 'DA_XUAT':
-      return 'Đã xuất vé';
+      return tBookings('statusPaid');
     case 'HOAN_TAT':
-      return 'Hoàn tất';
+      return tBookings('completed');
     case 'DA_DAT':
-      return 'Đã đặt';
+      return tBookings('reserved');
     case 'DA_SU_DUNG':
-      return 'Đã sử dụng';
+      return tBookings('statusPaid');
     case 'DA_HUY':
-      return 'Đã hủy';
+      return tBookings('cancelled');
     case 'CHO_THANH_TOAN':
-      return 'Chờ thanh toán';
+      return tBookings('unpaid');
     case 'GIU_CHO':
-      return 'Đang giữ chỗ';
+      return tBookings('reserved');
     default:
       return status;
   }
 }
 
 export function CustomerTicketsTab({ customerId }: { customerId: number }) {
+  const tCustomers = useTranslations('customers');
+  const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   const {
     tickets,
     meta,
@@ -93,16 +100,16 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
     >
       <FilterToolbar>
         <SearchInput
-          label="Tìm kiếm vé"
+          label={tBookings('tabTickets')}
           onChange={setSearchInput}
-          placeholder="Tìm theo mã vé, mã đặt vé, mã chuyến..."
+          placeholder={tCustomers('ticketsTabSearchPlaceholder')}
           value={searchInput}
         />
       </FilterToolbar>
       <ResourceSortControls
-        label="Sắp xếp vé"
+        label={tCustomers('sortByLabel')}
         value="departureDate"
-        options={[{ value: 'departureDate', label: 'Khởi hành' }]}
+        options={[{ value: 'departureDate', label: tBookings('departureDateLabel') }]}
         direction={sortDirection}
         onDirectionChange={() =>
           setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -113,24 +120,24 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
         <ResourceState error>
           <p>{error}</p>
           <Button onClick={refresh} type="button" variant="outline">
-            Thử lại
+            {tCommon('retry')}
           </Button>
         </ResourceState>
       )}
 
       {!error &&
         (loading && tickets.length === 0 ? (
-          <ResourceTableSkeleton resourceLabel="vé" />
+          <ResourceTableSkeleton resourceLabel={tBookings('tabTickets').toLowerCase()} />
         ) : tickets.length === 0 ? (
           <ResourceState>
             <p>
               {searchInput.trim()
-                ? 'Không tìm thấy vé phù hợp.'
-                : 'Khách hàng chưa có vé tại nhà xe này.'}
+                ? tCustomers('ticketsTabFilteredEmpty')
+                : tCustomers('ticketsTabNoData')}
             </p>
             {searchInput && (
               <Button variant="outline" onClick={() => setSearchInput('')}>
-                Xóa tìm kiếm
+                {tCustomers('clearSearch')}
               </Button>
             )}
           </ResourceState>
@@ -142,14 +149,14 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
             >
               <Table className="text-[13px]">
                 <TableCaption className="sr-only">
-                  Lịch sử vé của khách hàng
+                  {tBookings('tabTickets')}
                 </TableCaption>
                 <TableHeader>
                   <TableRow>
-                    <TableHead scope="col">Mã vé</TableHead>
-                    <TableHead scope="col">Mã đặt vé</TableHead>
-                    <TableHead scope="col">Tuyến đường</TableHead>
-                    <TableHead scope="col">Chuyến xe</TableHead>
+                    <TableHead scope="col">{tBookings('ticketCode')}</TableHead>
+                    <TableHead scope="col">{tBookings('bookingCode')}</TableHead>
+                    <TableHead scope="col">{tBookings('colTrip')}</TableHead>
+                    <TableHead scope="col">{tBookings('tripCode')}</TableHead>
                     <TableHead
                       aria-sort={
                         sortDirection === 'asc' ? 'ascending' : 'descending'
@@ -167,7 +174,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                         }
                         type="button"
                       >
-                        <span>Khởi hành</span>
+                        <span>{tBookings('departureDateLabel')}</span>
                         <span aria-hidden="true">
                           {sortDirection === 'asc' ? (
                             <ArrowUp size={14} />
@@ -177,9 +184,9 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                         </span>
                       </Button>
                     </TableHead>
-                    <TableHead scope="col">Ghế</TableHead>
-                    <TableHead scope="col">Giá thực tế</TableHead>
-                    <TableHead scope="col">Trạng thái</TableHead>
+                    <TableHead scope="col">{tBookings('seatCode')}</TableHead>
+                    <TableHead scope="col">{tBookings('colActualPrice')}</TableHead>
+                    <TableHead scope="col">{tBookings('ticketStatus')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -232,7 +239,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                         <ResourceStatusBadge
                           tone={ticketStatusTone(ticket.status)}
                         >
-                          {formatTicketStatus(ticket.status)}
+                          {formatTicketStatus(ticket.status, tBookings)}
                         </ResourceStatusBadge>
                       </TableCell>
                     </TableRow>
@@ -243,7 +250,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
 
             <div
               className="grid gap-4 p-4 min-[901px]:hidden"
-              aria-label="Danh sách vé dạng thẻ"
+              aria-label={tBookings('tabTickets')}
               aria-busy={loading || refreshing}
             >
               {tickets.map((ticket) => (
@@ -258,19 +265,19 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       </h3>
                     </div>
                     <ResourceStatusBadge tone={ticketStatusTone(ticket.status)}>
-                      {formatTicketStatus(ticket.status)}
+                      {formatTicketStatus(ticket.status, tBookings)}
                     </ResourceStatusBadge>
                   </div>
                   <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Tuyến đường</dt>
+                      <dt>{tBookings('colTrip')}</dt>
                       <dd>
                         {ticket.trip.route.origin} →{' '}
                         {ticket.trip.route.destination}
                       </dd>
                     </div>
                     <div>
-                      <dt>Chuyến / Xe</dt>
+                      <dt>{tBookings('tripCode')}</dt>
                       <dd>
                         <span className="admin-data-mono">
                           {ticket.trip.code}
@@ -283,7 +290,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       </dd>
                     </div>
                     <div>
-                      <dt>Khởi hành</dt>
+                      <dt>{tBookings('departureDateLabel')}</dt>
                       <dd>
                         {formatDeparture(
                           ticket.trip.departureDate,
@@ -292,7 +299,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       </dd>
                     </div>
                     <div>
-                      <dt>Ghế ngồi</dt>
+                      <dt>{tBookings('seatCode')}</dt>
                       <dd>
                         <span className="admin-data-mono">
                           {ticket.seat.code}
@@ -303,11 +310,11 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       </dd>
                     </div>
                     <div>
-                      <dt>Mã đặt vé</dt>
+                      <dt>{tBookings('bookingCode')}</dt>
                       <dd className="admin-data-mono">{ticket.booking.code}</dd>
                     </div>
                     <div>
-                      <dt>Giá niêm yết</dt>
+                      <dt>{tBookings('colInitialAmount')}</dt>
                       <dd>{ticket.listedPrice.toLocaleString('vi-VN')} đ</dd>
                     </div>
                   </dl>
@@ -321,7 +328,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                 disabled={loading}
                 onPageChange={setPage}
                 pageSize={meta.pageSize}
-                summaryLabel="vé"
+                summaryLabel={tBookings('tabTickets').toLowerCase()}
                 totalItems={meta.totalItems}
                 totalPages={meta.totalPages}
               />

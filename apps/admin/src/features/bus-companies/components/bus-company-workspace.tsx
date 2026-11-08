@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   getBusCompanyById,
   updateBusCompanyStatus,
@@ -80,6 +81,8 @@ export function BusCompanyWorkspace({
   onUpdated,
   onNotFound,
 }: BusCompanyWorkspaceProps) {
+  const tCompanies = useTranslations('busCompanies');
+  const tCommon = useTranslations('common');
   const authState = useAdminSession();
   const session =
     authState.status === 'authenticated' ? authState.session : null;
@@ -124,19 +127,19 @@ export function BusCompanyWorkspace({
             message:
               requestError instanceof Error
                 ? requestError.message
-                : 'Không thể tải thông tin nhà xe.',
+                : tCompanies('detailsTitle'),
           });
         }
       });
 
     return () => controller.abort();
-  }, [companyId, retryCount]);
+  }, [companyId, retryCount, tCompanies]);
 
   function handleCompanyUpdated(updatedCompany: BusCompany) {
     setDetailState({ status: 'success', company: updatedCompany });
     setEditDialogOpen(false);
     onUpdated?.(updatedCompany);
-    toast.success(`Đã cập nhật nhà xe ${updatedCompany.name}.`);
+    toast.success(tCompanies('updatedSuccess'));
   }
 
   async function confirmStatusChange() {
@@ -163,8 +166,8 @@ export function BusCompanyWorkspace({
       onUpdated?.(updatedCompany);
       toast.success(
         targetStatus === 'HOAT_DONG'
-          ? `Đã kích hoạt lại nhà xe ${updatedCompany.name}.`
-          : `Đã tạm ngưng nhà xe ${updatedCompany.name}.`,
+          ? tCompanies('reactivateSuccess', { name: updatedCompany.name })
+          : tCompanies('suspendSuccess', { name: updatedCompany.name }),
       );
     } catch (requestError: unknown) {
       toast.error(
@@ -186,9 +189,9 @@ export function BusCompanyWorkspace({
     <SuperAdminLayout
       activeSection="bus-companies"
       breadcrumbs={[
-        { label: 'Hệ thống', href: '/bus-companies' },
-        { label: 'Nhà xe', href: '/bus-companies' },
-        { label: company ? company.name : `Nhà xe #${companyId}` },
+        { label: tCommon('system'), href: '/bus-companies' },
+        { label: tCompanies('busCompaniesTitle'), href: '/bus-companies' },
+        { label: company ? company.name : tCompanies('companyNumber', { id: companyId }) },
       ]}
     >
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
@@ -213,7 +216,7 @@ export function BusCompanyWorkspace({
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Danh sách nhà xe
+                {tCompanies('backToList')}
               </Button>
 
               {canUpdate && company && (
@@ -223,12 +226,12 @@ export function BusCompanyWorkspace({
                     variant="outline"
                   >
                     {company.status === 'HOAT_DONG'
-                      ? 'Tạm ngưng nhà xe'
-                      : 'Kích hoạt lại'}
+                      ? tCompanies('suspendCompany')
+                      : tCompanies('reactivateCompany')}
                   </Button>
                   <Button onClick={() => setEditDialogOpen(true)}>
                     <Pencil aria-hidden="true" />
-                    Chỉnh sửa
+                    {tCommon('edit')}
                   </Button>
                 </>
               )}
@@ -239,12 +242,12 @@ export function BusCompanyWorkspace({
               />
             </div>
           }
-          title="Thông tin nhà xe"
+          title={tCompanies('companyDetailsTitle')}
           titleId="bus-company-workspace-title"
         />
 
         {detailState.status === 'loading' && (
-          <ResourceState loading>Đang tải thông tin nhà xe…</ResourceState>
+          <ResourceState loading>{tCommon('loading')}</ResourceState>
         )}
 
         {detailState.status === 'error' && (
@@ -255,13 +258,13 @@ export function BusCompanyWorkspace({
                 onClick={() => setRetryCount((count) => count + 1)}
                 variant="outline"
               >
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button
                 nativeButton={false}
                 render={<Link href="/bus-companies" />}
               >
-                Về danh sách nhà xe
+                {tCompanies('backToList')}
               </Button>
             </div>
           </ResourceState>
@@ -279,14 +282,14 @@ export function BusCompanyWorkspace({
                       {company.name}
                     </h2>
                     <p className="admin-data-mono mt-1 text-sm text-muted-foreground">
-                      Mã nhà xe: <span className="font-semibold text-foreground">{company.code}</span>
+                      {tCompanies('companyCodePrefix')} <span className="font-semibold text-foreground">{company.code}</span>
                     </p>
                   </div>
                 </div>
                 <ResourceStatusBadge
                   tone={company.status === 'HOAT_DONG' ? 'active' : 'muted'}
                 >
-                  {statusLabel(company.status)}
+                  {company.status === 'HOAT_DONG' ? tCompanies('statusActive') : tCompanies('statusSuspended')}
                 </ResourceStatusBadge>
               </div>
             </Card>
@@ -299,16 +302,16 @@ export function BusCompanyWorkspace({
                   <div className="flex items-center gap-2">
                     <Building2 className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Thông tin liên hệ
+                      {tCompanies('contactInfo')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Đầu mối liên hệ</dt>
+                      <dt>{tCompanies('contactLead')}</dt>
                       <dd className="break-words">
-                        {company.contactInfo || 'Chưa cập nhật'}
+                        {company.contactInfo || tCompanies('noContactInfo')}
                       </dd>
                     </div>
                   </dl>
@@ -319,19 +322,19 @@ export function BusCompanyWorkspace({
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground">
-                    Thông tin hồ sơ hệ thống
+                    {tCompanies('systemRecordTitle')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2">
                     <div>
-                      <dt className="text-muted-foreground">Ngày tạo</dt>
+                      <dt className="text-muted-foreground">{tCommon('createdAt')}</dt>
                       <dd className="mt-1 font-medium text-foreground tabular-nums">
                         {timestampFormat(company.createdAt)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Cập nhật lần cuối</dt>
+                      <dt className="text-muted-foreground">{tCommon('updatedAt')}</dt>
                       <dd className="mt-1 font-medium text-foreground tabular-nums">
                         {timestampFormat(company.updatedAt)}
                       </dd>
@@ -357,16 +360,16 @@ export function BusCompanyWorkspace({
             busy={statusSubmitting}
             description={
               company.status === 'HOAT_DONG'
-                ? `Nhà xe "${company.name}" sẽ tạm ngưng hoạt động. Các tuyến xe và chuyến xe liên quan có thể bị ảnh hưởng.`
-                : `Nhà xe "${company.name}" sẽ được kích hoạt lại trạng thái hoạt động bình thường.`
+                ? tCompanies('confirmSuspendDesc', { name: company.name })
+                : tCompanies('confirmReactivateDesc', { name: company.name })
             }
             onClose={() => {
               if (!statusSubmittingRef.current) setStatusDialogOpen(false);
             }}
             title={
               company.status === 'HOAT_DONG'
-                ? 'Tạm ngưng nhà xe này?'
-                : 'Kích hoạt lại nhà xe này?'
+                ? tCompanies('confirmSuspendTitle')
+                : tCompanies('confirmReactivateTitle')
             }
           >
             <Button
@@ -375,10 +378,10 @@ export function BusCompanyWorkspace({
               variant={company.status === 'HOAT_DONG' ? 'destructive' : 'default'}
             >
               {statusSubmitting
-                ? 'Đang cập nhật…'
+                ? tCommon('loading')
                 : company.status === 'HOAT_DONG'
-                  ? 'Tạm ngưng nhà xe'
-                  : 'Kích hoạt lại'}
+                  ? tCompanies('suspendCompany')
+                  : tCompanies('reactivateCompany')}
             </Button>
           </ResourceConfirmation>
         )}

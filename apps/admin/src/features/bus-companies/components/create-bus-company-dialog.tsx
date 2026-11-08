@@ -4,6 +4,7 @@ import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Button } from '@/components/ui/action-button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -65,6 +66,8 @@ export function CreateBusCompanyDialog({
   onClose,
   onCreated,
 }: CreateBusCompanyDialogProps) {
+  const tCompanies = useTranslations('busCompanies');
+  const tCommon = useTranslations('common');
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>(INITIAL_VALUES);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -153,8 +156,8 @@ export function CreateBusCompanyDialog({
 
   return (
     <ResourceModalDialog
-      title="Thêm nhà xe"
-      description="Nhập thông tin cơ bản để thêm đối tác vào hệ thống."
+      title={tCompanies('createBusCompany')}
+      description={tCompanies('createCompanyDesc')}
       busy={submitting}
       preventDismiss={submitting}
       onClose={onClose}
@@ -171,7 +174,7 @@ export function CreateBusCompanyDialog({
               type="button"
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button disabled={submitting} type="submit">
               {submitting && (
@@ -180,7 +183,7 @@ export function CreateBusCompanyDialog({
                   className="size-4 motion-safe:animate-spin"
                 />
               )}
-              {submitting ? 'Đang tạo…' : 'Tạo nhà xe'}
+              {submitting ? tCommon('loading') : tCompanies('createButton')}
             </Button>
           </div>
         }
@@ -190,14 +193,14 @@ export function CreateBusCompanyDialog({
         )}
         
         <Field data-invalid={Boolean(fieldErrors.code)}>
-          <FieldLabel htmlFor="create-company-code">Mã nhà xe</FieldLabel>
+          <FieldLabel htmlFor="create-company-code">{tCompanies('colCode')}</FieldLabel>
           <Input
             autoComplete="off"
             className="admin-data-mono"
             id="create-company-code"
             maxLength={50}
             onChange={(event) => updateField('code', event.target.value)}
-            placeholder="Ví dụ: NX001"
+            placeholder={tCompanies('companyCodePlaceholder')}
             required
             type="text"
             value={values.code}
@@ -212,13 +215,13 @@ export function CreateBusCompanyDialog({
         </Field>
         
         <Field data-invalid={Boolean(fieldErrors.name)}>
-          <FieldLabel htmlFor="create-company-name">Tên nhà xe</FieldLabel>
+          <FieldLabel htmlFor="create-company-name">{tCompanies('colName')}</FieldLabel>
           <Input
             autoComplete="organization"
             id="create-company-name"
             maxLength={150}
             onChange={(event) => updateField('name', event.target.value)}
-            placeholder="Nhập tên nhà xe"
+            placeholder={tCompanies('companyNamePlaceholder')}
             required
             type="text"
             value={values.name}
@@ -234,9 +237,9 @@ export function CreateBusCompanyDialog({
         
         <Field data-invalid={Boolean(fieldErrors.contactInfo)}>
           <FieldLabel htmlFor="create-company-contact">
-            Thông tin liên hệ{' '}
+            {tCompanies('contactInfo')}{' '}
             <span className="text-xs font-normal text-muted-foreground">
-              (Tùy chọn)
+              {tCompanies('optional')}
             </span>
           </FieldLabel>
           <Input
@@ -245,7 +248,7 @@ export function CreateBusCompanyDialog({
             onChange={(event) =>
               updateField('contactInfo', event.target.value)
             }
-            placeholder="Số điện thoại hoặc thông tin liên hệ"
+            placeholder={tCompanies('contactPlaceholder')}
             type="text"
             value={values.contactInfo}
             aria-invalid={Boolean(fieldErrors.contactInfo)}
@@ -262,7 +265,7 @@ export function CreateBusCompanyDialog({
         
         <Field data-invalid={Boolean(fieldErrors.status)}>
           <FieldLabel htmlFor="create-company-status-trigger">
-            Trạng thái
+            {tCommon('status')}
           </FieldLabel>
           <Select
             onValueChange={(value) => {
@@ -283,13 +286,13 @@ export function CreateBusCompanyDialog({
             >
               <SelectValue>
                 {values.status === 'HOAT_DONG'
-                  ? 'Đang hoạt động'
-                  : 'Tạm ngưng'}
+                  ? tCompanies('statusActive')
+                  : tCompanies('statusSuspended')}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="HOAT_DONG">Đang hoạt động</SelectItem>
-              <SelectItem value="TAM_NGUNG">Tạm ngưng</SelectItem>
+              <SelectItem value="HOAT_DONG">{tCompanies('statusActive')}</SelectItem>
+              <SelectItem value="TAM_NGUNG">{tCompanies('statusSuspended')}</SelectItem>
             </SelectContent>
           </Select>
           <FieldError id="create-company-status-error">

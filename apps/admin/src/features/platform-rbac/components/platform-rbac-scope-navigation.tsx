@@ -2,31 +2,34 @@
 
 import { Building2, Globe2 } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/action-button';
-
-const scopes = [
-  {
-    id: 'platform',
-    href: '/rbac',
-    label: 'Mặc định toàn hệ thống',
-    Icon: Globe2,
-  },
-  {
-    id: 'tenant',
-    href: '/rbac/tenants',
-    label: 'Theo nhà xe',
-    Icon: Building2,
-  },
-] as const;
 
 export function PlatformRbacScopeNavigation({
   activeScope,
 }: {
   activeScope: 'platform' | 'tenant';
 }) {
+  const tRbac = useTranslations('rbac');
+
+  const scopes = [
+    {
+      id: 'platform',
+      href: '/rbac',
+      label: tRbac('platformDefaultScope'),
+      Icon: Globe2,
+    },
+    {
+      id: 'tenant',
+      href: '/rbac/tenants',
+      label: tRbac('tenantScope'),
+      Icon: Building2,
+    },
+  ] as const;
+
   return (
     <nav
-      aria-label="Phạm vi phân quyền"
+      aria-label={tRbac('scopeNavLabel')}
       className="grid grid-cols-1 gap-2 rounded-[var(--admin-radius-panel)] border bg-card p-2 sm:flex sm:flex-wrap"
     >
       {scopes.map((scope) => {

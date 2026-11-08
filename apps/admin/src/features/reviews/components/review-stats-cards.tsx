@@ -2,6 +2,7 @@
 
 import { AlertTriangle, MessageSquareQuote, Star, ThumbsUp } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/card';
 import type { AdminReviewStats } from '../types/review';
 
@@ -65,6 +66,7 @@ function MetricItem({
 }
 
 export function ReviewStatsCards({ stats }: { stats: AdminReviewStats | null }) {
+  const tReviews = useTranslations('reviews');
   if (!stats) return null;
 
   return (
@@ -72,42 +74,47 @@ export function ReviewStatsCards({ stats }: { stats: AdminReviewStats | null }) 
       <MetricItem
         highlight="default"
         icon={<Star className="fill-amber-400 text-amber-500" size={18} />}
-        label="Điểm trung bình (CSAT)"
+        label={tReviews('csatTitle')}
         value={`${stats.averageRating > 0 ? stats.averageRating.toFixed(1) : '0.0'} / 5.0`}
       >
         <span>
-          {stats.ratingDistribution[5] ?? 0} lượt 5 sao ·{' '}
-          {stats.ratingDistribution[4] ?? 0} lượt 4 sao
+          {tReviews('fiveStarSubtitle', {
+            five: stats.ratingDistribution[5] ?? 0,
+            four: stats.ratingDistribution[4] ?? 0,
+          })}
         </span>
       </MetricItem>
 
       <MetricItem
         highlight="primary"
         icon={<MessageSquareQuote size={18} />}
-        label="Tổng lượt đánh giá"
+        label={tReviews('totalReviewsTitle')}
         value={stats.totalReviews.toLocaleString('vi-VN')}
       >
         <span>
-          {stats.visibleCount} công khai · {stats.hiddenCount} đã ẩn
+          {tReviews('publicVsHidden', {
+            visible: stats.visibleCount,
+            hidden: stats.hiddenCount,
+          })}
         </span>
       </MetricItem>
 
       <MetricItem
         highlight="success"
         icon={<ThumbsUp size={18} />}
-        label="Tỷ lệ hài lòng"
+        label={tReviews('satisfactionRateTitle')}
         value={`${stats.satisfactionRate}%`}
       >
-        <span>Đánh giá tốt từ 4–5 sao</span>
+        <span>{tReviews('satisfactionSubtitle')}</span>
       </MetricItem>
 
       <MetricItem
         highlight={stats.negativeCount > 0 ? 'warning' : 'default'}
         icon={<AlertTriangle size={18} />}
-        label="Cần chú ý / Đã ẩn"
-        value={`${stats.negativeCount} tiêu cực`}
+        label={tReviews('needAttentionTitle')}
+        value={tReviews('negativeCountValue', { count: stats.negativeCount })}
       >
-        <span>{stats.hiddenCount} đánh giá bị ẩn khỏi khách hàng</span>
+        <span>{tReviews('hiddenReviewsSubtitle', { count: stats.hiddenCount })}</span>
       </MetricItem>
     </Card>
   );

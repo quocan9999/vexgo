@@ -21,6 +21,7 @@ import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useLocale, useTranslations } from 'next-intl';
 import { getCustomerById, updateCustomerStatus } from '../services/customer-service';
 import type { CustomerDetail } from '../types/customer';
 import { CustomerTransactionsTab } from './customer-transactions-tab';
@@ -52,26 +53,35 @@ function formatCalendarDate(value?: string | null) {
   return value;
 }
 
-function formatGender(gender?: string | null) {
+function formatGender(
+  gender: string | null | undefined,
+  tCustomers: (key: string) => string,
+) {
   if (!gender) return '—';
   switch (gender.toUpperCase()) {
     case 'NAM':
-      return 'Nam';
+      return tCustomers('genderMale');
     case 'NU':
-      return 'Nữ';
+      return tCustomers('genderFemale');
     case 'KHAC':
-      return 'Khác';
+      return tCustomers('genderOther');
     default:
       return gender;
   }
 }
 
-function getStatusBadgeConfig(status: string, lockedUntil?: string | null) {
-  if (status === 'HOAT_DONG') return { tone: 'active' as const, label: 'Đang hoạt động' };
-  if (status === 'BI_KHOA') return { tone: 'danger' as const, label: 'Bị khóa' };
+function getStatusBadgeConfig(
+  status: string,
+  lockedUntil: string | null | undefined,
+  tCustomers: (key: string, values?: any) => string,
+) {
+  if (status === 'HOAT_DONG') return { tone: 'active' as const, label: tCustomers('statusActive') };
+  if (status === 'BI_KHOA') return { tone: 'danger' as const, label: tCustomers('statusLocked') };
   return {
     tone: 'warning' as const,
-    label: lockedUntil ? `Tạm khóa đến ${lockedUntil}` : 'Tạm khóa',
+    label: lockedUntil
+      ? tCustomers('lockUntilPrefix', { date: lockedUntil })
+      : tCustomers('statusTemporaryLocked'),
   };
 }
 
@@ -84,6 +94,9 @@ function getTomorrowDateString() {
   return `${year}-${month}-${day}`;
 }
 export function CustomerWorkspace({ customerId }: { customerId: number }) {
+  const tCustomers = useTranslations('customers');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const isValidId = Number.isSafeInteger(customerId) && customerId > 0;
@@ -226,11 +239,11 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
     <SuperAdminLayout
       activeSection="customers"
       breadcrumbs={[
-        { label: 'Quản lý khách hàng', href: '/customers' },
+        { label: tCustomers('eyebrow'), href: '/customers' },
         {
           label: customer
             ? `${customer.fullName} (${customer.customerCode})`
-            : 'Chi tiết khách hàng',
+            : tCustomers('workspaceEyebrow'),
         },
       ]}
     >
@@ -244,7 +257,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Quay lại danh sách
+                {tCustomers('backToList')}
               </Button>
               {canUpdateStatus && customer && (
                 <Button
@@ -269,8 +282,8 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                   }}
                 >
                   {customer.account.status === 'HOAT_DONG'
-                    ? 'Khóa tài khoản'
-                    : 'Mở khóa tài khoản'}
+                    ? tCustomers('lockAccount')
+                    : tCustomers('unlockAccount')}
                 </Button>
               )}
               <ResourceRefreshAction
@@ -279,14 +292,14 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               />
             </div>
           }
-          eyebrow="HỒ SƠ KHÁCH HÀNG"
-          title={customer ? customer.fullName : 'Hồ sơ khách hàng'}
+          eyebrow={tCustomers('workspaceEyebrow')}
+          title={customer ? customer.fullName : tCustomers('workspaceEyebrow')}
           titleId="customer-workspace-title"
         />
 
         {loading && !customer && (
           <ResourceState loading>
-            <p>Đang tải thông tin khách hàng…</p>
+            <p>{tCommon('loading')}…</p>
           </ResourceState>
         )}
 
@@ -296,11 +309,11 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
             <div className="flex flex-wrap justify-center gap-3">
               {isValidId && (
                 <Button onClick={refresh} type="button" variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               )}
               <Link className={buttonVariants()} href="/customers">
-                Về danh sách khách hàng
+                {tCustomers('backToList')}
               </Link>
             </div>
           </ResourceState>
@@ -313,14 +326,14 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
         {customer && (
           <>
             <section
-              aria-label="Tóm tắt thông tin khách hàng"
+              aria-label={tCustomers('customerSummary')}
               className="space-y-5 rounded-xl border bg-card p-4 shadow-sm sm:p-5"
               aria-busy={refreshing}
             >
               <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
                 <div>
                   <span className="text-xs text-muted-foreground">
-                    Mã khách hàng:{' '}
+                    {tCustomers('colCustomerCode')}:{' '}
                     <strong className="admin-data-mono">
                       {customer.customerCode}
                     </strong>
@@ -333,6 +346,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                   const { tone, label } = getStatusBadgeConfig(
                     customer.account.status,
                     customer.account.lockedUntil,
+                    tCustomers,
                   );
                   return (
                     <ResourceStatusBadge tone={tone}>
@@ -344,24 +358,26 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
 
               <dl className="grid grid-cols-2 gap-5 text-[13px] lg:grid-cols-4 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
                 <div>
-                  <dt>Số điện thoại</dt>
+                  <dt>{tCustomers('colPhone')}</dt>
                   <dd>{customer.phoneNumber}</dd>
                 </div>
                 <div>
-                  <dt>Email</dt>
+                  <dt>{tCustomers('colEmail')}</dt>
                   <dd>{customer.email || '—'}</dd>
                 </div>
                 <div>
-                  <dt>Điểm tích lũy</dt>
+                  <dt>{tCustomers('colLoyaltyPoints')}</dt>
                   <dd>
                     <strong>
-                      {customer.loyaltyPoints.toLocaleString('vi-VN')}
+                      {customer.loyaltyPoints.toLocaleString(
+                        locale === 'en' ? 'en-US' : 'vi-VN',
+                      )}
                     </strong>{' '}
-                    điểm
+                    {tCustomers('pointsUnit')}
                   </dd>
                 </div>
                 <div>
-                  <dt>Ngày tham gia</dt>
+                  <dt>{tCustomers('joinedDate')}</dt>
                   <dd>{formatDateTime(customer.createdAt)}</dd>
                 </div>
               </dl>
@@ -374,58 +390,59 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
             >
               <div className="max-w-full">
                 <TabsList
-                  aria-label="Các phân hệ hồ sơ khách hàng"
+                  aria-label={tCustomers('workspaceEyebrow')}
                   className="grid w-full grid-cols-2 sm:inline-flex sm:w-fit"
                 >
                   <TabsTrigger value="transactions">
-                    Lịch sử giao dịch
+                    {tCustomers('tabTransactions')}
                   </TabsTrigger>
-                  <TabsTrigger value="tickets">Vé</TabsTrigger>
-                  <TabsTrigger value="shipments">Gửi hàng</TabsTrigger>
-                  <TabsTrigger value="overview">Tổng quan</TabsTrigger>
+                  <TabsTrigger value="tickets">{tCustomers('tabTickets')}</TabsTrigger>
+                  <TabsTrigger value="shipments">{tCustomers('tabShipments')}</TabsTrigger>
+                  <TabsTrigger value="overview">{tCustomers('tabOverview')}</TabsTrigger>
                 </TabsList>
               </div>
               <TabsContent value="overview">
                 {activeTab === 'overview' && (
                   <div className="space-y-6">
                     <div className="space-y-5 rounded-xl border bg-card p-4 sm:p-5 [&_h4]:text-base [&_h4]:font-semibold">
-                      <h4>Hồ sơ cá nhân</h4>
+                      <h4>{tCustomers('personalProfile')}</h4>
                       <dl className="grid gap-5 text-[13px] sm:grid-cols-2">
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Ngày sinh</dt>
+                          <dt>{tCustomers('dateOfBirth')}</dt>
                           <dd>{formatCalendarDate(customer.dateOfBirth)}</dd>
                         </div>
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Giới tính</dt>
-                          <dd>{formatGender(customer.gender)}</dd>
+                          <dt>{tCustomers('gender')}</dt>
+                          <dd>{formatGender(customer.gender, tCustomers)}</dd>
                         </div>
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Số CCCD / Định danh</dt>
+                          <dt>{tCustomers('citizenId')}</dt>
                           <dd className="admin-data-mono">{customer.citizenId || '—'}</dd>
                         </div>
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Địa chỉ</dt>
+                          <dt>{tCustomers('address')}</dt>
                           <dd>{customer.address || '—'}</dd>
                         </div>
                       </dl>
                     </div>
 
                     <div className="space-y-5 rounded-xl border bg-card p-4 sm:p-5 [&_h4]:text-base [&_h4]:font-semibold">
-                      <h4>Chi tiết tài khoản liên kết</h4>
+                      <h4>{tCustomers('linkedAccount')}</h4>
                       <dl className="grid gap-5 text-[13px] sm:grid-cols-2">
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Mã tài khoản</dt>
+                          <dt>{tCustomers('accountId')}</dt>
                           <dd className="admin-data-mono">
                             #{customer.account.accountId}
                           </dd>
                         </div>
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Trạng thái tài khoản</dt>
+                          <dt>{tCustomers('colStatus')}</dt>
                           <dd>
                             {(() => {
                               const { tone, label } = getStatusBadgeConfig(
                                 customer.account.status,
                                 customer.account.lockedUntil,
+                                tCustomers,
                               );
                               return (
                                 <ResourceStatusBadge tone={tone}>
@@ -437,7 +454,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                         </div>
                         {customer.account.lockedUntil && customer.account.status === 'TAM_KHOA' && (
                           <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                            <dt>Hạn tạm khóa</dt>
+                            <dt>{tCustomers('lockUntil')}</dt>
                             <dd className="admin-data-mono font-medium text-amber-600 dark:text-amber-400">
                               {customer.account.lockedUntil}
                             </dd>
@@ -445,26 +462,26 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                         )}
                         {customer.account.lockReason && customer.account.status !== 'HOAT_DONG' && (
                           <div className="min-w-0 col-span-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                            <dt>Lý do khóa</dt>
+                            <dt>{tCustomers('lockReason')}</dt>
                             <dd className="text-destructive font-medium">
                               {customer.account.lockReason}
                             </dd>
                           </div>
                         )}
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Xác thực số điện thoại</dt>
+                          <dt>{tCustomers('phoneVerified')}</dt>
                           <dd>
                             {customer.account.phoneVerified
-                              ? 'Đã xác thực'
-                              : 'Chưa xác thực'}
+                              ? tCustomers('verified')
+                              : tCustomers('unverified')}
                           </dd>
                         </div>
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Thời gian đăng ký</dt>
+                          <dt>{tCustomers('registeredAt')}</dt>
                           <dd>{formatDateTime(customer.account.createdAt)}</dd>
                         </div>
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
-                          <dt>Cập nhật lần cuối</dt>
+                          <dt>{tCustomers('updatedAt')}</dt>
                           <dd>{formatDateTime(customer.account.updatedAt)}</dd>
                         </div>
                       </dl>
@@ -505,13 +522,13 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
           }}
           title={
             customer.account.status === 'HOAT_DONG'
-              ? 'Khóa tài khoản khách hàng?'
-              : 'Mở khóa tài khoản khách hàng?'
+              ? tCustomers('lockDialogTitle')
+              : tCustomers('unlockDialogTitle')
           }
           description={
             customer.account.status === 'HOAT_DONG'
-              ? 'Tài khoản khách hàng sẽ bị vô hiệu hóa. Khách hàng sẽ không thể đăng nhập hoặc đặt vé, và các phiên đăng nhập đang hoạt động sẽ bị thu hồi ngay lập tức.'
-              : 'Tài khoản khách hàng sẽ được kích hoạt trở lại và có thể đăng nhập, đặt vé bình thường.'
+              ? tCustomers('lockDialogDesc')
+              : tCustomers('unlockDialogDesc')
           }
           footer={
             <>
@@ -527,7 +544,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                 }}
                 variant="outline"
               >
-                Hủy
+                {tCommon('cancel')}
               </Button>
               <Button
                 aria-busy={statusSubmitting}
@@ -546,10 +563,10 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                   />
                 )}
                 {statusSubmitting
-                  ? 'Đang cập nhật…'
+                  ? `${tCommon('loading')}…`
                   : customer.account.status === 'HOAT_DONG'
-                    ? 'Xác nhận khóa tài khoản'
-                    : 'Xác nhận mở khóa'}
+                    ? tCustomers('confirmLock')
+                    : tCustomers('confirmUnlock')}
               </Button>
             </>
           }
@@ -559,7 +576,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               <>
                 <Field>
                   <FieldLabel id="workspace-lock-mode-label">
-                    Hình thức khóa <span className="text-destructive">*</span>
+                    {tCustomers('lockMode')} <span className="text-destructive">*</span>
                   </FieldLabel>
                   <RadioGroup
                     aria-labelledby="workspace-lock-mode-label"
@@ -572,11 +589,11 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                   >
                     <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                       <RadioGroupItem value="TAM_KHOA" id="workspace-radio-tam-khoa" />
-                      <span>Tạm khóa</span>
+                      <span>{tCustomers('lockModeTemp')}</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                       <RadioGroupItem value="BI_KHOA" id="workspace-radio-bi-khoa" />
-                      <span>Khóa vĩnh viễn</span>
+                      <span>{tCustomers('lockModePermanent')}</span>
                     </label>
                   </RadioGroup>
                 </Field>
@@ -584,7 +601,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                 {lockMode === 'TAM_KHOA' && (
                   <Field>
                     <FieldLabel htmlFor="workspace-locked-until">
-                      Tạm khóa đến ngày <span className="text-destructive">*</span>
+                      {tCustomers('lockUntilDateLabel')} <span className="text-destructive">*</span>
                     </FieldLabel>
                     <Input
                       id="workspace-locked-until"
@@ -607,8 +624,8 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               <div className="flex justify-between items-center">
                 <FieldLabel htmlFor="workspace-status-reason">
                   {customer.account.status === 'HOAT_DONG'
-                    ? 'Lý do khóa (tùy chọn)'
-                    : 'Lý do mở khóa (tùy chọn)'}
+                    ? tCustomers('reasonOptionalLock')
+                    : tCustomers('reasonOptionalUnlock')}
                 </FieldLabel>
                 <span className="text-xs text-muted-foreground">
                   {statusReason.length}/255
@@ -624,8 +641,8 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                 }}
                 placeholder={
                   customer.account.status === 'HOAT_DONG'
-                    ? 'Nhập lý do khóa nếu có (tối đa 255 ký tự)...'
-                    : 'Nhập lý do mở khóa nếu có (tối đa 255 ký tự)...'
+                    ? `${tCustomers('reasonOptionalLock')}...`
+                    : `${tCustomers('reasonOptionalUnlock')}...`
                 }
                 rows={3}
                 disabled={statusSubmitting}

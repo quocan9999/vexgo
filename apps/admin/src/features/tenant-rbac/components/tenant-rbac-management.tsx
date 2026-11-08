@@ -331,8 +331,8 @@ export function TenantRbacManagement() {
         className="admin-page-content admin-ui space-y-6"
       >
         <AdminPageHeader
-          eyebrow="QUẢN TRỊ NHÀ XE"
-          title={tRbac('rbacTitle')}
+          eyebrow={tRbac('eyebrowTenant')}
+          title={tRbac('tenantRbacTitle')}
           titleId="tenant-rbac-title"
           actions={
             <ResourceRefreshAction
@@ -351,18 +351,18 @@ export function TenantRbacManagement() {
         )}
         {loading && !config && (
           <Card>
-            <ResourceState loading>Đang tải cấu hình phân quyền…</ResourceState>
+            <ResourceState loading>{tRbac('loadingCatalog')}</ResourceState>
           </Card>
         )}
         {!loading && !config && loadError && (
           <Card>
             <ResourceState error>
               <h2 className="text-base font-semibold">
-                Không thể tải cấu hình quyền
+                {tRbac('loadErrorTitle')}
               </h2>
               <p>{loadError}</p>
               <Button onClick={retryLoading} variant="outline">
-                Thử tải lại
+                {tRbac('reloadConfig')}
               </Button>
             </ResourceState>
           </Card>
@@ -385,7 +385,7 @@ export function TenantRbacManagement() {
               radioName="tenant-rbac-role"
               roles={config.roles}
               selectedRoleName={selectedRole.roleName}
-              title="Chọn vai trò cần cấu hình"
+              title={tRbac('selectRoleTitle')}
               titleId="tenant-rbac-roles-title"
             />
 

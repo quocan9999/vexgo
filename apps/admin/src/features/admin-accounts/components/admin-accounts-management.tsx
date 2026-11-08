@@ -71,68 +71,44 @@ type FilterOptionsState =
   | { status: 'error'; message: string }
   | { status: 'success'; companies: FilterOption[]; roles: FilterOption[] };
 
-const ROLE_LABELS: Record<string, string> = {
-  NHA_XE_ADMIN: 'Quản trị nhà xe',
-  NHAN_VIEN_DIEU_HANH: 'Nhân viên điều hành',
-  NHAN_VIEN_BAN_VE: 'Nhân viên bán vé',
-  NHAN_VIEN_CSKH: 'Nhân viên CSKH',
-  NHAN_VIEN_PHU_XE: 'Nhân viên phụ xe',
-  NHAN_VIEN_KINH_DOANH: 'Nhân viên kinh doanh',
-};
-
-function roleLabel(role: string) {
-  return ROLE_LABELS[role] ?? role.replaceAll('_', ' ');
+function getRoleLabel(role: string, t: (key: string) => string) {
+  const map: Record<string, string> = {
+    NHA_XE_ADMIN: t('roleOperatorAdmin'),
+    NHAN_VIEN_DIEU_HANH: t('roleDispatcher'),
+    NHAN_VIEN_BAN_VE: t('roleTicketClerk'),
+    NHAN_VIEN_CSKH: t('roleSupportAgent'),
+    NHAN_VIEN_PHU_XE: t('roleDriverAssistant'),
+    NHAN_VIEN_KINH_DOANH: t('roleSales'),
+  };
+  return map[role] ?? role.replaceAll('_', ' ');
 }
 
-function statusLabel(status: AdminAccountStatus) {
-  return status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Đang khóa';
-}
-
-function formatTimestamp(value: string) {
-  const timestamp = new Date(value);
-  if (Number.isNaN(timestamp.getTime())) return 'Chưa có thông tin';
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-    .format(timestamp)
-    .replaceAll('/', '-');
-}
-
-function formatDate(value: string | null) {
-  if (!value) return 'Chưa cập nhật';
-  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : 'Chưa cập nhật';
-}
-
-function RoleBadges({ roles }: { roles: readonly string[] }) {
+function RoleBadges({ roles, t }: { roles: readonly string[]; t: (key: string) => string }) {
   if (roles.length === 0) {
-    return <span className="text-muted-foreground">Chưa được gán vai trò</span>;
+    return <span className="text-muted-foreground">{t('noRolesAssigned')}</span>;
   }
   return (
     <div className="flex flex-wrap gap-1.5">
       {roles.map((role) => (
         <ResourceStatusBadge key={role} tone="muted">
-          {roleLabel(role)}
+          {getRoleLabel(role, t)}
         </ResourceStatusBadge>
       ))}
     </div>
   );
 }
 
-function AccountStatusBadge({ status }: { status: AdminAccountStatus }) {
+function AccountStatusBadge({ status, t }: { status: AdminAccountStatus; t: (key: string) => string }) {
   return (
     <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
-      {statusLabel(status)}
+      {status === 'HOAT_DONG' ? t('statusActive') : t('statusLocked')}
     </ResourceStatusBadge>
   );
 }
 
 export function AdminAccountsManagement() {
   const tAccounts = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
   const {
     accountPage,
     busCompanyId,
@@ -165,6 +141,19 @@ export function AdminAccountsManagement() {
     searchInput.trim() || status || busCompanyId !== undefined || roleName || createdDateRange,
   );
 
+  const statusOptions: FilterOption[] = [
+    { value: 'HOAT_DONG', label: tAccounts('statusActive') },
+    { value: 'TAM_KHOA', label: tAccounts('statusLocked') },
+  ];
+
+  const sortOptions: FilterOption[] = [
+    { value: 'createdAt', label: tCommon('createdAt') },
+    { value: 'fullName', label: tAccounts('accountName') },
+    { value: 'phoneNumber', label: tAccounts('accountPhone') },
+    { value: 'status', label: tCommon('status') },
+    { value: 'updatedAt', label: tCommon('updatedAt') },
+  ];
+
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
@@ -178,7 +167,7 @@ export function AdminAccountsManagement() {
           companies: companies.map((company) => ({ value: String(company.id), label: company.label })),
           roles: catalog.roles.flatMap((role) =>
             role.scope === 'tenant' && TENANT_RBAC_ROLE_NAMES.includes(role.roleName as TenantRbacRoleName)
-              ? [{ value: role.roleName, label: roleLabel(role.roleName) }]
+              ? [{ value: role.roleName, label: getRoleLabel(role.roleName, tAccounts) }]
               : [],
           ),
         });
@@ -187,11 +176,11 @@ export function AdminAccountsManagement() {
         if (controller.signal.aborted) return;
         setFilterOptions({
           status: 'error',
-          message: requestError instanceof Error ? requestError.message : 'Không thể tải bộ lọc nhà xe và vai trò.',
+          message: requestError instanceof Error ? requestError.message : tAccounts('filterError'),
         });
       });
     return () => controller.abort();
-  }, [filterOptionsRetry]);
+  }, [filterOptionsRetry, tAccounts]);
 
   function sortableHeader(label: string, key: AdminAccountSortKey) {
     const selected = sortBy === key;
@@ -218,7 +207,7 @@ export function AdminAccountsManagement() {
               <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
-          eyebrow="QUẢN TRỊ NỀN TẢNG"
+          eyebrow={tAccounts('eyebrowPlatform')}
           title={tAccounts('adminAccountsTitle')}
           titleId="admin-accounts-title"
         />
@@ -227,42 +216,42 @@ export function AdminAccountsManagement() {
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label="Tìm tài khoản Admin"
+                label={tAccounts('searchAdminAccounts')}
                 onChange={updateSearch}
-                placeholder="Tìm theo tên, số điện thoại, email hoặc nhà xe"
+                placeholder={tAccounts('searchPlaceholder')}
                 value={searchInput}
               />
-              <SelectFilter allLabel="Tất cả trạng thái" label="Lọc theo trạng thái tài khoản" onChange={updateStatus} options={STATUS_OPTIONS} value={status} />
+              <SelectFilter allLabel={tAccounts('allStatuses')} label={tAccounts('filterStatusLabel')} onChange={updateStatus} options={statusOptions} value={status} />
               <SelectFilter
-                allLabel="Tất cả nhà xe"
-                label="Lọc theo nhà xe"
+                allLabel={tAccounts('allCompanies')}
+                label={tAccounts('filterCompanyLabel')}
                 onChange={updateBusCompany}
                 options={filterOptions.status === 'success' ? filterOptions.companies : []}
                 value={busCompanyId === undefined ? '' : String(busCompanyId)}
               />
               <SelectFilter
-                allLabel="Tất cả vai trò"
-                label="Lọc theo vai trò"
+                allLabel={tAccounts('allRoles')}
+                label={tAccounts('filterRoleLabel')}
                 onChange={updateRole}
                 options={filterOptions.status === 'success' ? filterOptions.roles : []}
                 value={roleName}
               />
               <DateRangeFilter
                 appearance="resource"
-                label="Ngày tạo"
+                label={tAccounts('colCreatedAt')}
                 onApply={updateCreatedDateRange}
                 value={createdDateRange}
               />
             </FilterToolbar>
 
             {filterOptions.status === 'loading' && (
-              <p className="border-b px-5 py-3 text-xs text-muted-foreground" role="status">Đang tải tùy chọn bộ lọc…</p>
+              <p className="border-b px-5 py-3 text-xs text-muted-foreground" role="status">{tAccounts('filterLoading')}</p>
             )}
             {filterOptions.status === 'error' && (
               <div className="border-b p-4">
                 <ResourceNotice kind="error">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span>Không tải được danh sách nhà xe và vai trò lọc: {filterOptions.message}</span>
+                    <span>{tAccounts('filterError')}: {filterOptions.message}</span>
                     <Button
                       onClick={() => {
                         setFilterOptions({ status: 'loading' });
@@ -270,7 +259,7 @@ export function AdminAccountsManagement() {
                       }}
                       variant="outline"
                     >
-                      Tải lại bộ lọc
+                      {tAccounts('retryFilters')}
                     </Button>
                   </div>
                 </ResourceNotice>
@@ -281,21 +270,21 @@ export function AdminAccountsManagement() {
               <div className="border-b p-4">
                 <ResourceNotice kind="error">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div><strong>Chưa tải được danh sách tài khoản Admin</strong><p className="mt-1">{error}</p></div>
-                    <Button onClick={refresh} variant="outline">Thử lại</Button>
+                    <div><strong>{tAccounts('loadErrorTitle')}</strong><p className="mt-1">{error}</p></div>
+                    <Button onClick={refresh} variant="outline">{tCommon('retry')}</Button>
                   </div>
                 </ResourceNotice>
               </div>
             )}
 
-            {loading && !accountPage && !error && <ResourceTableSkeleton resourceLabel="tài khoản Admin" />}
+            {loading && !accountPage && !error && <ResourceTableSkeleton resourceLabel={tAccounts('colAccount')} />}
 
             <ResourceSortControls
               direction={sortDirection}
-              label="Sắp xếp theo"
+              label={tCommon('sortBy')}
               onDirectionChange={() => sortAccounts(sortBy)}
               onFieldChange={(value) => sortAccounts(value as AdminAccountSortKey)}
-              options={SORT_OPTIONS}
+              options={sortOptions}
               value={sortBy}
             />
 
@@ -303,9 +292,8 @@ export function AdminAccountsManagement() {
               <ResourceState>
                 <div className="space-y-1">
                   <h3 className="font-semibold text-foreground">
-                    {hasFilters ? 'Không tìm thấy tài khoản Admin phù hợp' : 'Chưa có tài khoản Admin'}
+                    {hasFilters ? tAccounts('emptyFiltered') : tAccounts('emptyNoData')}
                   </h3>
-                  <p>{hasFilters ? 'Thử đổi từ khóa hoặc điều chỉnh bộ lọc.' : 'Tài khoản nhân viên sẽ xuất hiện ở đây sau khi được tạo.'}</p>
                 </div>
               </ResourceState>
             )}
@@ -319,13 +307,13 @@ export function AdminAccountsManagement() {
                   <Table className="min-w-[1120px]">
                     <TableHeader>
                       <TableRow>
-                        {sortableHeader('Họ và tên', 'fullName')}
-                        {sortableHeader('Số điện thoại', 'phoneNumber')}
-                        <TableHead scope="col">Nhà xe</TableHead>
-                        <TableHead scope="col">Vai trò</TableHead>
-                        {sortableHeader('Trạng thái', 'status')}
-                        {sortableHeader('Ngày tạo', 'createdAt')}
-                        <TableHead scope="col"><span className="sr-only">Thao tác</span></TableHead>
+                        {sortableHeader(tAccounts('accountName'), 'fullName')}
+                        {sortableHeader(tAccounts('accountPhone'), 'phoneNumber')}
+                        <TableHead scope="col">{tAccounts('colCompany')}</TableHead>
+                        <TableHead scope="col">{tAccounts('colRole')}</TableHead>
+                        {sortableHeader(tAccounts('colStatus'), 'status')}
+                        {sortableHeader(tAccounts('colCreatedAt'), 'createdAt')}
+                        <TableHead scope="col"><span className="sr-only">{tCommon('actions')}</span></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -349,11 +337,11 @@ export function AdminAccountsManagement() {
                             {account.email && <small className="mt-0.5 block text-xs text-muted-foreground">{account.email}</small>}
                           </TableCell>
                           <TableCell>{account.busCompany.name}</TableCell>
-                          <TableCell className="min-w-52"><RoleBadges roles={account.roles} /></TableCell>
-                          <TableCell><AccountStatusBadge status={account.status} /></TableCell>
-                          <TableCell>{formatTimestamp(account.createdAt)}</TableCell>
+                          <TableCell className="min-w-52"><RoleBadges roles={account.roles} t={tAccounts} /></TableCell>
+                          <TableCell><AccountStatusBadge status={account.status} t={tAccounts} /></TableCell>
+                          <TableCell>{account.createdAt}</TableCell>
                           <TableCell className="text-right">
-                            <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`tài khoản ${account.fullName}`} />
+                            <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`${tAccounts('colAccount')} ${account.fullName}`} />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -379,15 +367,15 @@ export function AdminAccountsManagement() {
                             {account.employee.position ? `${account.employee.position} · ` : ''}{account.employee.employeeCode}
                           </p>
                         </div>
-                        <AccountStatusBadge status={account.status} />
+                        <AccountStatusBadge status={account.status} t={tAccounts} />
                       </div>
                       <dl className="grid min-w-0 grid-cols-2 gap-4 border-t pt-3 text-[13px] [&_dd]:mt-1 [&_dd]:break-words [&_dt]:text-xs [&_dt]:text-muted-foreground">
-                        <div><dt>Nhà xe</dt><dd>{account.busCompany.name}</dd></div>
-                        <div><dt>Ngày tạo</dt><dd>{formatTimestamp(account.createdAt)}</dd></div>
-                        <div className="col-span-2"><dt>Vai trò</dt><dd className="mt-2"><RoleBadges roles={account.roles} /></dd></div>
+                        <div><dt>{tAccounts('colCompany')}</dt><dd>{account.busCompany.name}</dd></div>
+                        <div><dt>{tAccounts('colCreatedAt')}</dt><dd>{account.createdAt}</dd></div>
+                        <div className="col-span-2"><dt>{tAccounts('colRole')}</dt><dd className="mt-2"><RoleBadges roles={account.roles} t={tAccounts} /></dd></div>
                       </dl>
                       <div className="border-t pt-3">
-                        <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`tài khoản ${account.fullName}`} />
+                        <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`${tAccounts('colAccount')} ${account.fullName}`} />
                       </div>
                     </Card>
                   ))}
@@ -398,7 +386,7 @@ export function AdminAccountsManagement() {
                   disabled={loading}
                   onPageChange={changePage}
                   pageSize={accountPage.meta.pageSize}
-                  summaryLabel="tài khoản"
+                  summaryLabel={tAccounts('colAccount')}
                   totalItems={accountPage.meta.totalItems}
                   totalPages={accountPage.meta.totalPages}
                 />

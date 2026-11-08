@@ -1090,19 +1090,19 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               </Button>
             </div>
             <SearchInput
-              label="Tìm cuộc trò chuyện"
-              placeholder="Tên khách hàng, số điện thoại…"
+              label={tChat('searchConversations')}
+              placeholder={tChat('searchPlaceholder')}
               value={searchQuery}
               onChange={setSearchQuery}
             />
             <SelectFilter
-              label="Trạng thái hội thoại"
-              allLabel="Tất cả hội thoại"
+              label={tChat('statusFilterLabel')}
+              allLabel={tChat('allConversations')}
               value={activeTab === 'ALL' ? '' : activeTab}
               options={[
-                { value: 'CHO_TIEP_NHAN', label: 'Chờ tiếp nhận' },
-                { value: 'DANG_XU_LY', label: 'Đang xử lý' },
-                { value: 'DA_DONG', label: 'Đã đóng' },
+                { value: 'CHO_TIEP_NHAN', label: tChat('tabPending') },
+                { value: 'DANG_XU_LY', label: tChat('tabProcessing') },
+                { value: 'DA_DONG', label: tChat('tabClosed') },
               ]}
               onChange={(value) => setActiveTab((value || 'ALL') as FilterTab)}
             />
@@ -1112,9 +1112,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             aria-busy={loadingConversations}
           >
             {loadingConversations ? (
-              <ResourceState loading>Đang tải cuộc trò chuyện…</ResourceState>
+              <ResourceState loading>{tChat('loadingOlderMessages')}</ResourceState>
             ) : conversations.length === 0 ? (
-              <ResourceState>Không có cuộc trò chuyện phù hợp.</ResourceState>
+              <ResourceState>{tChat('emptyConversations')}</ResourceState>
             ) : (
               <ul className="space-y-2 p-3">
                 {conversations.map((c) => {
@@ -1165,7 +1165,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             {c.khachHang.taiKhoan.soDienThoai}
                           </span>
                           <span className="line-clamp-2 text-[13px] text-muted-foreground">
-                            {c.tinNhanCuoi?.noiDung || 'Cuộc trò chuyện mới'}
+                            {c.tinNhanCuoi?.noiDung || tChat('newConversation')}
                           </span>
                           <span className="flex flex-wrap items-center justify-between gap-2">
                             <ResourceStatusBadge
@@ -1178,10 +1178,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                               }
                             >
                               {c.trangThai === 'CHO_TIEP_NHAN'
-                                ? 'Chờ tiếp nhận'
+                                ? tChat('tabPending')
                                 : c.trangThai === 'DANG_XU_LY'
-                                  ? 'Đang xử lý'
-                                  : 'Đã đóng'}
+                                  ? tChat('tabProcessing')
+                                  : tChat('tabClosed')}
                             </ResourceStatusBadge>
                             <time
                               className="text-xs text-muted-foreground"
@@ -1214,7 +1214,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   {loadingMore && (
                     <Loader2 aria-hidden className="motion-safe:animate-spin" />
                   )}
-                  {loadingMore ? 'Đang tải…' : 'Tải thêm hội thoại'}
+                  {loadingMore ? tChat('loadingOlderMessages') : tChat('loadMore')}
                 </Button>
               </div>
             )}
@@ -1225,11 +1225,11 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
           className={`${styles.detail} ${selectedConv ? 'flex' : 'hidden md:flex'}`}
         >
           <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 text-xs text-muted-foreground">
-            <span>Hỗ trợ khách hàng</span>
+            <span>{tChat('supportChatTitle')}</span>
             <ResourceStatusBadge tone={socketConnected ? 'active' : 'muted'}>
               {socketConnected
-                ? 'Đã kết nối realtime'
-                : 'Chưa kết nối realtime'}
+                ? tChat('realtimeConnected')
+                : tChat('realtimeDisconnected')}
             </ResourceStatusBadge>
           </div>
           {!selectedConv ? (
@@ -1239,10 +1239,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   aria-hidden
                   className="mx-auto size-10 text-primary/60"
                 />
-                <h2 className="text-lg font-semibold">Chọn cuộc trò chuyện</h2>
+                <h2 className="text-lg font-semibold">{tChat('noConversationSelected')}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Chọn khách hàng trong hộp thư để xem nội dung và phản hồi hỗ
-                  trợ.
+                  {tChat('selectConversationPrompt')}
                 </p>
               </div>
             </div>
@@ -1274,12 +1273,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       className="truncate text-xs text-muted-foreground"
                       title={
                         selectedConv.nhanVien?.taiKhoan.hoTen ||
-                        'Chưa tiếp nhận'
+                        tChat('unassigned')
                       }
                     >
-                      Người xử lý:{' '}
+                      {tChat('handler')}{' '}
                       {selectedConv.nhanVien?.taiKhoan.hoTen ||
-                        'Chưa tiếp nhận'}
+                        tChat('unassigned')}
                     </p>
                     <p className="admin-data-mono hidden break-all text-xs text-muted-foreground sm:block">
                       {selectedConv.maCuocTroChuyen}
@@ -1295,19 +1294,19 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                           className="motion-safe:animate-spin"
                         />
                       )}
-                      Tiếp nhận hỗ trợ
+                      {tChat('takeConversation')}
                     </Button>
                   )}
                   {!isClosed && canManageChat && (
                     <Button
                       disabled={actionLoading}
                       variant="outline"
-                      aria-label="Kết thúc"
+                      aria-label={tChat('endConversation')}
                       className="w-11 px-0 sm:w-auto sm:px-4"
                       onClick={() => setCloseOpen(true)}
                     >
                       <XCircle aria-hidden />
-                      <span className="hidden sm:inline">Kết thúc</span>
+                      <span className="hidden sm:inline">{tChat('endConversation')}</span>
                     </Button>
                   )}
                 </div>
@@ -1321,7 +1320,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               >
                 {loadingMessages ? (
                   <ResourceState loading>
-                    Đang tải lịch sử tin nhắn…
+                    {tChat('loadingOlderMessages')}
                   </ResourceState>
                 ) : (
                   <>
@@ -1339,8 +1338,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             />
                           )}
                           {loadingOlderMessages
-                            ? 'Đang tải…'
-                            : 'Tải tin nhắn cũ hơn'}
+                            ? tChat('loadingOlderMessages')
+                            : tChat('loadOlderMessages')}
                         </Button>
                       </div>
                     )}
@@ -1416,12 +1415,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             {pending ? (
                               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Clock aria-hidden className="size-3" />
-                                Đang gửi
+                                {tChat('sendingStatus')}
                               </span>
                             ) : failed ? (
                               <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
                                 <AlertCircle aria-hidden className="size-3" />
-                                Gửi thất bại
+                                {tChat('failedToSend')}
                                 <Button
                                   size="sm"
                                   variant="link"
@@ -1435,8 +1434,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             ) : staff ? (
                               <span className="text-xs text-muted-foreground">
                                 {msg.trangThai === 'DA_DOC'
-                                  ? 'Đã đọc'
-                                  : 'Đã gửi'}
+                                  ? tChat('readStatus')
+                                  : tChat('sentStatus')}
                               </span>
                             ) : null}
                           </div>
@@ -1448,7 +1447,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         role="status"
                         className="text-xs italic text-muted-foreground"
                       >
-                        Khách hàng đang nhập…
+                        {tChat('customerTypingText')}
                       </p>
                     )}
                     <div ref={messagesEndRef} />
@@ -1458,15 +1457,15 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               <div className="shrink-0 border-t bg-card p-4">
                 {!canManageChat ? (
                   <ResourceNotice kind="info">
-                    Bạn đang xem hội thoại với quyền chỉ đọc.
+                    {tChat('readOnlyNotice')}
                   </ResourceNotice>
                 ) : isClosed ? (
                   <ResourceNotice kind="info">
-                    Cuộc trò chuyện đã kết thúc. Không thể gửi thêm tin nhắn.
+                    {tChat('closedNotice')}
                   </ResourceNotice>
                 ) : isPending ? (
                   <ResourceNotice kind="info">
-                    Tiếp nhận hỗ trợ để bắt đầu phản hồi khách hàng.
+                    {tChat('claimToReplyNotice')}
                   </ResourceNotice>
                 ) : (
                   <div className="space-y-2">
@@ -1474,7 +1473,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       htmlFor="support-chat-reply"
                       className="block text-[13px] font-semibold"
                     >
-                      Nội dung phản hồi
+                      {tChat('replyLabel')}
                     </label>
                     <div className="flex items-end gap-2">
                       <Input
@@ -1486,14 +1485,14 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                           !event.nativeEvent.isComposing &&
                           handleSendMessage()
                         }
-                        placeholder="Nhập tin nhắn…"
+                        placeholder={tChat('typeMessage')}
                         disabled={sending}
                         className="min-w-0 flex-1"
                       />
                       <Button
                         onClick={handleSendMessage}
                         disabled={!inputValue.trim() || sending}
-                        aria-label="Gửi tin nhắn"
+                        aria-label={tChat('sendMessage')}
                       >
                         {sending ? (
                           <Loader2
@@ -1503,7 +1502,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         ) : (
                           <Send aria-hidden />
                         )}
-                        <span className="hidden sm:inline">Gửi</span>
+                        <span className="hidden sm:inline">{tChat('sendMessage')}</span>
                       </Button>
                     </div>
                   </div>
@@ -1515,8 +1514,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       </div>
       {closeOpen && selectedConv && (
         <ResourceConfirmation
-          title="Kết thúc cuộc trò chuyện?"
-          description={`Kết thúc hỗ trợ ${selectedConv.khachHang.taiKhoan.hoTen}. Lịch sử tin nhắn vẫn được giữ lại.`}
+          title={tChat('confirmCloseTitle')}
+          description={tChat('confirmCloseDesc', { name: selectedConv.khachHang.taiKhoan.hoTen })}
           busy={actionLoading}
           onClose={() => setCloseOpen(false)}
         >
@@ -1528,7 +1527,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             {actionLoading && (
               <Loader2 aria-hidden className="motion-safe:animate-spin" />
             )}
-            Kết thúc hội thoại
+            {tChat('confirmCloseButton')}
           </Button>
         </ResourceConfirmation>
       )}

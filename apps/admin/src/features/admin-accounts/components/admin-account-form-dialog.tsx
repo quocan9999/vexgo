@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/action-button';
+import { useTranslations } from 'next-intl';
 import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
 import type { AdminRbacRole } from '@/features/platform-rbac/types/platform-rbac';
@@ -137,6 +138,8 @@ export function AdminAccountFormDialog({
   onClose: () => void;
   onSaved: (saved: AdminAccount) => void;
 }) {
+  const tAccounts = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
   const editing = account !== undefined;
   const idPrefix = editing
     ? `edit-admin-account-${account.accountId}`
@@ -392,11 +395,11 @@ export function AdminAccountFormDialog({
       busy={submitting}
       description={
         editing
-          ? 'Cập nhật thông tin cá nhân. Số điện thoại, nhà xe, mã nhân viên và vai trò được quản lý riêng.'
-          : 'Tạo tài khoản nhân viên gắn với một nhà xe và ít nhất một vai trò nhà xe.'
+          ? tAccounts('editDesc')
+          : tAccounts('createDesc')
       }
       preventDismiss={submitting}
-      title={editing ? 'Chỉnh sửa tài khoản Admin' : 'Thêm tài khoản Admin'}
+      title={editing ? tAccounts('editAccount') : tAccounts('createAccount')}
       onClose={closeDialog}
       size="xl"
     >
@@ -411,7 +414,7 @@ export function AdminAccountFormDialog({
               type="button"
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button
               disabled={
@@ -431,23 +434,23 @@ export function AdminAccountFormDialog({
                 />
               )}
               {submitting
-                ? 'Đang lưu…'
+                ? tAccounts('savingRoles')
                 : editing
-                  ? 'Lưu thay đổi'
-                  : 'Tạo tài khoản'}
+                  ? tAccounts('saveChanges')
+                  : tAccounts('createButton')}
             </Button>
           </div>
         }
       >
         {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
-        {textField('fullName', 'Họ và tên', 'text', true)}
+        {textField('fullName', tAccounts('accountName'), 'text', true)}
         {!editing && (
           <>
-            {textField('phoneNumber', 'Số điện thoại', 'tel', true)}
-            {textField('password', 'Mật khẩu', 'password', true)}
+            {textField('phoneNumber', tAccounts('accountPhone'), 'tel', true)}
+            {textField('password', tAccounts('password'), 'password', true)}
             <UiField data-invalid={Boolean(fieldErrors.busCompanyId)}>
               <FieldLabel htmlFor={`${idPrefix}-busCompanyId`}>
-                Nhà xe <span aria-hidden>*</span>
+                {tAccounts('colCompany')} <span aria-hidden>*</span>
               </FieldLabel>
               <Select
                 disabled={
@@ -461,7 +464,7 @@ export function AdminAccountFormDialog({
                 value={values.busCompanyId || null}
               >
                 <SelectTrigger
-                  aria-label="Nhà xe"
+                  aria-label={tAccounts('colCompany')}
                   aria-required="true"
                   aria-invalid={Boolean(fieldErrors.busCompanyId)}
                   aria-describedby={
@@ -471,13 +474,13 @@ export function AdminAccountFormDialog({
                   }
                   id={`${idPrefix}-busCompanyId`}
                 >
-                  <SelectValue placeholder="Chọn nhà xe">
+                  <SelectValue placeholder={tAccounts('selectCompany')}>
                     {options.status === 'success'
                       ? (options.companies.find(
                           (company) =>
                             String(company.id) === values.busCompanyId,
-                        )?.label ?? 'Chọn nhà xe')
-                      : 'Chọn nhà xe'}
+                        )?.label ?? tAccounts('selectCompany'))
+                      : tAccounts('selectCompany')}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -503,7 +506,7 @@ export function AdminAccountFormDialog({
                   className="text-xs text-muted-foreground"
                   role="status"
                 >
-                  Đang tải danh sách nhà xe…
+                  {tAccounts('loadingCompanies')}
                 </p>
               )}
             </UiField>
@@ -513,7 +516,7 @@ export function AdminAccountFormDialog({
               className="gap-3"
             >
               <FieldLegend>
-                Vai trò nhà xe <span aria-hidden>*</span>
+                {tAccounts('tenantRolesLegend')} <span aria-hidden>*</span>
               </FieldLegend>
               <FieldGroup className="gap-2">
                 {options.status === 'success' &&
@@ -578,11 +581,11 @@ export function AdminAccountFormDialog({
             )}
           </>
         )}
-        {textField('position', 'Chức vụ')}
-        {textField('joinedAt', 'Ngày vào làm', 'date')}
-        {textField('dateOfBirth', 'Ngày sinh', 'date')}
-        {textField('email', 'Email', 'email')}
-        {textField('citizenId', 'CCCD')}
+        {textField('position', tAccounts('position'))}
+        {textField('joinedAt', tAccounts('joinedAt'), 'date')}
+        {textField('dateOfBirth', tAccounts('dateOfBirth'), 'date')}
+        {textField('email', tAccounts('accountEmail'), 'email')}
+        {textField('citizenId', tAccounts('citizenId'))}
       </ResourceModalForm>
     </ResourceModalDialog>
   );

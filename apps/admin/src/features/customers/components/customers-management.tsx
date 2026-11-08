@@ -29,27 +29,27 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useCustomers } from '../hooks/use-customers';
 import type { CustomerAccountStatus, CustomerSortKey } from '../types/customer';
 
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'HOAT_DONG', label: 'Đang hoạt động' },
-  { value: 'TAM_KHOA', label: 'Tạm khóa' },
-  { value: 'BI_KHOA', label: 'Bị khóa' },
-];
-
-function getCustomerStatusBadgeConfig(status: string) {
+function getCustomerStatusBadgeConfig(
+  status: string,
+  tCustomers: (key: string) => string,
+) {
   if (status === 'HOAT_DONG') {
-    return { tone: 'active' as const, label: 'Đang hoạt động' };
+    return { tone: 'active' as const, label: tCustomers('statusActive') };
   }
   if (status === 'BI_KHOA') {
-    return { tone: 'danger' as const, label: 'Bị khóa' };
+    return { tone: 'danger' as const, label: tCustomers('statusLocked') };
   }
-  return { tone: 'warning' as const, label: 'Tạm khóa' };
+  return { tone: 'warning' as const, label: tCustomers('statusTemporaryLocked') };
 }
+
 export function CustomersManagement() {
   const tCustomers = useTranslations('customers');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
   const {
     customers,
     meta,
@@ -68,6 +68,12 @@ export function CustomersManagement() {
     refresh,
     resetFilters,
   } = useCustomers();
+
+  const statusOptions: FilterOption[] = [
+    { value: 'HOAT_DONG', label: tCustomers('statusActive') },
+    { value: 'TAM_KHOA', label: tCustomers('statusTemporaryLocked') },
+    { value: 'BI_KHOA', label: tCustomers('statusLocked') },
+  ];
 
   const router = useRouter();
 
@@ -106,7 +112,7 @@ export function CustomersManagement() {
           actions={
             <ResourceRefreshAction loading={refreshing} onClick={refresh} />
           }
-          eyebrow="QUẢN LÝ KHÁCH HÀNG"
+          eyebrow={tCustomers('eyebrow')}
           title={tCustomers('customersTitle')}
           titleId="customers-page-title"
         />
@@ -117,39 +123,39 @@ export function CustomersManagement() {
           aria-labelledby="customers-table-heading"
         >
           <h2 id="customers-table-heading" className="sr-only">
-            Danh sách khách hàng
+            {tCustomers('customersTitle')}
           </h2>
 
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
             <FilterToolbar>
               <SearchInput
-                label="Tìm kiếm khách hàng"
+                label={tCustomers('searchLabel')}
                 onChange={setSearchInput}
-                placeholder="Tìm theo mã, tên, SĐT, email..."
+                placeholder={tCustomers('searchPlaceholder')}
                 value={searchInput}
               />
               <SelectFilter
-                allLabel="Tất cả trạng thái"
-                label="Trạng thái tài khoản"
+                allLabel={tCustomers('statusAll')}
+                label={tCustomers('statusFilterLabel')}
                 onChange={(val) =>
                   setAccountStatus(val as CustomerAccountStatus | '')
                 }
-                options={STATUS_OPTIONS}
+                options={statusOptions}
                 value={accountStatus}
               />
             </FilterToolbar>
 
             <div className="flex items-end gap-3 border-b p-4 min-[901px]:hidden">
               <SelectFilter
-                label="Sắp xếp theo"
-                allLabel="Mã khách hàng"
+                label={tCustomers('sortByLabel')}
+                allLabel={tCustomers('colCustomerCode')}
                 value={sortBy}
                 options={[
-                  { value: 'customerCode', label: 'Mã khách hàng' },
-                  { value: 'fullName', label: 'Họ tên' },
-                  { value: 'loyaltyPoints', label: 'Điểm tích lũy' },
-                  { value: 'createdAt', label: 'Ngày tạo' },
-                  { value: 'updatedAt', label: 'Cập nhật' },
+                  { value: 'customerCode', label: tCustomers('colCustomerCode') },
+                  { value: 'fullName', label: tCustomers('colFullName') },
+                  { value: 'loyaltyPoints', label: tCustomers('colLoyaltyPoints') },
+                  { value: 'createdAt', label: tCustomers('registeredAt') },
+                  { value: 'updatedAt', label: tCustomers('updatedAt') },
                 ]}
                 onChange={(value) => {
                   const key = (value || 'customerCode') as CustomerSortKey;
@@ -158,7 +164,7 @@ export function CustomersManagement() {
               />
               <Button
                 variant="outline"
-                aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                aria-label={`${tCustomers('sortByLabel')}, ${sortDirection === 'asc' ? tCustomers('sortAsc') : tCustomers('sortDesc')}`}
                 onClick={() => handleSort(sortBy)}
               >
                 {sortDirection === 'asc' ? (
@@ -166,7 +172,7 @@ export function CustomersManagement() {
                 ) : (
                   <ArrowDown aria-hidden />
                 )}
-                {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                {sortDirection === 'asc' ? tCustomers('sortAsc') : tCustomers('sortDesc')}
               </Button>
             </div>
 
@@ -174,20 +180,20 @@ export function CustomersManagement() {
               <ResourceState error>
                 <p>{error}</p>
                 <Button onClick={refresh} type="button" variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
 
             {!error &&
               (loading && customers.length === 0 ? (
-                <ResourceTableSkeleton resourceLabel="khách hàng" />
+                <ResourceTableSkeleton resourceLabel={tCustomers('customersTitle').toLowerCase()} />
               ) : customers.length === 0 ? (
                 <ResourceState>
                   <p>
                     {isFiltered
-                      ? 'Không tìm thấy khách hàng phù hợp với bộ lọc.'
-                      : 'Chưa có khách hàng nào trong hệ thống nhà xe.'}
+                      ? tCustomers('emptyFiltered')
+                      : tCustomers('emptyNoData')}
                   </p>
                   {isFiltered && (
                     <Button
@@ -195,7 +201,7 @@ export function CustomersManagement() {
                       type="button"
                       variant="outline"
                     >
-                      Đặt lại bộ lọc
+                      {tCustomers('resetFilters')}
                     </Button>
                   )}
                 </ResourceState>
@@ -207,7 +213,7 @@ export function CustomersManagement() {
                   >
                     <Table className="text-[13px]">
                       <TableCaption className="sr-only">
-                        Danh sách khách hàng
+                        {tCustomers('customersTitle')}
                       </TableCaption>
                       <TableHeader>
                         <TableRow>
@@ -222,7 +228,7 @@ export function CustomersManagement() {
                               size="sm"
                               onClick={() => handleSort('customerCode')}
                             >
-                              <span>Mã KH</span>
+                              <span>{tCustomers('colCustomerCode')}</span>
                               {renderSortIcon('customerCode')}
                             </Button>
                           </TableHead>
@@ -237,12 +243,12 @@ export function CustomersManagement() {
                               size="sm"
                               onClick={() => handleSort('fullName')}
                             >
-                              <span>Họ tên</span>
+                              <span>{tCustomers('colFullName')}</span>
                               {renderSortIcon('fullName')}
                             </Button>
                           </TableHead>
-                          <TableHead scope="col">Số điện thoại</TableHead>
-                          <TableHead scope="col">Email</TableHead>
+                          <TableHead scope="col">{tCustomers('colPhone')}</TableHead>
+                          <TableHead scope="col">{tCustomers('colEmail')}</TableHead>
                           <TableHead
                             scope="col"
                             aria-sort={getAriaSort('loyaltyPoints')}
@@ -254,15 +260,15 @@ export function CustomersManagement() {
                               size="sm"
                               onClick={() => handleSort('loyaltyPoints')}
                             >
-                              <span>Điểm tích lũy</span>
+                              <span>{tCustomers('colLoyaltyPoints')}</span>
                               {renderSortIcon('loyaltyPoints')}
                             </Button>
                           </TableHead>
                           <TableHead scope="col">
-                            Trạng thái tài khoản
+                            {tCustomers('colStatus')}
                           </TableHead>
                           <TableHead scope="col">
-                            <span className="sr-only">Thao tác</span>
+                            <span className="sr-only">{tCustomers('colActions')}</span>
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -284,12 +290,17 @@ export function CustomersManagement() {
                             <TableCell>{customer.email || '—'}</TableCell>
                             <TableCell>
                               <strong>
-                                {customer.loyaltyPoints.toLocaleString('vi-VN')}
+                                {customer.loyaltyPoints.toLocaleString(
+                                  locale === 'en' ? 'en-US' : 'vi-VN',
+                                )}
                               </strong>
                             </TableCell>
                             <TableCell>
                               {(() => {
-                                const { tone, label } = getCustomerStatusBadgeConfig(customer.account.status);
+                                const { tone, label } = getCustomerStatusBadgeConfig(
+                                  customer.account.status,
+                                  tCustomers,
+                                );
                                 return (
                                   <ResourceStatusBadge tone={tone}>
                                     {label}
@@ -303,7 +314,9 @@ export function CustomersManagement() {
                                 onClick={() =>
                                   router.push(`/customers/${customer.customerId}`)
                                 }
-                                resourceName={`khách hàng ${customer.customerCode}`}
+                                resourceName={tCustomers('viewCustomer', {
+                                  code: customer.customerCode,
+                                })}
                               />
                             </TableCell>
                           </TableRow>
@@ -314,7 +327,7 @@ export function CustomersManagement() {
 
                   <div
                     className="grid gap-4 p-4 min-[901px]:hidden"
-                    aria-label="Danh sách khách hàng dạng thẻ"
+                    aria-label={tCustomers('customersTitle')}
                     aria-busy={loading || refreshing}
                   >
                     {customers.map((customer) => (
@@ -329,7 +342,10 @@ export function CustomersManagement() {
                             </h3>
                           </div>
                           {(() => {
-                            const { tone, label } = getCustomerStatusBadgeConfig(customer.account.status);
+                            const { tone, label } = getCustomerStatusBadgeConfig(
+                              customer.account.status,
+                              tCustomers,
+                            );
                             return (
                               <ResourceStatusBadge tone={tone}>
                                 {label}
@@ -339,18 +355,20 @@ export function CustomersManagement() {
                         </div>
                         <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                           <div>
-                            <dt>Số điện thoại</dt>
+                            <dt>{tCustomers('colPhone')}</dt>
                             <dd>{customer.phoneNumber}</dd>
                           </div>
                           <div>
-                            <dt>Email</dt>
+                            <dt>{tCustomers('colEmail')}</dt>
                             <dd>{customer.email || '—'}</dd>
                           </div>
                           <div>
-                            <dt>Điểm tích lũy</dt>
+                            <dt>{tCustomers('colLoyaltyPoints')}</dt>
                             <dd>
-                              {customer.loyaltyPoints.toLocaleString('vi-VN')}{' '}
-                              điểm
+                              {customer.loyaltyPoints.toLocaleString(
+                                locale === 'en' ? 'en-US' : 'vi-VN',
+                              )}{' '}
+                              {tCustomers('pointsUnit')}
                             </dd>
                           </div>
                         </dl>
@@ -360,7 +378,9 @@ export function CustomersManagement() {
                             onClick={() =>
                               router.push(`/customers/${customer.customerId}`)
                             }
-                            resourceName={`khách hàng ${customer.customerCode}`}
+                            resourceName={tCustomers('viewCustomer', {
+                              code: customer.customerCode,
+                            })}
                           />
                         </div>
                       </Card>
@@ -373,7 +393,7 @@ export function CustomersManagement() {
                       disabled={loading}
                       onPageChange={setPage}
                       pageSize={meta.pageSize}
-                      summaryLabel="khách hàng"
+                      summaryLabel={locale === 'en' ? 'customers' : 'khách hàng'}
                       totalItems={meta.totalItems}
                       totalPages={meta.totalPages}
                     />
