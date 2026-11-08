@@ -413,6 +413,9 @@ ${userQuery}
       );
     }
 
+    // Làm sạch tuyệt đối các thẻ trích dẫn rò rỉ (như 【DOC-...】, [DOC-...]) khỏi câu trả lời gửi đến khách hàng
+    reply = this.cleanReplyText(reply);
+
     return this.finalizeResponse({
       sessionId,
       sessionToken,
@@ -423,6 +426,21 @@ ${userQuery}
       requiresHumanHandoff: false,
       startTime,
     });
+  }
+
+  /**
+   * Loại bỏ triệt để các mã tài liệu kỹ thuật, ký hiệu ngoặc vuông/ngoặc đen
+   * để câu trả lời luôn sạch sẽ (Clean Output), thân thiện với khách hàng.
+   */
+  cleanReplyText(text: string): string {
+    if (!text) return '';
+    return text
+      .replace(/[【\[]\s*DOC-[A-Z0-9_-]+\s*[】\]]/gi, '')
+      .replace(/【[^】]*】/g, '')
+      .replace(/\(\s*Nguồn:[^)]*\)/gi, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   /**
@@ -445,7 +463,7 @@ ${userQuery}
               content: `Bạn là Trợ lý ảo VexGo AI thông minh và tận tâm hỗ trợ khách hàng đặt vé xe, gửi hàng hóa và giải đáp chính sách xe khách.
 CHỈ TRẢ LỜI dựa trên các thông tin được cung cấp trong thẻ <context> và <realtime_data>.
 TUYỆT ĐỐI KHÔNG tự bịa đặt hay suy đoán thông tin ngoài dữ liệu đã cho.
-Nếu câu hỏi liên quan đến chính sách, hãy trích dẫn mã quy định theo định dạng [Mã tài liệu].
+TUYỆT ĐỐI KHÔNG chèn mã tài liệu kỹ thuật, mã văn bản hay các ký hiệu như 【DOC-...】, [DOC-...] vào câu trả lời. Trả lời văn phong tự nhiên, liền mạch, lịch sự và dễ hiểu cho khách hàng.
 Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
             },
             {
@@ -480,7 +498,7 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
   ): string {
     if (intent === 'POLICY_RAG' && chunks.length > 0) {
       const topChunk = chunks[0];
-      return `Theo quy định của VexGo [${topChunk.documentCode}]:\n\n${topChunk.rawContent}\n\n(Nguồn: ${topChunk.hierarchyPath})`;
+      return `Theo quy định hiện hành của VexGo:\n\n${topChunk.rawContent}`;
     }
 
     if (intent === 'TRIP_SEARCH') {

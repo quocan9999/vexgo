@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   Tag,
   ShieldCheck,
+  Sparkles,
   Star,
   Ticket,
   Truck,
@@ -42,6 +43,7 @@ import headerStyles from './admin-header.module.css';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   ADMIN_OPERATION_SECTIONS,
+  canAccessAiKnowledge,
   canAccessSupportChat,
   canReadTenantRbac,
   getFirstAccessibleAdminPath,
@@ -76,6 +78,7 @@ type SuperAdminLayoutProps = {
     | 'shipments'
     | 'revenue-reports'
     | 'reviews'
+    | 'ai-knowledge'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac'
@@ -99,6 +102,7 @@ const BREADCRUMB_SECTION_LABELS: Record<string, string> = {
   customers: 'Quản lý khách hàng',
   'support-chat': 'Hỗ trợ khách hàng',
   reviews: 'Đánh giá & Phản hồi',
+  'ai-knowledge': 'Quản lý Tri thức AI',
   'booking-management': 'Quản lý đặt vé & vé',
   promotions: 'Quản lý khuyến mãi',
   shipments: 'Danh sách phiếu gửi hàng',
@@ -247,6 +251,10 @@ const OPERATION_NAVIGATION_DETAILS: Record<
     label: 'Đánh giá & Phản hồi',
     icon: () => <Star size={18} />,
   },
+  'ai-knowledge': {
+    label: 'Tri thức AI (RAG)',
+    icon: () => <Sparkles size={18} />,
+  },
 };
 
 type NavClusterKey = 'operations' | 'fleet' | 'commercial' | 'customer';
@@ -276,7 +284,7 @@ const OPERATION_CLUSTERS: NavCluster[] = [
   {
     key: 'customer',
     label: 'Khách hàng & Dịch vụ',
-    sections: ['customers', 'support-chat', 'reviews'],
+    sections: ['customers', 'support-chat', 'reviews', 'ai-knowledge'],
   },
 ];
 
@@ -334,6 +342,9 @@ export function SuperAdminLayout({
     (item) => {
       if (item.section === 'support-chat') {
         return canAccessSupportChat(session);
+      }
+      if (item.section === 'ai-knowledge') {
+        return canAccessAiKnowledge(session);
       }
       return hasAdminPermission(session, item.readPermission);
     },
@@ -529,6 +540,14 @@ export function SuperAdminLayout({
                         href="/reviews"
                         icon={<Star size={18} />}
                         label="Đánh giá & Phản hồi"
+                        onClick={closeMobileNavigation}
+                        tooltipEnabled={sidebarTooltipEnabled}
+                      />
+                      <AdminSidebarLink
+                        active={activeSection === 'ai-knowledge'}
+                        href="/ai-knowledge"
+                        icon={<Sparkles size={18} />}
+                        label="Tri thức AI (RAG)"
                         onClick={closeMobileNavigation}
                         tooltipEnabled={sidebarTooltipEnabled}
                       />
