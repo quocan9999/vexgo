@@ -2,7 +2,7 @@
 
 import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { LocationPicker } from '@/features/locations/components/location-picker';
-
+import { useTranslations } from 'next-intl';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
@@ -68,6 +68,8 @@ export function RouteFormDialog({
   onSaved,
   route,
 }: RouteFormDialogProps) {
+  const tRoutes = useTranslations('routes');
+  const tCommon = useTranslations('common');
   const editing = route !== undefined;
   const idPrefix = editing ? `edit-route-${route.routeId}` : 'create-route';
   const formRef = useRef<HTMLFormElement>(null);
@@ -97,23 +99,23 @@ export function RouteFormDialog({
     const errors: FieldErrors = {};
     if (!editing) {
       if (values.status !== 'HOAT_DONG' && values.status !== 'TAM_NGUNG') {
-        errors.status = 'Vui lòng chọn trạng thái.';
+        errors.status = tRoutes('errors.statusRequired');
       }
     }
-    if (!values.origin.trim()) errors.origin = 'Vui lòng nhập điểm đi.';
+    if (!values.origin.trim()) errors.origin = tRoutes('errors.originRequired');
     else if (values.origin.trim().length > 100)
-      errors.origin = 'Điểm đi không được vượt quá 100 ký tự.';
+      errors.origin = tRoutes('errors.originMaxLength');
     if (!values.destination.trim())
-      errors.destination = 'Vui lòng nhập điểm đến.';
+      errors.destination = tRoutes('errors.destinationRequired');
     else if (values.destination.trim().length > 100)
-      errors.destination = 'Điểm đến không được vượt quá 100 ký tự.';
+      errors.destination = tRoutes('errors.destinationMaxLength');
     else if (
       values.origin.trim() &&
       values.origin.trim().toLowerCase() === values.destination.trim().toLowerCase()
     ) {
-      errors.destination = 'Điểm đến không được trùng với điểm đi.';
+      errors.destination = tRoutes('errors.destinationSameAsOrigin');
     }
-    const duration = parseRouteDuration(values.durationMinutes);
+    const duration = parseRouteDuration(values.durationMinutes, tRoutes('errors.durationInvalid'));
     if ('error' in duration) errors.durationMinutes = duration.error;
     return errors;
   }
@@ -123,9 +125,7 @@ export function RouteFormDialog({
     if (submittingRef.current) return;
     setFormError(null);
     if (!editing && tenantBusCompanyId === undefined) {
-      setFormError(
-        'Không xác định được nhà xe của tài khoản. Vui lòng đăng nhập lại.',
-      );
+      setFormError(tRoutes('errors.busCompanyMissing'));
       return;
     }
     const errors = validate();
@@ -134,7 +134,7 @@ export function RouteFormDialog({
       focusFirstInvalid();
       return;
     }
-    const parsedDuration = parseRouteDuration(values.durationMinutes);
+    const parsedDuration = parseRouteDuration(values.durationMinutes, tRoutes('errors.durationInvalid'));
     if ('error' in parsedDuration) return;
     const durationMinutes = parsedDuration.value;
 
@@ -157,7 +157,7 @@ export function RouteFormDialog({
     } catch (requestError: unknown) {
       if (requestError instanceof RouteApiError) {
         if (requestError.code === 'ROUTE_CODE_EXISTS') {
-          toast.error('Không thể cấp mã tuyến. Vui lòng thử tạo lại.');
+          toast.error(tRoutes('errors.codeAssignFailed'));
         } else if (
           requestError.code === 'ROUTE_DUPLICATE_ENDPOINTS' ||
           requestError.code === 'ROUTE_SAME_ENDPOINTS'
@@ -179,12 +179,12 @@ export function RouteFormDialog({
           }
         }
       } else if (requestError instanceof TypeError) {
-        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error(tCommon('networkError'));
       } else {
         toast.error(
           requestError instanceof Error
             ? requestError.message
-            : 'Không thể lưu tuyến xe.',
+            : tRoutes('errors.saveError'),
         );
       }
     } finally {
@@ -232,11 +232,11 @@ export function RouteFormDialog({
 
   return (
     <ResourceModalDialog
-      title={editing ? 'Chỉnh sửa tuyến xe' : 'Thêm tuyến xe'}
+      title={editing ? tRoutes('editRoute') : tRoutes('createRoute')}
       description={
         editing
-          ? 'Cập nhật điểm đi, điểm đến và thời gian chạy của tuyến.'
-          : 'Nhập thông tin tuyến thuộc nhà xe của bạn và thời gian chạy dự kiến.'
+          ? tRoutes('editRouteDesc')
+          : tRoutes('createRouteDesc')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -250,13 +250,13 @@ export function RouteFormDialog({
         footer={
           <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button disabled={submitting} variant="outline" onClick={closeDialog}>
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button disabled={submitting} aria-busy={submitting} type="submit">
               {submitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-              {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo tuyến'}
+              {submitting ? tCommon('saving') : editing ? tCommon('saveChanges') : tRoutes('createButton')}
             </Button>
           </div>
         }
@@ -269,15 +269,15 @@ export function RouteFormDialog({
             </strong>
             <p className="text-xs text-muted-foreground">
               {route.busCompany.name} ·{' '}
-              {route.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}
+              {route.status === 'HOAT_DONG' ? tRoutes('active') : tRoutes('inactive')}
             </p>
           </div>
         )}
-        {textField('origin', 'Điểm đi')}
-        {textField('destination', 'Điểm đến')}
+        {textField('origin', tRoutes('colOrigin'))}
+        {textField('destination', tRoutes('colDestination'))}
         <FieldRoot data-invalid={Boolean(fieldErrors.durationMinutes)}>
           <FieldLabel htmlFor={`${idPrefix}-durationMinutes`}>
-            Thời gian chạy (phút) <span aria-hidden>*</span>
+            {tRoutes('durationMinutesLabel')} <span aria-hidden>*</span>
           </FieldLabel>
           <Input
             aria-describedby={
@@ -305,7 +305,7 @@ export function RouteFormDialog({
         {!editing && (
           <FieldRoot data-invalid={Boolean(fieldErrors.status)}>
             <FieldLabel htmlFor={`${idPrefix}-status`}>
-              Trạng thái <span aria-hidden>*</span>
+              {tRoutes('colStatus')} <span aria-hidden>*</span>
             </FieldLabel>
             <Select
               disabled={submitting}
@@ -316,25 +316,25 @@ export function RouteFormDialog({
             >
               <SelectTrigger
                 id={`${idPrefix}-status`}
-                aria-label="Trạng thái"
+                aria-label={tRoutes('colStatus')}
                 aria-required="true"
                 aria-invalid={Boolean(fieldErrors.status)}
                 aria-describedby={
                   fieldErrors.status ? `${idPrefix}-status-error` : undefined
                 }
               >
-                <SelectValue placeholder="Chọn trạng thái">
+                <SelectValue placeholder={tRoutes('selectStatus')}>
                   {values.status === 'HOAT_DONG'
-                    ? 'Đang hoạt động'
+                    ? tRoutes('active')
                     : values.status === 'TAM_NGUNG'
-                      ? 'Tạm ngưng'
-                      : 'Chọn trạng thái'}
+                      ? tRoutes('inactive')
+                      : tRoutes('selectStatus')}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="HOAT_DONG">Đang hoạt động</SelectItem>
-                  <SelectItem value="TAM_NGUNG">Tạm ngưng</SelectItem>
+                  <SelectItem value="HOAT_DONG">{tRoutes('active')}</SelectItem>
+                  <SelectItem value="TAM_NGUNG">{tRoutes('inactive')}</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>

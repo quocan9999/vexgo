@@ -40,7 +40,7 @@ export async function getStations(
     throw new StationApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể tải danh sách điểm đón trả.',
+        : 'Failed to load stations list.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -58,7 +58,7 @@ export async function getStationById(id: number): Promise<Station> {
     throw new StationApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể tải thông tin điểm đón trả.',
+        : 'Failed to load station details.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -79,7 +79,7 @@ export async function createStation(input: CreateStationInput): Promise<Station>
     throw new StationApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể tạo điểm đón trả.',
+        : 'Failed to create station.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -100,7 +100,7 @@ export async function updateStation(id: number, input: UpdateStationInput): Prom
     throw new StationApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể cập nhật điểm đón trả.',
+        : 'Failed to update station.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -119,7 +119,7 @@ export async function deleteStation(id: number): Promise<Station> {
     throw new StationApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể xóa điểm đón trả.',
+        : 'Failed to delete station.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -133,7 +133,7 @@ export async function getTripPassengerPoints(tripId: number) {
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new StationApiError('Không thể tải điểm đón trả của chuyến xe.');
+    throw new StationApiError('Failed to load trip passenger points.');
   }
   return body.data;
 }
@@ -147,7 +147,7 @@ export async function updateTripPassengerPoints(tripId: number, points: Record<s
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new StationApiError('Không thể cập nhật điểm đón trả của chuyến xe.');
+    throw new StationApiError('Failed to update trip passenger points.');
   }
   return body.data;
 }

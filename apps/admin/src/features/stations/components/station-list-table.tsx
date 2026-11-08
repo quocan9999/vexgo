@@ -115,7 +115,7 @@ export function StationListTable({
                     href={`/stations/${st.diemDonTraId}`}
                     onClick={onSelectStation ? () => onSelectStation(st) : undefined}
                     label={tCommon('viewDetails')}
-                    resourceName={`điểm ${st.tenDiem}`}
+                    resourceName={tStations('resourceNameWithName', { name: st.tenDiem })}
                   />
                 </TableCell>
               </TableRow>
@@ -162,7 +162,7 @@ export function StationListTable({
                 href={`/stations/${st.diemDonTraId}`}
                 onClick={onSelectStation ? () => onSelectStation(st) : undefined}
                 label={tCommon('viewDetails')}
-                resourceName={`điểm ${st.tenDiem}`}
+                resourceName={tStations('resourceNameWithName', { name: st.tenDiem })}
               />
             </div>
           </Card>

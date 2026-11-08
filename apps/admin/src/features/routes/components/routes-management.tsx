@@ -319,7 +319,7 @@ export function RoutesManagement() {
                                 <ResourceDetailAction
                                   href={`/routes/${route.routeId}`}
                                   label={tCommon('viewDetails')}
-                                  resourceName={`tuyến ${route.code}`}
+                                  resourceName={tRoutes('routeWithCode', { code: route.code })}
                                 />
                               </TableCell>
                             </TableRow>
@@ -365,7 +365,7 @@ export function RoutesManagement() {
                             <ResourceDetailAction
                               href={`/routes/${route.routeId}`}
                               label={tCommon('viewDetails')}
-                              resourceName={`tuyến ${route.code}`}
+                              resourceName={tRoutes('routeWithCode', { code: route.code })}
                             />
                           </div>
                         </Card>

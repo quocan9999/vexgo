@@ -72,8 +72,8 @@ export function StationsManagement() {
       setTotalPages(res.meta.totalPages);
       setTotalItems(res.meta.totalItems);
     } catch {
-      setError('Không thể tải danh sách điểm đón trả. Vui lòng thử lại.');
-      toast.error('Không thể tải danh sách điểm đón trả.');
+      setError(tStations('errors.loadListFailed'));
+      toast.error(tStations('errors.loadListFailed'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +92,7 @@ export function StationsManagement() {
       setDeletingStation(undefined);
       loadData();
     } catch {
-      toast.error('Không thể xóa điểm đón trả.');
+      toast.error(tStations('errors.deleteFailed'));
     } finally {
       setDeleting(false);
     }

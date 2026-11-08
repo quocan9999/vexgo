@@ -26,22 +26,15 @@ import { Button } from '@/components/ui/action-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LegacyBadge } from '@/components/ui/status-badge';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
+import { useTranslations } from 'next-intl';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { deleteStation, getStationById } from '../services/station-service';
-import type { Station } from '../types/station';
+import type { Station, StationType } from '../types/station';
 import { StationFormDialog } from './station-form-dialog';
 
 interface StationWorkspaceProps {
   stationId: number;
 }
-
-const TYPE_LABELS: Record<string, string> = {
-  BEN_XE: 'Bến xe',
-  VAN_PHONG: 'Văn phòng',
-  DIEM_DON_TRA: 'Điểm đón/trả',
-  TRUNG_CHUYEN: 'Trung chuyển',
-  TRAM_NGHI: 'Trạm nghỉ',
-};
 
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
@@ -56,6 +49,8 @@ function timestampFormat(value: string) {
 }
 
 export function StationWorkspace({ stationId }: StationWorkspaceProps) {
+  const tStations = useTranslations('stations');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { can } = useAdminPermissions();
   const canUpdate = can('route:update');
@@ -69,6 +64,14 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const typeLabels: Record<StationType, string> = {
+    BEN_XE: tStations('typeTerminal'),
+    VAN_PHONG: tStations('typeOffice'),
+    DIEM_DON_TRA: tStations('typeStop'),
+    TRUNG_CHUYEN: tStations('typeTransit'),
+    TRAM_NGHI: tStations('typeRest'),
+  };
 
   useEffect(() => {
     let current = true;
@@ -87,7 +90,7 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
           setError(
             err instanceof Error
               ? err.message
-              : 'Không thể tải thông tin điểm đón trả.',
+              : tStations('errors.loadDetailsFailed'),
           );
           setLoading(false);
         }
@@ -96,7 +99,7 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
     return () => {
       current = false;
     };
-  }, [stationId, retryCount]);
+  }, [stationId, retryCount, tStations]);
 
   function retry() {
     setRetryCount((c) => c + 1);
@@ -107,12 +110,12 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
     setDeleting(true);
     try {
       await deleteStation(station.diemDonTraId);
-      toast.success(`Đã xóa điểm đón trả "${station.tenDiem}".`);
+      toast.success(tStations('deletedWithName', { name: station.tenDiem }));
       setDeleteOpen(false);
       router.push('/stations');
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Xóa điểm đón trả thất bại.',
+        err instanceof Error ? err.message : tStations('errors.deleteFailed'),
       );
     } finally {
       setDeleting(false);
@@ -123,8 +126,8 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
     <SuperAdminLayout
       activeSection="stations"
       breadcrumbs={[
-        { label: 'Bến bãi & Điểm đón trả', href: '/stations' },
-        { label: station ? station.tenDiem : 'Chi tiết điểm đón trả' },
+        { label: tStations('stationsTitle'), href: '/stations' },
+        { label: station ? station.tenDiem : tStations('stationDetails') },
       ]}
     >
       <div className="admin-page-content space-y-6">
@@ -137,12 +140,12 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Quay lại danh sách
+                {tCommon('backToList')}
               </Button>
               {canUpdate && station && (
                 <Button onClick={() => setFormOpen(true)}>
                   <Pencil aria-hidden="true" />
-                  Chỉnh sửa
+                  {tCommon('edit')}
                 </Button>
               )}
               {canDelete && station && (
@@ -151,24 +154,24 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                   variant="destructive"
                 >
                   <Trash2 aria-hidden="true" />
-                  Xóa điểm
+                  {tStations('deletePoint')}
                 </Button>
               )}
               <ResourceRefreshAction loading={loading} onClick={retry} />
             </div>
           }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
+          eyebrow={tStations('eyebrow')}
           title={
             station
-              ? `Chi tiết điểm ${station.tenDiem}`
-              : 'Chi tiết điểm đón trả'
+              ? tStations('stationDetailsWithName', { name: station.tenDiem })
+              : tStations('stationDetails')
           }
           titleId="station-workspace-title"
         />
 
         {loading && (
           <ResourceState loading>
-            Đang tải thông tin điểm đón trả…
+            {tStations('loadingDetails')}
           </ResourceState>
         )}
 
@@ -177,10 +180,10 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
             <p>{error}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={retry} variant="outline">
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button nativeButton={false} render={<Link href="/stations" />}>
-                Về danh sách điểm đón trả
+                {tStations('backToStations')}
               </Button>
             </div>
           </ResourceState>
@@ -203,7 +206,7 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                       {station.tenDiem}
                     </h2>
                     <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      Mã điểm:{' '}
+                      {tStations('colCode')}:{' '}
                       <strong className="admin-data-mono font-semibold">
                         {station.maDiem}
                       </strong>
@@ -213,34 +216,34 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                 <ResourceStatusBadge
                   tone={station.loaiDiem === 'BEN_XE' ? 'active' : 'muted'}
                 >
-                  {TYPE_LABELS[station.loaiDiem] ?? station.loaiDiem}
+                  {typeLabels[station.loaiDiem] ?? station.loaiDiem}
                 </ResourceStatusBadge>
               </div>
             </Card>
 
             {/* Bento Grid Layout */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Vị trí & Phân loại */}
+              {/* Card 1: Location & Scale */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <MapPin className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Vị trí & Quy mô
+                      {tStations('locationAndScale')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Loại hình trạm / bến</dt>
+                      <dt>{tStations('stationTypeLabel')}</dt>
                       <dd className="font-medium text-foreground">
-                        {TYPE_LABELS[station.loaiDiem] ?? station.loaiDiem}
+                        {typeLabels[station.loaiDiem] ?? station.loaiDiem}
                       </dd>
                     </div>
                     {station.loaiDiem === 'TRUNG_CHUYEN' && station.benTrungChuyen && (
                       <div>
-                        <dt>Bến đích trung chuyển</dt>
+                        <dt>{tStations('transitDestinationLabel')}</dt>
                         <dd className="font-medium text-foreground">
                           {station.benTrungChuyen.tenDiem} (
                           <span className="admin-data-mono">{station.benTrungChuyen.maDiem}</span>
@@ -249,18 +252,18 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                       </div>
                     )}
                     <div>
-                      <dt>Địa chỉ chi tiết</dt>
+                      <dt>{tStations('addressDetailLabel')}</dt>
                       <dd className="text-foreground">{station.diaChi}</dd>
                     </div>
                     <div>
-                      <dt>Khu vực hành chính (trước sáp nhập)</dt>
+                      <dt>{tStations('adminAreaOldLabel')}</dt>
                       <dd className="flex items-center gap-1.5">
                         <span>{station.diaDiemCu?.tenDiaDiem ?? '—'}</span>
                         <LegacyBadge />
                       </dd>
                     </div>
                     <div>
-                      <dt>Khu vực hành chính (sau sáp nhập)</dt>
+                      <dt>{tStations('adminAreaNewLabel')}</dt>
                       <dd className="font-medium text-foreground">
                         {station.diaDiemMoi?.tenDiaDiem ?? '—'}
                       </dd>
@@ -269,49 +272,49 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                 </CardContent>
               </Card>
 
-              {/* Card 2: Liên hệ & Tọa độ */}
+              {/* Card 2: Contact & GPS */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Phone className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Liên hệ & Định vị
+                      {tStations('contactAndGps')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Số điện thoại liên hệ</dt>
+                      <dt>{tStations('phoneLabel')}</dt>
                       <dd className="admin-data-mono font-medium text-foreground">
-                        {station.soDienThoai || 'Chưa thiết lập'}
+                        {station.soDienThoai || tStations('notConfigured')}
                       </dd>
                     </div>
                     <div>
-                      <dt>Tọa độ GPS (Vĩ độ / Kinh độ)</dt>
+                      <dt>{tStations('gpsCoordinatesLabel')}</dt>
                       <dd className="admin-data-mono text-muted-foreground">
                         {station.viDo && station.kinhDo
                           ? `${station.viDo.toFixed(4)}, ${station.kinhDo.toFixed(4)}`
-                          : 'Chưa cập nhật tọa độ'}
+                          : tStations('noGps')}
                       </dd>
                     </div>
                     <div>
-                      <dt>Nhà xe quản lý</dt>
+                      <dt>{tStations('managingCompanyLabel')}</dt>
                       <dd className="font-medium text-foreground">
-                        {station.nhaXe ? `${station.nhaXe.tenNhaXe} (${station.nhaXe.maNhaXe})` : 'Toàn hệ thống'}
+                        {station.nhaXe ? `${station.nhaXe.tenNhaXe} (${station.nhaXe.maNhaXe})` : tStations('allSystem')}
                       </dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
 
-              {/* Card 3: Hồ sơ & Thời gian */}
+              {/* Card 3: Record & Timeline */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Hồ sơ & Thời gian
+                      {tStations('recordAndTimeline')}
                     </CardTitle>
                   </div>
                 </CardHeader>
@@ -320,7 +323,7 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                     <div>
                       <dt className="flex items-center gap-1.5">
                         <Clock className="size-3.5" />
-                        Ngày tạo hồ sơ
+                        {tStations('createdAtLabel')}
                       </dt>
                       <dd className="text-muted-foreground tabular-nums">
                         {timestampFormat(station.createdAt)}
@@ -329,7 +332,7 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
                     <div>
                       <dt className="flex items-center gap-1.5">
                         <Clock className="size-3.5" />
-                        Cập nhật lần cuối
+                        {tStations('updatedAtLabel')}
                       </dt>
                       <dd className="text-muted-foreground tabular-nums">
                         {timestampFormat(station.updatedAt)}
@@ -350,15 +353,15 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
             onSaved={(saved) => {
               setStation(saved);
               setFormOpen(false);
-              toast.success(`Đã cập nhật điểm "${saved.tenDiem}".`);
+              toast.success(tStations('updatedWithName', { name: saved.tenDiem }));
             }}
           />
         )}
 
         {deleteOpen && station && (
           <ResourceConfirmation
-            title={`Xóa điểm đón trả ${station.tenDiem}?`}
-            description={`Điểm đón trả "${station.tenDiem}" (${station.maDiem}) sẽ bị xóa vĩnh viễn khỏi hệ thống. Thao tác này không thể hoàn tác.`}
+            title={tStations('deleteTitle', { name: station.tenDiem })}
+            description={tStations('deleteDescription', { name: station.tenDiem, code: station.maDiem })}
             busy={deleting}
             onClose={() => setDeleteOpen(false)}
           >
@@ -373,7 +376,7 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
               ) : (
                 <Trash2 aria-hidden />
               )}
-              {deleting ? 'Đang xóa…' : 'Xóa điểm'}
+              {deleting ? tStations('deleting') : tStations('deletePoint')}
             </Button>
           </ResourceConfirmation>
         )}
