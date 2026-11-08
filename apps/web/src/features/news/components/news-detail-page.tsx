@@ -16,10 +16,13 @@ import {
   Tag,
   Newspaper,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { type NewsArticle, NEWS_ARTICLES } from '../data/news.data';
 
 export function NewsDetailPage({ article }: { article?: NewsArticle }) {
   const router = useRouter();
+  const t = useTranslations('news');
+  const locale = useLocale();
 
   if (!article) {
     notFound();
@@ -38,7 +41,7 @@ export function NewsDetailPage({ article }: { article?: NewsArticle }) {
             className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#FF5722] transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span>Quay lại</span>
+            <span>{t('back')}</span>
           </button>
         </div>
       </div>
@@ -112,18 +115,18 @@ export function NewsDetailPage({ article }: { article?: NewsArticle }) {
                   </div>
                   <div>
                     <h4 className="text-sm font-extrabold text-slate-900">
-                      Trải nghiệm tuyến xe được nhắc tới trong bài
+                      {t('relatedRouteTitle')}
                     </h4>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {article.relatedRoute.label} với nhiều khung giờ khởi hành mỗi ngày.
+                      {t('relatedRouteDesc', { route: article.relatedRoute.label })}
                     </p>
                   </div>
                 </div>
                 <Link
-                  href={`/trips?from=${encodeURIComponent(article.relatedRoute.origin)}&to=${encodeURIComponent(article.relatedRoute.destination)}`}
+                  href={`/${locale}/trips?from=${encodeURIComponent(article.relatedRoute.origin)}&to=${encodeURIComponent(article.relatedRoute.destination)}`}
                   className="px-5 py-2.5 rounded-xl bg-[#FF5722] hover:bg-[#E64A19] text-white text-xs sm:text-sm font-bold shadow-sm transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5"
                 >
-                  <span>Tìm vé chuyến này</span>
+                  <span>{t('findTicketsForRoute')}</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
@@ -133,7 +136,7 @@ export function NewsDetailPage({ article }: { article?: NewsArticle }) {
             <div className="mt-8 pt-6 border-t border-slate-100 flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-2">
                 <Tag className="w-3.5 h-3.5" />
-                Chủ đề:
+                {t('topicLabel')}
               </span>
               {article.tags.map((t, i) => (
                 <span
@@ -154,16 +157,16 @@ export function NewsDetailPage({ article }: { article?: NewsArticle }) {
                 <Bus className="w-7 h-7" />
               </div>
               <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                Đặt vé xe trực tuyến VexGo
+                {t('onlineBookingTitle')}
               </h3>
               <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-                Tìm chuyến xe khách, xem sơ đồ ghế thực tế và thanh toán an toàn 100%.
+                {t('onlineBookingDesc')}
               </p>
               <Link
-                href="/trips"
+                href={`/${locale}/trips`}
                 className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white text-sm font-bold shadow-md hover:shadow-lg hover:brightness-105 transition-all flex items-center justify-center gap-2"
               >
-                <span>Tìm chuyến xe ngay</span>
+                <span>{t('findTripsNow')}</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -172,13 +175,13 @@ export function NewsDetailPage({ article }: { article?: NewsArticle }) {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide mb-4 flex items-center gap-2">
                 <Newspaper className="w-4 h-4 text-[#FF5722]" />
-                Bài viết liên quan
+                {t('relatedArticles')}
               </h3>
               <div className="space-y-4">
                 {otherArticles.map((item) => (
                   <Link
                     key={item.id}
-                    href={`/news/${item.id}`}
+                    href={`/${locale}/news/${item.id}`}
                     className="group block pb-4 border-b border-slate-100 last:border-b-0 last:pb-0"
                   >
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF5722] block mb-1">
