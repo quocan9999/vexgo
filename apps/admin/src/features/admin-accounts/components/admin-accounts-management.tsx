@@ -38,6 +38,7 @@ import {
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
 import {
@@ -131,6 +132,7 @@ function AccountStatusBadge({ status }: { status: AdminAccountStatus }) {
 }
 
 export function AdminAccountsManagement() {
+  const tAccounts = useTranslations('adminAccounts');
   const {
     accountPage,
     busCompanyId,
@@ -212,12 +214,12 @@ export function AdminAccountsManagement() {
         <AdminPageHeader
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              {canCreate && <ResourceCreateAction label="Thêm tài khoản" onClick={() => setCreateOpen(true)} />}
+              {canCreate && <ResourceCreateAction label={tAccounts('createAccount')} onClick={() => setCreateOpen(true)} />}
               <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
           eyebrow="QUẢN TRỊ NỀN TẢNG"
-          title="Quản lý tài khoản Admin"
+          title={tAccounts('adminAccountsTitle')}
           titleId="admin-accounts-title"
         />
 

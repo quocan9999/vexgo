@@ -316,5 +316,102 @@
     "revenueByPaymentMethod": "Payment Methods",
     "filterDateRange": "Date Range",
     "trendChart": "Growth Trend Chart"
+  },
+  "busCompanies": {
+    "busCompaniesTitle": "Bus Company Management",
+    "busCompaniesSubtitle": "List and profiles of partner bus companies",
+    "createBusCompany": "Add Bus Company",
+    "editBusCompany": "Edit Bus Company",
+    "companyCode": "Company Code",
+    "companyName": "Company Name",
+    "hotline": "Hotline",
+    "email": "Email",
+    "address": "Address",
+    "searchPlaceholder": "Search by company name, code, email...",
+    "saveSuccess": "Bus company information saved successfully"
+  },
+  "vehicles": {
+    "vehiclesTitle": "Vehicle Fleet",
+    "vehiclesSubtitle": "Track and manage transportation vehicles",
+    "createVehicle": "Add Vehicle",
+    "editVehicle": "Edit Vehicle",
+    "plateNumber": "License Plate",
+    "vehicleType": "Vehicle Type",
+    "seatCount": "Seat Count",
+    "floorCount": "Floors",
+    "manufacturingYear": "Manufacturing Year",
+    "vehicleStatus": "Vehicle Status",
+    "active": "Active",
+    "maintenance": "Maintenance",
+    "inactive": "Inactive",
+    "searchPlaceholder": "Search license plate or vehicle type...",
+    "saveSuccess": "Vehicle information saved successfully"
+  },
+  "vehicleTypes": {
+    "vehicleTypesTitle": "Vehicle Type Management",
+    "vehicleTypesSubtitle": "Vehicle classifications and seat layout formats",
+    "createVehicleType": "Add Vehicle Type",
+    "editVehicleType": "Edit Vehicle Type",
+    "typeName": "Type Name",
+    "description": "Description",
+    "totalSeats": "Total Seats",
+    "searchPlaceholder": "Search type name, description...",
+    "saveSuccess": "Vehicle type saved successfully"
+  },
+  "customers": {
+    "customersTitle": "Customer Management",
+    "customersSubtitle": "Passenger accounts and service history",
+    "customerCode": "Customer Code",
+    "fullName": "Full Name",
+    "phoneNumber": "Phone Number",
+    "email": "Email",
+    "loyaltyPoints": "Loyalty Points",
+    "accountStatus": "Account Status",
+    "searchPlaceholder": "Search by code, name, phone, email...",
+    "saveSuccess": "Customer information saved successfully"
+  },
+  "adminAccounts": {
+    "adminAccountsTitle": "Admin Account Management",
+    "adminAccountsSubtitle": "System administrators and company staff accounts",
+    "createAccount": "Add Account",
+    "editAccount": "Edit Account",
+    "accountName": "Full Name",
+    "accountEmail": "Email",
+    "accountPhone": "Phone Number",
+    "assignedRole": "Assigned Role",
+    "searchPlaceholder": "Search by name, phone, email, or company",
+    "saveSuccess": "Admin account saved successfully"
+  },
+  "rbac": {
+    "rbacTitle": "Platform RBAC Management",
+    "tenantRbacTitle": "Tenant RBAC Management",
+    "rbacSubtitle": "Configure roles and permission matrices",
+    "roleName": "Role Name",
+    "roleDescription": "Role Description",
+    "permissions": "Permissions",
+    "addRole": "Add Role",
+    "editRole": "Edit Role",
+    "saveSuccess": "RBAC configuration saved successfully"
+  },
+  "supportChat": {
+    "supportChatTitle": "Customer Support Chat",
+    "supportChatSubtitle": "Live support inbox and customer inquiries",
+    "inbox": "Inbox",
+    "allConversations": "All Conversations",
+    "pending": "Pending",
+    "processing": "In Progress",
+    "closed": "Closed",
+    "searchPlaceholder": "Customer name, phone...",
+    "typeMessage": "Type a message...",
+    "sendMessage": "Send"
+  },
+  "reviews": {
+    "reviewsTitle": "Reviews & Feedback Management",
+    "reviewsSubtitle": "Monitor customer ratings and CSAT satisfaction",
+    "averageRating": "Average Rating",
+    "totalReviews": "Total Reviews",
+    "rating": "Rating",
+    "comment": "Comment",
+    "searchPlaceholder": "Customer name, phone, or comment keywords..."
   }
 }

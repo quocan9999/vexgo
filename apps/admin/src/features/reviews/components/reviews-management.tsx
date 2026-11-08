@@ -37,6 +37,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useReviews } from '../hooks/use-reviews';
 import type { AdminReviewSortKey, ReviewStatus } from '../types/review';
 import { ReviewStatsCards } from './review-stats-cards';
@@ -102,6 +103,7 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export function ReviewsManagement() {
+  const tReviews = useTranslations('reviews');
   const {
     reviews,
     stats,
@@ -184,7 +186,7 @@ export function ReviewsManagement() {
             <ResourceRefreshAction loading={refreshing} onClick={refresh} />
           }
           eyebrow="QUẢN TRỊ ĐÁNH GIÁ"
-          title="Quản lý đánh giá & phản hồi"
+          title={tReviews('reviewsTitle')}
           titleId="reviews-page-title"
         />
 

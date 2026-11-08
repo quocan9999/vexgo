@@ -34,6 +34,7 @@ import {
   type AdminSession,
 } from '@/features/admin-auth/services/admin-auth';
 import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
+import { useTranslations } from 'next-intl';
 import { adminSupportChatApi } from '../services/admin-support-chat.api';
 import { useAdminChatSocket } from '../hooks/use-admin-chat-socket';
 import { AdminSupportConversation, AdminSupportMessage } from '../types';
@@ -153,6 +154,7 @@ export function SupportChatMessageText({
 }
 
 export function AdminChatMessenger({ session }: { session: AdminSession }) {
+  const tChat = useTranslations('supportChat');
   const token = getAdminAccessToken();
   const canManageChat = hasAdminPermission(session, 'chat:manage');
 
@@ -1065,7 +1067,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             <div className="flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-base font-semibold">
                 <MessageSquare aria-hidden className="size-4 text-primary" />
-                Hộp thư <Badge variant="secondary">{totalItems}</Badge>
+                {tChat('inbox')} <Badge variant="secondary">{totalItems}</Badge>
               </h2>
               <Button
                 variant="ghost"

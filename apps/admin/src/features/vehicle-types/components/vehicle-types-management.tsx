@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import type { VehicleType, VehicleTypeSortKey } from '../types/vehicle-type';
 import { useVehicleTypes } from '../hooks/use-vehicle-types';
 import { VehicleTypeFormDialog } from './vehicle-type-form-dialog';
@@ -62,6 +63,7 @@ function sortLabel(
 }
 
 export function VehicleTypesManagement() {
+  const tVehicleTypes = useTranslations('vehicleTypes');
   const router = useRouter();
   const { can } = useAdminPermissions();
   const canCreate = can('vehicle-type:create');
@@ -100,13 +102,13 @@ export function VehicleTypesManagement() {
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
           eyebrow="DANH MỤC PHƯƠNG TIỆN"
-          title="Quản lý loại xe"
+          title={tVehicleTypes('vehicleTypesTitle')}
           titleId="vehicle-types-title"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm loại xe"
+                  label={tVehicleTypes('createVehicleType')}
                   onClick={() => setCreateDialogOpen(true)}
                 />
               )}

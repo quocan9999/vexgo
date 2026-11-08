@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useCustomers } from '../hooks/use-customers';
 import type { CustomerAccountStatus, CustomerSortKey } from '../types/customer';
 
@@ -48,6 +49,7 @@ function getCustomerStatusBadgeConfig(status: string) {
   return { tone: 'warning' as const, label: 'Tạm khóa' };
 }
 export function CustomersManagement() {
+  const tCustomers = useTranslations('customers');
   const {
     customers,
     meta,
@@ -105,7 +107,7 @@ export function CustomersManagement() {
             <ResourceRefreshAction loading={refreshing} onClick={refresh} />
           }
           eyebrow="QUẢN LÝ KHÁCH HÀNG"
-          title="Quản lý khách hàng"
+          title={tCustomers('customersTitle')}
           titleId="customers-page-title"
         />
 

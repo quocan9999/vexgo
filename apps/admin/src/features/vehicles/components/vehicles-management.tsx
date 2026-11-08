@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   VEHICLE_STATUSES,
   type VehicleFilterOption,
@@ -117,6 +118,7 @@ function vehicleStatusBadge(vehicle: VehicleListItem) {
 }
 
 export function VehiclesManagement() {
+  const tVehicles = useTranslations('vehicles');
   const router = useRouter();
   const { can } = useAdminPermissions();
   const canCreate = can('vehicle:create');
@@ -171,13 +173,13 @@ export function VehiclesManagement() {
       <div className={`admin-ui admin-page-content ${styles.page}`}>
         <AdminPageHeader
           eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
-          title="Danh sách xe"
+          title={tVehicles('vehiclesTitle')}
           titleId="vehicles-title"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm xe"
+                  label={tVehicles('createVehicle')}
                   onClick={() => router.push('/vehicles/create')}
                 />
               )}

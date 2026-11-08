@@ -316,5 +316,102 @@
     "revenueByPaymentMethod": "Phương thức thanh toán",
     "filterDateRange": "Khoảng thời gian",
     "trendChart": "Biểu đồ xu hướng tăng trưởng"
+  },
+  "busCompanies": {
+    "busCompaniesTitle": "Quản lý nhà xe",
+    "busCompaniesSubtitle": "Danh sách và hồ sơ các đơn vị vận tải đối tác",
+    "createBusCompany": "Thêm nhà xe",
+    "editBusCompany": "Chỉnh sửa nhà xe",
+    "companyCode": "Mã nhà xe",
+    "companyName": "Tên nhà xe",
+    "hotline": "Hotline",
+    "email": "Email",
+    "address": "Địa chỉ",
+    "searchPlaceholder": "Tìm theo tên nhà xe, mã, email...",
+    "saveSuccess": "Lưu thông tin nhà xe thành công"
+  },
+  "vehicles": {
+    "vehiclesTitle": "Danh sách xe",
+    "vehiclesSubtitle": "Theo dõi và quản lý phương tiện vận tải",
+    "createVehicle": "Thêm xe",
+    "editVehicle": "Chỉnh sửa xe",
+    "plateNumber": "Biển số xe",
+    "vehicleType": "Loại xe",
+    "seatCount": "Số ghế",
+    "floorCount": "Số tầng",
+    "manufacturingYear": "Năm sản xuất",
+    "vehicleStatus": "Trạng thái xe",
+    "active": "Đang hoạt động",
+    "maintenance": "Bảo dưỡng",
+    "inactive": "Ngừng hoạt động",
+    "searchPlaceholder": "Tìm biển số hoặc loại xe…",
+    "saveSuccess": "Lưu thông tin phương tiện thành công"
+  },
+  "vehicleTypes": {
+    "vehicleTypesTitle": "Quản lý loại xe",
+    "vehicleTypesSubtitle": "Danh mục các chủng loại xe và định dạng sơ đồ ghế",
+    "createVehicleType": "Thêm loại xe",
+    "editVehicleType": "Chỉnh sửa loại xe",
+    "typeName": "Tên loại xe",
+    "description": "Mô tả",
+    "totalSeats": "Tổng số ghế",
+    "searchPlaceholder": "Tìm tên loại xe, mô tả…",
+    "saveSuccess": "Lưu loại xe thành công"
+  },
+  "customers": {
+    "customersTitle": "Quản lý khách hàng",
+    "customersSubtitle": "Danh sách tài khoản hành khách và lịch sử sử dụng dịch vụ",
+    "customerCode": "Mã khách hàng",
+    "fullName": "Họ và tên",
+    "phoneNumber": "Số điện thoại",
+    "email": "Email",
+    "loyaltyPoints": "Điểm tích lũy",
+    "accountStatus": "Trạng thái tài khoản",
+    "searchPlaceholder": "Tìm theo mã, tên, SĐT, email...",
+    "saveSuccess": "Lưu thông tin khách hàng thành công"
+  },
+  "adminAccounts": {
+    "adminAccountsTitle": "Quản lý tài khoản Admin",
+    "adminAccountsSubtitle": "Danh sách tài khoản quản trị hệ thống và nhân sự nhà xe",
+    "createAccount": "Thêm tài khoản",
+    "editAccount": "Chỉnh sửa tài khoản",
+    "accountName": "Họ và tên",
+    "accountEmail": "Email",
+    "accountPhone": "Số điện thoại",
+    "assignedRole": "Vai trò",
+    "searchPlaceholder": "Tìm theo tên, số điện thoại, email hoặc nhà xe",
+    "saveSuccess": "Lưu tài khoản quản trị thành công"
+  },
+  "rbac": {
+    "rbacTitle": "Phân quyền vai trò",
+    "tenantRbacTitle": "Phân quyền nhà xe",
+    "rbacSubtitle": "Cấu hình vai trò và ma trận quyền hạn",
+    "roleName": "Tên vai trò",
+    "roleDescription": "Mô tả vai trò",
+    "permissions": "Quyền hạn",
+    "addRole": "Thêm vai trò",
+    "editRole": "Chỉnh sửa vai trò",
+    "saveSuccess": "Lưu thiết lập phân quyền thành công"
+  },
+  "supportChat": {
+    "supportChatTitle": "Chăm sóc khách hàng",
+    "supportChatSubtitle": "Hộp thư hỗ trợ trực tuyến và giải đáp khách hàng",
+    "inbox": "Hộp thư",
+    "allConversations": "Tất cả hội thoại",
+    "pending": "Chờ tiếp nhận",
+    "processing": "Đang xử lý",
+    "closed": "Đã đóng",
+    "searchPlaceholder": "Tên khách hàng, số điện thoại…",
+    "typeMessage": "Nhập tin nhắn…",
+    "sendMessage": "Gửi"
+  },
+  "reviews": {
+    "reviewsTitle": "Quản lý đánh giá & phản hồi",
+    "reviewsSubtitle": "Theo dõi ý kiến đánh giá và mức độ hài lòng của khách hàng",
+    "averageRating": "Điểm đánh giá trung bình",
+    "totalReviews": "Tổng số đánh giá",
+    "rating": "Số sao",
+    "comment": "Nội dung nhận xét",
+    "searchPlaceholder": "Tên khách hàng, số điện thoại hoặc từ khóa trong nhận xét..."
   }
 }

@@ -38,6 +38,7 @@ import {
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import { CreateBusCompanyDialog } from './create-bus-company-dialog';
 import type {
@@ -89,6 +90,7 @@ function CompanyMark({ name }: { name: string }) {
 }
 
 export function BusCompaniesManagement() {
+  const tCompanies = useTranslations('busCompanies');
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const canCreateCompany = hasPlatformAdminPermission(
@@ -169,7 +171,7 @@ export function BusCompaniesManagement() {
             <div className="flex flex-wrap items-center gap-2">
               {canCreateCompany && (
                 <ResourceCreateAction
-                  label="Thêm nhà xe"
+                  label={tCompanies('createBusCompany')}
                   onClick={openCreateDialog}
                 />
               )}
@@ -177,7 +179,7 @@ export function BusCompaniesManagement() {
             </div>
           }
           eyebrow="ĐỐI TÁC NỀN TẢNG"
-          title="Quản lý nhà xe"
+          title={tCompanies('busCompaniesTitle')}
           titleId="page-title"
         />
         <section aria-label="Danh sách nhà xe" aria-busy={loading}>

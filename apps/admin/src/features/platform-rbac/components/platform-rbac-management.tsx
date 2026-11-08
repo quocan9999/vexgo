@@ -14,6 +14,7 @@ import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-s
 import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { PlatformRbacScopeNavigation } from './platform-rbac-scope-navigation';
 import {
   getDefaultRolePermissions,
@@ -39,6 +40,7 @@ function hasSameKeys(left: readonly string[], right: readonly string[]): boolean
 }
 
 export function PlatformRbacManagement() {
+  const tRbac = useTranslations('rbac');
   const [config, setConfig] = useState<DefaultAdminRbacConfig | null>(null);
   const [drafts, setDrafts] = useState<RoleDrafts>({});
   const [selectedRoleName, setSelectedRoleName] =
@@ -190,7 +192,7 @@ export function PlatformRbacManagement() {
       >
         <AdminPageHeader
           eyebrow="QUẢN TRỊ NỀN TẢNG"
-          title="Phân quyền vai trò"
+          title={tRbac('rbacTitle')}
           titleId="platform-rbac-title"
           actions={
             <ResourceRefreshAction

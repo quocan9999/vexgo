@@ -22,6 +22,7 @@ import {
 } from '@/features/admin-auth/services/admin-access';
 import { reloadAdminSession } from '@/features/admin-auth/services/admin-auth';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   getTenantRolePermissions,
   replaceTenantRolePermissions,
@@ -113,6 +114,7 @@ function PermissionKeyList({
 }
 
 export function TenantRbacManagement() {
+  const tRbac = useTranslations('rbac');
   const authState = useAdminSession();
   const session =
     authState.status === 'authenticated' ? authState.session : null;
@@ -330,7 +332,7 @@ export function TenantRbacManagement() {
       >
         <AdminPageHeader
           eyebrow="QUẢN TRỊ NHÀ XE"
-          title="Phân quyền vai trò"
+          title={tRbac('rbacTitle')}
           titleId="tenant-rbac-title"
           actions={
             <ResourceRefreshAction
