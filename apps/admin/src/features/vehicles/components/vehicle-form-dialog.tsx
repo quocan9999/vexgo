@@ -1,7 +1,7 @@
 'use client';
 
 import { ResourceModalForm } from '@/components/admin/resource-modal-form';
-
+import { useTranslations } from 'next-intl';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
@@ -59,6 +59,8 @@ export function VehicleFormDialog({
   onClose,
   onSaved,
 }: VehicleFormDialogProps) {
+  const tVehicles = useTranslations('vehicles');
+  const tCommon = useTranslations('common');
   const authState = useAdminSession();
   const tenantId =
     authState.status === 'authenticated'
@@ -81,7 +83,11 @@ export function VehicleFormDialog({
   const [layoutSeats, setLayoutSeats] = useState<SeatLayoutItem[]>([]);
   const optionsReady = Boolean(tenantId) && vehicleTypes.status === 'success';
   const optionErrors = [
-    vehicleTypes.status === 'error' ? `Loại xe: ${vehicleTypes.message}` : null,
+    vehicleTypes.status === 'error'
+      ? tVehicles('optionsErrorPrefixVehicleType', {
+          error: vehicleTypes.message,
+        })
+      : null,
   ].filter((message): message is string => message !== null);
 
   function closeDialog() {
@@ -102,19 +108,19 @@ export function VehicleFormDialog({
     const licensePlate = values.licensePlate.trim();
     const vehicleTypeId = Number(values.vehicleTypeId);
 
-    if (!licensePlate) errors.licensePlate = 'Vui lòng nhập biển số xe.';
+    if (!licensePlate) errors.licensePlate = tVehicles('errors.plateRequired');
     else if (licensePlate.length > 15) {
-      errors.licensePlate = 'Biển số xe không được vượt quá 15 ký tự.';
+      errors.licensePlate = tVehicles('errors.plateMaxLength');
     }
 
     if (!Number.isSafeInteger(vehicleTypeId) || vehicleTypeId < 1) {
-      errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
+      errors.vehicleTypeId = tVehicles('errors.typeRequired');
     }
     if (!editing && !VEHICLE_STATUSES.includes(values.status)) {
-      errors.status = 'Vui lòng chọn trạng thái xe.';
+      errors.status = tVehicles('errors.statusRequired');
     }
     if (!editing && layoutSeats.length === 0) {
-      errors.seats = 'Vui lòng thêm ít nhất một ghế vào sơ đồ xe.';
+      errors.seats = tVehicles('errors.seatsRequired');
     }
 
     return errors;
@@ -126,7 +132,7 @@ export function VehicleFormDialog({
 
     setFormError(null);
     if (!optionsReady) {
-      setFormError('Không xác định được nhà xe hoặc chưa tải được loại xe.');
+      setFormError(tVehicles('unresolvedOperatorOrTypes'));
       return;
     }
 
@@ -177,21 +183,21 @@ export function VehicleFormDialog({
         requestError instanceof VehicleApiError &&
         requestError.code === 'VEHICLE_LICENSE_PLATE_EXISTS'
       ) {
-        setFieldErrors({ licensePlate: 'Biển số xe đã tồn tại.' });
+        setFieldErrors({ licensePlate: tVehicles('errors.plateExists') });
         requestAnimationFrame(() =>
           formRef.current
             ?.querySelector<HTMLElement>('[aria-invalid="true"]')
             ?.focus(),
         );
       } else if (requestError instanceof TypeError) {
-        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error(tVehicles('networkError'));
       } else {
         toast.error(
           requestError instanceof Error
             ? requestError.message
             : editing
-              ? 'Không thể cập nhật xe. Vui lòng thử lại.'
-              : 'Không thể tạo xe. Vui lòng thử lại.',
+              ? tVehicles('saveError')
+              : tVehicles('saveError'),
         );
       }
     } finally {
@@ -202,11 +208,15 @@ export function VehicleFormDialog({
 
   return (
     <ResourceModalDialog
-      title={editing ? 'Chỉnh sửa xe' : 'Thêm xe'}
+      title={
+        editing
+          ? tVehicles('formDialogEditTitle', { plate: vehicle.licensePlate })
+          : tVehicles('formDialogCreateTitle')
+      }
       description={
         editing
-          ? 'Cập nhật biển số và loại xe.'
-          : 'Nhập thông tin xe và tạo sơ đồ ghế riêng cho phương tiện này.'
+          ? tVehicles('formDialogEditDesc')
+          : tVehicles('formDialogCreateDesc')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -224,7 +234,7 @@ export function VehicleFormDialog({
               onClick={closeDialog}
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button
               aria-busy={submitting}
@@ -237,7 +247,11 @@ export function VehicleFormDialog({
                   className="motion-safe:animate-spin"
                 />
               )}
-              {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo xe'}
+              {submitting
+                ? tVehicles('saving')
+                : editing
+                  ? tCommon('saveChanges')
+                  : tVehicles('createVehicle')}
             </Button>
           </div>
         }
@@ -252,13 +266,13 @@ export function VehicleFormDialog({
               onClick={onRetryOptions}
               variant="outline"
             >
-              Tải lại tùy chọn
+              {tVehicles('retryFilterOptions')}
             </Button>
           </ResourceNotice>
         )}
         <Field data-invalid={Boolean(fieldErrors.licensePlate)}>
           <FieldLabel htmlFor={`${idPrefix}-license-plate`}>
-            Biển số xe <span aria-hidden>*</span>
+            {tVehicles('plateNumber')} <span aria-hidden>*</span>
           </FieldLabel>
           <Input
             aria-describedby={
@@ -275,7 +289,7 @@ export function VehicleFormDialog({
             onChange={(event) =>
               updateField('licensePlate', event.target.value)
             }
-            placeholder="Ví dụ: 51B-123.45"
+            placeholder={tVehicles('plateNumberPlaceholder')}
             required
             value={values.licensePlate}
           />
@@ -285,7 +299,7 @@ export function VehicleFormDialog({
         </Field>
         <Field data-invalid={Boolean(fieldErrors.vehicleTypeId)}>
           <FieldLabel htmlFor={`${idPrefix}-vehicle-type`}>
-            Loại xe <span aria-hidden>*</span>
+            {tVehicles('vehicleType')} <span aria-hidden>*</span>
           </FieldLabel>
           <Select
             disabled={submitting || !optionsReady}
@@ -304,7 +318,7 @@ export function VehicleFormDialog({
               aria-required
               id={`${idPrefix}-vehicle-type`}
             >
-              <SelectValue placeholder="Chọn loại xe">
+              <SelectValue placeholder={tVehicles('selectVehicleTypePlaceholder')}>
                 {vehicleTypes.status === 'success'
                   ? vehicleTypes.options.find(
                       (option) => String(option.id) === values.vehicleTypeId,
@@ -335,7 +349,7 @@ export function VehicleFormDialog({
         {!editing && (
           <Field data-invalid={Boolean(fieldErrors.status)}>
             <FieldLabel htmlFor={`${idPrefix}-status`}>
-              Trạng thái <span aria-hidden>*</span>
+              {tVehicles('vehicleStatus')} <span aria-hidden>*</span>
             </FieldLabel>
             <Select
               disabled={submitting}
@@ -353,13 +367,19 @@ export function VehicleFormDialog({
                 id={`${idPrefix}-status`}
               >
                 <SelectValue>
-                  {values.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Bảo trì'}
+                  {values.status === 'HOAT_DONG'
+                    ? tVehicles('statusActive')
+                    : tVehicles('statusMaintenance')}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent align="start">
                 <SelectGroup>
-                  <SelectItem value="HOAT_DONG">Đang hoạt động</SelectItem>
-                  <SelectItem value="BAO_TRI">Bảo trì</SelectItem>
+                  <SelectItem value="HOAT_DONG">
+                    {tVehicles('statusActive')}
+                  </SelectItem>
+                  <SelectItem value="BAO_TRI">
+                    {tVehicles('statusMaintenance')}
+                  </SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>

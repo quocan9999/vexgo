@@ -1,12 +1,8 @@
 'use client';
 
-import { ArrowLeft, Armchair, BusFront, LoaderCircle } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useRef, useState, type FormEvent } from 'react';
-import { toast } from 'sonner';
-import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { useTranslations } from 'next-intl';
 import { ResourceNotice } from '@/components/admin/resource-ui';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { Button } from '@/components/ui/action-button';
 import {
   Card,
@@ -26,8 +22,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import {
+  Armchair,
+  ArrowLeft,
+  BusFront,
+  LoaderCircle,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useRef, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
 import { useVehicleFilterOptions } from '../hooks/use-vehicle-filter-options';
-import { createVehicle, VehicleApiError } from '../services/vehicle-service';
+import {
+  createVehicle,
+  VehicleApiError,
+} from '../services/vehicle-service';
 import {
   VEHICLE_STATUSES,
   type VehicleSeatLayoutInput,
@@ -49,16 +58,19 @@ type FormField = keyof FormValues;
 type FieldErrors = Partial<Record<FormField | 'seats', string>>;
 
 export function VehicleCreateWorkspace() {
+  const tVehicles = useTranslations('vehicles');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const authState = useAdminSession();
-  const options = useVehicleFilterOptions();
-  const formRef = useRef<HTMLFormElement>(null);
-  const submittingRef = useRef(false);
-
   const tenantId =
     authState.status === 'authenticated'
       ? authState.session.busCompanyId
       : null;
+
+  const options = useVehicleFilterOptions();
+
+  const formRef = useRef<HTMLFormElement>(null);
+  const submittingRef = useRef(false);
 
   const [values, setValues] = useState<FormValues>({
     licensePlate: '',
@@ -85,21 +97,21 @@ export function VehicleCreateWorkspace() {
     const vehicleTypeId = Number(values.vehicleTypeId);
 
     if (!licensePlate) {
-      errors.licensePlate = 'Vui lòng nhập biển số xe.';
+      errors.licensePlate = tVehicles('errors.plateRequired');
     } else if (licensePlate.length > 15) {
-      errors.licensePlate = 'Biển số xe không được vượt quá 15 ký tự.';
+      errors.licensePlate = tVehicles('errors.plateMaxLength');
     }
 
     if (!Number.isSafeInteger(vehicleTypeId) || vehicleTypeId < 1) {
-      errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
+      errors.vehicleTypeId = tVehicles('errors.typeRequired');
     }
 
     if (!VEHICLE_STATUSES.includes(values.status)) {
-      errors.status = 'Vui lòng chọn trạng thái xe.';
+      errors.status = tVehicles('errors.statusRequired');
     }
 
     if (layoutSeats.length === 0) {
-      errors.seats = 'Vui lòng thêm ít nhất một ghế vào sơ đồ xe.';
+      errors.seats = tVehicles('errors.seatsRequired');
     }
 
     return errors;
@@ -111,7 +123,7 @@ export function VehicleCreateWorkspace() {
 
     setFormError(null);
     if (!optionsReady) {
-      setFormError('Không xác định được nhà xe hoặc chưa tải được loại xe.');
+      setFormError(tVehicles('unresolvedOperatorOrTypes'));
       return;
     }
 
@@ -152,26 +164,26 @@ export function VehicleCreateWorkspace() {
         ),
       });
 
-      toast.success(`Đã tạo xe ${savedVehicle.licensePlate} thành công!`);
+      toast.success(tVehicles('createdSuccess', { plate: savedVehicle.licensePlate }));
       router.push(`/vehicles/${savedVehicle.vehicleId}`);
     } catch (requestError: unknown) {
       if (
         requestError instanceof VehicleApiError &&
         requestError.code === 'VEHICLE_LICENSE_PLATE_EXISTS'
       ) {
-        setFieldErrors({ licensePlate: 'Biển số xe đã tồn tại.' });
+        setFieldErrors({ licensePlate: tVehicles('errors.plateExists') });
         requestAnimationFrame(() =>
           formRef.current
             ?.querySelector<HTMLElement>('[aria-invalid="true"]')
             ?.focus(),
         );
       } else if (requestError instanceof TypeError) {
-        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error(tVehicles('networkError'));
       } else {
         const message =
           requestError instanceof Error
             ? requestError.message
-            : 'Không thể tạo xe. Vui lòng thử lại.';
+            : tVehicles('saveError');
         setFormError(message);
         toast.error(message);
       }
@@ -195,12 +207,12 @@ export function VehicleCreateWorkspace() {
               variant="outline"
             >
               <ArrowLeft aria-hidden="true" className="size-4" />
-              Quay lại danh sách
+              {tVehicles('backToVehicles')}
             </Button>
           </div>
         }
-        eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
-        title="Thêm xe mới"
+        eyebrow={tVehicles('eyebrow')}
+        title={tVehicles('createVehicle')}
         titleId="create-vehicle-title"
       />
 
@@ -215,22 +227,22 @@ export function VehicleCreateWorkspace() {
         )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Cột trái: Thông tin cơ bản & Thống kê */}
+          {/* Left column: Basic info & Seat statistics */}
           <div className="space-y-6 lg:col-span-5 xl:col-span-4">
             <Card className="gap-0 py-0 shadow-sm">
               <CardHeader className="border-b p-5">
                 <CardTitle className="text-base flex items-center gap-2">
                   <BusFront className="size-5 text-primary" />
-                  Thông tin phương tiện
+                  {tVehicles('identificationTitle')}
                 </CardTitle>
                 <CardDescription>
-                  Nhập thông tin nhận diện cơ bản của xe mới.
+                  {tVehicles('identificationSubtitle')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 p-5">
                 <Field data-invalid={Boolean(fieldErrors.licensePlate)}>
                   <FieldLabel htmlFor="create-vehicle-license-plate">
-                    Biển số xe <span aria-hidden="true">*</span>
+                    {tVehicles('plateNumber')} <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <Input
                     aria-describedby={
@@ -247,7 +259,7 @@ export function VehicleCreateWorkspace() {
                     onChange={(event) =>
                       updateField('licensePlate', event.target.value)
                     }
-                    placeholder="Ví dụ: 51B-123.45"
+                    placeholder={tVehicles('plateNumberPlaceholder')}
                     required
                     value={values.licensePlate}
                   />
@@ -258,7 +270,7 @@ export function VehicleCreateWorkspace() {
 
                 <Field data-invalid={Boolean(fieldErrors.vehicleTypeId)}>
                   <FieldLabel htmlFor="create-vehicle-type">
-                    Loại xe <span aria-hidden="true">*</span>
+                    {tVehicles('vehicleType')} <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <Select
                     disabled={submitting || !optionsReady}
@@ -276,12 +288,12 @@ export function VehicleCreateWorkspace() {
                       aria-invalid={Boolean(fieldErrors.vehicleTypeId)}
                       id="create-vehicle-type"
                     >
-                      <SelectValue placeholder="Chọn loại xe">
+                      <SelectValue placeholder={tVehicles('selectVehicleTypePlaceholder')}>
                         {options.vehicleTypes.status === 'success'
                           ? options.vehicleTypes.options.find(
                               (opt) => String(opt.id) === values.vehicleTypeId,
                             )?.label
-                          : 'Đang tải loại xe…'}
+                          : tVehicles('loadingFilterOptions')}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent align="start">
@@ -305,7 +317,7 @@ export function VehicleCreateWorkspace() {
 
                 <Field data-invalid={Boolean(fieldErrors.status)}>
                   <FieldLabel htmlFor="create-vehicle-status">
-                    Trạng thái ban đầu <span aria-hidden="true">*</span>
+                    {tVehicles('vehicleStatus')} <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <Select
                     disabled={submitting}
@@ -325,14 +337,18 @@ export function VehicleCreateWorkspace() {
                     >
                       <SelectValue>
                         {values.status === 'HOAT_DONG'
-                          ? 'Đang hoạt động'
-                          : 'Bảo trì'}
+                          ? tVehicles('statusActive')
+                          : tVehicles('statusMaintenance')}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent align="start">
                       <SelectGroup>
-                        <SelectItem value="HOAT_DONG">Đang hoạt động</SelectItem>
-                        <SelectItem value="BAO_TRI">Bảo trì</SelectItem>
+                        <SelectItem value="HOAT_DONG">
+                          {tVehicles('statusActive')}
+                        </SelectItem>
+                        <SelectItem value="BAO_TRI">
+                          {tVehicles('statusMaintenance')}
+                        </SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -347,27 +363,37 @@ export function VehicleCreateWorkspace() {
               <CardHeader className="border-b p-5">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Armchair className="size-5 text-primary" />
-                  Thống kê sơ đồ ghế
+                  {tVehicles('seatStats')}
                 </CardTitle>
                 <CardDescription>
-                  Tổng quan số lượng ghế được cấu hình cho xe.
+                  {tVehicles('seatStatsDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 p-5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Tổng số ghế:</span>
+                  <span className="text-muted-foreground">
+                    {tVehicles('totalSeatsLabel')}:
+                  </span>
                   <span className="font-bold text-base text-primary">
-                    {layoutSeats.length} ghế
+                    {tVehicles('seatCountBadge', { count: layoutSeats.length })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Tầng dưới:</span>
-                  <span className="font-semibold">{floor1Count} ghế</span>
+                  <span className="text-muted-foreground">
+                    {tVehicles('floorLower')}:
+                  </span>
+                  <span className="font-semibold">
+                    {tVehicles('seatCountBadge', { count: floor1Count })}
+                  </span>
                 </div>
                 {floor2Count > 0 && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Tầng trên:</span>
-                    <span className="font-semibold">{floor2Count} ghế</span>
+                    <span className="text-muted-foreground">
+                      {tVehicles('floorUpper')}:
+                    </span>
+                    <span className="font-semibold">
+                      {tVehicles('seatCountBadge', { count: floor2Count })}
+                    </span>
                   </div>
                 )}
                 {fieldErrors.seats && (
@@ -393,7 +419,7 @@ export function VehicleCreateWorkspace() {
                       className="size-4 motion-safe:animate-spin"
                     />
                   )}
-                  {submitting ? 'Đang tạo xe…' : 'Hoàn tất & Tạo xe mới'}
+                  {submitting ? tVehicles('saving') : tVehicles('completeAndCreateVehicle')}
                 </Button>
                 <Button
                   className="w-full"
@@ -401,21 +427,21 @@ export function VehicleCreateWorkspace() {
                   render={<Link href="/vehicles" />}
                   variant="outline"
                 >
-                  Hủy thao tác
+                  {tCommon('cancel')}
                 </Button>
               </CardContent>
             </Card>
           </div>
 
-          {/* Cột phải: Visual Seat Layout Editor toàn màn hình */}
+          {/* Right column: Visual Seat Layout Editor */}
           <div className="space-y-6 lg:col-span-7 xl:col-span-8">
             <Card className="gap-0 py-0 shadow-sm">
               <CardHeader className="border-b p-5">
                 <CardTitle className="text-base">
-                  Thiết kế sơ đồ ghế trực quan
+                  {tVehicles('visualSeatLayout')}
                 </CardTitle>
                 <CardDescription>
-                  Kéo thả, căn chỉnh các dãy ghế, lối đi và phân tầng cho xe.
+                  {tVehicles('visualSeatLayoutDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-5">

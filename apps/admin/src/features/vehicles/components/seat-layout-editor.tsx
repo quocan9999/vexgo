@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import {
   Armchair,
@@ -86,6 +87,8 @@ export function SeatLayoutEditor({
   onDeleteUpperFloor,
   onSave,
 }: SeatLayoutEditorProps) {
+  const tVehicles = useTranslations('vehicles');
+  const tCommon = useTranslations('common');
   const [activeFloor, setActiveFloor] = useState(1);
   const [hasSecondFloor, setHasSecondFloor] = useState(false);
   const [selectedSeatNumber, setSelectedSeatNumber] = useState<string | null>(
@@ -142,7 +145,7 @@ export function SeatLayoutEditor({
       ),
     );
     if (collides) {
-      setInteractionMessage('Khoảng cách này làm hai ghế bị chồng lên nhau.');
+      setInteractionMessage(tVehicles('seatCollisionError'));
       return;
     }
     setInteractionMessage(null);
@@ -159,14 +162,11 @@ export function SeatLayoutEditor({
           (axis === 'x' ? item.x === seat.x : item.y === seat.y),
       )
       .map((item) => item.seatNumber);
-    const limit = axis === 'x' ? 890 : 30000;
-    const minimum = axis === 'x' ? 110 : 1000;
-    const step = axis === 'x' ? 5 : 50;
-    const value = Math.max(
-      minimum,
-      Math.min(limit, Math.round((seat[axis] + delta) / step) * step),
-    );
-    updateGroup(group, seat.floor, axis, value);
+    const current = seat[axis];
+    const min = axis === 'x' ? 110 : 1000;
+    const max = axis === 'x' ? 890 : 30000;
+    const next = Math.max(min, Math.min(max, current + delta));
+    if (next !== current) updateGroup(group, seat.floor, axis, next);
   }
 
   function startDrag(
@@ -174,11 +174,7 @@ export function SeatLayoutEditor({
     seat: SeatLayoutItem,
   ) {
     if (busy) return;
-    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedSeatNumber(seat.seatNumber);
-    setInteractionMessage(null);
-    setAlignmentGuides({ x: null, y: null });
     dragRef.current = {
       pointerId: event.pointerId,
       seatNumber: seat.seatNumber,
@@ -188,65 +184,63 @@ export function SeatLayoutEditor({
       pointerX: event.clientX,
       pointerY: event.clientY,
     };
+    setSelectedSeatNumber(seat.seatNumber);
+    setAlignmentGuides({ x: seat.x, y: seat.y });
   }
 
   function moveDrag(event: PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId || busy) return;
-    const deltaX = event.clientX - drag.pointerX;
-    const deltaY = event.clientY - drag.pointerY;
-    if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 3) return;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0) return;
 
-    const width = Math.max(
-      1,
-      canvasRef.current?.getBoundingClientRect().width ?? 1,
-    );
-    const rawX = Math.max(
-      110,
-      Math.min(
-        890,
-        Math.round((drag.startX + (deltaX / width) * 1000) / 5) * 5,
-      ),
-    );
-    const rawY = Math.max(
-      1000,
-      Math.min(
-        30000,
-        Math.round((drag.startY + deltaY / VERTICAL_UNIT_PX) / 50) * 50,
-      ),
-    );
+    const deltaX = ((event.clientX - drag.pointerX) / rect.width) * 1000;
+    const deltaY = (event.clientY - drag.pointerY) / VERTICAL_UNIT_PX;
+    const rawX = Math.round(drag.startX + deltaX);
+    const rawY = Math.round(drag.startY + deltaY);
+    const boundedX = Math.max(110, Math.min(890, rawX));
+    const boundedY = Math.max(1000, Math.min(30000, rawY));
+
     const otherSeats = seats.filter(
       (seat) =>
         seat.floor === drag.floor && seat.seatNumber !== drag.seatNumber,
     );
-    const xSnapDistance = (10 / width) * 1000;
-    const ySnapDistance = 10 / VERTICAL_UNIT_PX;
-    const nearestX = otherSeats
-      .map((seat) => seat.x)
-      .filter((x) => Math.abs(x - rawX) <= xSnapDistance)
-      .sort((left, right) => Math.abs(left - rawX) - Math.abs(right - rawX))[0];
-    const nearestY = otherSeats
-      .map((seat) => seat.y)
-      .filter((y) => Math.abs(y - rawY) <= ySnapDistance)
-      .sort((left, right) => Math.abs(left - rawY) - Math.abs(right - rawY))[0];
-
-    const candidates = [
-      {
-        x: nearestX ?? rawX,
-        y: nearestY ?? rawY,
-        guideX: nearestX ?? null,
-        guideY: nearestY ?? null,
-      },
-      { x: nearestX ?? rawX, y: rawY, guideX: nearestX ?? null, guideY: null },
-      { x: rawX, y: nearestY ?? rawY, guideX: null, guideY: nearestY ?? null },
-      { x: rawX, y: rawY, guideX: null, guideY: null },
-    ].filter(
-      (candidate, index, all) =>
-        all.findIndex(
-          (item) => item.x === candidate.x && item.y === candidate.y,
-        ) === index,
+    const candidateXAlignments = Array.from(
+      new Set(otherSeats.map((seat) => seat.x)),
     );
-    const destination = candidates.find(
+    const candidateYAlignments = Array.from(
+      new Set(otherSeats.map((seat) => seat.y)),
+    );
+
+    const nearestX = candidateXAlignments
+      .map((targetX) => ({
+        targetX,
+        distance: Math.abs(targetX - boundedX),
+      }))
+      .filter((candidate) => candidate.distance <= 40)
+      .sort((a, b) => a.distance - b.distance)[0]?.targetX;
+
+    const nearestY = candidateYAlignments
+      .map((targetY) => ({
+        targetY,
+        distance: Math.abs(targetY - boundedY),
+      }))
+      .filter((candidate) => candidate.distance <= 140)
+      .sort((a, b) => a.distance - b.distance)[0]?.targetY;
+
+    const targetX = nearestX ?? boundedX;
+    const targetY = nearestY ?? boundedY;
+
+    const destinationCandidates = [
+      { x: targetX, y: targetY, guideX: nearestX ?? null, guideY: nearestY ?? null },
+      { x: targetX, y: boundedY, guideX: nearestX ?? null, guideY: null },
+      { x: boundedX, y: targetY, guideX: null, guideY: nearestY ?? null },
+      { x: boundedX, y: boundedY, guideX: null, guideY: null },
+    ];
+
+    const destination = destinationCandidates.find(
       (candidate) =>
         !otherSeats.some(
           (seat) =>
@@ -257,7 +251,7 @@ export function SeatLayoutEditor({
 
     if (!destination) {
       setAlignmentGuides({ x: null, y: null });
-      setInteractionMessage('Khoảng cách này làm hai ghế bị chồng lên nhau.');
+      setInteractionMessage(tVehicles('seatCollisionError'));
       return;
     }
 
@@ -326,7 +320,7 @@ export function SeatLayoutEditor({
       columnCounts[activeVisibleFloor] ?? 4,
     );
     if (!seatNumber || !coordinates) {
-      setInteractionMessage('Tầng này đã đạt số ghế tối đa.');
+      setInteractionMessage(tVehicles('maxSeatsReached'));
       return;
     }
     const nextSeat: SeatLayoutItem = {
@@ -351,7 +345,7 @@ export function SeatLayoutEditor({
       setSelectedSeatNumber(savedLayoutSeat.seatNumber);
     } catch (addError: unknown) {
       setInteractionMessage(
-        addError instanceof Error ? addError.message : 'Không thể thêm ghế.',
+        addError instanceof Error ? addError.message : tVehicles('cannotAddSeat'),
       );
     } finally {
       setAdding(false);
@@ -387,7 +381,7 @@ export function SeatLayoutEditor({
       return;
     }
     if (dirty) {
-      setInteractionMessage('Lưu sơ đồ hiện tại trước khi xóa tầng trên.');
+      setInteractionMessage(tVehicles('saveLayoutFirstBeforeRemovingDeck'));
       return;
     }
     if (!canRemoveDraft && !onDeleteUpperFloor) return;
@@ -411,7 +405,7 @@ export function SeatLayoutEditor({
       removeEmptyUpperFloor();
     } catch (error: unknown) {
       setFloorRemovalError(
-        error instanceof Error ? error.message : 'Không thể xóa tầng trên.',
+        error instanceof Error ? error.message : tVehicles('cannotRemoveUpperDeck'),
       );
     } finally {
       setFloorRemoving(false);
@@ -425,7 +419,9 @@ export function SeatLayoutEditor({
 
     return (
       <div
-        aria-label={`Sơ đồ ghế tầng ${floor === 1 ? 'dưới' : 'trên'}`}
+        aria-label={tVehicles('deckAriaLabel', {
+          floor: floor === 1 ? tVehicles('floorLower') : tVehicles('floorUpper'),
+        })}
         className="relative mx-auto w-full max-w-[460px] overflow-hidden rounded-b-[32px] border-x border-b border-slate-300/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 shadow-inner select-none"
         onPointerCancel={stopDrag}
         onPointerMove={moveDrag}
@@ -454,14 +450,17 @@ export function SeatLayoutEditor({
         )}
         {seatsOnFloor.length === 0 ? (
           <div className="absolute inset-0 grid place-items-center p-8 text-center text-sm text-muted-foreground">
-            Chưa có ghế ở tầng này. Dùng nút “Thêm ghế” để bắt đầu sơ đồ.
+            {tVehicles('emptyDeckDesc')}
           </div>
         ) : (
           seatsOnFloor.map((seat) => {
             const selected = selectedSeatNumber === seat.seatNumber;
             return (
               <Button
-                aria-label={`${seat.seatNumber}, tầng ${floor === 1 ? 'dưới' : 'trên'}. Dùng phím mũi tên để căn chỉnh theo hàng hoặc cột.`}
+                aria-label={tVehicles('seatAriaLabel', {
+                  seatNumber: seat.seatNumber,
+                  floor: floor === 1 ? tVehicles('floorLower') : tVehicles('floorUpper'),
+                })}
                 aria-pressed={selected}
                 className={`absolute z-10 h-14 w-[58px] -translate-x-1/2 -translate-y-1/2 flex-col gap-0.5 rounded-xl px-1 transition-all duration-150 ${
                   selected
@@ -504,13 +503,13 @@ export function SeatLayoutEditor({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <TabsList
-            aria-label="Tầng xe"
+            aria-label={tVehicles('floorCount')}
             className={`grid ${hasFloorTwo ? 'grid-cols-2' : 'grid-cols-1'}`}
           >
             <TabsTrigger value="1">
-              {hasFloorTwo ? 'Tầng dưới' : 'Ghế ngồi'}
+              {hasFloorTwo ? tVehicles('floorLower') : tVehicles('seatCount')}
             </TabsTrigger>
-            {hasFloorTwo && <TabsTrigger value="2">Tầng trên</TabsTrigger>}
+            {hasFloorTwo && <TabsTrigger value="2">{tVehicles('floorUpper')}</TabsTrigger>}
           </TabsList>
           {hasFloorTwo ? (
             <Button
@@ -527,7 +526,7 @@ export function SeatLayoutEditor({
               variant="outline"
             >
               <Trash2 aria-hidden />
-              Xóa tầng trên
+              {tVehicles('removeUpperDeck')}
             </Button>
           ) : (
             <Button
@@ -541,7 +540,7 @@ export function SeatLayoutEditor({
               variant="outline"
             >
               <Plus aria-hidden />
-              Tạo tầng trên
+              {tVehicles('addUpperDeck')}
             </Button>
           )}
         </div>
@@ -549,7 +548,7 @@ export function SeatLayoutEditor({
         <Card className="h-auto gap-0 py-0">
           <CardHeader className="flex flex-col gap-4 border-b p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-base">Sơ đồ ghế 2D</CardTitle>
+              <CardTitle className="text-base">{tVehicles('visualSeatLayout')}</CardTitle>
             </div>
             <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:ml-auto sm:w-auto">
               <div className="flex shrink-0 items-center gap-2">
@@ -557,7 +556,7 @@ export function SeatLayoutEditor({
                   className="text-sm font-medium text-muted-foreground"
                   id={`seat-column-count-${activeVisibleFloor}`}
                 >
-                  Số cột
+                  {tVehicles('columnsCount')}
                 </span>
                 <Select
                   disabled={busy}
@@ -570,13 +569,15 @@ export function SeatLayoutEditor({
                     size="sm"
                   >
                     <SelectValue>
-                      {columnCounts[activeVisibleFloor] ?? 4} cột
+                      {tVehicles('columnsOption', {
+                        count: columnCounts[activeVisibleFloor] ?? 4,
+                      })}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="end">
                     {[1, 2, 3, 4, 5].map((count) => (
                       <SelectItem key={count} value={String(count)}>
-                        {count} cột
+                        {tVehicles('columnsOption', { count })}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -592,7 +593,7 @@ export function SeatLayoutEditor({
                     variant="outline"
                   >
                     <PencilLine aria-hidden />
-                    Chỉnh sửa ghế đang chọn
+                    {tVehicles('editSelectedSeat')}
                   </Button>
                 )}
               <Button
@@ -601,7 +602,7 @@ export function SeatLayoutEditor({
                 variant="outline"
               >
                 <Plus aria-hidden />
-                {adding ? 'Đang thêm…' : 'Thêm ghế'}
+                {adding ? tVehicles('addingSeat') : tVehicles('addSeat')}
               </Button>
               {selectedSeat &&
                 ((canRemoveDraft &&
@@ -624,7 +625,7 @@ export function SeatLayoutEditor({
                     ) : (
                       <Trash2 aria-hidden />
                     )}
-                    {deletingSeat ? 'Đang xóa…' : 'Xóa ghế đang chọn'}
+                    {deletingSeat ? tVehicles('deletingSeat') : tVehicles('deleteSelectedSeat')}
                   </Button>
                 )}
               {onSave && (
@@ -633,7 +634,7 @@ export function SeatLayoutEditor({
                   disabled={busy || !dirty || seats.length === 0}
                   onClick={onSave}
                 >
-                  {saving ? 'Đang lưu…' : 'Lưu sơ đồ'}
+                  {saving ? tVehicles('saving') : tVehicles('saveLayout')}
                 </Button>
               )}
             </div>
@@ -642,11 +643,13 @@ export function SeatLayoutEditor({
             <div className="mx-auto flex w-full max-w-[460px] items-center justify-between rounded-t-[32px] border border-b-0 border-slate-300/80 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-card px-5 py-3 text-xs font-semibold text-slate-700 dark:text-slate-300 shadow-2xs">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 dark:border-blue-800/80 px-2.5 py-1 text-blue-700 dark:text-blue-300">
                 <BusFront aria-hidden className="size-4 text-blue-600 dark:text-blue-400" />
-                Vị trí tài xế
+                {tVehicles('driverPosition')}
               </span>
-              <span className="font-bold uppercase tracking-wider text-[11px] text-slate-400">Đầu xe</span>
+              <span className="font-bold uppercase tracking-wider text-[11px] text-slate-400">
+                {tVehicles('vehicleFront')}
+              </span>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-slate-600 dark:text-slate-400">
-                Cửa đón khách ➔
+                {tVehicles('passengerDoorArrow')}
               </span>
             </div>
 
@@ -661,8 +664,10 @@ export function SeatLayoutEditor({
 
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
               <p className="m-0">
-                {seats.length.toLocaleString('vi-VN')} / {MAX_VEHICLE_SEATS} ghế
-                · Kéo ghế để tạo khoảng cách lối đi.
+                {tVehicles('seatsFootnote', {
+                  count: seats.length.toLocaleString(),
+                  max: MAX_VEHICLE_SEATS,
+                })}
               </p>
             </div>
             {(error || interactionMessage) && (
@@ -679,13 +684,13 @@ export function SeatLayoutEditor({
           busy={floorRemoving}
           description={
             canRemoveDraft
-              ? `Xóa tầng trên sẽ bỏ ${upperFloorSeats.length} ghế khỏi bản nháp xe.`
-              : `Xóa tầng trên sẽ xóa ${upperFloorSeats.length} ghế khỏi xe. Chỉ thực hiện được khi các ghế này chưa được dùng trong chuyến.`
+              ? tVehicles('deckRemovalDraftDesc', { count: upperFloorSeats.length })
+              : tVehicles('deckRemovalServerDesc', { count: upperFloorSeats.length })
           }
           onClose={() => {
             if (!floorRemoving) setFloorRemovalOpen(false);
           }}
-          title="Xóa tầng trên?"
+          title={tVehicles('deckRemovalTitle')}
         >
           {floorRemovalError && (
             <ResourceNotice kind="error">{floorRemovalError}</ResourceNotice>
@@ -699,7 +704,7 @@ export function SeatLayoutEditor({
             {floorRemoving && (
               <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
             )}
-            {floorRemoving ? 'Đang xóa tầng…' : 'Xóa tầng trên'}
+            {floorRemoving ? tVehicles('deletingDeck') : tVehicles('deckRemovalConfirm')}
           </Button>
         </ResourceConfirmation>
       )}

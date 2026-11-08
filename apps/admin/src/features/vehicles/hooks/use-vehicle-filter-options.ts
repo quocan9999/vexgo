@@ -14,11 +14,11 @@ export type VehicleFilterOptionState =
 
 function errorMessage(error: unknown, resource: string) {
   if (error instanceof TypeError) {
-    return 'Không thể kết nối đến máy chủ API. Vui lòng thử tải lại.';
+    return 'Cannot connect to API server. Please retry.';
   }
   return error instanceof Error
     ? error.message
-    : `Không thể tải tùy chọn ${resource}.`;
+    : `Failed to load ${resource} options.`;
 }
 
 export function useVehicleFilterOptions() {
@@ -42,7 +42,7 @@ export function useVehicleFilterOptions() {
         if (current && !controller.signal.aborted) {
           setBusCompanies({
             status: 'error',
-            message: errorMessage(error, 'nhà xe'),
+            message: errorMessage(error, 'bus company'),
           });
         }
       });
@@ -55,7 +55,7 @@ export function useVehicleFilterOptions() {
         if (current && !controller.signal.aborted) {
           setVehicleTypes({
             status: 'error',
-            message: errorMessage(error, 'loại xe'),
+            message: errorMessage(error, 'vehicle type'),
           });
         }
       });

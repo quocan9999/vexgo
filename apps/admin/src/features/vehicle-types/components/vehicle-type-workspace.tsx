@@ -77,7 +77,7 @@ export function VehicleTypeWorkspace({
             status: 'error',
             message:
               error instanceof TypeError
-                ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+                ? tVehicleTypes('networkError')
                 : error instanceof Error
                   ? error.message
                   : tVehicleTypes('errorLoading'),
@@ -195,7 +195,7 @@ export function VehicleTypeWorkspace({
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Card 1: Sức chứa hàng mặc định */}
+              {/* Card 1: Default cargo capacity */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
@@ -227,7 +227,7 @@ export function VehicleTypeWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 2: Thông tin mô tả & Hồ sơ */}
+              {/* Card 2: Description & record */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">

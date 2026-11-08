@@ -105,13 +105,13 @@ export function VehicleTypeFormDialog({
     const name = values.name.trim();
     const description = values.description.trim();
 
-    if (!name) errors.name = 'Vui lòng nhập tên loại xe.';
+    if (!name) errors.name = tVehicleTypes('errors.nameRequired');
     else if (name.length > 100) {
-      errors.name = 'Tên loại xe không được vượt quá 100 ký tự.';
+      errors.name = tVehicleTypes('errors.nameMaxLength');
     }
 
     if (description.length > 500) {
-      errors.description = 'Mô tả không được vượt quá 500 ký tự.';
+      errors.description = tVehicleTypes('errors.descriptionMaxLength');
     }
 
     for (const field of [
@@ -126,7 +126,7 @@ export function VehicleTypeFormDialog({
         !Number.isSafeInteger(capacity) ||
         capacity > 2_147_483_647
       ) {
-        errors[field] = 'Nhập số nguyên từ 0 đến 2147483647.';
+        errors[field] = tVehicleTypes('errors.integerRange');
       }
     }
 
@@ -139,9 +139,7 @@ export function VehicleTypeFormDialog({
 
     setFormError(null);
     if (!editing && !tenantId) {
-      setFormError(
-        'Không xác định được nhà xe của tài khoản. Vui lòng đăng nhập lại.',
-      );
+      setFormError(tVehicleTypes('errors.busCompanyMissing'));
       return;
     }
     const errors = validate();
@@ -192,14 +190,14 @@ export function VehicleTypeFormDialog({
           focusFirstInvalid();
         }
       } else if (requestError instanceof TypeError) {
-        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error(tVehicleTypes('errors.networkError'));
       } else {
         toast.error(
           requestError instanceof Error
             ? requestError.message
             : editing
-              ? 'Không thể cập nhật loại xe. Vui lòng thử lại.'
-              : 'Không thể tạo loại xe. Vui lòng thử lại.',
+              ? tVehicleTypes('errors.updateFailed')
+              : tVehicleTypes('errors.createFailed'),
         );
       }
     } finally {

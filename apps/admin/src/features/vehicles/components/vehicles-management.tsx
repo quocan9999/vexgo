@@ -65,15 +65,6 @@ function timestampFormat(value: string) {
     .replaceAll('/', '-');
 }
 
-function statusLabel(status: VehicleStatus) {
-  switch (status) {
-    case 'HOAT_DONG':
-      return 'Đang hoạt động';
-    case 'BAO_TRI':
-      return 'Bảo trì';
-  }
-}
-
 function statusTone(status: VehicleStatus) {
   return status === 'HOAT_DONG' ? 'active' : 'warning';
 }
@@ -152,10 +143,14 @@ export function VehiclesManagement() {
   const hasActiveFilters = Boolean(filters.vehicleTypeId || filters.status);
   const optionErrors = [
     options.busCompanies.status === 'error'
-      ? `Nhà xe: ${options.busCompanies.message}`
+      ? tVehicles('optionsErrorPrefixBusCompany', {
+          error: options.busCompanies.message,
+        })
       : null,
     options.vehicleTypes.status === 'error'
-      ? `Loại xe: ${options.vehicleTypes.message}`
+      ? tVehicles('optionsErrorPrefixVehicleType', {
+          error: options.vehicleTypes.message,
+        })
       : null,
   ].filter((message): message is string => message !== null);
 
@@ -407,10 +402,9 @@ export function VehiclesManagement() {
                                 {vehicle.licensePlate}
                               </h2>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                Xe #
-                                <span className="admin-data-mono">
-                                  {vehicle.vehicleId}
-                                </span>
+                                {tVehicles('vehicleNumberBadge', {
+                                  id: vehicle.vehicleId,
+                                })}
                               </p>
                             </div>
                             {vehicleStatusBadge(vehicle)}
