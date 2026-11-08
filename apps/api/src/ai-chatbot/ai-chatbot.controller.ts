@@ -5,14 +5,10 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
-import {
-  ApiOperation,
-  ApiParam,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public, OptionalAuth } from '../auth/decorators/public.decorator.js';
 import { OptionalPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
@@ -35,7 +31,8 @@ export class AiChatbotController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Phản hồi từ Trợ lý ảo AI kèm trích dẫn và thẻ gợi ý chuyến xe (nếu có).',
+    description:
+      'Phản hồi từ Trợ lý ảo AI kèm trích dẫn và thẻ gợi ý chuyến xe (nếu có).',
   })
   @ApiResponse({
     status: 400,
@@ -54,11 +51,11 @@ export class AiChatbotController {
   }
 
   @Get('sessions/:sessionToken/messages')
-  @Public()
+  @OptionalAuth()
   @ApiOperation({
     summary: 'Khôi phục lịch sử hội thoại AI',
     description:
-      'Lấy lại toàn bộ các tin nhắn đã trao đổi trong một phiên hội thoại AI thông qua sessionToken.',
+      'Khôi phục phiên khách vãng lai bằng UUID bí mật; phiên gắn tài khoản yêu cầu đăng nhập đúng chủ sở hữu.',
   })
   @ApiParam({
     name: 'sessionToken',
@@ -74,8 +71,14 @@ export class AiChatbotController {
     description: 'Không tìm thấy phiên hội thoại.',
     type: ApiErrorResponseDto,
   })
-  async getSessionMessages(@Param('sessionToken') sessionToken: string) {
-    return this.chatbotService.getSessionMessages(sessionToken);
+  async getSessionMessages(
+    @Param('sessionToken', new ParseUUIDPipe()) sessionToken: string,
+    @OptionalPrincipal() principal?: AuthPrincipal,
+  ) {
+    return this.chatbotService.getSessionMessages(
+      sessionToken,
+      principal?.taiKhoanId,
+    );
   }
 
   @Get('suggestions')

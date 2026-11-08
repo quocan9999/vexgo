@@ -55,7 +55,10 @@ describe('AiChatbotController', () => {
 
   it('should retrieve session messages by sessionToken', async () => {
     const res = await controller.getSessionMessages('test-session-uuid');
-    expect(mockService.getSessionMessages).toHaveBeenCalledWith('test-session-uuid');
+    expect(mockService.getSessionMessages).toHaveBeenCalledWith(
+      'test-session-uuid',
+      undefined,
+    );
     expect(res.sessionToken).toBe('test-session-uuid');
   });
 

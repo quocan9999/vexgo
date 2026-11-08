@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class SendMessageDto {
   @ApiProperty({
@@ -8,6 +16,8 @@ export class SendMessageDto {
     example: 'Chính sách hoàn hủy vé trước 24 giờ như thế nào?',
   })
   @IsString({ message: 'Nội dung tin nhắn phải là chuỗi ký tự.' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @MaxLength(2000)
   @IsNotEmpty({ message: 'Nội dung tin nhắn không được để trống.' })
   message!: string;
 
@@ -16,15 +26,18 @@ export class SendMessageDto {
     example: 'c2e4293e-2b5d-4f1a-8c65-0d2d3e9501a2',
   })
   @IsOptional()
-  @IsString()
+  @IsUUID()
   sessionToken?: string;
 
   @ApiPropertyOptional({
-    description: 'ID nhà xe nếu khách hàng đang tương tác trong trang của nhà xe cụ thể',
+    description:
+      'ID nhà xe nếu khách hàng đang tương tác trong trang của nhà xe cụ thể',
     example: 1,
   })
   @IsOptional()
-  @Transform(({ value }) => (value !== undefined && value !== '' ? Number(value) : undefined))
+  @Transform(({ value }) =>
+    value !== undefined && value !== '' ? Number(value) : undefined,
+  )
   @IsInt({ message: 'nhaXeId phải là số nguyên dương.' })
   @Min(1)
   nhaXeId?: number;

@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { EmbeddingProviderService } from '../embedding/embedding-provider.service.js';
 import { TextChunkerService } from '../chunking/text-chunker.service.js';
 import { DEFAULT_KNOWLEDGE_DOCUMENTS } from '../seed/default-knowledge.data.js';
+import { createHash } from 'node:crypto';
 
 export interface RetrievedChunk {
   chunkId: number;
@@ -20,7 +21,7 @@ export interface RetrievedChunk {
 
 const DENSE_WEIGHT = 0.75;
 const LEXICAL_WEIGHT = 0.25;
-const SIMILARITY_THRESHOLD = 0.60;
+const SIMILARITY_THRESHOLD = 0.6;
 const HIGH_TIER_THRESHOLD = 0.75;
 const DEFAULT_TOP_K = 4;
 
@@ -33,10 +34,49 @@ function removeVietnameseDiacritics(str: string): string {
 }
 
 const COMMON_STOP_WORDS = new Set([
-  'va', 'nhu', 'the', 'nao', 'la', 'cua', 'duoc', 'khi', 'cho', 'voi', 'trong',
-  'cac', 'nhung', 'thi', 'o', 'co', 'nay', 'do', 'de', 'tai', 'ra', 'vao',
-  'mot', 'hai', 'ba', 'bon', 'nam', 'sau', 'bay', 'tam', 'chin', 'muoi',
-  'hoac', 'hay', 'ma', 'vi', 'nen', 'neu', 'tuy', 'du', 'gi', 'sao', 'ai'
+  'va',
+  'nhu',
+  'the',
+  'nao',
+  'la',
+  'cua',
+  'duoc',
+  'khi',
+  'cho',
+  'voi',
+  'trong',
+  'cac',
+  'nhung',
+  'thi',
+  'o',
+  'co',
+  'nay',
+  'do',
+  'de',
+  'tai',
+  'ra',
+  'vao',
+  'mot',
+  'hai',
+  'ba',
+  'bon',
+  'nam',
+  'sau',
+  'bay',
+  'tam',
+  'chin',
+  'muoi',
+  'hoac',
+  'hay',
+  'ma',
+  'vi',
+  'nen',
+  'neu',
+  'tuy',
+  'du',
+  'gi',
+  'sao',
+  'ai',
 ]);
 
 @Injectable()
@@ -142,8 +182,9 @@ export class HybridRetrievalService implements OnApplicationBootstrap {
       const hybridScore = this.calculateHybridScore(denseScore, lexicalScore);
 
       // 6. Lọc ngưỡng cứng tau = 0.60 (chấp nhận ngoại lệ nếu khớp mã quy chế chính xác)
-      const isExactCodeMatch =
-        trimmedQuery.toLowerCase().includes(chunk.document.documentCode.toLowerCase());
+      const isExactCodeMatch = trimmedQuery
+        .toLowerCase()
+        .includes(chunk.document.documentCode.toLowerCase());
       const tier = this.resolveTier(denseScore);
 
       if (
@@ -191,7 +232,9 @@ export class HybridRetrievalService implements OnApplicationBootstrap {
   private extractLexicalTerms(text: string): Set<string> {
     const cleaned = text.toLowerCase();
     const noDiacritics = removeVietnameseDiacritics(cleaned);
-    const tokens = noDiacritics.split(/[\s,.;:!?()'"\-\\/[\]{}]+/i).filter(Boolean);
+    const tokens = noDiacritics
+      .split(/[\s,.;:!?()'"\-\\/[\]{}]+/i)
+      .filter(Boolean);
     const result = new Set<string>();
 
     for (const token of tokens) {
@@ -205,7 +248,10 @@ export class HybridRetrievalService implements OnApplicationBootstrap {
   /**
    * Điểm khớp từ khóa Term Overlap chuẩn hóa [0, 1]
    */
-  private computeLexicalOverlap(queryTerms: Set<string>, content: string): number {
+  private computeLexicalOverlap(
+    queryTerms: Set<string>,
+    content: string,
+  ): number {
     if (queryTerms.size === 0) return 0;
     const contentTerms = this.extractLexicalTerms(content);
     if (contentTerms.size === 0) return 0;
@@ -253,6 +299,36 @@ export class HybridRetrievalService implements OnApplicationBootstrap {
       } else {
         docId = existing.id;
         hasChunks = existing.chunks.length > 0;
+        // Retire only the exact shipped default that promised automatic
+        // refunds. Never overwrite tenant/custom policy documents.
+        const shippedHash =
+          '37a9cdb0afe4816e8c33a16ca33de15218c5736b856016c56d5555904ce10675';
+        if (
+          docData.documentCode === 'DOC-CANCEL-POLICY' &&
+          existing.scope === 'GLOBAL' &&
+          existing.nhaXeId === null &&
+          createHash('sha256')
+            .update(existing.rawContent.replace(/\r\n/g, '\n'))
+            .digest('hex') === shippedHash
+        ) {
+          const replaced = await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.aiKnowledgeDocument.updateMany({
+              where: {
+                id: docId,
+                scope: 'GLOBAL',
+                nhaXeId: null,
+                rawContent: existing.rawContent,
+              },
+              data: { rawContent: docData.rawContent },
+            });
+            if (updated.count !== 1) return false;
+            await tx.aiKnowledgeChunk.deleteMany({
+              where: { documentId: docId },
+            });
+            return true;
+          });
+          if (replaced) hasChunks = false;
+        }
       }
 
       // 2. Nếu tài liệu chưa có chunks, tiến hành chunking và embedding
@@ -263,7 +339,8 @@ export class HybridRetrievalService implements OnApplicationBootstrap {
         );
         if (chunks.length > 0) {
           const passageTexts = chunks.map((c) => c.groundedContent);
-          const embeddings = await this.embeddingProvider.embedPassages(passageTexts);
+          const embeddings =
+            await this.embeddingProvider.embedPassages(passageTexts);
 
           for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
@@ -281,7 +358,9 @@ export class HybridRetrievalService implements OnApplicationBootstrap {
               },
             });
           }
-          this.logger.log(`Indexed document [${docData.documentCode}] with ${chunks.length} chunks.`);
+          this.logger.log(
+            `Indexed document [${docData.documentCode}] with ${chunks.length} chunks.`,
+          );
         }
       }
     }

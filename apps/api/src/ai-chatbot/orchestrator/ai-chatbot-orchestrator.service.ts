@@ -1,6 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
+import { assertAiSessionAccess } from '../ai-session-access.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
@@ -162,39 +168,55 @@ ${userQuery}
     let sessionId: number | undefined;
     let resolvedKhachHangId = request.khachHangId;
 
-    if (!resolvedKhachHangId && request.taiKhoanId && this.prisma.khachHang) {
-      try {
+    try {
+      if (request.taiKhoanId) {
         const customer = await this.prisma.khachHang.findUnique({
           where: { taiKhoanId: request.taiKhoanId },
           select: { khachHangId: true },
         });
-        resolvedKhachHangId = customer?.khachHangId;
-      } catch {
-        // ignore
-      }
-    }
-
-    if (this.prisma.aiChatSession) {
-      try {
-        const session = await this.prisma.aiChatSession.findUnique({
-          where: { sessionToken },
-          select: { id: true },
-        });
-        if (session) {
-          sessionId = session.id;
-        } else {
-          const created = await this.prisma.aiChatSession.create({
-            data: {
-              sessionToken,
-              khachHangId: resolvedKhachHangId ?? null,
-              status: 'ACTIVE',
-            },
+        if (!customer)
+          throw new ForbiddenException({
+            error: 'AI_CUSTOMER_REQUIRED',
+            message: 'Vui lòng dùng tài khoản khách hàng để bắt đầu hội thoại.',
           });
-          sessionId = created.id;
-        }
-      } catch (err) {
-        this.logger.warn(`Could not sync AI session: ${String(err)}`);
+        resolvedKhachHangId = customer.khachHangId;
+      } else {
+        // Ownership only comes from the verified principal, never a caller hint.
+        resolvedKhachHangId = undefined;
       }
+      const session = await this.prisma.aiChatSession.findUnique({
+        where: { sessionToken },
+        select: { id: true, khachHangId: true },
+      });
+      if (session) {
+        await assertAiSessionAccess(
+          this.prisma,
+          session.khachHangId,
+          request.taiKhoanId,
+        );
+        sessionId = session.id;
+      } else {
+        const created = await this.prisma.aiChatSession.create({
+          data: {
+            sessionToken,
+            khachHangId: resolvedKhachHangId ?? null,
+            status: 'ACTIVE',
+          },
+        });
+        sessionId = created.id;
+      }
+      // Persist the question before acknowledging any normal/handoff reply.
+      await this.prisma.aiChatMessage.create({
+        data: { sessionId, role: 'USER', content: rawMessage },
+      });
+    } catch (err) {
+      if (err instanceof ForbiddenException) throw err;
+      this.logger.warn('Could not persist AI session/question.');
+      throw new ServiceUnavailableException({
+        error: 'AI_HISTORY_UNAVAILABLE',
+        message:
+          'Chưa lưu được hội thoại. Vui lòng kiểm tra lại lịch sử trước khi gửi lại.',
+      });
     }
 
     // 2. Kiểm tra các điều kiện Handoff tiên nghiệm (Prior Conditions 1, 2, 3)
@@ -203,7 +225,7 @@ ${userQuery}
         sessionId,
         sessionToken,
         reply:
-          'Tôi đã tiếp nhận yêu cầu của bạn. Tôi đang kết nối bạn với nhân viên CSKH của nhà xe để hỗ trợ trực tiếp ngay nhé!',
+          'Bạn hãy chọn “Chat với nhân viên” để mở kênh CSKH của nhà xe. Tin nhắn này chưa tự kết nối hoặc gửi yêu cầu cho nhân viên.',
         intent: 'HUMAN_HANDOFF',
         citations: [],
         requiresHumanHandoff: true,
@@ -217,7 +239,7 @@ ${userQuery}
         sessionId,
         sessionToken,
         reply:
-          'VexGo rất tiếc về trải nghiệm không tốt của bạn. Hệ thống đang chuyển thông tin khẩn cấp đến bộ phận quản lý khiếu nại để trực tiếp liên hệ và bảo vệ quyền lợi của bạn.',
+          'VexGo rất tiếc về trải nghiệm không tốt của bạn. Bạn hãy chọn “Chat với nhân viên” hoặc liên hệ trực tiếp nhà xe để được hỗ trợ khiếu nại. AI chưa tự gửi yêu cầu cho nhân viên.',
         intent: 'HUMAN_HANDOFF',
         citations: [],
         requiresHumanHandoff: true,
@@ -231,7 +253,7 @@ ${userQuery}
         sessionId,
         sessionToken,
         reply:
-          'Đây là sự cố hành trình khẩn cấp. Tôi đang ưu tiên chuyển tiếp bạn đến nhân viên tổng đài điều hành nhà xe để xử lý ngay lập tức.',
+          'Đây có thể là sự cố hành trình khẩn cấp. Bạn cần liên hệ trực tiếp tổng đài điều hành nhà xe hoặc chọn “Chat với nhân viên”. AI chưa tự liên hệ hoặc điều phối hỗ trợ.',
         intent: 'HUMAN_HANDOFF',
         citations: [],
         requiresHumanHandoff: true,
@@ -280,9 +302,11 @@ ${userQuery}
           rawMessage.match(/([A-Z0-9]{2,4}-[0-9A-Z-]+)/i)?.[1] ||
           rawMessage.match(/\b(TK[0-9A-Z]+)\b/i)?.[1] ||
           '';
-        const phoneMatch = rawMessage.match(/\b(0\d{9})\b/)?.[1];
+        const phoneMatch = rawMessage.match(
+          /(?<!\d)(\+84\d{9}|0\d{9})(?!\d)/,
+        )?.[1];
 
-        if (codeMatch) {
+        if (codeMatch && phoneMatch) {
           const ticketData = await this.businessTools.lookupTicketStatus({
             ticketCode: codeMatch,
             phoneNumber: phoneMatch,
@@ -304,9 +328,11 @@ ${userQuery}
       ) {
         detectedIntent = 'SHIPMENT_LOOKUP';
         const wbMatch = rawMessage.match(/\b(WB[0-9A-Z]+)\b/i)?.[1] || '';
-        const phoneMatch = rawMessage.match(/\b(0\d{9})\b/)?.[1];
+        const phoneMatch = rawMessage.match(
+          /(?<!\d)(\+84\d{9}|0\d{9})(?!\d)/,
+        )?.[1];
 
-        if (wbMatch) {
+        if (wbMatch && phoneMatch) {
           const shipmentData = await this.businessTools.lookupShipmentStatus({
             shipmentCode: wbMatch,
             phoneNumber: phoneMatch,
@@ -314,7 +340,7 @@ ${userQuery}
           realtimeData = shipmentData;
         } else {
           realtimeData = {
-            note: 'Vui lòng cung cấp mã vận đơn (VD: WB12345678) để tra cứu trạng thái bưu kiện.',
+            note: 'Vui lòng cung cấp mã vận đơn (VD: WB12345678) và số điện thoại người gửi hoặc người nhận để xác minh.',
           };
         }
       }
@@ -331,7 +357,7 @@ ${userQuery}
         });
       }
     } catch (toolErr) {
-      this.logger.error(`Tool execution error: ${String(toolErr)}`);
+      this.logger.error('AI business tool failed; no personal data returned.');
       toolExecutionConflict = true;
     }
 
@@ -341,7 +367,7 @@ ${userQuery}
         sessionId,
         sessionToken,
         reply:
-          'Đã có sự cố khi kết nối dữ liệu tra cứu giao dịch của bạn. Tôi đang kết nối trực tiếp với nhân viên hỗ trợ để đối soát thủ công ngay nhé.',
+          'Chưa tra cứu được dữ liệu giao dịch. Bạn hãy chọn “Chat với nhân viên” để được hỗ trợ đối soát; AI chưa tự kết nối với nhân viên.',
         intent: 'HUMAN_HANDOFF',
         citations: [],
         requiresHumanHandoff: true,
@@ -352,8 +378,17 @@ ${userQuery}
 
     // 4. Truy hồi RAG văn bản quy chế nếu không phải công cụ dữ liệu động thuần túy
     let retrievedChunks: RetrievedChunk[] = [];
-    if (detectedIntent === 'GENERAL' || cleanNormalized.includes('chinh sach') || cleanNormalized.includes('quy dinh') || cleanNormalized.includes('huy ve') || cleanNormalized.includes('doi tra')) {
-      retrievedChunks = await this.retrievalService.retrieve(rawMessage, request.nhaXeId);
+    if (
+      detectedIntent === 'GENERAL' ||
+      cleanNormalized.includes('chinh sach') ||
+      cleanNormalized.includes('quy dinh') ||
+      cleanNormalized.includes('huy ve') ||
+      cleanNormalized.includes('doi tra')
+    ) {
+      retrievedChunks = await this.retrievalService.retrieve(
+        rawMessage,
+        request.nhaXeId,
+      );
       if (retrievedChunks.length > 0) {
         detectedIntent = 'POLICY_RAG';
       }
@@ -369,11 +404,7 @@ ${userQuery}
       cleanNormalized.includes('nhu the nao') ||
       cleanNormalized.includes('bao nhieu');
 
-    if (
-      isPolicyQuestion &&
-      retrievedChunks.length === 0 &&
-      !realtimeData
-    ) {
+    if (isPolicyQuestion && retrievedChunks.length === 0 && !realtimeData) {
       return this.finalizeResponse({
         sessionId,
         sessionToken,
@@ -396,7 +427,11 @@ ${userQuery}
     }));
 
     // 6. Sinh phản hồi qua LLM (Groq API hoặc Template Grounded Fallback)
-    const prompt = this.buildGroundedPrompt(retrievedChunks, realtimeData, rawMessage);
+    const prompt = this.buildGroundedPrompt(
+      retrievedChunks,
+      realtimeData,
+      rawMessage,
+    );
     let reply = '';
 
     if (this.groqApiKey && !this.groqApiKey.includes('gsk....')) {
@@ -445,6 +480,8 @@ ${userQuery}
               content: `Bạn là Trợ lý ảo VexGo AI thông minh và tận tâm hỗ trợ khách hàng đặt vé xe, gửi hàng hóa và giải đáp chính sách xe khách.
 CHỈ TRẢ LỜI dựa trên các thông tin được cung cấp trong thẻ <context> và <realtime_data>.
 TUYỆT ĐỐI KHÔNG tự bịa đặt hay suy đoán thông tin ngoài dữ liệu đã cho.
+VexGo không hoàn tiền trực tuyến: sau khi hủy vé khách phải liên hệ hỗ trợ/nhà xe. Phí và quyền hủy phải dựa trên báo giá hủy của vé cụ thể, không mặc định 10%.
+Không khẳng định đã kết nối nhân viên hoặc gửi khiếu nại: chỉ hướng dẫn khách mở kênh Chat với nhân viên.
 Nếu câu hỏi liên quan đến chính sách, hãy trích dẫn mã quy định theo định dạng [Mã tài liệu].
 Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
             },
@@ -513,10 +550,21 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     }
 
     if (intent === 'PROMOTION_INQUIRY' && realtimeData) {
-      const promoData = realtimeData as { promotions: Array<{ code: string; name: string; discountValue: number; discountType: string; validUntil: string }> };
+      const promoData = realtimeData as {
+        promotions: Array<{
+          code: string;
+          name: string;
+          discountValue: number;
+          discountType: string;
+          validUntil: string;
+        }>;
+      };
       if (promoData.promotions && promoData.promotions.length > 0) {
         const promoList = promoData.promotions
-          .map((p) => `- Mã "${p.code}": ${p.name} (${p.discountType} ${p.discountValue.toLocaleString('vi-VN')}) - Hạn đến ${p.validUntil}`)
+          .map(
+            (p) =>
+              `- Mã "${p.code}": ${p.name} (${p.discountType} ${p.discountValue.toLocaleString('vi-VN')}) - Hạn đến ${p.validUntil}`,
+          )
           .join('\n');
         return `Các mã khuyến mãi đang áp dụng tại VexGo:\n\n${promoList}\n\nBạn hãy nhập mã tại bước thanh toán để được khấu trừ giá vé nhé!`;
       }
@@ -526,17 +574,25 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     return 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, theo dõi bưu kiện hoặc giải đáp các chính sách hoàn hủy và hành lý của nhà xe.';
   }
 
-  private parseTripSearchQuery(msg: string): { origin: string; destination: string; date?: string } {
+  private parseTripSearchQuery(msg: string): {
+    origin: string;
+    destination: string;
+    date?: string;
+  } {
     let origin = '';
     let destination = '';
 
     const lower = msg.toLowerCase();
-    const match = lower.match(/(?:tu|tai|o)\s+([a-z0-9\s.]+?)\s+(?:den|ve|di)\s+([a-z0-9\s.]+?)(?:ngay|$|\?)/i);
+    const match = lower.match(
+      /(?:tu|tai|o)\s+([a-z0-9\s.]+?)\s+(?:den|ve|di)\s+([a-z0-9\s.]+?)(?:ngay|$|\?)/i,
+    );
     if (match) {
       origin = match[1].trim();
       destination = match[2].trim();
     } else {
-      const match2 = lower.match(/([a-z0-9\s.]+?)\s*(?:-|–|to|den)\s*([a-z0-9\s.]+)/i);
+      const match2 = lower.match(
+        /([a-z0-9\s.]+?)\s*(?:-|–|to|den)\s*([a-z0-9\s.]+)/i,
+      );
       if (match2) {
         origin = match2[1].replace(/^(tim xe|ve xe|chuyen)\s*/i, '').trim();
         destination = match2[2].trim();
@@ -563,7 +619,7 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     const latencyMs = Date.now() - params.startTime;
 
     // Lưu vết tin nhắn vào AiChatMessage trong DB
-    if (params.sessionId && this.prisma.aiChatMessage) {
+    if (params.sessionId) {
       try {
         await this.prisma.aiChatMessage.create({
           data: {
@@ -587,8 +643,18 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
           });
         }
       } catch (err) {
-        this.logger.warn(`Could not persist AI message: ${String(err)}`);
+        this.logger.warn('Could not persist AI reply.');
+        throw new ServiceUnavailableException({
+          error: 'AI_HISTORY_UNAVAILABLE',
+          message:
+            'Chưa xác nhận được việc lưu câu trả lời. Vui lòng kiểm tra lịch sử trước khi gửi lại.',
+        });
       }
+    } else {
+      throw new ServiceUnavailableException({
+        error: 'AI_HISTORY_UNAVAILABLE',
+        message: 'Chưa lưu được hội thoại.',
+      });
     }
 
     return {

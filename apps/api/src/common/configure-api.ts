@@ -56,6 +56,10 @@ export function sanitizeRequestUrl(url: string): string {
     /(\/seat-holds\/)([^/?#]+)/gi,
     '$1[REDACTED_HOLD_TOKEN]',
   );
+  sanitized = sanitized.replace(
+    /(\/ai-chatbot\/sessions\/)([^/?#]+)/gi,
+    '$1[REDACTED_AI_SESSION]',
+  );
 
   // Redact potential sensitive tokens in query params
   sanitized = sanitized.replace(
