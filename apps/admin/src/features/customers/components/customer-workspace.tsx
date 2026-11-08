@@ -104,7 +104,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
   const [loading, setLoading] = useState(isValidId);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(
-    isValidId ? null : 'Mã khách hàng không hợp lệ.',
+    isValidId ? null : tCustomers('errors.invalidId'),
   );
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('transactions');
   const [refreshCount, setRefreshCount] = useState(0);
@@ -141,7 +141,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
           setError(
             err instanceof Error
               ? err.message
-              : 'Không thể tải thông tin khách hàng.',
+              : tCustomers('errors.loadDetailsFailed'),
           );
         }
       })
@@ -152,7 +152,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
       });
 
     return () => controller.abort();
-  }, [customerId, isValidId, refreshCount]);
+  }, [customerId, isValidId, refreshCount, tCustomers]);
 
   function refresh() {
     setRefreshing(true);
@@ -166,14 +166,14 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
     let hasError = false;
     if (isLocking && lockMode === 'TAM_KHOA') {
       if (!lockedUntilDate) {
-        setLockedUntilError('Vui lòng chọn ngày hết hạn tạm khóa.');
+        setLockedUntilError(tCustomers('errors.lockUntilRequired'));
         hasError = true;
       } else {
         const selected = new Date(`${lockedUntilDate}T00:00:00Z`);
         const today = new Date();
         today.setUTCHours(0, 0, 0, 0);
         if (selected <= today) {
-          setLockedUntilError('Ngày hết hạn tạm khóa phải là ngày trong tương lai.');
+          setLockedUntilError(tCustomers('errors.lockUntilFuture'));
           hasError = true;
         } else {
           setLockedUntilError(null);
@@ -183,7 +183,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
 
     const trimmedReason = statusReason.trim();
     if (trimmedReason.length > 255) {
-      setStatusReasonError('Lý do không được vượt quá 255 ký tự.');
+      setStatusReasonError(tCustomers('errors.reasonMaxLength'));
       hasError = true;
     } else {
       setStatusReasonError(null);
@@ -208,7 +208,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
 
       const response = await updateCustomerStatus(customerId, payload);
 
-      toast.success(response.message || 'Cập nhật trạng thái tài khoản thành công.');
+      toast.success(response.message || tCustomers('toastStatusUpdated'));
       setCustomer((prev) =>
         prev
           ? {
@@ -228,7 +228,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
       setLockedUntilDate('');
     } catch (err) {
       setStatusError(
-        err instanceof Error ? err.message : 'Không thể cập nhật trạng thái.',
+        err instanceof Error ? err.message : tCustomers('errors.updateStatusFailed'),
       );
     } finally {
       setStatusSubmitting(false);

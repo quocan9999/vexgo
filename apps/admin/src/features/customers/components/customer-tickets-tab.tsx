@@ -232,7 +232,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       </TableCell>
                       <TableCell>
                         <strong>
-                          {ticket.actualPrice.toLocaleString('vi-VN')} đ
+                          {ticket.actualPrice.toLocaleString('vi-VN')} ₫
                         </strong>
                       </TableCell>
                       <TableCell>
@@ -261,7 +261,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                         {ticket.ticketCode}
                       </span>
                       <h3 className="mt-1 text-base font-semibold">
-                        {ticket.actualPrice.toLocaleString('vi-VN')} đ
+                        {ticket.actualPrice.toLocaleString('vi-VN')} ₫
                       </h3>
                     </div>
                     <ResourceStatusBadge tone={ticketStatusTone(ticket.status)}>
@@ -315,7 +315,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                     </div>
                     <div>
                       <dt>{tBookings('colInitialAmount')}</dt>
-                      <dd>{ticket.listedPrice.toLocaleString('vi-VN')} đ</dd>
+                      <dd>{ticket.listedPrice.toLocaleString('vi-VN')} ₫</dd>
                     </div>
                   </dl>
                 </Card>

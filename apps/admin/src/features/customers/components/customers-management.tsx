@@ -393,7 +393,7 @@ export function CustomersManagement() {
                       disabled={loading}
                       onPageChange={setPage}
                       pageSize={meta.pageSize}
-                      summaryLabel={locale === 'en' ? 'customers' : 'khách hàng'}
+                      summaryLabel={tCustomers('resourceLabel')}
                       totalItems={meta.totalItems}
                       totalPages={meta.totalPages}
                     />

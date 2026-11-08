@@ -212,7 +212,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <strong>{s.totalFee.toLocaleString('vi-VN')} đ</strong>
+                        <strong>{s.totalFee.toLocaleString('vi-VN')} ₫</strong>
                       </TableCell>
                       <TableCell>
                         <ResourceStatusBadge
@@ -240,7 +240,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                         {s.waybillCode}
                       </span>
                       <h3 className="mt-1 text-base font-semibold">
-                        {s.totalFee.toLocaleString('vi-VN')} đ
+                        {s.totalFee.toLocaleString('vi-VN')} ₫
                       </h3>
                     </div>
                     <ResourceStatusBadge tone={shipmentStatusTone(s.status)}>

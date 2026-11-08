@@ -58,21 +58,21 @@ function getSessionKey(authState: ReturnType<typeof useAdminSession>) {
 function detailErrorMessage(error: unknown, kind: DetailKind) {
   if (error instanceof Error && error.message === 'INVALID_RESOURCE_ID') {
     return kind === 'bookings'
-      ? 'Mã phiếu đặt vé không hợp lệ.'
-      : 'Mã vé không hợp lệ.';
+      ? 'Invalid booking ID.'
+      : 'Invalid ticket ID.';
   }
   if (error instanceof BookingManagementApiError) {
     if (error.status === 401)
-      return 'Phiên quản trị đã hết hạn. Hãy đăng nhập lại.';
+      return 'Admin session expired. Please sign in again.';
     if (error.status === 403)
-      return 'Tài khoản hiện không có quyền xem dữ liệu này.';
+      return 'Account does not have permission to view this resource.';
     if (error.status === 404) {
       return kind === 'bookings'
-        ? 'Không tìm thấy phiếu đặt vé trong nhà xe.'
-        : 'Không tìm thấy vé trong nhà xe.';
+        ? 'Booking not found in operator scope.'
+        : 'Ticket not found in operator scope.';
     }
   }
-  return 'Không thể tải dữ liệu. Hãy thử lại.';
+  return 'Failed to load data. Please retry.';
 }
 
 function isAuthorizationError(error: unknown) {

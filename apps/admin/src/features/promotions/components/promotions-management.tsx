@@ -46,19 +46,6 @@ import type {
 import { usePromotions } from '../hooks/use-promotions';
 import { PromotionFormDialog } from './promotion-form-dialog';
 
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'HOAT_DONG', label: 'Hoạt động' },
-  { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
-];
-const EFFECTIVE_LABELS: Record<PromotionEffectiveState, string> = {
-  UPCOMING: 'Chưa bắt đầu',
-  ACTIVE: 'Đang hiệu lực',
-  SUSPENDED: 'Tạm ngưng',
-  EXPIRED: 'Hết hạn',
-  EXHAUSTED: 'Hết lượt',
-  UNAVAILABLE: 'Hết hiệu lực',
-};
-
 type StatusRequest = { promotion: Promotion; status: PromotionStatus };
 
 function formatDate(value: string): string {
@@ -79,10 +66,16 @@ function formatMoney(value: string): string {
   return `${amount}${cents ? `,${cents}` : ''} ₫`;
 }
 
-function formatDiscount(promotion: Promotion): string {
-  return promotion.discountType === 'PHAN_TRAM'
-    ? `${promotion.discountValue.replace(/\.00$/, '')}%${promotion.maxDiscount ? ` (tối đa ${formatMoney(promotion.maxDiscount)})` : ''}`
-    : formatMoney(promotion.discountValue);
+function formatDiscount(promotion: Promotion, tPromotions?: (key: any, options?: any) => string): string {
+  if (promotion.discountType !== 'PHAN_TRAM') {
+    return formatMoney(promotion.discountValue);
+  }
+  const maxSuffix = promotion.maxDiscount
+    ? tPromotions
+      ? ` ${tPromotions('maxDiscountUpTo', { amount: formatMoney(promotion.maxDiscount) })}`
+      : ` (max ${formatMoney(promotion.maxDiscount)})`
+    : '';
+  return `${promotion.discountValue.replace(/\.00$/, '')}%${maxSuffix}`;
 }
 
 function hcmBusinessDate(): string {
@@ -225,11 +218,11 @@ export function PromotionsManagement() {
       const message =
         requestError instanceof PromotionApiError
           ? requestError.code === 'PROMOTION_CONCURRENT_MODIFICATION'
-            ? 'Khuyến mãi vừa thay đổi. Danh sách đã được làm mới, vui lòng kiểm tra lại.'
+            ? tPromotions('errors.concurrentChanged')
             : requestError.code === 'PROMOTION_UNAVAILABLE'
-              ? 'Không thể đổi trạng thái khuyến mãi không khả dụng.'
+              ? tPromotions('errors.cannotChangeUnavailable')
               : requestError.message
-          : 'Không thể cập nhật trạng thái khuyến mãi. Vui lòng thử lại.';
+          : tPromotions('errors.updateStatusFailed');
       setStatusRequest(null);
       toast.error(message);
       refresh();
@@ -429,7 +422,7 @@ export function PromotionsManagement() {
                           </span>
                         </TableCell>
                         <TableCell className="min-w-28 max-w-40 whitespace-normal">
-                          {formatDiscount(promotion)}
+                          {formatDiscount(promotion, tPromotions)}
                         </TableCell>
                         <TableCell>
                           <span className="block">
@@ -474,7 +467,7 @@ export function PromotionsManagement() {
                       <dl className="grid gap-3 text-[13px] [&>div]:grid [&>div]:grid-cols-[100px_minmax(0,1fr)] [&>div]:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                         <div>
                           <dt>{tPromotions('colDiscount')}</dt>
-                          <dd>{formatDiscount(promotion)}</dd>
+                          <dd>{formatDiscount(promotion, tPromotions)}</dd>
                         </div>
                         <div>
                           <dt>{tPromotions('colValidity')}</dt>

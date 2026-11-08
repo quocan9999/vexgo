@@ -137,15 +137,15 @@ function detailHref(
 
 function getErrorMessage(error: unknown) {
   if (!(error instanceof BookingManagementApiError)) {
-    return 'Không thể tải dữ liệu. Hãy thử lại.';
+    return 'Failed to load data. Please retry.';
   }
   if (error.status === 401) {
-    return 'Phiên quản trị đã hết hạn. Hãy đăng nhập lại để tiếp tục.';
+    return 'Admin session expired. Please sign in again to continue.';
   }
   if (error.status === 403) {
-    return 'Tài khoản hiện không có quyền xem phiếu đặt vé và vé.';
+    return 'Account does not have permission to view bookings and tickets.';
   }
-  if (error.status === 404) return 'Không tìm thấy dữ liệu yêu cầu.';
+  if (error.status === 404) return 'Requested data not found.';
   return error.message;
 }
 

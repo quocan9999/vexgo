@@ -70,6 +70,7 @@ export function ResourceModalDialog({
   preventDismiss?: boolean;
   onClose: () => void;
 }) {
+  const t = useTranslations('common');
   return (
     <Dialog
       open
@@ -85,6 +86,7 @@ export function ResourceModalDialog({
           'flex max-h-[90vh] flex-col gap-0 p-0 overflow-hidden',
         )}
         showCloseButton={!preventDismiss}
+        closeLabel={t('close')}
       >
         <DialogHeader className="border-b px-5 py-4 sm:px-6">
           <DialogTitle>{title}</DialogTitle>

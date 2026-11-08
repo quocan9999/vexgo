@@ -84,53 +84,51 @@ function compareMinorUnits(left: string, right: string): number {
   return left === right ? 0 : left < right ? -1 : 1;
 }
 
-function validate(values: FormValues): FieldErrors {
+function validate(values: FormValues, tPromotions: (key: any) => string): FieldErrors {
   const errors: FieldErrors = {};
   const name = values.name.trim();
   const code = values.code.trim().toUpperCase();
-  if (!name) errors.name = 'Vui lòng nhập tên chương trình.';
+  if (!name) errors.name = tPromotions('errors.nameRequired');
   else if (name.length > 150)
-    errors.name = 'Tên chương trình không vượt quá 150 ký tự.';
+    errors.name = tPromotions('errors.nameMaxLength');
   if (!/^[A-Z0-9][A-Z0-9_-]{2,49}$/.test(code))
-    errors.code = 'Mã gồm 3–50 ký tự A–Z, 0–9, gạch dưới hoặc gạch ngang.';
+    errors.code = tPromotions('errors.codeFormat');
   if (
     values.discountType !== 'PHAN_TRAM' &&
     values.discountType !== 'SO_TIEN'
   ) {
-    errors.discountType = 'Vui lòng chọn loại giảm giá.';
+    errors.discountType = tPromotions('errors.discountTypeRequired');
   }
   const discountValue = cents(values.discountValue);
   if (discountValue === null || compareMinorUnits(discountValue, '0') <= 0)
-    errors.discountValue =
-      'Mức giảm phải là số dương, tối đa 2 chữ số thập phân.';
+    errors.discountValue = tPromotions('errors.discountValuePositive');
   else if (
     values.discountType === 'PHAN_TRAM' &&
     compareMinorUnits(discountValue, '10000') > 0
   )
-    errors.discountValue = 'Phần trăm giảm không được vượt quá 100.';
+    errors.discountValue = tPromotions('errors.discountPercentMax');
   if (values.discountType === 'PHAN_TRAM') {
     const maxDiscount = cents(values.maxDiscount);
     if (maxDiscount === null || compareMinorUnits(maxDiscount, '0') <= 0)
-      errors.maxDiscount = 'Giảm tối đa bắt buộc và phải lớn hơn 0.';
+      errors.maxDiscount = tPromotions('errors.maxDiscountRequired');
   }
   if (values.minimumTicketAmount.trim()) {
     const minimum = cents(values.minimumTicketAmount);
     if (minimum === null)
-      errors.minimumTicketAmount =
-        'Giá trị tối thiểu phải là số không âm, tối đa 2 chữ số thập phân.';
+      errors.minimumTicketAmount = tPromotions('errors.minOrderNonNegative');
   }
   if (!isDateOnly(values.startsOn))
-    errors.startsOn = 'Vui lòng chọn ngày bắt đầu hợp lệ.';
+    errors.startsOn = tPromotions('errors.startsOnRequired');
   if (!isDateOnly(values.endsOn))
-    errors.endsOn = 'Vui lòng chọn ngày kết thúc hợp lệ.';
+    errors.endsOn = tPromotions('errors.endsOnRequired');
   else if (isDateOnly(values.startsOn) && values.endsOn < values.startsOn)
-    errors.endsOn = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
+    errors.endsOn = tPromotions('errors.endsOnAfterStartsOn');
   if (
     !/^\d+$/.test(values.usageLimit) ||
     !Number.isSafeInteger(Number(values.usageLimit)) ||
     Number(values.usageLimit) < 1
   ) {
-    errors.usageLimit = 'Số lượt tối đa phải là số nguyên dương.';
+    errors.usageLimit = tPromotions('errors.usageLimitPositive');
   }
   return errors;
 }
@@ -217,10 +215,10 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submittingRef.current) return;
-    const errors = validate(values);
+    const errors = validate(values, tPromotions);
     if (promotion && Number(values.usageLimit) < promotion.usageCount) {
       errors.usageLimit =
-        'Số lượt tối đa không được nhỏ hơn số lượt đã sử dụng.';
+        tPromotions('errors.usageLimitLessThanUsed');
     }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
@@ -262,18 +260,18 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           focusFirstInvalidField(serverErrors);
         } else if (requestError.code === 'PROMOTION_CODE_EXISTS') {
           const errors: FieldErrors = {
-            code: 'Mã khuyến mãi đã tồn tại trong nhà xe này.',
+            code: tPromotions('errors.codeExists'),
           };
           setFieldErrors(errors);
           focusFirstInvalidField(errors);
         } else {
           toast.error(
             requestError.message ||
-              'Không thể lưu khuyến mãi. Vui lòng thử lại.',
+              tPromotions('errors.saveFailed'),
           );
         }
       } else {
-        toast.error('Không thể kết nối hoặc lưu khuyến mãi. Vui lòng thử lại.');
+        toast.error(tPromotions('networkError'));
       }
       submittingRef.current = false;
       setSubmitting(false);

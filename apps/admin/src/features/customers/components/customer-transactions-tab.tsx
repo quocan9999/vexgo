@@ -259,7 +259,7 @@ export function CustomerTransactionsTab({
                       <TableCell>{formatDateTime(tx.createdDate)}</TableCell>
                       <TableCell>
                         <strong>
-                          {tx.totalAmount.toLocaleString('vi-VN')} đ
+                          {tx.totalAmount.toLocaleString('vi-VN')} ₫
                         </strong>
                       </TableCell>
                       <TableCell>
@@ -287,7 +287,7 @@ export function CustomerTransactionsTab({
                         {tx.code}
                       </span>
                       <h3 className="mt-1 text-base font-semibold">
-                        {tx.totalAmount.toLocaleString('vi-VN')} đ
+                        {tx.totalAmount.toLocaleString('vi-VN')} ₫
                       </h3>
                     </div>
                     <ResourceStatusBadge tone={statusTone(tx.status)}>

@@ -49,31 +49,12 @@ import type {
 import { useFarePrices } from '../hooks/use-fare-prices';
 import { FarePriceFormDialog } from './fare-price-form-dialog';
 
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'HOAT_DONG', label: 'Hoạt động' },
-  { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
-];
-
-const EFFECTIVE_STATE_OPTIONS: FilterOption[] = [
-  { value: 'CHUA_HIEU_LUC', label: 'Chưa hiệu lực' },
-  { value: 'DANG_HIEU_LUC', label: 'Đang hiệu lực' },
-  { value: 'HET_HIEU_LUC', label: 'Hết hiệu lực' },
-  { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
-];
-
-const EFFECTIVE_STATE_LABELS: Record<FarePriceEffectiveState, string> = {
-  CHUA_HIEU_LUC: 'Chưa hiệu lực',
-  DANG_HIEU_LUC: 'Đang hiệu lực',
-  HET_HIEU_LUC: 'Hết hiệu lực',
-  TAM_NGUNG: 'Tạm ngưng',
-};
-
 function formatPrice(value: number) {
   return `${new Intl.NumberFormat('vi-VN').format(value)} ₫`;
 }
 
-function formatDateOnly(value: string | null) {
-  if (value === null) return 'Không giới hạn';
+function formatDateOnly(value: string | null, unlimitedLabel = 'Unlimited') {
+  if (value === null) return unlimitedLabel;
   return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
@@ -82,10 +63,6 @@ function formatDateOnly(value: string | null) {
   })
     .format(new Date(`${value}T00:00:00.000Z`))
     .replaceAll('/', '-');
-}
-
-function statusLabel(status: FarePrice['status']) {
-  return status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng';
 }
 
 function statusTone(status: FarePrice['status']) {

@@ -867,7 +867,18 @@
     "routeLabel": "Route",
     "tripCodeLabel": "Trip Code",
     "colStatus": "Status",
-    "colActions": "Actions"
+    "colActions": "Actions",
+    "loadingBookings": "Opening booking management…",
+    "errors": {
+      "invalidBookingId": "Invalid booking ID.",
+      "invalidTicketId": "Invalid ticket ID.",
+      "sessionExpired": "Admin session expired. Please sign in again.",
+      "forbidden": "Account does not have permission to view this resource.",
+      "bookingNotFound": "Booking not found in operator scope.",
+      "ticketNotFound": "Ticket not found in operator scope.",
+      "loadError": "Failed to load data. Please retry.",
+      "networkError": "Cannot connect to API server. Please try again."
+    }
   },
   "shipments": {
     "shipmentsTitle": "Shipment List",
@@ -1006,7 +1017,27 @@
     "backToList": "Back to Fare Prices",
     "createdSuccess": "Created fare price for {code}.",
     "updatedSuccess": "Updated fare price for {code}.",
-    "tableCaption": "Fare prices list"
+    "tableCaption": "Fare prices list",
+    "networkError": "Cannot connect to API server. Please try again.",
+    "errors": {
+      "routeRequired": "Please select a route.",
+      "typeRequired": "Please select a vehicle type.",
+      "priceRequired": "Please enter listed price.",
+      "pricePositiveInteger": "Listed price must be a positive integer in VND.",
+      "validFromRequired": "Please select a valid start date.",
+      "validToInvalid": "Invalid end date.",
+      "validToAfterValidFrom": "End date must be on or after start date.",
+      "statusRequired": "Please select status.",
+      "routeNotFound": "Selected route no longer exists. Please choose again.",
+      "vehicleTypeNotFound": "Selected vehicle type no longer exists. Please choose again.",
+      "concurrentModification": "Fare price data was modified concurrently. Please reload and try again.",
+      "notFound": "Fare price not found.",
+      "overlapActive": "Cannot activate because validity overlaps an active fare price for the same route and vehicle type.",
+      "updateStatusFailed": "Failed to update fare price status.",
+      "loadDetailsFailed": "Failed to load fare price details.",
+      "updateFailed": "Failed to update fare price. Please try again.",
+      "createFailed": "Failed to create fare price. Please try again."
+    }
   },
   "promotions": {
     "promotionsTitle": "Promotions & Discounts",
@@ -1081,7 +1112,29 @@
     "toastCreated": "Created promotion {code}.",
     "toastUpdated": "Updated promotion {code}.",
     "toastReactivated": "Reactivated promotion {code}.",
-    "toastSuspended": "Suspended promotion {code}."
+    "toastSuspended": "Suspended promotion {code}.",
+    "networkError": "Cannot connect to API server or save promotion. Please try again.",
+    "errors": {
+      "nameRequired": "Please enter promotion program name.",
+      "nameMaxLength": "Program name must not exceed 150 characters.",
+      "codeFormat": "Code must be 3–50 chars: A–Z, 0–9, underscore or hyphen.",
+      "discountTypeRequired": "Please select discount type.",
+      "discountValuePositive": "Discount value must be a positive number with at most 2 decimals.",
+      "discountPercentMax": "Percentage discount cannot exceed 100.",
+      "maxDiscountRequired": "Maximum discount is required and must be greater than 0.",
+      "minOrderNonNegative": "Minimum order must be a non-negative number with at most 2 decimals.",
+      "startsOnRequired": "Please select a valid start date.",
+      "endsOnRequired": "Please select a valid end date.",
+      "endsOnAfterStartsOn": "End date must be on or after start date.",
+      "usageLimitPositive": "Usage limit must be a positive integer.",
+      "usageLimitLessThanUsed": "Usage limit cannot be lower than already used count.",
+      "codeExists": "Promotion code already exists in this operator.",
+      "saveFailed": "Cannot save promotion. Please try again.",
+      "concurrentChanged": "Promotion data was modified. The list has been refreshed, please check again.",
+      "cannotChangeUnavailable": "Cannot change status of an unavailable promotion.",
+      "updateStatusFailed": "Cannot update promotion status. Please try again."
+    },
+    "maxDiscountUpTo": "(max {amount})"
   },
   "reports": {
     "reportsTitle": "Revenue Reports",
@@ -1570,7 +1623,17 @@
     "shipmentsTabFilteredEmpty": "No shipments match the search criteria.",
     "transactionsTabNoData": "No transactions recorded for this customer.",
     "transactionsTabFilteredEmpty": "No transactions match the search criteria.",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "resourceLabel": "customers",
+    "toastStatusUpdated": "Account status updated successfully.",
+    "errors": {
+      "invalidId": "Invalid customer ID.",
+      "loadDetailsFailed": "Failed to load customer details.",
+      "lockUntilRequired": "Please select temporary lock expiration date.",
+      "lockUntilFuture": "Lock expiration date must be in the future.",
+      "reasonMaxLength": "Reason must not exceed 255 characters.",
+      "updateStatusFailed": "Failed to update account status."
+    }
   },
   "adminAccounts": {
     "adminAccountsTitle": "Admin Account Management",

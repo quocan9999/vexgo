@@ -74,7 +74,7 @@ export function useCustomerTickets(customerId: number) {
         setError(
           err instanceof Error
             ? err.message
-            : 'Không thể tải lịch sử vé.',
+            : 'Failed to load ticket history.',
         );
       })
       .finally(() => {

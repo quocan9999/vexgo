@@ -86,7 +86,7 @@ async function readResponse(response: Response, resource: string): Promise<unkno
     throw new PromotionApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể xử lý ${resource} (HTTP ${response.status}).`,
+        : `Unable to process ${resource} (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
       isRecord(body) ? getErrorDetails(body.details) : [],
       response.status,
@@ -101,7 +101,7 @@ function apiUrl(path: string): string {
 
 function unwrapPromotion(body: unknown, resource: string): Promotion {
   if (!isRecord(body) || !isPromotion(body.data)) {
-    throw new Error(`API trả về ${resource} không hợp lệ.`);
+    throw new Error(`API returned invalid ${resource}.`);
   }
   return body.data;
 }
@@ -122,18 +122,18 @@ export async function getPromotions(
   if (query.toDate) params.set('toDate', query.toDate);
   const body = await readResponse(
     await adminApiFetch(`${apiUrl('')}?${params.toString()}`, { cache: 'no-store', signal }),
-    'danh sách khuyến mãi',
+    'promotion list',
   );
-  if (!isPaginatedPromotions(body)) throw new Error('API trả về danh sách khuyến mãi không hợp lệ.');
+  if (!isPaginatedPromotions(body)) throw new Error('API returned invalid promotion list.');
   return body;
 }
 
 export async function getPromotionById(id: number, signal?: AbortSignal): Promise<Promotion> {
   const body = await readResponse(
     await adminApiFetch(apiUrl(`/${id}`), { cache: 'no-store', signal }),
-    'chi tiết khuyến mãi',
+    'promotion details',
   );
-  return unwrapPromotion(body, 'chi tiết khuyến mãi');
+  return unwrapPromotion(body, 'promotion details');
 }
 
 export async function createPromotion(input: CreatePromotionRequest): Promise<Promotion> {
@@ -143,9 +143,9 @@ export async function createPromotion(input: CreatePromotionRequest): Promise<Pr
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     }),
-    'khuyến mãi',
+    'promotion',
   );
-  return unwrapPromotion(body, 'thông tin khuyến mãi');
+  return unwrapPromotion(body, 'promotion info');
 }
 
 export async function updatePromotionStatus(
@@ -158,9 +158,9 @@ export async function updatePromotionStatus(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     }),
-    'trạng thái khuyến mãi',
+    'promotion status',
   );
-  return unwrapPromotion(body, 'thông tin khuyến mãi');
+  return unwrapPromotion(body, 'promotion info');
 }
 
 export async function updatePromotion(id: number, input: CreatePromotionRequest): Promise<Promotion> {
@@ -170,7 +170,7 @@ export async function updatePromotion(id: number, input: CreatePromotionRequest)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     }),
-    'khuyến mãi',
+    'promotion',
   );
-  return unwrapPromotion(body, 'thông tin khuyến mãi');
+  return unwrapPromotion(body, 'promotion info');
 }

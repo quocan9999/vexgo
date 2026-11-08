@@ -87,6 +87,7 @@ function validate(
   routeOptions: FarePriceOptionsState,
   vehicleTypeOptions: FarePriceOptionsState,
   editing: boolean,
+  tFare: (key: any) => string,
 ): FieldErrors {
   const errors: FieldErrors = {};
   const routeId = Number(values.routeId);
@@ -100,7 +101,7 @@ function validate(
       routeOptions.status !== 'success' ||
       routeOptions.options.length === 0)
   ) {
-    errors.routeId = 'Vui lòng chọn tuyến xe.';
+    errors.routeId = tFare('errors.routeRequired');
   }
   if (
     !editing &&
@@ -109,31 +110,31 @@ function validate(
       vehicleTypeOptions.status !== 'success' ||
       vehicleTypeOptions.options.length === 0)
   ) {
-    errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
+    errors.vehicleTypeId = tFare('errors.typeRequired');
   }
   if (!values.listedPrice.trim())
-    errors.listedPrice = 'Vui lòng nhập giá niêm yết.';
+    errors.listedPrice = tFare('errors.priceRequired');
   else if (!Number.isSafeInteger(listedPrice) || listedPrice <= 0) {
-    errors.listedPrice = 'Giá niêm yết phải là số nguyên VND lớn hơn 0.';
+    errors.listedPrice = tFare('errors.pricePositiveInteger');
   }
   if (!isDateOnly(values.validFrom)) {
-    errors.validFrom = 'Vui lòng chọn ngày bắt đầu hợp lệ.';
+    errors.validFrom = tFare('errors.validFromRequired');
   }
   if (values.validTo && !isDateOnly(values.validTo)) {
-    errors.validTo = 'Ngày kết thúc không hợp lệ.';
+    errors.validTo = tFare('errors.validToInvalid');
   } else if (
     values.validTo &&
     isDateOnly(values.validFrom) &&
     values.validTo < values.validFrom
   ) {
-    errors.validTo = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
+    errors.validTo = tFare('errors.validToAfterValidFrom');
   }
   if (
     !editing &&
     values.status !== 'HOAT_DONG' &&
     values.status !== 'TAM_NGUNG'
   ) {
-    errors.status = 'Vui lòng chọn trạng thái.';
+    errors.status = tFare('errors.statusRequired');
   }
 
   return errors;
@@ -200,7 +201,7 @@ export function FarePriceFormDialog({
     event.preventDefault();
     if (submittingRef.current) return;
 
-    const errors = validate(values, routeOptions, vehicleTypeOptions, editing);
+    const errors = validate(values, routeOptions, vehicleTypeOptions, editing, tFare);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       focusFirstInvalid();
@@ -234,23 +235,23 @@ export function FarePriceFormDialog({
       if (requestError instanceof FarePriceApiError) {
         if (requestError.code === 'FARE_PRICE_OVERLAP') {
           toast.error(
-            'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+            tFare('errors.overlapActive'),
           );
         } else if (requestError.code === 'ROUTE_NOT_FOUND') {
           setRelationError(
             'routeId',
-            'Tuyến xe không còn tồn tại. Vui lòng chọn lại.',
+            tFare('errors.routeNotFound'),
           );
           onRetryRouteOptions();
         } else if (requestError.code === 'VEHICLE_TYPE_NOT_FOUND') {
           setRelationError(
             'vehicleTypeId',
-            'Loại xe không còn tồn tại. Vui lòng chọn lại.',
+            tFare('errors.vehicleTypeNotFound'),
           );
           onRetryVehicleTypeOptions();
         } else if (requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION') {
           toast.error(
-            'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+            tFare('errors.concurrentModification'),
           );
         } else if (requestError.code === 'FARE_PRICE_NOT_FOUND' && editing) {
           onNotFound?.();
@@ -266,12 +267,12 @@ export function FarePriceFormDialog({
           }
         }
       } else if (requestError instanceof TypeError) {
-        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error(tFare('networkError'));
       } else {
         toast.error(
           editing
-            ? 'Không thể cập nhật bảng giá. Vui lòng thử lại.'
-            : 'Không thể tạo bảng giá. Vui lòng thử lại.',
+            ? tFare('errors.updateFailed')
+            : tFare('errors.createFailed'),
         );
       }
     } finally {

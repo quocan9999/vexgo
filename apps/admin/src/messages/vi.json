@@ -867,7 +867,18 @@
     "routeLabel": "Tuyến xe",
     "tripCodeLabel": "Mã chuyến xe",
     "colStatus": "Trạng thái",
-    "colActions": "Thao tác"
+    "colActions": "Thao tác",
+    "loadingBookings": "Đang mở quản lý phiếu đặt vé…",
+    "errors": {
+      "invalidBookingId": "Mã phiếu đặt vé không hợp lệ.",
+      "invalidTicketId": "Mã vé không hợp lệ.",
+      "sessionExpired": "Phiên quản trị đã hết hạn. Hãy đăng nhập lại.",
+      "forbidden": "Tài khoản hiện không có quyền xem dữ liệu này.",
+      "bookingNotFound": "Không tìm thấy phiếu đặt vé trong nhà xe.",
+      "ticketNotFound": "Không tìm thấy vé trong nhà xe.",
+      "loadError": "Không thể tải dữ liệu. Hãy thử lại.",
+      "networkError": "Không thể kết nối đến máy chủ API. Vui lòng thử lại."
+    }
   },
   "shipments": {
     "shipmentsTitle": "Danh sách phiếu gửi hàng",
@@ -1006,7 +1017,27 @@
     "backToList": "Danh sách bảng giá",
     "createdSuccess": "Đã tạo bảng giá vé {code}.",
     "updatedSuccess": "Đã cập nhật bảng giá vé {code}.",
-    "tableCaption": "Danh sách bảng giá vé"
+    "tableCaption": "Danh sách bảng giá vé",
+    "networkError": "Không thể kết nối đến máy chủ API. Vui lòng thử lại.",
+    "errors": {
+      "routeRequired": "Vui lòng chọn tuyến xe.",
+      "typeRequired": "Vui lòng chọn loại xe.",
+      "priceRequired": "Vui lòng nhập giá niêm yết.",
+      "pricePositiveInteger": "Giá niêm yết phải là số nguyên VND lớn hơn 0.",
+      "validFromRequired": "Vui lòng chọn ngày bắt đầu hợp lệ.",
+      "validToInvalid": "Ngày kết thúc không hợp lệ.",
+      "validToAfterValidFrom": "Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.",
+      "statusRequired": "Vui lòng chọn trạng thái.",
+      "routeNotFound": "Tuyến xe không còn tồn tại. Vui lòng chọn lại.",
+      "vehicleTypeNotFound": "Loại xe không còn tồn tại. Vui lòng chọn lại.",
+      "concurrentModification": "Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.",
+      "notFound": "Bảng giá không còn tồn tại.",
+      "overlapActive": "Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.",
+      "updateStatusFailed": "Không thể cập nhật trạng thái bảng giá.",
+      "loadDetailsFailed": "Không thể tải thông tin bảng giá.",
+      "updateFailed": "Không thể cập nhật bảng giá. Vui lòng thử lại.",
+      "createFailed": "Không thể tạo bảng giá. Vui lòng thử lại."
+    }
   },
   "promotions": {
     "promotionsTitle": "Chương trình khuyến mãi",
@@ -1081,7 +1112,29 @@
     "toastCreated": "Đã tạo khuyến mãi {code}.",
     "toastUpdated": "Đã cập nhật khuyến mãi {code}.",
     "toastReactivated": "Đã bật lại khuyến mãi {code}.",
-    "toastSuspended": "Đã tạm ngưng khuyến mãi {code}."
+    "toastSuspended": "Đã tạm ngưng khuyến mãi {code}.",
+    "networkError": "Không thể kết nối hoặc lưu khuyến mãi. Vui lòng thử lại.",
+    "errors": {
+      "nameRequired": "Vui lòng nhập tên chương trình.",
+      "nameMaxLength": "Tên chương trình không vượt quá 150 ký tự.",
+      "codeFormat": "Mã gồm 3–50 ký tự A–Z, 0–9, gạch dưới hoặc gạch ngang.",
+      "discountTypeRequired": "Vui lòng chọn loại giảm giá.",
+      "discountValuePositive": "Mức giảm phải là số dương, tối đa 2 chữ số thập phân.",
+      "discountPercentMax": "Phần trăm giảm không được vượt quá 100.",
+      "maxDiscountRequired": "Giảm tối đa bắt buộc và phải lớn hơn 0.",
+      "minOrderNonNegative": "Giá trị tối thiểu phải là số không âm, tối đa 2 chữ số thập phân.",
+      "startsOnRequired": "Vui lòng chọn ngày bắt đầu hợp lệ.",
+      "endsOnRequired": "Vui lòng chọn ngày kết thúc hợp lệ.",
+      "endsOnAfterStartsOn": "Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.",
+      "usageLimitPositive": "Số lượt tối đa phải là số nguyên dương.",
+      "usageLimitLessThanUsed": "Số lượt tối đa không được nhỏ hơn số lượt đã sử dụng.",
+      "codeExists": "Mã khuyến mãi đã tồn tại trong nhà xe này.",
+      "saveFailed": "Không thể lưu khuyến mãi. Vui lòng thử lại.",
+      "concurrentChanged": "Khuyến mãi vừa thay đổi. Danh sách đã được làm mới, vui lòng kiểm tra lại.",
+      "cannotChangeUnavailable": "Không thể đổi trạng thái khuyến mãi không khả dụng.",
+      "updateStatusFailed": "Không thể cập nhật trạng thái khuyến mãi. Vui lòng thử lại."
+    },
+    "maxDiscountUpTo": "(tối đa {amount})"
   },
   "reports": {
     "reportsTitle": "Báo cáo doanh thu",
@@ -1570,7 +1623,17 @@
     "shipmentsTabFilteredEmpty": "Không tìm thấy đơn hàng phù hợp.",
     "transactionsTabNoData": "Chưa có giao dịch nào được ghi nhận cho khách hàng này.",
     "transactionsTabFilteredEmpty": "Không tìm thấy giao dịch phù hợp.",
-    "clearSearch": "Xóa tìm kiếm"
+    "clearSearch": "Xóa tìm kiếm",
+    "resourceLabel": "khách hàng",
+    "toastStatusUpdated": "Cập nhật trạng thái tài khoản thành công.",
+    "errors": {
+      "invalidId": "Mã khách hàng không hợp lệ.",
+      "loadDetailsFailed": "Không thể tải thông tin khách hàng.",
+      "lockUntilRequired": "Vui lòng chọn ngày hết hạn tạm khóa.",
+      "lockUntilFuture": "Ngày hết hạn tạm khóa phải là ngày trong tương lai.",
+      "reasonMaxLength": "Lý do không được vượt quá 255 ký tự.",
+      "updateStatusFailed": "Không thể cập nhật trạng thái tài khoản."
+    }
   },
   "adminAccounts": {
     "adminAccountsTitle": "Quản lý tài khoản Admin",

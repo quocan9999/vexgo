@@ -42,8 +42,8 @@ function formatPrice(listedPrice: number) {
   return `${new Intl.NumberFormat('vi-VN').format(listedPrice)} ₫`;
 }
 
-function formatDateOnly(value: string | null) {
-  if (value === null) return 'Không giới hạn';
+function formatDateOnly(value: string | null, unlimitedLabel = 'N/A') {
+  if (value === null) return unlimitedLabel;
   return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
@@ -161,7 +161,7 @@ export function FarePriceWorkspace({
     !initialFarePrice && (!requestMatches || request.status === 'loading');
   const error =
     requestMatches && request.status === 'error'
-      ? 'Không thể tải thông tin bảng giá.'
+      ? tFare('errors.loadDetailsFailed')
       : null;
   const farePrice =
     request.farePrice ??
@@ -173,7 +173,7 @@ export function FarePriceWorkspace({
     setRequest({ key: requestKey, status: 'success', farePrice: updated });
     setEditDialogOpen(false);
     onUpdated?.(updated);
-    toast.success('Đã cập nhật bảng giá vé.');
+    toast.success(tFare('updatedSuccess'));
   }
 
   const targetStatus: FarePriceStatus | null = farePrice
@@ -197,13 +197,13 @@ export function FarePriceWorkspace({
       setRequest({ key: requestKey, status: 'success', farePrice: updated });
       setStatusDialogOpen(false);
       onUpdated?.(updated);
-      toast.success('Đã cập nhật bảng giá vé.');
+      toast.success(tFare('updatedSuccess'));
     } catch (requestError: unknown) {
       if (
         requestError instanceof FarePriceApiError &&
         requestError.code === 'FARE_PRICE_NOT_FOUND'
       ) {
-        toast.error('Bảng giá không còn tồn tại.');
+        toast.error(tFare('errors.notFound'));
         onNotFoundRef.current?.();
       } else if (
         requestError instanceof FarePriceApiError &&
@@ -211,22 +211,22 @@ export function FarePriceWorkspace({
         targetStatus === 'HOAT_DONG'
       ) {
         toast.error(
-          'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+          tFare('errors.overlapActive'),
         );
       } else if (
         requestError instanceof FarePriceApiError &&
         requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION'
       ) {
         toast.error(
-          'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+          tFare('errors.concurrentModification'),
         );
       } else {
         toast.error(
           requestError instanceof TypeError
-            ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+            ? tFare('networkError')
             : requestError instanceof Error
               ? requestError.message
-              : 'Không thể cập nhật trạng thái bảng giá.',
+              : tFare('errors.updateStatusFailed'),
         );
       }
     } finally {
@@ -250,7 +250,7 @@ export function FarePriceWorkspace({
           requestError instanceof FarePriceApiError &&
           requestError.code === 'FARE_PRICE_NOT_FOUND'
         ) {
-          toast.error('Bảng giá không còn tồn tại.');
+          toast.error(tFare('errors.notFound'));
           onNotFoundRef.current?.();
           setRequest({ key, status: 'error' });
           return;
@@ -262,7 +262,7 @@ export function FarePriceWorkspace({
       current = false;
       controller.abort();
     };
-  }, [farePriceId, retryCount]);
+  }, [farePriceId, retryCount, tFare]);
 
   return (
     <SuperAdminLayout
@@ -387,7 +387,7 @@ export function FarePriceWorkspace({
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Giá niêm yết */}
+              {/* Card 1: Listed Price */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm border-primary/20 bg-primary/5">
                 <CardHeader className="p-0 pb-3">
                   <CardTitle className="text-sm font-semibold text-muted-foreground">
@@ -404,7 +404,7 @@ export function FarePriceWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 2: Thông tin hành trình & Loại xe */}
+              {/* Card 2: Route & Vehicle Type Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
@@ -428,7 +428,7 @@ export function FarePriceWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 3: Thời gian hiệu lực */}
+              {/* Card 3: Validity Period */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
@@ -443,13 +443,13 @@ export function FarePriceWorkspace({
                     <div>
                       <dt>{tFare('colValidFrom')}</dt>
                       <dd className="admin-data-mono">
-                        {formatDateOnly(farePrice.validFrom)}
+                        {formatDateOnly(farePrice.validFrom, tFare('unlimitedDate'))}
                       </dd>
                     </div>
                     <div>
                       <dt>{tFare('colValidTo')}</dt>
                       <dd className="admin-data-mono">
-                        {farePrice.validTo ? formatDateOnly(farePrice.validTo) : tFare('unlimitedDate')}
+                        {farePrice.validTo ? formatDateOnly(farePrice.validTo, tFare('unlimitedDate')) : tFare('unlimitedDate')}
                       </dd>
                     </div>
                     <div>
@@ -461,7 +461,7 @@ export function FarePriceWorkspace({
               </Card>
             </div>
 
-            {/* Thông tin hệ thống */}
+            {/* System Info */}
             <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
               <CardHeader className="p-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">
