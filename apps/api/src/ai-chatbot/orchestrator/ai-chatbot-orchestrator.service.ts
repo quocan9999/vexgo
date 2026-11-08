@@ -24,6 +24,7 @@ export interface ChatbotRequest {
   nhaXeId?: number;
   khachHangId?: number;
   taiKhoanId?: number;
+  requestId?: string;
 }
 
 export interface CitationItem {
@@ -43,6 +44,7 @@ export interface ChatbotResponse {
   requiresHumanHandoff: boolean;
   handoffReason?: string;
   latencyMs: number;
+  requestId?: string;
 }
 
 const GENERATION_TEMPERATURE = 0.15;
@@ -231,6 +233,7 @@ ${userQuery}
         requiresHumanHandoff: true,
         handoffReason: 'EXPLICIT_HUMAN_REQUEST',
         startTime,
+        requestId: request.requestId,
       });
     }
 
@@ -245,6 +248,7 @@ ${userQuery}
         requiresHumanHandoff: true,
         handoffReason: 'NEGATIVE_SENTIMENT_CRISIS',
         startTime,
+        requestId: request.requestId,
       });
     }
 
@@ -259,6 +263,7 @@ ${userQuery}
         requiresHumanHandoff: true,
         handoffReason: 'EMERGENCY_INCIDENT',
         startTime,
+        requestId: request.requestId,
       });
     }
 
@@ -373,6 +378,7 @@ ${userQuery}
         requiresHumanHandoff: true,
         handoffReason: 'TOOL_EXECUTION_CONFLICT',
         startTime,
+        requestId: request.requestId,
       });
     }
 
@@ -415,6 +421,7 @@ ${userQuery}
         requiresHumanHandoff: true,
         handoffReason: 'RAG_KNOWLEDGE_GAP',
         startTime,
+        requestId: request.requestId,
       });
     }
 
@@ -460,6 +467,7 @@ ${userQuery}
       suggestedTrips,
       requiresHumanHandoff: false,
       startTime,
+      requestId: request.requestId,
     });
   }
 
@@ -633,6 +641,7 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     requiresHumanHandoff: boolean;
     handoffReason?: string;
     startTime: number;
+    requestId?: string;
   }): Promise<ChatbotResponse> {
     const latencyMs = Date.now() - params.startTime;
 
@@ -690,6 +699,7 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
       requiresHumanHandoff: params.requiresHumanHandoff,
       handoffReason: params.handoffReason,
       latencyMs,
+      requestId: params.requestId,
     };
   }
 }

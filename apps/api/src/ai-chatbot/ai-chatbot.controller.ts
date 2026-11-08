@@ -2,11 +2,13 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public, OptionalAuth } from '../auth/decorators/public.decorator.js';
@@ -77,6 +79,46 @@ export class AiChatbotController {
   ) {
     return this.chatbotService.getSessionMessages(
       sessionToken,
+      principal?.taiKhoanId,
+    );
+  }
+
+  @Get('requests/:requestId')
+  @OptionalAuth()
+  @ApiOperation({
+    summary: 'Tra cứu trạng thái hoặc phục hồi kết quả yêu cầu theo requestId',
+    description:
+      'Kiểm tra trạng thái (PROCESSING, COMPLETED, FAILED) hoặc lấy lại kết quả của tin nhắn khi client gặp sự cố mạng hoặc timeout.',
+  })
+  @ApiParam({
+    name: 'requestId',
+    description: 'Mã định danh yêu cầu UUID v4',
+    example: 'b7c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Trạng thái và kết quả của yêu cầu.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền truy cập yêu cầu này hoặc thiếu mã xác minh.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy yêu cầu tương ứng với requestId.',
+    type: ApiErrorResponseDto,
+  })
+  async getRequestStatus(
+    @Param('requestId', new ParseUUIDPipe()) requestId: string,
+    @Headers('x-recovery-key') recoveryKeyHeader?: string,
+    @Query('recoveryKey') recoveryKeyQuery?: string,
+    @OptionalPrincipal() principal?: AuthPrincipal,
+  ) {
+    const recoveryKey = recoveryKeyHeader || recoveryKeyQuery;
+    return this.chatbotService.getRequestStatus(
+      requestId,
+      recoveryKey,
       principal?.taiKhoanId,
     );
   }

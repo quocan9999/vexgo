@@ -1170,3 +1170,35 @@ model AiChatMessage {
   @@index([sessionId, createdAt])
 }
 
+model AiChatRequest {
+  id              Int       @id @default(autoincrement()) @db.Int
+  requestId       String    @unique @db.VarChar(64)
+  payloadHash     String    @db.Char(64)
+  status          String    @default("PROCESSING") @db.VarChar(30)
+  sessionToken    String?   @db.VarChar(64)
+  taiKhoanId      Int?      @db.Int
+  khachHangId     Int?      @db.Int
+  recoveryKeyHash String?   @db.Char(64)
+  responsePayload Json?
+  errorMessage    String?   @db.Text
+  errorCode       String?   @db.VarChar(50)
+  leaseUntil      DateTime? @db.DateTime(0)
+  createdAt       DateTime  @default(now()) @db.DateTime(0)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  expiresAt       DateTime  @db.DateTime(0)
+
+  @@index([taiKhoanId, status])
+  @@index([sessionToken])
+  @@index([expiresAt])
+}
+
+model AiChatbotSetting {
+  id                   Int      @id @default(1) @db.Int
+  idempotencyTtlDays   Int      @default(7) @db.Int
+  leaseDurationSeconds Int      @default(60) @db.Int
+  contextHistoryLimit  Int      @default(10) @db.Int
+  temperature          Decimal  @default(0.15) @db.Decimal(3, 2)
+  updatedAt            DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+

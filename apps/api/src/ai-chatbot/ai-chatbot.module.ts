@@ -14,6 +14,8 @@ import { AiBusinessToolsService } from './tools/ai-business-tools.service.js';
 import { AiChatbotOrchestratorService } from './orchestrator/ai-chatbot-orchestrator.service.js';
 import { AiKnowledgeAdminController } from './admin/ai-knowledge-admin.controller.js';
 import { AiKnowledgeAdminService } from './admin/ai-knowledge-admin.service.js';
+import { AiChatbotSettingsController } from './admin/ai-chatbot-settings.controller.js';
+import { AiChatbotSettingsService } from './admin/ai-chatbot-settings.service.js';
 
 @Module({
   imports: [
@@ -24,7 +26,11 @@ import { AiKnowledgeAdminService } from './admin/ai-knowledge-admin.service.js';
     PromotionsModule,
     LocationsModule,
   ],
-  controllers: [AiChatbotController, AiKnowledgeAdminController],
+  controllers: [
+    AiChatbotController,
+    AiKnowledgeAdminController,
+    AiChatbotSettingsController,
+  ],
   providers: [
     EmbeddingProviderService,
     TextChunkerService,
@@ -33,6 +39,7 @@ import { AiKnowledgeAdminService } from './admin/ai-knowledge-admin.service.js';
     AiChatbotOrchestratorService,
     AiChatbotService,
     AiKnowledgeAdminService,
+    AiChatbotSettingsService,
   ],
   exports: [
     AiChatbotService,
@@ -40,6 +47,7 @@ import { AiKnowledgeAdminService } from './admin/ai-knowledge-admin.service.js';
     HybridRetrievalService,
     EmbeddingProviderService,
     AiKnowledgeAdminService,
+    AiChatbotSettingsService,
   ],
 })
 export class AiChatbotModule {}

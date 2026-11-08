@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Bot } from 'lucide-react';
+import { Plus, Bot, Sliders } from 'lucide-react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
   ResourceCreateAction,
@@ -31,6 +31,7 @@ import { AiKnowledgeDetailDialog } from './ai-knowledge-detail-dialog';
 import { AiKnowledgeFormDialog } from './ai-knowledge-form-dialog';
 import { AiKnowledgeTable } from './ai-knowledge-table';
 import { AiKnowledgeTestDialog } from './ai-knowledge-test-dialog';
+import { AiSettingsDialog } from './ai-settings-dialog';
 
 const TENANT_SCOPE_FILTER_OPTIONS = [
   { value: '', label: 'Tất cả nguồn tài liệu' },
@@ -76,6 +77,7 @@ export function AiKnowledgeManagement() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleOpenCreate = () => {
     setSelectedDoc(null);
@@ -114,6 +116,17 @@ export function AiKnowledgeManagement() {
           titleId="ai-knowledge-page-title"
           actions={
             <div className="flex items-center gap-2">
+              {!isTenantScope && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs font-semibold h-9"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <Sliders className="size-4 text-primary" />
+                  Cấu hình AI
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -249,6 +262,14 @@ export function AiKnowledgeManagement() {
           open={testDialogOpen}
           onOpenChange={setTestDialogOpen}
         />
+
+        {/* Dialog Cấu hình hệ thống AI (Super Admin only) */}
+        {!isTenantScope && (
+          <AiSettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+          />
+        )}
       </div>
     </SuperAdminLayout>
   );

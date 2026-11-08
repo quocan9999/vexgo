@@ -41,4 +41,23 @@ export class SendMessageDto {
   @IsInt({ message: 'nhaXeId phải là số nguyên dương.' })
   @Min(1)
   nhaXeId?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Client-generated UUID v4 định danh yêu cầu chống gửi trùng và phục hồi kết quả khi mất mạng',
+    example: 'b7c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'requestId phải là định dạng UUID v4 hợp lệ.' })
+  requestId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Mã bí mật dùng để khôi phục yêu cầu cho khách vãng lai ở lượt gửi đầu',
+    example: 'rcv_9f8e7d6c5b4a3210',
+  })
+  @IsOptional()
+  @IsString({ message: 'recoveryKey phải là chuỗi ký tự.' })
+  @MaxLength(64, { message: 'recoveryKey tối đa 64 ký tự.' })
+  recoveryKey?: string;
 }
