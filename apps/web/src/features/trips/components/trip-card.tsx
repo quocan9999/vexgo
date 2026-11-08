@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Clock, MapPin, Star } from 'lucide-react';
+import { useTranslations, useLocale } from 'next-intl';
+import { formatCompactCurrency } from '@/lib/format';
 import { TripScheduleModal } from './trip-schedule-modal';
 import type { Trip } from '@/types/customer';
 import { AlternativeTripsModal } from './alternative-trips';
@@ -20,6 +22,8 @@ export function TripCard({
   onSelect,
   onChoose,
 }: TripCardProps) {
+  const t = useTranslations('trips');
+  const locale = useLocale();
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
@@ -40,7 +44,7 @@ export function TripCard({
           <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
               <span className="text-[11px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Nhà xe
+                {t('operatorPrefix')}
               </span>
               <h3 className="text-base sm:text-lg font-black text-[#0060c4] uppercase tracking-wide truncate">
                 {operatorName}
@@ -66,8 +70,8 @@ export function TripCard({
             <div className="sm:hidden text-right shrink-0">
               <span className="text-lg font-black text-[#f05123]">
                 {Number.isFinite(trip.price)
-                  ? `${new Intl.NumberFormat('vi-VN').format(trip.price)}đ`
-                  : 'Liên hệ'}
+                  ? formatCompactCurrency(trip.price, locale)
+                  : t('contactPrice')}
               </span>
             </div>
 
@@ -82,7 +86,7 @@ export function TripCard({
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-slate-700 hover:text-[#f05123] hover:bg-orange-50 border border-slate-200 hover:border-orange-200 transition-colors cursor-pointer"
               >
                 <Clock size={13} className="text-[#f05123]" />
-                Lịch trình
+                {t('schedule')}
               </button>
             </div>
           </div>
@@ -134,13 +138,13 @@ export function TripCard({
                 <span className="font-medium uppercase">{trip.vehicleType}</span>
                 <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
                 <span className="font-bold text-[#00b14f]">
-                  {trip.availableSeats} ghế trống
+                  {trip.availableSeats} {t('seatsAvailable')}
                 </span>
               </div>
               <div className="text-xl font-bold text-[#f05123]">
                 {Number.isFinite(trip.price)
-                  ? `${new Intl.NumberFormat('vi-VN').format(trip.price)}đ`
-                  : 'Liên hệ'}
+                  ? formatCompactCurrency(trip.price, locale)
+                  : t('contactPrice')}
               </div>
             </div>
           </div>
@@ -151,7 +155,7 @@ export function TripCard({
               <span className="font-semibold text-slate-700 uppercase truncate text-[11px]">{trip.vehicleType}</span>
               <span className="text-slate-300">•</span>
               <span className="font-bold text-[#00b14f] text-[11px] whitespace-nowrap">
-                {trip.availableSeats} ghế trống
+                {trip.availableSeats} {t('seatsAvailable')}
               </span>
             </div>
             <button
@@ -163,7 +167,7 @@ export function TripCard({
               className="inline-flex items-center gap-1 text-[11px] font-bold text-[#f05123] hover:underline cursor-pointer shrink-0 ml-2"
             >
               <Clock size={12} />
-              Lịch trình
+              {t('schedule')}
             </button>
           </div>
         </div>
@@ -180,7 +184,7 @@ export function TripCard({
               className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 hover:border-amber-300 transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
             >
               <Star size={13} className="fill-amber-400 text-amber-400" />
-              <span>Xem đánh giá</span>
+              <span>{t('viewReviews')}</span>
             </button>
 
             <button
@@ -192,7 +196,7 @@ export function TripCard({
               className="inline-flex items-center px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold text-[#0060c4] bg-white hover:bg-[#0060c4] hover:text-white border border-blue-200 hover:border-[#0060c4] transition-all duration-200 hover:shadow-xs active:scale-95 cursor-pointer"
               title="Xem gợi ý các chuyến xe thay thế"
             >
-              Gợi ý chuyến thay thế
+              {t('alternativeTrips')}
             </button>
           </div>
 
@@ -204,7 +208,7 @@ export function TripCard({
             }}
             className="w-full sm:w-auto bg-[#f05123] hover:bg-[#d8441a] text-white px-5 sm:px-6 py-2 rounded-lg text-xs sm:text-[13px] font-bold transition-colors shadow-xs cursor-pointer text-center"
           >
-            Chọn chuyến
+            {t('chooseTrip')}
           </button>
         </div>
       </div>

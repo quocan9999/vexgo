@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useSyncExternalStore, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
 import { ArrowLeft, CheckCircle2, Info, ScanLine, X } from 'lucide-react';
 import {
   markPaymentDraftTerminal,
@@ -244,6 +245,9 @@ function PaymentPriceBreakdownRows({
 function PaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('payments');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
   const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
   const draftId = searchParams.get('draftId');
 
@@ -1350,15 +1354,15 @@ function PaymentContent() {
               {vietQrUrl && vietQrConfig && !paymentTerminalStatus && timeLeft !== 0 && (
                 <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-[13px] space-y-2.5">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Mã ngân hàng:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('bank')}:</span>
                     <span className="font-bold text-slate-900 text-right">{vietQrConfig.bankId}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Chủ tài khoản:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('accountName')}:</span>
                     <span className="font-bold text-slate-900 text-right uppercase">{vietQrConfig.accountName}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Số tài khoản:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('accountNumber')}:</span>
                     <div className="flex items-center gap-2 justify-end min-w-0">
                       <strong className="text-slate-950 font-black tracking-wide">
                         {vietQrConfig.accountNumber}
@@ -1368,12 +1372,12 @@ function PaymentContent() {
                         onClick={() => copyToClipboard(vietQrConfig.accountNumber, 'stk')}
                         className="w-[66px] text-[11px] text-accent font-bold py-0.5 rounded bg-accent/10 hover:bg-accent/20 active:scale-95 transition-all whitespace-nowrap shrink-0 text-center cursor-pointer"
                       >
-                        {copiedField === 'stk' ? 'Đã chép' : 'Sao chép'}
+                        {copiedField === 'stk' ? t('copied') : t('copy')}
                       </button>
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Nội dung CK:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('transferContent')}:</span>
                     <div className="flex items-center gap-2 justify-end min-w-0">
                       <strong
                         className="text-emerald-700 font-black font-mono text-xs truncate max-w-[170px] sm:max-w-[210px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60"
@@ -1386,7 +1390,7 @@ function PaymentContent() {
                         onClick={() => copyToClipboard(transferContent, 'nd')}
                         className="w-[66px] text-[11px] text-accent font-bold py-0.5 rounded bg-accent/10 hover:bg-accent/20 active:scale-95 transition-all whitespace-nowrap shrink-0 text-center cursor-pointer"
                       >
-                        {copiedField === 'nd' ? 'Đã chép' : 'Sao chép'}
+                        {copiedField === 'nd' ? t('copied') : t('copy')}
                       </button>
                     </div>
                   </div>
@@ -1397,7 +1401,7 @@ function PaymentContent() {
                 {vietQrUrl && !paymentTerminalStatus && timeLeft !== 0 && (
                   <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center justify-center gap-1.5">
                     <ScanLine className="w-4 h-4 text-emerald-600 inline-block" />
-                    Quét mã qua bất kỳ App Ngân hàng
+                    {t('vietQrInstructions')}
                   </p>
                 )}
 
@@ -1512,17 +1516,17 @@ function PaymentContent() {
             {/* Thông tin hành khách */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <h3 className="font-bold text-slate-900 text-base mb-4">
-                Thông tin hành khách
+                {t('passengerInfo')}
               </h3>
               <div className="space-y-2.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Họ và tên</span>
+                  <span className="text-slate-500">{t('passengerInfo')}</span>
                   <span className="font-bold text-slate-800">
                     {bookingDraft.passenger.fullName}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Số điện thoại</span>
+                  <span className="text-slate-500">Phone</span>
                   <span className="font-bold text-slate-800">
                     {bookingDraft.passenger.phoneNumber}
                   </span>
@@ -1540,7 +1544,7 @@ function PaymentContent() {
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                  Thông tin chuyến đi
+                  {t('tripInfo')}
                   <Info className="w-4 h-4 text-rose-500" />
                 </h3>
                 <button
@@ -1548,7 +1552,7 @@ function PaymentContent() {
                   onClick={() => setShowTripDetailModal(true)}
                   className="text-xs text-rose-500 font-bold underline cursor-pointer"
                 >
-                  Chi tiết
+                  {tCommon('details')}
                 </button>
               </div>
 

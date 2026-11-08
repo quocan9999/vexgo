@@ -4,6 +4,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
 import {
   AlertCircle,
   ArrowRight,
@@ -135,6 +136,10 @@ function formatPhoneDisplay(phoneStr: string | null): string {
 function TicketSearchForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('tickets');
+  const tLookup = useTranslations('lookup');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
 
   let authContext: ReturnType<typeof useAuthSession> | null = null;
   try {
@@ -319,17 +324,17 @@ function TicketSearchForm() {
           </div>
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-900">
-              Tra cứu vé &amp; Hành trình đặt chỗ
+              {tLookup('lookupTitle')}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Nhập mã vé và số điện thoại để xem chi tiết thông tin chuyến xe
+              {tLookup('lookupSubtitle')}
             </p>
           </div>
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              Mã vé xe <span className="text-rose-500">*</span>
+              {tLookup('ticketCode')} <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <Ticket
@@ -345,7 +350,7 @@ function TicketSearchForm() {
                   if (ticketCodeError) setTicketCodeError(null);
                   if (generalError) setGeneralError(null);
                 }}
-                placeholder="Vui lòng nhập mã vé"
+                placeholder={tLookup('ticketCodePlaceholder')}
                 disabled={isLoading}
                 className={`w-full h-12 pl-12 pr-4 rounded-xl border ${
                   ticketCodeError
@@ -364,7 +369,7 @@ function TicketSearchForm() {
 
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              Số điện thoại <span className="text-rose-500">*</span>
+              {tLookup('phone')} <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <Phone
@@ -380,7 +385,7 @@ function TicketSearchForm() {
                   if (phoneError) setPhoneError(null);
                   if (generalError) setGeneralError(null);
                 }}
-                placeholder="Vui lòng nhập số điện thoại"
+                placeholder={tLookup('phonePlaceholder')}
                 disabled={isLoading}
                 className={`w-full h-12 pl-12 pr-4 rounded-xl border ${
                   phoneError
@@ -403,7 +408,7 @@ function TicketSearchForm() {
               onClick={() => setShowLookupGuide(true)}
               className="text-sm font-bold text-[#f05123] hover:text-[#ea4a18] hover:underline transition-colors cursor-pointer text-left"
             >
-              Hướng dẫn tra cứu vé
+              {tLookup('lookupTitle')}
             </button>
             <button
               type="submit"
@@ -413,12 +418,12 @@ function TicketSearchForm() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Đang tra cứu...</span>
+                  <span>{tCommon('loading')}</span>
                 </>
               ) : (
                 <>
                   <Search className="w-4 h-4 shrink-0" />
-                  <span>Tra cứu vé</span>
+                  <span>{tLookup('lookupButton')}</span>
                 </>
               )}
             </button>
@@ -457,11 +462,11 @@ function TicketSearchForm() {
             <div>
               {isCancelled ? (
                 <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-50 text-rose-600 border border-rose-200">
-                  <XCircle className="w-4 h-4" /> Vé đã hủy
+                  <XCircle className="w-4 h-4" /> {t('statusCancelled')}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
-                  <CheckCircle2 className="w-4 h-4" /> Vé hợp lệ / Đã đặt
+                  <CheckCircle2 className="w-4 h-4" /> {t('statusConfirmed')}
                 </span>
               )}
             </div>
@@ -470,7 +475,7 @@ function TicketSearchForm() {
           {/* Ticket Code Copy Bar */}
           <div className="px-6 sm:px-8 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-4 text-xs font-bold text-slate-600">
             <div className="flex items-center gap-2 overflow-hidden">
-              <span className="text-slate-400 uppercase tracking-wider shrink-0">Mã vé:</span>
+              <span className="text-slate-400 uppercase tracking-wider shrink-0">{t('ticketCode')}:</span>
               <span className="font-mono font-black text-slate-900 text-sm tracking-wide truncate">
                 {ticket.ticketCode}
               </span>
@@ -479,17 +484,17 @@ function TicketSearchForm() {
               type="button"
               onClick={() => handleCopyCode(ticket.ticketCode)}
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 active:scale-95 text-slate-700 font-semibold transition-all shrink-0 cursor-pointer shadow-xs"
-              title="Sao chép mã vé"
+              title={t('ticketCode')}
             >
               {copied ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-emerald-700 font-bold">Đã chép</span>
+                  <span className="text-emerald-700 font-bold">✓</span>
                 </>
               ) : (
                 <>
                   <Copy className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Sao chép</span>
+                  <span>{tLookup('ticketCode')}</span>
                 </>
               )}
             </button>
@@ -502,7 +507,7 @@ function TicketSearchForm() {
               {/* Departure Info */}
               <div className="space-y-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Khởi hành
+                  {t('departure')}
                 </span>
                 <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
                   {departureInfo.time}
@@ -946,7 +951,7 @@ function TicketSearchForm() {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-sm transition-all shadow-xs cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
-              Tra cứu vé khác
+              {tLookup('lookupButton')}
             </button>
 
             <div className="flex items-center gap-3">
@@ -954,10 +959,10 @@ function TicketSearchForm() {
                 type="button"
                 onClick={() => window.print()}
                 className="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-sm transition-all shadow-xs cursor-pointer"
-                title="In thông tin vé"
+                title={t('printTicket')}
               >
                 <Printer className="w-4 h-4" />
-                In vé
+                {t('printTicket')}
               </button>
 
               <button
@@ -966,7 +971,7 @@ function TicketSearchForm() {
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 font-bold text-sm transition-all cursor-pointer shadow-xs"
               >
                 <XCircle className="w-4 h-4" />
-                Hủy vé
+                {t('cancelTicket')}
               </button>
 
               <Link
@@ -992,7 +997,7 @@ function TicketSearchForm() {
                 className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#0060c4] hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-sm transition-all shadow-md shadow-[#0060c4]/25 cursor-pointer"
               >
                 <FileText className="w-4 h-4" />
-                Xem vé điện tử
+                {t('printTicket')}
               </Link>
             </div>
           </div>

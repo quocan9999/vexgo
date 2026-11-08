@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Filter, ChevronDown, MapPin, X, Bus, Loader2, RotateCcw, AlertCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { TripCard } from '@/features/trips/components/trip-card';
 import type { Trip } from '@/types/customer';
 import {
@@ -156,6 +157,7 @@ function TripSlot({
   destination,
   active,
   onActivate,
+  notSelectedText = 'Chưa chọn',
 }: {
   num: number;
   trip: Trip | null;
@@ -164,6 +166,7 @@ function TripSlot({
   destination: string;
   active: boolean;
   onActivate: () => void;
+  notSelectedText?: string;
 }) {
   return (
     <button
@@ -205,7 +208,7 @@ function TripSlot({
         ) : (
           <>
             <p className="text-[11px] text-slate-400">
-              {label ? `${label} (chưa chọn)` : 'Chưa chọn'}
+              {label ? `${label} (${notSelectedText})` : notSelectedText}
             </p>
             <p className="text-[12px] font-medium text-slate-500">
               {origin || '—'} - {destination || '—'}
@@ -225,6 +228,8 @@ function TripSlot({
 export function TripList() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('trips');
+  const tCommon = useTranslations('common');
   const [outboundTrips, setOutboundTrips] = useState<Trip[]>([]);
   const [returnTrips, setReturnTrips] = useState<Trip[]>([]);
   const [outboundMeta, setOutboundMeta] = useState(EMPTY_META);
@@ -664,25 +669,24 @@ export function TripList() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white rounded-2xl p-5 shadow-sm mb-6 gap-4 border border-slate-200/80">
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              Chọn chuyến xe phù hợp
+              {t('pageTitle')}
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              So sánh giờ đi, loại xe, số ghế trống, giá vé và chính sách trước
-              khi chọn chỗ.
+              {t('pageSubtitle')}
             </p>
           </div>
           <div className="flex gap-2">
             <div className="bg-[#e8f6f3] text-[#00b14f] px-3.5 py-1.5 rounded-xl text-center border border-[#b2e8d3] min-w-[70px]">
               <p className="font-extrabold text-lg leading-tight">{totalResults}</p>
-              <p className="text-[10px] uppercase font-bold">Kết quả</p>
+              <p className="text-[10px] uppercase font-bold">{t('resultsBadge')}</p>
             </div>
             <div className="bg-[#fff4e5] text-[#FF5722] px-3.5 py-1.5 rounded-xl text-center border border-[#ffe0b2] min-w-[70px]">
-              <p className="font-extrabold text-lg leading-tight">10p</p>
-              <p className="text-[10px] uppercase font-bold">Giữ ghế</p>
+              <p className="font-extrabold text-lg leading-tight">{t('seatHoldTime')}</p>
+              <p className="text-[10px] uppercase font-bold">{t('seatHoldBadge')}</p>
             </div>
             <div className="border border-slate-200 text-slate-800 px-3.5 py-1.5 rounded-xl text-center bg-white min-w-[70px] shadow-2xs">
-              <p className="font-extrabold text-lg leading-tight">QR</p>
-              <p className="text-[10px] uppercase font-bold">Vé điện tử</p>
+              <p className="font-extrabold text-lg leading-tight">{t('eTicketIcon')}</p>
+              <p className="text-[10px] uppercase font-bold">{t('eTicketBadge')}</p>
             </div>
           </div>
         </div>
@@ -694,7 +698,7 @@ export function TripList() {
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200/90">
               <div className="px-4 py-3 border-b border-slate-200">
                 <h2 className="font-bold text-slate-800 text-[13px] uppercase tracking-wide">
-                  CHUYẾN ĐI CỦA BẠN
+                  {t('yourTrip')}
                 </h2>
               </div>
 
@@ -708,13 +712,14 @@ export function TripList() {
                     destination={destination}
                     active={summaryCardStates.outbound === 'active'}
                     onActivate={() => setActiveTab('outbound')}
+                    notSelectedText={t('notSelected')}
                   />
                   {selectedOutbound && (
                     <button
                       type="button"
                       onClick={() => setSelectedOutbound(null)}
                       className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/80 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                      aria-label="Bỏ chọn chuyến đi"
+                      aria-label={t('deselectOutbound')}
                     >
                       <X size={14} aria-hidden="true" />
                     </button>
@@ -730,13 +735,14 @@ export function TripList() {
                       destination={origin}
                       active={summaryCardStates.return === 'active'}
                       onActivate={() => setActiveTab('return')}
+                      notSelectedText={t('notSelected')}
                     />
                     {selectedReturn && (
                       <button
                         type="button"
                         onClick={() => setSelectedReturn(null)}
                         className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/80 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                        aria-label="Bỏ chọn chuyến về"
+                        aria-label={t('deselectReturn')}
                       >
                         <X size={14} aria-hidden="true" />
                       </button>
@@ -751,7 +757,7 @@ export function TripList() {
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
                 <h2 className="font-black text-slate-900 flex items-center gap-2 text-[13px] uppercase tracking-wide">
                   <Filter size={16} className="text-[#2563EB]" />
-                  LỌC CHUYẾN
+                  {t('filterTitle')}
                 </h2>
                 <button
                   onClick={() => {
@@ -766,14 +772,14 @@ export function TripList() {
                   }}
                   className="text-[11px] font-bold text-slate-500 hover:text-[#FF5722] transition-colors cursor-pointer"
                 >
-                  ↺ Đặt lại
+                  ↺ {t('resetFilters')}
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
-                    Loại xe / dịch vụ
+                    {t('vehicleType')}
                   </label>
                   <div className="relative">
                     <select
@@ -781,10 +787,10 @@ export function TripList() {
                       onChange={(e) => setVehicleType(e.target.value)}
                       className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
                     >
-                      <option value="all">Tất cả loại xe</option>
-                      <option value="Limousine">Limousine</option>
-                      <option value="Giường">Giường nằm</option>
-                      <option value="Ghế">Ghế ngồi</option>
+                      <option value="all">{t('allVehicleTypes')}</option>
+                      <option value="Limousine">{t('seatTypeLimousine')}</option>
+                      <option value="Giường">{t('seatTypeSleeper')}</option>
+                      <option value="Ghế">{t('seatTypeSeater')}</option>
                     </select>
                     <ChevronDown
                       size={16}
@@ -795,7 +801,7 @@ export function TripList() {
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
-                    Khung giờ khởi hành
+                    {t('departureTime')}
                   </label>
                   <div className="relative">
                     <select
@@ -803,15 +809,15 @@ export function TripList() {
                       onChange={(e) => setTimeRange(e.target.value)}
                       className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
                     >
-                      <option value="all">Tất cả khung giờ</option>
+                      <option value="all">{t('departureTime')}: {tCommon('all')}</option>
                       <option value="early-morning">
-                        Sáng sớm (00:00 - 06:00)
+                        {t('timeEarlyMorning')}
                       </option>
-                      <option value="morning">Buổi sáng (06:00 - 12:00)</option>
+                      <option value="morning">{t('timeMorning')}</option>
                       <option value="afternoon">
-                        Buổi chiều (12:00 - 18:00)
+                        {t('timeAfternoon')}
                       </option>
-                      <option value="evening">Buổi tối (18:00 - 24:00)</option>
+                      <option value="evening">{t('timeEvening')}</option>
                     </select>
                     <ChevronDown
                       size={16}
@@ -822,7 +828,7 @@ export function TripList() {
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
-                    Nhà xe
+                    {t('operator')}
                   </label>
                   <div className="relative">
                     <select
@@ -830,7 +836,7 @@ export function TripList() {
                       onChange={(e) => setOperator(e.target.value)}
                       className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
                     >
-                      <option value="all">Tất cả nhà xe</option>
+                      <option value="all">{t('allOperators')}</option>
                       {allOperators.map((op) => (
                         <option key={op} value={op}>
                           Nhà xe {op}
@@ -847,7 +853,7 @@ export function TripList() {
                 {allPickupPoints.length > 0 && (
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-2">
-                      Điểm đón ({allPickupPoints.length})
+                      {t('pickupPoint')} ({allPickupPoints.length})
                     </label>
                     <div className="relative">
                       <select
@@ -855,7 +861,7 @@ export function TripList() {
                         onChange={(e) => setPickupPointFilter(e.target.value)}
                         className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
                       >
-                        <option value="all">Tất cả điểm đón</option>
+                        <option value="all">{t('allPickupPoints')}</option>
                         {allPickupPoints.map((name) => (
                           <option key={name} value={name}>
                             {name}
@@ -873,7 +879,7 @@ export function TripList() {
                 {allDropoffPoints.length > 0 && (
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-2">
-                      Điểm trả ({allDropoffPoints.length})
+                      {t('dropoffPoint')} ({allDropoffPoints.length})
                     </label>
                     <div className="relative">
                       <select
@@ -881,7 +887,7 @@ export function TripList() {
                         onChange={(e) => setDropoffPointFilter(e.target.value)}
                         className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
                       >
-                        <option value="all">Tất cả điểm trả</option>
+                        <option value="all">{t('allDropoffPoints')}</option>
                         {allDropoffPoints.map((name) => (
                           <option key={name} value={name}>
                             {name}
@@ -909,7 +915,7 @@ export function TripList() {
                   <div className="space-y-1.5">
                     <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
                       <span className="size-2 rounded-full bg-[#00b14f]" />
-                      Khu vực đón tại {origin || 'nơi đi'}:
+                      {t('pickupPoint')} ({origin || '—'}):
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       <button
@@ -921,7 +927,7 @@ export function TripList() {
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
-                        Tất cả
+                        {tCommon('all')}
                       </button>
                       {subAreas.from.map((area) => (
                         <button
@@ -951,7 +957,7 @@ export function TripList() {
                   <div className="space-y-1.5">
                     <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
                       <span className="size-2 rounded-full bg-[#f05123]" />
-                      Khu vực trả tại {destination || 'nơi đến'}:
+                      {t('dropoffPoint')} ({destination || '—'}):
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       <button
@@ -963,7 +969,7 @@ export function TripList() {
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
-                        Tất cả
+                        {tCommon('all')}
                       </button>
                       {subAreas.to.map((area) => (
                         <button
@@ -1003,7 +1009,7 @@ export function TripList() {
                         : 'text-slate-500 border-b border-slate-100 hover:text-slate-700'
                     }`}
                   >
-                    CHUYẾN ĐI – NGÀY ĐI
+                    {t('outboundTrip').toUpperCase()}
                   </button>
                   <button
                     onClick={() => setActiveTab('return')}
@@ -1013,7 +1019,7 @@ export function TripList() {
                         : 'text-slate-500 border-b border-slate-100 hover:text-slate-700'
                     }`}
                   >
-                    CHUYẾN VỀ – NGÀY VỀ
+                    {t('returnTrip').toUpperCase()}
                   </button>
                 </div>
               </div>
@@ -1022,12 +1028,11 @@ export function TripList() {
             {/* Toolbar */}
             <div className="flex justify-between items-center bg-white p-3 px-4 rounded-xl shadow-sm border border-slate-100">
               <p className="text-[13px] font-medium text-slate-600">
-                Tìm thấy{' '}
                 <span className="font-bold text-blue-600">{totalResults}</span>{' '}
-                chuyến xe phù hợp
+                {t('resultsBadge').toLowerCase()}
               </p>
               <div className="flex items-center gap-2">
-                <span className="text-[13px] text-slate-500">⇅ Sắp xếp:</span>
+                <span className="text-[13px] text-slate-500">⇅ {t('sortBy')}:</span>
                 <select
                   value={sort}
                   onChange={(e) => {
@@ -1040,8 +1045,8 @@ export function TripList() {
                   }}
                   className="text-[13px] font-medium text-slate-700 border border-slate-200 rounded-md px-3 py-1.5 outline-none bg-white"
                 >
-                  <option value="departure">Mới cập nhật</option>
-                  <option value="price">Giá thấp đến cao</option>
+                  <option value="departure">{t('sortDepartureAsc')}</option>
+                  <option value="price">{t('sortPriceAsc')}</option>
                 </select>
               </div>
             </div>
@@ -1052,7 +1057,7 @@ export function TripList() {
                 <div className="bg-white rounded-xl p-12 flex flex-col items-center justify-center text-slate-500 border border-slate-100 shadow-sm">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f05123] mb-4"></div>
                   <p className="font-semibold text-sm">
-                    Đang tải dữ liệu chuyến xe...
+                    {t('loadingTrips')}
                   </p>
                 </div>
               ) : error ? (
@@ -1061,14 +1066,7 @@ export function TripList() {
                     <AlertCircle className="w-6 h-6" />
                   </div>
                   <p className="font-bold text-sm text-slate-900 mb-1">
-                    {error.toLowerCase().includes('fetch')
-                      ? 'Không thể kết nối đến máy chủ'
-                      : error}
-                  </p>
-                  <p className="text-xs text-slate-500 mb-4 max-w-sm">
-                    {error.toLowerCase().includes('fetch')
-                      ? 'Máy chủ có thể đang khởi động lại hoặc đường truyền mạng bị gián đoạn. Vui lòng bấm thử lại.'
-                      : 'Vui lòng kiểm tra lại thông tin hoặc thử lại.'}
+                    {t('loadError')}
                   </p>
                   <button
                     type="button"
@@ -1076,7 +1074,7 @@ export function TripList() {
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f05123] text-white text-xs font-bold shadow-xs hover:bg-[#d94419] active:scale-95 transition-all cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Thử lại</span>
+                    <span>{t('retry')}</span>
                   </button>
                 </div>
               ) : filteredTrips.length > 0 ? (
@@ -1092,10 +1090,10 @@ export function TripList() {
               ) : (
                 <div className="bg-white rounded-2xl py-14 px-8 text-center border border-slate-200/80 shadow-2xs">
                   <h3 className="font-bold text-slate-900 text-base mb-1.5">
-                    Không tìm thấy chuyến xe nào phù hợp
+                    {t('noTripsFound')}
                   </h3>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                    Vui lòng thử thay đổi điểm đón/trả, bộ lọc hoặc chọn ngày khởi hành khác.
+                    {t('noTripsHint')}
                   </p>
                 </div>
               )}
@@ -1114,24 +1112,16 @@ export function TripList() {
                     {loadingMore ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
-                        <span>Đang tải thêm chuyến xe...</span>
+                        <span>{t('loadingMore')}</span>
                       </>
                     ) : (
                       <>
-                        <span>Xem thêm chuyến xe</span>
+                        <span>{t('loadMore')}</span>
                         <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-orange-500 transition-colors" />
                       </>
                     )}
                   </button>
-                ) : activeMeta.totalItems > 10 ? (
-                  <div className="text-center py-2 text-xs text-slate-400 font-medium">
-                    ✓ Đã hiển thị tất cả {activeMeta.totalItems} chuyến xe
-                  </div>
                 ) : null}
-
-                <p className="text-[11px] text-slate-400">
-                  Đang hiển thị {activeTrips.length} trên tổng số {activeMeta.totalItems} chuyến
-                </p>
               </div>
             )}
           </div>
