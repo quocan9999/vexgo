@@ -11,6 +11,7 @@ import {
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Package, Luggage, Info } from 'lucide-react';
+import { useTranslations, useLocale } from 'next-intl';
 
 import { LuggageForm } from './luggage-form';
 import { resolveCargoCategoryId } from './luggage-item';
@@ -116,7 +117,7 @@ export function calculateLuggageFee(
 }
 
 export const LuggageStep: React.FC<LuggageStepProps> = ({
-  title = 'HÀNH LÝ CỦA CHUYẾN ĐI',
+  title,
   route,
   time,
   seat,
@@ -127,6 +128,9 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
   onPackagesChange,
   onFeeChange,
 }) => {
+  const t = useTranslations('booking');
+  const locale = useLocale();
+
   const [packages, setPackages] = useState<LuggageSizePackage[]>(
     propPackages && propPackages.length > 0 ? propPackages : LUGGAGE_SIZE_PACKAGES,
   );
@@ -205,7 +209,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
           setCargoCategoriesError(
             error instanceof Error
               ? error.message
-              : 'Không thể tải danh mục loại hàng hóa.',
+              : (locale === 'vi' ? 'Không thể tải danh mục loại hàng hóa.' : 'Cannot load cargo categories.'),
           );
         }
       })
@@ -215,7 +219,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!hasExtraLuggage) {
@@ -243,33 +247,35 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
     onFeeChange(estimatedFee, totalWeight, items);
   }, [hasExtraLuggage, items, packages, vehicles, surcharges, onFeeChange]);
 
+  const resolvedTitle = title || t('cargoTripTitle');
+
   return (
     <div className="p-4 md:p-5 border-b border-slate-200">
       <div className="mb-5 pb-4 border-b border-slate-100">
-        <h2 className="text-base font-black text-slate-950 mb-3">{title}</h2>
+        <h2 className="text-base font-black text-slate-950 mb-3">{resolvedTitle}</h2>
         <div className="bg-slate-50 rounded-lg p-3 text-sm flex flex-col gap-1.5 border border-slate-200">
           <div className="flex justify-between">
-            <span className="text-slate-500">Tuyến:</span>
+            <span className="text-slate-500">{t('routeLabel')}:</span>
             <span className="font-bold text-slate-800">{route}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Thời gian:</span>
+            <span className="text-slate-500">{t('departureTimeLabel')}:</span>
             <span className="font-bold text-slate-800">{time}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Ghế:</span>
-            <span className="font-bold text-slate-800">{seat || 'Chưa chọn'}</span>
+            <span className="text-slate-500">{t('seat')}:</span>
+            <span className="font-bold text-slate-800">{seat || t('unselected')}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Hành khách:</span>
-            <span className="font-bold text-slate-800">{passenger || 'Chưa nhập'}</span>
+            <span className="text-slate-500">{t('passengerName')}:</span>
+            <span className="font-bold text-slate-800">{passenger || (locale === 'vi' ? 'Chưa nhập' : 'Not entered')}</span>
           </div>
         </div>
       </div>
 
-      <h3 className="text-sm font-bold text-slate-900 mb-2">Bạn có hàng hóa cần gửi dưới hầm xe không?</h3>
+      <h3 className="text-sm font-bold text-slate-900 mb-2">{t('hasCargoQuestion')}</h3>
       <p className="mb-4 text-xs leading-relaxed text-slate-600">
-        Hành lý xách tay tiêu chuẩn không thuộc dịch vụ hàng gửi dưới hầm xe.
+        {t('handLuggageStandardNotice')}
       </p>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -281,10 +287,10 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
         >
           <Luggage className={`w-8 h-8 ${!hasExtraLuggage ? 'text-accent' : 'text-slate-400'}`} />
           <span className={`text-sm font-bold ${!hasExtraLuggage ? 'text-accent' : 'text-slate-800'}`}>
-            Chỉ có hành lý xách tay
+            {t('handLuggageOnly')}
           </span>
           <span className="text-[11px] text-slate-500 font-medium">
-            (Hành lý gọn nhẹ mang theo bên người)
+            {t('handLuggageOnlySub')}
           </span>
         </div>
 
@@ -308,10 +314,10 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
         >
           <Package className={`w-8 h-8 ${hasExtraLuggage ? 'text-accent' : 'text-slate-400'}`} />
           <span className={`text-sm font-bold ${hasExtraLuggage ? 'text-accent' : 'text-slate-800'}`}>
-            Có hàng gửi dưới hầm xe
+            {t('holdLuggageIncluded')}
           </span>
           <span className="text-[11px] text-slate-500 font-medium">
-            (Vali lớn, thùng xốp, xe máy, xe đạp...)
+            {t('holdLuggageIncludedSub')}
           </span>
         </div>
       </div>
@@ -321,53 +327,53 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
           {cargoCapacity?.acceptsShipments ? (
             <div className="mb-5 rounded-xl border border-slate-200/90 bg-slate-50/60 p-3.5">
               <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2.5 pb-2 border-b border-slate-200/60">
-                <span>Khả năng nhận hàng của chuyến</span>
-                <span className="text-slate-400 font-normal lowercase">cập nhật thời gian thực</span>
+                <span>{t('tripCargoCapacity')}</span>
+                <span className="text-slate-400 font-normal lowercase">{t('realtimeUpdated')}</span>
               </div>
               <div className="grid grid-cols-3 divide-x divide-slate-200 text-xs">
                 <div className="pr-3">
-                  <div className="text-slate-500 text-[11px]">Xe máy</div>
+                  <div className="text-slate-500 text-[11px]">{t('packageMotorbike')}</div>
                   <div className="mt-0.5 flex items-baseline gap-1">
                     {cargoCapacity.capacities.motorcycles.remaining === 0 ? (
-                      <span className="text-xs font-bold text-red-500">Hết chỗ</span>
+                      <span className="text-xs font-bold text-red-500">{t('outOfCapacity')}</span>
                     ) : (
                       <>
                         <span className="text-sm font-extrabold text-slate-900">
                           {cargoCapacity.capacities.motorcycles.remaining}
                         </span>
-                        <span className="text-[11px] text-slate-500">chỗ trống</span>
+                        <span className="text-[11px] text-slate-500">{t('availableSpots')}</span>
                       </>
                     )}
                   </div>
                 </div>
 
                 <div className="px-3">
-                  <div className="text-slate-500 text-[11px]">Hàng 20–40kg / Xe đạp</div>
+                  <div className="text-slate-500 text-[11px]">{locale === 'vi' ? 'Hàng 20–40kg / Xe đạp' : '20–40kg / Bicycle'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1">
                     {cargoCapacity.capacities.bulkyGoods.remaining === 0 ? (
-                      <span className="text-xs font-bold text-red-500">Hết chỗ</span>
+                      <span className="text-xs font-bold text-red-500">{t('outOfCapacity')}</span>
                     ) : (
                       <>
                         <span className="text-sm font-extrabold text-slate-900">
                           {cargoCapacity.capacities.bulkyGoods.remaining}
                         </span>
-                        <span className="text-[11px] text-slate-500">kiện/chỗ trống</span>
+                        <span className="text-[11px] text-slate-500">{t('availablePkgSpots')}</span>
                       </>
                     )}
                   </div>
                 </div>
 
                 <div className="pl-3">
-                  <div className="text-slate-500 text-[11px]">Hàng &lt;20kg</div>
+                  <div className="text-slate-500 text-[11px]">{locale === 'vi' ? 'Hàng <20kg' : 'Cargo <20kg'}</div>
                   <div className="mt-0.5 flex items-baseline gap-1">
                     {cargoCapacity.capacities.parcels.remaining === 0 ? (
-                      <span className="text-xs font-bold text-red-500">Hết chỗ</span>
+                      <span className="text-xs font-bold text-red-500">{t('outOfCapacity')}</span>
                     ) : (
                       <>
                         <span className="text-sm font-extrabold text-slate-900">
                           {cargoCapacity.capacities.parcels.remaining}
                         </span>
-                        <span className="text-[11px] text-slate-500">kiện trống</span>
+                        <span className="text-[11px] text-slate-500">{t('availablePackages')}</span>
                       </>
                     )}
                   </div>
@@ -377,16 +383,16 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
           ) : cargoCapacity && !cargoCapacity.acceptsShipments ? (
             <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
               <Info className="w-4 h-4 shrink-0 text-amber-600" />
-              <span>Chuyến xe này không nhận chở xe máy hoặc hàng ký gửi dưới hầm. Khách chỉ được mang hành lý xách tay tiêu chuẩn.</span>
+              <span>{t('tripNoCargoNotice')}</span>
             </div>
           ) : null}
           {cargoCategoriesLoading ? (
             <p role="status" className="mb-3 text-xs text-slate-500">
-              Đang tải danh mục hàng hóa...
+              {t('cargoLoadingNotice')}
             </p>
           ) : cargoCategoriesError ? (
             <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              {cargoCategoriesError} Cước hàng sẽ chỉ được xác định sau khi hệ thống tải được danh mục hợp lệ.
+              {cargoCategoriesError}
             </p>
           ) : null}
           <LuggageForm
@@ -398,7 +404,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
             onChange={setItems}
           />
           <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
-            Cước vận chuyển hàng hóa được tính theo loại hàng, tổng khối lượng và bảng cước của nhà xe trên tuyến đã chọn. Phụ phí dễ vỡ {(surcharges?.fragile ?? 20_000).toLocaleString('vi-VN')}đ và hàng giá trị cao {(surcharges?.valuable ?? 50_000).toLocaleString('vi-VN')}đ được tính một lần cho mỗi loại nếu có ít nhất một kiện tương ứng. Số tiền chính xác được máy chủ xác định khi tạo đơn.
+            {t('cargoPricingRuleNotice')}
           </p>
           {overweightRegularCargoItem && (
             <div className="mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -408,10 +414,10 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
                 </div>
                 <div className="space-y-1">
                   <h4 className="text-sm font-bold text-slate-900">
-                    Có kiện hành lý thường vượt quá 40kg — Cần tạo vận đơn gửi hàng
+                    {t('cargoItemOverweightNotice')}
                   </h4>
                   <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                    Vé xe nhận hàng thường tối đa {MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg mỗi kiện. Cước hàng gửi kèm được xác định theo bảng cước của tuyến khi tạo đơn; kiện vượt giới hạn này cần gửi riêng bằng dịch vụ gửi hàng hầm xe.
+                    {t('cargoItemOverweightDesc', { maxKg: MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG })}
                   </p>
                 </div>
               </div>
@@ -420,7 +426,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
                   type="button"
                   className="h-9 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
                 >
-                  Chuyển sang gửi hàng →
+                  {t('switchToFreightShipment')}
                 </button>
               </Link>
             </div>
@@ -432,25 +438,18 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({
       <div className="mt-6 rounded-xl border border-slate-200/90 bg-slate-50/80 p-4 space-y-2.5 text-xs text-slate-600 leading-relaxed">
         <div className="flex items-center gap-2 font-bold text-slate-900 text-xs">
           <Info className="w-4 h-4 text-accent shrink-0" />
-          <span>Lưu ý về hành lý & hàng gửi kèm theo chuyến xe:</span>
+          <span>{t('cargoNoticeAndRules')}</span>
         </div>
         <ul className="space-y-1.5 pl-6 list-disc text-slate-600">
+          <li>{t('freeHandLuggageRule')}</li>
+          <li>{t('holdLuggageRule')}</li>
+          <li>{t('cargoPackagingRule')}</li>
           <li>
-            <strong>Hành lý xách tay miễn phí:</strong> Mỗi hành khách được mang theo miễn phí 01 balo / vali xách tay nhỏ gọn (≤ 7kg) lên khoang ghế ngồi.
-          </li>
-          <li>
-            <strong>Hành lý ký gửi hầm xe:</strong> Kiện hành lý lớn hoặc vượt kích thước gửi dưới hầm xe áp dụng theo biểu phí niêm yết của nhà xe ở trên và được nhân viên hỗ trợ xếp gọn vào hầm khi lên xe.
-          </li>
-          <li>
-            Quý khách vui lòng đóng gói chắc chắn và dán rõ thông tin họ tên, số điện thoại lên từng kiện hàng để tránh thất lạc.
-          </li>
-          <li>
-            Trường hợp quý khách chỉ có nhu cầu gửi hàng hóa, bưu kiện mà <strong>không đi cùng chuyến xe</strong>, vui lòng sử dụng{' '}
             <Link
               href="/send-freight"
               className="font-bold text-accent hover:underline inline-flex items-center gap-0.5"
             >
-              Dịch vụ gửi hàng bưu kiện riêng →
+              {t('freightShipmentAloneLink')}
             </Link>
           </li>
         </ul>

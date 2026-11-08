@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
 import { CheckCircle2, ChevronLeft, ChevronRight, Info, Mail, Phone, Tag, Ticket, User, X } from 'lucide-react';
 import type { Post } from '@/features/posts/types/post';
 import { tripsApi, type ApiTrip, type ApiTripSeat, type ApiTripStopPoint } from '@/features/trips/services/trips.api';
@@ -88,6 +89,7 @@ const SeatButton = ({
   onToggle,
   style,
 }: SeatButtonProps) => {
+  const t = useTranslations('booking');
   const seatClass = booked
     ? 'fill-slate-200 stroke-slate-300'
     : selected
@@ -103,7 +105,7 @@ const SeatButton = ({
     <button
       type="button"
       disabled={booked}
-      aria-label={`${seat}${booked ? ' đã bán' : selected ? ' đang chọn' : ' còn trống'}`}
+      aria-label={`${seat}${booked ? ' ' + t('sold').toLowerCase() : selected ? ' ' + t('selecting').toLowerCase() : ' ' + t('available').toLowerCase()}`}
       aria-pressed={selected}
       onClick={() => onToggle(seat)}
       className="group absolute min-h-11 min-w-11 -translate-x-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -138,6 +140,8 @@ const SeatGrid = ({
   onToggle,
   onVehicleInfoClick,
 }: SeatGridProps) => {
+  const t = useTranslations('booking');
+  const locale = useLocale();
   const seatFloorLayouts = getTripSeatFloorLayouts(tripSeats);
   const isSleeper =
     vehicleType?.toUpperCase().includes('GIƯỜNG') ||
@@ -149,12 +153,12 @@ const SeatGrid = ({
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-black text-slate-950 whitespace-nowrap">Chọn ghế</h2>
+            <h2 className="text-lg font-black text-slate-950 whitespace-nowrap">{t('selectSeats')}</h2>
             <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">
-              {tripSeats.length} chỗ
+              {t('seatsCount', { count: tripSeats.length })}
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap">
-              {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
+              {isSleeper ? (locale === 'vi' ? 'Giường nằm' : 'Sleeper') : (locale === 'vi' ? 'Ghế ngồi' : 'Seater')}
             </span>
           </div>
           <p className="text-xs font-bold text-slate-500 mt-1">
@@ -166,7 +170,7 @@ const SeatGrid = ({
           onClick={onVehicleInfoClick}
           className="min-h-11 px-2 text-xs font-bold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-md cursor-pointer whitespace-nowrap shrink-0"
         >
-          Thông tin xe
+          {t('vehicleInfo')}
         </button>
       </div>
 
@@ -183,12 +187,12 @@ const SeatGrid = ({
             className={`bg-slate-50/80 border border-slate-200 rounded-xl ${isSleeper ? 'p-3' : 'p-3.5'} flex flex-col items-center`}
           >
             <div className="w-full flex items-center justify-between pb-2 mb-3 border-b border-dashed border-slate-200 px-1">
-              <span className="text-[10px] font-bold text-slate-400">Tài xế</span>
+              <span className="text-[10px] font-bold text-slate-400">{t('driver')}</span>
               <h3 className="text-[11px] font-black text-[#0060c4] uppercase">
-                {floorLayout.label}
+                {floorLayout.floor === 1 ? t('lowerFloor') : floorLayout.floor === 2 ? t('upperFloor') : floorLayout.label}
               </h3>
               <span className="text-[9px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                Cửa lên
+                {t('entranceDoorShort')}
               </span>
             </div>
             <div
@@ -207,7 +211,7 @@ const SeatGrid = ({
               ))}
             </div>
             <div className="w-full text-center pt-2 mt-3 border-t border-dashed border-slate-200 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-              Cuối xe
+              {t('rearOfBus')}
             </div>
           </div>
         ))}
@@ -248,6 +252,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   returnApiTrip,
 }) => {
   const router = useRouter();
+  const t = useTranslations('booking');
+  const locale = useLocale();
+  const formatMoney = (amount: number) => locale === 'vi' ? `${amount.toLocaleString('vi-VN')}đ` : `${amount.toLocaleString('en-US')} VND`;
   const { user, executeWithAuth, isAuthenticated, isHydrated } = useAuthSession();
   const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
   const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
@@ -435,7 +442,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     ...returnLuggageItems.map((it) => ({ ...it, legTitle: 'Chuyến về' as const })),
   ];
   const hasCargoItems = allLuggageItems.length > 0;
-  const totalFareLabel = 'Tổng tiền';
+  const totalFareLabel = t('totalAmount');
 
   const [outboundCargoRoutePoints, setOutboundCargoRoutePoints] =
     useState<ShipmentRoutePoints | null>(null);
@@ -829,7 +836,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         return current.filter((item) => item !== seat);
       }
       if (current.length >= 5) {
-        setSubmitError('Chuyến đi chỉ được chọn tối đa 5 ghế.');
+        setSubmitError(t('errorOutboundMax5Seats'));
         return current;
       }
       return [...current, seat];
@@ -843,7 +850,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         return current.filter((item) => item !== seat);
       }
       if (current.length >= 5) {
-        setSubmitError('Chuyến về chỉ được chọn tối đa 5 ghế.');
+        setSubmitError(t('errorReturnMax5Seats'));
         return current;
       }
       return [...current, seat];
@@ -880,30 +887,30 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     setSubmitError(null);
 
     if (!isHydrated) {
-      setSubmitError('Đang tải trạng thái tài khoản. Vui lòng đợi rồi thử lại.');
+      setSubmitError(t('errorLoadingAccountState'));
       return;
     }
 
     if (!passengerValidation.isValid) {
       const missingDetails: string[] = [];
       if (!customerName.trim()) {
-        missingDetails.push('Họ và tên');
+        missingDetails.push(t('customerName'));
       }
       if (!customerPhone.trim()) {
-        missingDetails.push('Số điện thoại');
+        missingDetails.push(t('customerPhone'));
       } else if (passengerValidation.errors.phoneNumber) {
-        missingDetails.push('Số điện thoại (định dạng chưa đúng)');
+        missingDetails.push(t('errorFieldPhoneInvalid'));
       }
       if (!customerEmail.trim()) {
-        missingDetails.push('Email');
+        missingDetails.push(t('customerEmail'));
       } else if (passengerValidation.errors.email) {
-        missingDetails.push('Email (định dạng chưa đúng)');
+        missingDetails.push(t('errorFieldEmailInvalid'));
       }
 
       const msg =
         missingDetails.length > 0
-          ? `Quý khách vui lòng nhập đầy đủ và chính xác thông tin khách hàng:\n• ${missingDetails.join('\n• ')}`
-          : 'Quý khách vui lòng điền đầy đủ thông tin khách hàng trước khi thanh toán.';
+          ? `${t('errorEnterRequiredCustomerInfo')}\n• ${missingDetails.join('\n• ')}`
+          : t('errorIncompleteInfoSimple');
 
       setCustomerInfoAlertMessage(msg);
       setShowCustomerInfoAlert(true);
@@ -911,35 +918,35 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     }
 
     if (outboundSeats.length === 0) {
-      setSubmitError('Vui lòng chọn ít nhất một ghế cho chuyến đi.');
+      setSubmitError(t('errSelectOutboundSeat'));
       return;
     }
     if (outboundSeats.length > 5) {
-      setSubmitError('Chuyến đi chỉ được chọn tối đa 5 ghế.');
+      setSubmitError(t('errorOutboundMax5Seats'));
       return;
     }
     if (returnSeats.length === 0) {
-      setSubmitError('Vui lòng chọn ít nhất một ghế cho chuyến về.');
+      setSubmitError(t('errSelectReturnSeat'));
       return;
     }
     if (returnSeats.length > 5) {
-      setSubmitError('Chuyến về chỉ được chọn tối đa 5 ghế.');
+      setSubmitError(t('errorReturnMax5Seats'));
       return;
     }
 
     if (!acceptedTerms) {
-      setSubmitError('Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.');
+      setSubmitError(t('errAgreeTermsRequired'));
       return;
     }
 
     if (promotionInput.trim() && !activePromotionCode) {
-      setSubmitError('Hãy áp dụng hoặc bỏ mã khuyến mãi đã nhập trước khi tiếp tục.');
+      setSubmitError(t('errorApplyOrDiscardPromo'));
       promotionInputRef.current?.focus();
       return;
     }
     if (activePromotionCode && !hasCurrentPromotionQuote) {
       setSubmitError(
-        promotionMessage || 'Đang kiểm tra mã khuyến mãi. Vui lòng đợi rồi thử lại.',
+        promotionMessage || (locale === 'vi' ? 'Đang kiểm tra mã khuyến mãi. Vui lòng đợi rồi thử lại.' : 'Checking promo code. Please wait and try again.'),
       );
       promotionInputRef.current?.focus();
       return;
@@ -972,7 +979,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     const outboundTripId = Number(outboundPost.id);
     const returnTripId = Number(returnPost.id);
     if (!Number.isSafeInteger(outboundTripId) || outboundTripId <= 0 || !Number.isSafeInteger(returnTripId) || returnTripId <= 0) {
-      setSubmitError('Không xác định được chuyến xe. Vui lòng tải lại trang.');
+      setSubmitError(t('errorTripNotFound'));
       return;
     }
 
@@ -998,7 +1005,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       resolvedOutboundSeats.some((seat) => !seat) ||
       outboundSeatIds.length !== outboundSeats.length
     ) {
-      setSubmitError('Sơ đồ ghế chuyến đi đã thay đổi. Hãy chọn lại ghế còn trống.');
+      setSubmitError(t('outboundSeatChangedError'));
       await refreshSeatMaps();
       return;
     }
@@ -1007,7 +1014,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       resolvedReturnSeats.some((seat) => !seat) ||
       returnSeatIds.length !== returnSeats.length
     ) {
-      setSubmitError('Sơ đồ ghế chuyến về đã thay đổi. Hãy chọn lại ghế còn trống.');
+      setSubmitError(t('returnSeatChangedError'));
       await refreshSeatMaps();
       return;
     }
@@ -1289,13 +1296,13 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         setIsSubmitting(false);
         if (error instanceof ApiError && error.status === 409) {
           setSubmitError(
-            error.message || 'Ghế vừa được người khác giữ. Sơ đồ ghế đang được cập nhật.',
+            error.message || t('errorSeatHeldConflict'),
           );
           void refreshSeatMaps();
           return;
         }
         setSubmitError(
-          error instanceof Error ? error.message : 'Không thể tạo đơn đặt vé khứ hồi. Vui lòng thử lại.',
+          error instanceof Error ? error.message : (locale === 'vi' ? 'Không thể tạo đơn đặt vé khứ hồi. Vui lòng thử lại.' : 'Cannot create round-trip booking. Please try again.'),
         );
       }
     }
@@ -1356,7 +1363,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       setPromotionQuoteState({
         requestKey: promotionRequestKey,
         status: 'idle',
-        message: 'Đang xác minh trạng thái tài khoản trước khi kiểm tra mã.',
+        message: locale === 'vi' ? 'Đang xác minh trạng thái tài khoản trước khi kiểm tra mã.' : 'Verifying account status before checking promo code.',
       });
       return;
     }
@@ -1365,7 +1372,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       setPromotionQuoteState({
         requestKey: promotionRequestKey,
         status: 'idle',
-        message: 'Chọn ít nhất một ghế cho chuyến đi để kiểm tra mã khuyến mãi.',
+        message: locale === 'vi' ? 'Chọn ít nhất một ghế cho chuyến đi để kiểm tra mã khuyến mãi.' : 'Select at least one seat for outbound trip to apply promo code.',
       });
       return;
     }
@@ -1374,7 +1381,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       setPromotionQuoteState({
         requestKey: promotionRequestKey,
         status: 'idle',
-        message: 'Nhập số điện thoại để kiểm tra điều kiện sử dụng mã.',
+        message: locale === 'vi' ? 'Nhập số điện thoại để kiểm tra điều kiện sử dụng mã.' : 'Enter phone number to verify promo code eligibility.',
       });
       return;
     }
@@ -1387,7 +1394,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       setPromotionQuoteState({
         requestKey: promotionRequestKey,
         status: 'invalid',
-        message: 'Không thể xác minh chuyến hoặc ghế đã chọn. Hãy tải lại sơ đồ ghế.',
+        message: locale === 'vi' ? 'Không thể xác minh chuyến hoặc ghế đã chọn. Hãy tải lại sơ đồ ghế.' : 'Cannot verify selected trip or seats. Please reload seat map.',
       });
       promotionInputRef.current?.focus();
       return;
@@ -1398,7 +1405,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     setPromotionQuoteState({
       requestKey: promotionRequestKey,
       status: 'loading',
-      message: 'Đang kiểm tra mã khuyến mãi…',
+      message: t('checkingPromo'),
     });
 
     const timeout = setTimeout(async () => {
@@ -1425,13 +1432,13 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           quote.appliedPromotionCode.toUpperCase() !== activePromotionCode ||
           amounts.some((amount) => !Number.isFinite(amount) || amount < 0)
         ) {
-          throw new Error('Máy chủ chưa xác nhận được mã khuyến mãi. Hãy kiểm tra lại mã.');
+          throw new Error(locale === 'vi' ? 'Máy chủ chưa xác nhận được mã khuyến mãi. Hãy kiểm tra lại mã.' : 'Server could not verify promo code. Please check again.');
         }
 
         setPromotionQuoteState({
           requestKey: promotionRequestKey,
           status: 'valid',
-          message: `Mã ${quote.appliedPromotionCode} đã được áp dụng.`,
+          message: t('promoAppliedSuccess', { code: quote.appliedPromotionCode }),
           quote,
         });
       } catch (error) {
@@ -1442,7 +1449,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           message:
             error instanceof Error
               ? error.message
-              : 'Không thể kiểm tra mã khuyến mãi. Vui lòng thử lại.',
+              : (locale === 'vi' ? 'Không thể kiểm tra mã khuyến mãi. Vui lòng thử lại.' : 'Cannot verify promo code. Please try again.'),
         });
         promotionInputRef.current?.focus();
       }
@@ -1512,7 +1519,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#F05929] transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" />
-            Quay lại
+            {t('actionBack')}
           </button>
         </div>
       </div>
@@ -1523,7 +1530,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             {/* Chọn ghế 2 chiều */}
             <div className="flex flex-col md:flex-row border-b border-slate-200 divide-y md:divide-y-0 md:divide-x divide-slate-200">
               <SeatGrid
-                title="Chuyến đi"
+                title={t('outboundTripLeg')}
                 date={departureLabel}
                 vehicleType={outboundPost.propertyType}
                 tripSeats={outboundSeatMap}
@@ -1532,7 +1539,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 onVehicleInfoClick={() => setShowVehicleInfoModal(true)}
               />
               <SeatGrid
-                title="Chuyến về"
+                title={t('returnTripLeg')}
                 date={returnLabel}
                 vehicleType={returnPost.propertyType}
                 tripSeats={returnSeatMap}
@@ -1546,18 +1553,17 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-[11px] font-bold text-slate-600">
               <span className="inline-flex items-center gap-2">
                 <SeatIcon className="w-4 h-5 fill-slate-200 stroke-slate-300" />{' '}
-                Đã bán
+                {t('sold')}
               </span>
               <span className="inline-flex items-center gap-2">
-                <SeatIcon className="w-4 h-5 fill-sky-100 stroke-sky-300" /> Còn
-                trống
+                <SeatIcon className="w-4 h-5 fill-sky-100 stroke-sky-300" /> {t('available')}
               </span>
               <span className="inline-flex items-center gap-2">
                 <SeatIcon className="w-4 h-5 fill-[#F5A623] stroke-[#D98A12]" />{' '}
-                Đang chọn
+                {t('selecting')}
               </span>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600 text-[10px] font-bold">
-                Tối đa 5 ghế/chuyến
+                {t('maxSeatsPerTrip')}
               </span>
             </div>
 
@@ -1565,12 +1571,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 border-b border-slate-200 divide-y md:divide-y-0 md:divide-x divide-slate-200">
               <div className="p-4 md:p-5">
                 <h2 className="text-base font-black text-slate-950 mb-4">
-                  Thông tin khách hàng
+                  {t('customerInfo')}
                 </h2>
                 <div className="space-y-4">
                   <label className="block">
                     <span className="text-xs font-bold text-slate-700">
-                      Họ và tên <span className="text-red-500">*</span>
+                      {t('customerName')} <span className="text-red-500">*</span>
                     </span>
                     <div className="mt-1.5 relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1582,7 +1588,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         }`}
                         value={customerName}
                         onChange={(e) => setUserNameOverride(e.target.value)}
-                        placeholder="Nhập họ và tên"
+                        placeholder={t('customerNamePlaceholder')}
                       />
                     </div>
                     {passengerErrors.fullName && (
@@ -1593,7 +1599,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold text-slate-700">
-                      Số điện thoại <span className="text-red-500">*</span>
+                      {t('customerPhone')} <span className="text-red-500">*</span>
                     </span>
                     <div className="mt-1.5 relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1605,7 +1611,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         }`}
                         value={customerPhone}
                         onChange={(e) => setUserPhoneOverride(e.target.value)}
-                        placeholder="Nhập số điện thoại"
+                        placeholder={t('customerPhonePlaceholder')}
                       />
                     </div>
                     {passengerErrors.phoneNumber && (
@@ -1616,7 +1622,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold text-slate-700">
-                      Email <span className="text-red-500">*</span>
+                      {t('customerEmail')} <span className="text-red-500">*</span>
                     </span>
                     <div className="mt-1.5 relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1629,7 +1635,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         }`}
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
-                        placeholder="Nhập email"
+                        placeholder={t('customerEmailPlaceholder')}
                       />
                     </div>
                     {passengerErrors.email && (
@@ -1643,26 +1649,17 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
               <div className="p-4 md:p-5">
                 <h2 className="text-base font-black text-accent mb-4 uppercase">
-                  Điều khoản & Lưu ý
+                  {t('termsAndNotes')}
                 </h2>
                 <div className="space-y-3 text-[11px] font-semibold text-slate-700 leading-relaxed">
                   <p className="text-accent font-black">
-                    Quý khách vui lòng đăng nhập tài khoản để nhận chương trình
-                    khuyến mãi.
+                    {t('termsLoginRewardNotice')}
                   </p>
                   <p>
-                    (*) Quý khách vui lòng có mặt tại bến xuất phát của xe trước
-                    ít nhất 30 phút giờ xe khởi hành, mang theo thông báo đã
-                    thanh toán vé thành công. Vui lòng liên hệ Trung tâm tổng
-                    đài <strong className="text-accent">1900 6067</strong> để
-                    được hỗ trợ.
+                    {t('termsArriveEarlyNotice')}
                   </p>
                   <p>
-                    (*) Nếu quý khách có nhu cầu trung chuyển, vui lòng liên hệ
-                    Tổng đài trung chuyển{' '}
-                    <strong className="text-accent">1900 6918</strong> trước khi
-                    đặt vé. Chúng tôi không đón/trung chuyển tại những điểm xe
-                    trung chuyển không thể tới được.
+                    {t('termsShuttleHotlineNotice', { hotline: '1900 6918' })}
                   </p>
                 </div>
               </div>
@@ -1678,14 +1675,14 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 className="text-base font-black text-slate-950 mb-3 flex items-center gap-2"
               >
                 <Tag className="w-4 h-4 text-accent" />
-                Mã khuyến mãi
+                {t('promoCodeTitle')}
               </h2>
               <div className="max-w-2xl">
                 <label
                   htmlFor="booking-promotion-code"
                   className="block text-xs font-bold text-slate-700 mb-1.5"
                 >
-                  Nhập một mã cho đơn đặt vé khứ hồi
+                  {t('enterPromoCode')}
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -1710,7 +1707,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           ? 'border-emerald-500 focus:border-emerald-500'
                           : 'border-slate-300 focus:border-accent'
                     }`}
-                    placeholder="Ví dụ: VEXGO50"
+                    placeholder={t('promoCodePlaceholder')}
                   />
                   <button
                     type="button"
@@ -1767,9 +1764,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         </div>
                         <div className="text-left">
                           <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                            Chọn mã ưu đãi có sẵn
+                            {t('promoAvailableVouchers')}
                             <span className="rounded-full bg-accent px-1.5 py-0.2 text-[10px] font-extrabold text-white">
-                              {availablePromotions.length} mã
+                              {t('promoVouchersCount', { count: availablePromotions.length })}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 font-medium">
@@ -1781,7 +1778,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1 text-xs font-bold text-accent group-hover:translate-x-0.5 transition-transform">
-                        <span>{activePromotionCode ? 'Đổi mã' : 'Chọn mã'}</span>
+                        <span>{activePromotionCode ? t('promoChangeCode') : t('promoSelectCode')}</span>
                         <ChevronRight className="h-4 w-4" />
                       </div>
                     </button>
@@ -1808,7 +1805,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </h3>
                       {outboundPickupSurcharge > 0 && (
                         <span className="text-xs font-bold text-accent">
-                          +{outboundPickupSurcharge.toLocaleString('vi-VN')}đ / vé
+                          +{formatMoney(outboundPickupSurcharge)} / {locale === 'vi' ? 'vé' : 'ticket'}
                         </span>
                       )}
                     </div>
@@ -1821,7 +1818,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleOutboundPickupModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP {outboundPickupStations.length > 0 ? `(${outboundPickupStations.length})` : ''}
+                        {t('stationOffice')} {outboundPickupStations.length > 0 ? `(${outboundPickupStations.length})` : ''}
                       </label>
                       <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundPickupMode === 'transfer' ? 'text-accent' : ''} ${outboundPickupTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
@@ -1832,7 +1829,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleOutboundPickupModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển {outboundPickupTransfers.length > 0 ? `(${outboundPickupTransfers.length})` : ''}
+                        {t('shuttleTransfer')} {outboundPickupTransfers.length > 0 ? `(${outboundPickupTransfers.length})` : ''}
                       </label>
                     </div>
                     <select
@@ -1871,7 +1868,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </h3>
                       {outboundDropoffSurcharge > 0 && (
                         <span className="text-xs font-bold text-accent">
-                          +{outboundDropoffSurcharge.toLocaleString('vi-VN')}đ / vé
+                          +{formatMoney(outboundDropoffSurcharge)} / {locale === 'vi' ? 'vé' : 'ticket'}
                         </span>
                       )}
                     </div>
@@ -1884,7 +1881,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleOutboundDropoffModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP {outboundDropoffStations.length > 0 ? `(${outboundDropoffStations.length})` : ''}
+                        {t('stationOffice')} {outboundDropoffStations.length > 0 ? `(${outboundDropoffStations.length})` : ''}
                       </label>
                       <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundDropoffMode === 'transfer' ? 'text-accent' : ''} ${outboundDropoffTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
@@ -1895,7 +1892,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleOutboundDropoffModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển {outboundDropoffTransfers.length > 0 ? `(${outboundDropoffTransfers.length})` : ''}
+                        {t('shuttleTransfer')} {outboundDropoffTransfers.length > 0 ? `(${outboundDropoffTransfers.length})` : ''}
                       </label>
                     </div>
                     <select
@@ -1938,7 +1935,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </h3>
                       {returnPickupSurcharge > 0 && (
                         <span className="text-xs font-bold text-accent">
-                          +{returnPickupSurcharge.toLocaleString('vi-VN')}đ / vé
+                          +{formatMoney(returnPickupSurcharge)} / {locale === 'vi' ? 'vé' : 'ticket'}
                         </span>
                       )}
                     </div>
@@ -1951,7 +1948,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleReturnPickupModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP {returnPickupStations.length > 0 ? `(${returnPickupStations.length})` : ''}
+                        {t('stationOffice')} {returnPickupStations.length > 0 ? `(${returnPickupStations.length})` : ''}
                       </label>
                       <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnPickupMode === 'transfer' ? 'text-accent' : ''} ${returnPickupTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
@@ -1962,7 +1959,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleReturnPickupModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển {returnPickupTransfers.length > 0 ? `(${returnPickupTransfers.length})` : ''}
+                        {t('shuttleTransfer')} {returnPickupTransfers.length > 0 ? `(${returnPickupTransfers.length})` : ''}
                       </label>
                     </div>
                     <select
@@ -2001,7 +1998,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </h3>
                       {returnDropoffSurcharge > 0 && (
                         <span className="text-xs font-bold text-accent">
-                          +{returnDropoffSurcharge.toLocaleString('vi-VN')}đ / vé
+                          +{formatMoney(returnDropoffSurcharge)} / {locale === 'vi' ? 'vé' : 'ticket'}
                         </span>
                       )}
                     </div>
@@ -2014,7 +2011,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleReturnDropoffModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP {returnDropoffStations.length > 0 ? `(${returnDropoffStations.length})` : ''}
+                        {t('stationOffice')} {returnDropoffStations.length > 0 ? `(${returnDropoffStations.length})` : ''}
                       </label>
                       <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnDropoffMode === 'transfer' ? 'text-accent' : ''} ${returnDropoffTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
@@ -2025,7 +2022,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           onChange={() => handleReturnDropoffModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển {returnDropoffTransfers.length > 0 ? `(${returnDropoffTransfers.length})` : ''}
+                        {t('shuttleTransfer')} {returnDropoffTransfers.length > 0 ? `(${returnDropoffTransfers.length})` : ''}
                       </label>
                     </div>
                     <select
@@ -2061,12 +2058,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                      Hành lý / Hàng gửi • Chuyến đi ({outboundRoute})
+                      {t('cargoHoldItems')} • {t('outboundTripLeg')} ({outboundRoute})
                     </h3>
                   </div>
                   {outboundLuggageFee > 0 && (
                     <span className="text-xs font-black text-red-600">
-                      +{outboundLuggageFee.toLocaleString('vi-VN')}đ
+                      +{formatMoney(outboundLuggageFee)}
                     </span>
                   )}
                 </div>
@@ -2075,7 +2072,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   route={outboundRoute}
                   time={outboundDepartureTimeText}
                   seat={`Ghế: ${outboundSeats.join(', ') || '-'}`}
-                  passenger={customerName || 'Khách hàng'}
+                  passenger={customerName || (locale === 'vi' ? 'Khách hàng' : 'Customer')}
                   cargoCapacity={outboundCargoCapacity}
                   tripId={Number(outboundPost.id)}
                   onPackagesChange={setOutboundLuggagePackages}
@@ -2089,7 +2086,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                      Hành lý / Hàng gửi • Chuyến về ({returnRoute})
+                      {t('cargoHoldItems')} • {t('returnTripLeg')} ({returnRoute})
                     </h3>
                   </div>
 
@@ -2102,12 +2099,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         onChange={(e) => handleToggleCopyOutbound(e.target.checked)}
                         className="rounded border-slate-300 text-accent focus:ring-accent accent-accent w-4 h-4 cursor-pointer"
                       />
-                      <span>Áp dụng giống chuyến đi</span>
+                      <span>{t('copyOutboundLuggage')}</span>
                     </label>
 
                     {returnLuggageFee > 0 && (
                       <span className="text-xs font-black text-red-600">
-                        +{returnLuggageFee.toLocaleString('vi-VN')}đ
+                        +{formatMoney(returnLuggageFee)}
                       </span>
                     )}
                   </div>
@@ -2116,10 +2113,10 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 {copyOutboundToReturn ? (
                   <div className="p-4 md:p-6 text-center bg-slate-50/50">
                     <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-accent/10 border border-accent/20 text-xs font-bold text-accent">
-                      <span>✓ Đã sao chép danh sách hàng gửi hầm xe từ chuyến đi</span>
+                      <span>{t('copiedLuggageNotice')}</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
-                      Bỏ tích &quot;Áp dụng giống chuyến đi&quot; ở trên nếu bạn muốn chỉnh sửa hoặc không gửi hàng ở chuyến về.
+                      {t('uncheckCopyNotice')}
                     </p>
                   </div>
                 ) : (
@@ -2128,7 +2125,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     route={returnRoute}
                     time={returnDepartureTimeText}
                     seat={`Ghế: ${returnSeats.join(', ') || '-'}`}
-                    passenger={customerName || 'Khách hàng'}
+                    passenger={customerName || (locale === 'vi' ? 'Khách hàng' : 'Customer')}
                     cargoCapacity={returnCargoCapacity}
                     tripId={Number(returnPost.id)}
                     onPackagesChange={setReturnLuggagePackages}
@@ -2166,9 +2163,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 />
                 <span className="text-[13px] md:text-sm text-slate-800">
                   <span className="text-accent font-bold underline underline-offset-2">
-                    Chấp nhận điều khoản
+                    {t('acceptTerms')}
                   </span>{' '}
-                  đặt vé & chính sách bảo mật thông tin của VexGo
+                  {t('andPrivacyPolicy')}
                 </span>
               </label>
             </div>
@@ -2185,7 +2182,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   </span>
                 </div>
                 <span className="text-2xl font-black text-red-600">
-                  {totalFare.toLocaleString('vi-VN')}đ
+                  {formatMoney(totalFare)}
                 </span>
               </div>
               <div className="flex flex-col gap-3 sm:items-end">
@@ -2209,7 +2206,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     disabled={isSubmitting}
                     className="min-h-11 px-6 rounded-lg bg-accent text-white font-bold text-sm hover:bg-accent-hover shadow-sm disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand transition-colors"
                   >
-                    {isSubmitting ? 'Đang xử lý…' : 'Thanh toán'}
+                    {isSubmitting ? t('actionProcessing') : t('actionPay')}
                   </button>
                 </div>
               </div>
@@ -2221,53 +2218,53 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-black text-slate-900 text-sm">
-                  Thông tin chuyến đi
+                  {t('tripInfoOutbound')}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowOutboundTripModal(true)}
                   className="min-h-11 px-2 text-xs font-bold text-accent hover:underline cursor-pointer"
                 >
-                  Chi tiết
+                  {t('tripDetailsBtn')}
                 </button>
               </div>
               <div className="space-y-2 text-xs font-semibold text-slate-600">
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500">Tuyến xe</span>
+                  <span className="text-slate-500">{t('routeLabel')}</span>
                   <span className="text-right text-slate-900">
                     {outboundRoute}
                   </span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500">Thời gian xuất bến</span>
+                  <span className="text-slate-500">{t('departureTimeLabel')}</span>
                   <span className="text-emerald-600 font-black text-right">
                     {outboundDepartureTimeText}
                   </span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500">Loại ghế</span>
+                  <span className="text-slate-500">{t('seatTypeLabel')}</span>
                   <span className="text-slate-900 font-bold">
-                    {outboundPost.propertyType?.toUpperCase().includes('GIƯỜNG') || outboundTripSeats.some((s) => s.position?.includes('Tầng')) ? 'Giường nằm' : 'Ghế ngồi'}
+                    {outboundPost.propertyType?.toUpperCase().includes('GIƯỜNG') || outboundTripSeats.some((s) => s.position?.includes('Tầng')) ? (locale === 'vi' ? 'Giường nằm' : 'Sleeper') : (locale === 'vi' ? 'Ghế ngồi' : 'Seater')}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Số lượng ghế</span>
+                  <span className="text-slate-500">{t('seatCountLabel')}</span>
                   <span className="text-slate-900">
-                    {outboundSeats.length} Ghế
+                    {t('seatsQuantity', { count: outboundSeats.length })}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Số ghế</span>
+                  <span className="text-slate-500">{t('seatNumbersLabel')}</span>
                   <span className="text-brand font-bold">
                     {outboundSeats.join(', ') || '-'}
                   </span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-slate-100">
                   <span className="text-slate-500 font-bold">
-                    Tổng tiền lượt đi
+                    {t('outboundFareLabel')}
                   </span>
                   <span className="text-accent font-black">
-                    {outboundFare.toLocaleString('vi-VN')}đ
+                    {formatMoney(outboundFare)}
                   </span>
                 </div>
               </div>
@@ -2276,53 +2273,53 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-black text-slate-900 text-sm">
-                  Thông tin chuyến về
+                  {t('tripInfoReturn')}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowReturnTripModal(true)}
                   className="min-h-11 px-2 text-xs font-bold text-accent hover:underline cursor-pointer"
                 >
-                  Chi tiết
+                  {t('tripDetailsBtn')}
                 </button>
               </div>
               <div className="space-y-2 text-xs font-semibold text-slate-600">
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500">Tuyến xe</span>
+                  <span className="text-slate-500">{t('routeLabel')}</span>
                   <span className="text-right text-slate-900">
                     {returnRoute}
                   </span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500">Thời gian xuất bến</span>
+                  <span className="text-slate-500">{t('departureTimeLabel')}</span>
                   <span className="text-emerald-600 font-black text-right">
                     {returnDepartureTimeText}
                   </span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500">Loại ghế</span>
+                  <span className="text-slate-500">{t('seatTypeLabel')}</span>
                   <span className="text-slate-900 font-bold">
-                    {returnPost.propertyType?.toUpperCase().includes('GIƯỜNG') || returnTripSeats.some((s) => s.position?.includes('Tầng')) ? 'Giường nằm' : 'Ghế ngồi'}
+                    {returnPost.propertyType?.toUpperCase().includes('GIƯỜNG') || returnTripSeats.some((s) => s.position?.includes('Tầng')) ? (locale === 'vi' ? 'Giường nằm' : 'Sleeper') : (locale === 'vi' ? 'Ghế ngồi' : 'Seater')}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Số lượng ghế</span>
+                  <span className="text-slate-500">{t('seatCountLabel')}</span>
                   <span className="text-slate-900">
-                    {returnSeats.length} Ghế
+                    {t('seatsQuantity', { count: returnSeats.length })}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Số ghế</span>
+                  <span className="text-slate-500">{t('seatNumbersLabel')}</span>
                   <span className="text-brand font-bold">
                     {returnSeats.join(', ') || '-'}
                   </span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-slate-100">
                   <span className="text-slate-500 font-bold">
-                    Tổng tiền lượt về
+                    {t('returnFareLabel')}
                   </span>
                   <span className="text-accent font-black">
-                    {returnFare.toLocaleString('vi-VN')}đ
+                    {formatMoney(returnFare)}
                   </span>
                 </div>
               </div>
@@ -2334,19 +2331,19 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 <div className="flex justify-between items-center mb-3">
                   <div className="flex items-center gap-2">
                     <h3 className="font-black text-slate-900 text-sm">
-                      Hàng gửi hầm xe
+                      {t('cargoHoldItems')}
                     </h3>
                     <button
                       type="button"
                       onClick={() => setShowCargoInfoModal(true)}
                       className="text-xs font-black text-accent hover:underline"
                     >
-                      Chi tiết
+                      {t('tripDetailsBtn')}
                     </button>
                   </div>
                   <div className="flex items-center">
                     <span className="text-[11px] font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-full border border-accent/20">
-                      {allLuggageItems.length} kiện • {Number(luggageWeight.toFixed(2))}kg
+                      {t('cargoPackageCountWeight', { count: allLuggageItems.length, weight: Number(luggageWeight.toFixed(2)) })}
                     </span>
                   </div>
                 </div>
@@ -2360,7 +2357,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
                             <span className="text-slate-500 font-medium">
-                              {item.legTitle === 'Chuyến đi' ? 'Lượt đi:' : 'Lượt về:'}
+                              {item.legTitle === 'Chuyến đi' ? t('outboundLegShort') : t('returnLegShort')}
                             </span>
                             <span>{item.type}</span>
                           </div>
@@ -2371,12 +2368,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           )}
                           {item.category === 'fragile' && (
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
-                              Dễ vỡ
+                              {t('cargoCategoryFragile')}
                             </span>
                           )}
                           {item.category === 'valuable' && (
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
-                              Giá trị cao
+                              {t('cargoCategoryValuable')}
                             </span>
                           )}
                         </div>
@@ -2401,14 +2398,14 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                           <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
                             {item.packageSize && (
                               <span className="bg-accent/10 text-accent font-bold px-1.5 py-0.5 rounded text-[10px]">
-                                Gói Size {item.packageSize}
+                                {locale === 'vi' ? 'Gói Size' : 'Package Size'} {item.packageSize}
                               </span>
                             )}
                             <span>
                               {item.weight > 0 ? (
-                                <strong className="text-slate-800">Tối đa {Number(item.weight.toFixed(2))} kg</strong>
+                                <strong className="text-slate-800">{locale === 'vi' ? 'Tối đa' : 'Max'} {Number(item.weight.toFixed(2))} kg</strong>
                               ) : (
-                                <span className="text-slate-600 font-normal">Chưa chọn gói</span>
+                                <span className="text-slate-600 font-normal">{locale === 'vi' ? 'Chưa chọn gói' : 'Package not selected'}</span>
                               )}
                             </span>
                             {item.length && item.width && item.height ? (
@@ -2434,11 +2431,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         const itemFee = calculateLuggageFee([item], itemPackages);
                         return itemFee > 0 ? (
                           <span className="shrink-0 text-right text-xs font-bold text-red-600">
-                            {itemFee.toLocaleString('vi-VN')}đ
+                            {formatMoney(itemFee)}
                           </span>
                         ) : (
                           <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
-                            Theo bảng cước tuyến
+                            {t('cargoFeePerRouteRate')}
                           </span>
                         );
                       })()}
@@ -2450,24 +2447,24 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
               <h3 className="font-black text-slate-900 text-sm mb-4 flex items-center gap-1.5">
-                Chi tiết giá <Info className="w-3.5 h-3.5 text-accent" />
+                {t('priceDetails')} <Info className="w-3.5 h-3.5 text-accent" />
               </h3>
               <div className="space-y-3 text-xs font-semibold text-slate-600">
                 <div className="flex justify-between">
-                  <span>Giá vé lượt đi</span>
+                  <span>{t('outboundFareWithCount', { count: outboundSeats.length })}</span>
                   <span>{outboundFare.toLocaleString('vi-VN')}đ</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Giá vé lượt về</span>
+                  <span>{t('returnFareWithCount', { count: returnSeats.length })}</span>
                   <span>{returnFare.toLocaleString('vi-VN')}đ</span>
                 </div>
                 {promotionQuote && promotionDiscountAmount > 0 && (
                   <div className="flex justify-between text-emerald-700">
                     <span className="font-semibold flex items-center gap-1">
-                      Giảm giá ({promotionQuote.appliedPromotionCode})
+                      {t('discountWithCode', { code: promotionQuote.appliedPromotionCode || '' })}
                     </span>
                     <strong className="font-bold">
-                      −{promotionDiscountAmount.toLocaleString('vi-VN')}đ
+                      −{formatMoney(promotionDiscountAmount)}
                     </strong>
                   </div>
                 )}
@@ -2477,7 +2474,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   hasCargo={hasCargoItems}
                 />
                 <div className="flex justify-between">
-                  <span>Phí thanh toán</span>
+                  <span>{t('paymentFee')}</span>
                   <span>0đ</span>
                 </div>
                 <div className="flex justify-between pt-3 border-t border-slate-200">
@@ -2485,7 +2482,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     {totalFareLabel}
                   </span>
                   <span className="text-sm font-black text-accent">
-                    {totalFare.toLocaleString('vi-VN')}đ
+                    {formatMoney(totalFare)}
                   </span>
                 </div>
               </div>
@@ -2507,17 +2504,17 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
                 <h2 className="text-base font-black text-slate-950">
-                  Chi tiết hàng gửi hầm xe
+                  {t('cargoHoldItemsDetailModalTitle')}
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Tổng cộng: {allLuggageItems.length} kiện • {Number(luggageWeight.toFixed(2))}kg
+                  {locale === 'vi' ? 'Tổng cộng: ' : 'Total: '}{t('cargoPackageCountWeight', { count: allLuggageItems.length, weight: Number(luggageWeight.toFixed(2)) })}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCargoInfoModal(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
-                aria-label="Đóng chi tiết hàng gửi"
+                aria-label={t('cargoHoldItemsDetailModalTitle')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2542,11 +2539,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       <div className="flex items-center gap-2 flex-wrap">
                         <strong className="text-slate-900 font-bold">
                           <span className="text-slate-500 font-medium mr-1.5">
-                            {item.legTitle === 'Chuyến đi' ? 'Lượt đi:' : 'Lượt về:'}
+                            {item.legTitle === 'Chuyến đi' ? t('outboundLegShort') : t('returnLegShort')}
                           </span>
                           {isMoto || isBike
-                            ? `Phương tiện: ${item.type}`
-                            : `Kiện: ${item.customTypeName?.trim() ? `${item.type} (${item.customTypeName.trim()})` : item.type}`}
+                            ? `${locale === 'vi' ? 'Phương tiện: ' : 'Vehicle: '}${item.type}`
+                            : `${locale === 'vi' ? 'Kiện: ' : 'Package: '}${item.customTypeName?.trim() ? `${item.type} (${item.customTypeName.trim()})` : item.type}`}
                         </strong>
                         {item.quantity > 1 && (
                           <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
@@ -2577,7 +2574,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                             {actualW > 0 ? (
                               <strong className="text-slate-800 font-semibold">{Number(actualW.toFixed(2))} kg</strong>
                             ) : (
-                              <span className="text-slate-600 font-normal">Chưa nhập khối lượng</span>
+                              <span className="text-slate-600 font-normal">{locale === 'vi' ? 'Chưa nhập khối lượng' : 'Weight not specified'}</span>
                             )}
                           </span>
                           {item.length && item.width && item.height ? (
@@ -2586,7 +2583,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                               <span>{item.length}×{item.width}×{item.height}cm</span>
                               {volW > actualW && (
                                 <span className="text-accent font-semibold">
-                                  ({volW}kg quy đổi)
+                                  {t('cargoVolumetricWeight', { weight: volW })}
                                 </span>
                               )}
                             </>
@@ -2606,11 +2603,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       const itemFee = calculateLuggageFee([item], itemPackages);
                       return itemFee > 0 ? (
                         <span className="font-extrabold text-red-600">
-                          +{itemFee.toLocaleString('vi-VN')}đ
+                          +{formatMoney(itemFee)}
                         </span>
                       ) : (
                         <span className="font-bold text-emerald-600">
-                          Theo bảng cước
+                          {t('cargoFeePerRouteRate')}
                         </span>
                       );
                     })()}
@@ -2621,11 +2618,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
               <div>
-                <span className="font-bold text-slate-600 block">Cước hàng dự tính</span>
-                <span className="text-[11px] text-amber-600 font-medium block">Thanh toán tại bến khi gửi, không cộng vào tiền vé</span>
+                <span className="font-bold text-slate-600 block">{locale === 'vi' ? 'Cước hàng dự tính' : 'Estimated freight fee'}</span>
+                <span className="text-[11px] text-amber-600 font-medium block">{t('estimatedCargoFeeNotice')}</span>
               </div>
               <strong className="text-amber-700 text-sm font-bold">
-                {luggageFee > 0 ? `${luggageFee.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
+                {luggageFee > 0 ? formatMoney(luggageFee) : (locale === 'vi' ? 'Miễn phí' : 'Free')}
               </strong>
             </div>
           </section>
@@ -2635,8 +2632,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       <FeaturePlaceholderModal
         isOpen={showVehicleInfoModal}
         onClose={() => setShowVehicleInfoModal(false)}
-        title="Tính năng sắp có"
-        message="Thông tin xe sẽ được bổ sung ở phiên bản sau."
+        title={t('vehicleInfoModalTitle')}
+        message={t('vehicleInfoModalDesc')}
       />
 
       {/* Outbound Trip Detail Modal */}
@@ -2652,7 +2649,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-slate-950">
-                  Thông tin chuyến đi (Lượt đi)
+                  {t('outboundTripModalTitle')}
                 </h2>
                 <span className="w-5 h-5 rounded-full border-[1.5px] border-accent text-accent flex items-center justify-center font-black text-[10px]">
                   i
@@ -2662,7 +2659,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 type="button"
                 onClick={() => setShowOutboundTripModal(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
-                aria-label="Đóng chi tiết chuyến đi"
+                aria-label={t('outboundTripModalTitle')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2671,42 +2668,42 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="mt-4 rounded-lg border border-slate-200 p-3 bg-slate-50">
               <div className="flex flex-col gap-2.5 text-xs">
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Tuyến xe</span>
+                  <span className="font-bold text-slate-500">{t('routeLabel')}</span>
                   <strong className="text-right text-slate-950">
                     {outboundRoute}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Xuất bến</span>
+                  <span className="font-bold text-slate-500">{t('departureTimeLabel')}</span>
                   <strong className="text-right text-emerald-600">
                     {outboundDepartureTimeText}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Loại ghế</span>
+                  <span className="font-bold text-slate-500">{t('seatTypeLabel')}</span>
                   <strong className="text-right text-slate-950">
-                    {outboundPost.propertyType?.toUpperCase().includes('GIƯỜNG') || outboundTripSeats.some((s) => s.position?.includes('Tầng')) ? 'Giường nằm' : 'Ghế ngồi'}
+                    {outboundPost.propertyType?.toUpperCase().includes('GIƯỜNG') || outboundTripSeats.some((s) => s.position?.includes('Tầng')) ? (locale === 'vi' ? 'Giường nằm' : 'Sleeper') : (locale === 'vi' ? 'Ghế ngồi' : 'Seater')}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Số lượng ghế</span>
+                  <span className="font-bold text-slate-500">{t('seatCountLabel')}</span>
                   <strong className="text-right text-slate-950">
                     {outboundSeats.length}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Số ghế</span>
+                  <span className="font-bold text-slate-500">{t('seatNumbersLabel')}</span>
                   <strong className="text-right text-brand font-bold">
-                    {outboundSeats.join(', ') || 'Chưa chọn'}
+                    {outboundSeats.join(', ') || t('unselected')}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2 pt-2.5 border-t border-slate-200 mt-0.5">
-                  <span className="font-black text-slate-700">Tổng tiền lượt đi</span>
+                  <span className="font-black text-slate-700">{t('outboundFareLabel')}</span>
                   <strong className="text-right text-red-600 text-sm">
                     {outboundFare.toLocaleString('vi-VN')}đ
                   </strong>
@@ -2730,7 +2727,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-slate-950">
-                  Thông tin chuyến đi (Lượt về)
+                  {t('returnTripModalTitle')}
                 </h2>
                 <span className="w-5 h-5 rounded-full border-[1.5px] border-accent text-accent flex items-center justify-center font-black text-[10px]">
                   i
@@ -2740,7 +2737,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 type="button"
                 onClick={() => setShowReturnTripModal(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
-                aria-label="Đóng chi tiết chuyến về"
+                aria-label={t('returnTripModalTitle')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2749,42 +2746,42 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="mt-4 rounded-lg border border-slate-200 p-3 bg-slate-50">
               <div className="flex flex-col gap-2.5 text-xs">
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Tuyến xe</span>
+                  <span className="font-bold text-slate-500">{t('routeLabel')}</span>
                   <strong className="text-right text-slate-950">
                     {returnRoute}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Xuất bến</span>
+                  <span className="font-bold text-slate-500">{t('departureTimeLabel')}</span>
                   <strong className="text-right text-emerald-600">
                     {returnDepartureTimeText}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Loại ghế</span>
+                  <span className="font-bold text-slate-500">{t('seatTypeLabel')}</span>
                   <strong className="text-right text-slate-950">
-                    {returnPost.propertyType?.toUpperCase().includes('GIƯỜNG') || returnTripSeats.some((s) => s.position?.includes('Tầng')) ? 'Giường nằm' : 'Ghế ngồi'}
+                    {returnPost.propertyType?.toUpperCase().includes('GIƯỜNG') || returnTripSeats.some((s) => s.position?.includes('Tầng')) ? (locale === 'vi' ? 'Giường nằm' : 'Sleeper') : (locale === 'vi' ? 'Ghế ngồi' : 'Seater')}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Số lượng ghế</span>
+                  <span className="font-bold text-slate-500">{t('seatCountLabel')}</span>
                   <strong className="text-right text-slate-950">
                     {returnSeats.length}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2">
-                  <span className="font-bold text-slate-500">Số ghế</span>
+                  <span className="font-bold text-slate-500">{t('seatNumbersLabel')}</span>
                   <strong className="text-right text-brand font-bold">
-                    {returnSeats.join(', ') || 'Chưa chọn'}
+                    {returnSeats.join(', ') || t('unselected')}
                   </strong>
                 </div>
 
                 <div className="flex justify-between gap-2 pt-2.5 border-t border-slate-200 mt-0.5">
-                  <span className="font-black text-slate-700">Tổng tiền lượt về</span>
+                  <span className="font-black text-slate-700">{t('returnFareLabel')}</span>
                   <strong className="text-right text-red-600 text-sm">
                     {returnFare.toLocaleString('vi-VN')}đ
                   </strong>
@@ -2804,7 +2801,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         >
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">
-              Thông tin khách hàng chưa đầy đủ
+              {t('errorIncompleteCustomerInfoTitle')}
             </h3>
             <p className="mt-3 whitespace-pre-line text-sm text-slate-600">
               {customerInfoAlertMessage}
@@ -2815,7 +2812,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 onClick={() => setShowCustomerInfoAlert(false)}
                 className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 cursor-pointer"
               >
-                Đã hiểu
+                {t('btnUnderstood')}
               </button>
             </div>
           </div>

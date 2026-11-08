@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -31,6 +32,8 @@ export const AlternativeTripsSection: React.FC<AlternativeTripsProps> = ({
   className = '',
   onSelectAlternative,
 }) => {
+  const t = useTranslations('trips');
+  const locale = useLocale();
   const [alternatives, setAlternatives] = useState<AlternativeTripItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -69,7 +72,7 @@ export const AlternativeTripsSection: React.FC<AlternativeTripsProps> = ({
       <div className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
         <div className="mb-4">
           <h3 className="font-black text-slate-900 text-base">
-            Gợi ý chuyến thay thế từ nhà xe khác
+            {t('alternativeModalTitle')}
           </h3>
         </div>
         <div className="flex items-center justify-center py-8 text-slate-400 gap-2 text-sm font-semibold">
@@ -92,7 +95,7 @@ export const AlternativeTripsSection: React.FC<AlternativeTripsProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-blue-100/80">
         <div>
           <h3 className="font-black text-slate-900 text-base">
-            Gợi ý chuyến thay thế từ nhà xe khác
+            {t('alternativeModalTitle')}
           </h3>
           <p className="text-xs text-slate-500 font-medium">
             Cùng tuyến, cùng giờ khởi hành và giá vé tiết kiệm hơn hoặc tương đương
@@ -185,16 +188,16 @@ export const AlternativeTripsSection: React.FC<AlternativeTripsProps> = ({
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
                   {savings > 0 && (
                     <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Tiết kiệm {formatCurrency(savings)}
+                      {t('saving', { amount: formatCurrency(savings) })}
                     </span>
                   )}
                   {item.recommendationReason.includes('Cùng giờ') && (
                     <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">
-                      Cùng giờ khởi hành
+                      {t('sameDepartureTime')}
                     </span>
                   )}
                   <span className="text-[11px] font-bold text-[#00b14f] bg-emerald-50/60 px-2 py-0.5 rounded border border-emerald-200/60">
-                    Còn {item.availableSeats} chỗ trống
+                    {t('seatsLeft', { count: item.availableSeats })}
                   </span>
                 </div>
               </div>
@@ -203,7 +206,7 @@ export const AlternativeTripsSection: React.FC<AlternativeTripsProps> = ({
               <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-50/50 mt-auto">
                 <div className="shrink-0">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                    Giá vé
+                    {t('fareLabel')}
                   </span>
                   <span className="text-lg sm:text-xl font-black text-[#f05123] whitespace-nowrap">
                     {formatCurrency(item.price)}
@@ -216,14 +219,14 @@ export const AlternativeTripsSection: React.FC<AlternativeTripsProps> = ({
                     onClick={() => onSelectAlternative(item)}
                     className="bg-[#f05123] hover:bg-[#d8441a] text-white px-4 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                   >
-                    Chọn chuyến này
+                    {t('chooseThisTrip')}
                   </button>
                 ) : (
                   <Link
                     href={`/trips/${item.tripId}`}
                     className="bg-[#f05123] hover:bg-[#d8441a] text-white px-4 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                   >
-                    Chọn chuyến này
+                    {t('chooseThisTrip')}
                   </Link>
                 )}
               </div>

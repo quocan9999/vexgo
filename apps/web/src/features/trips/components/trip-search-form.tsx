@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { LocationPicker } from '@/features/locations/components/location-picker';
 import type { LocationOption } from '@/features/locations/services/locations.api';
@@ -19,6 +20,8 @@ import { AlertModal } from '@/components/ui/alert-modal';
 
 export function TripSearchForm({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
+  const t = useTranslations('trips');
+  const tBooking = useTranslations('booking');
   const [service, setService] = useState<'trip' | 'shipment'>('trip');
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
@@ -48,7 +51,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
     if (newDate && newDate < todayStr) {
       setAlertConfig({
         isOpen: true,
-        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+        title: t('errDepartDatePast'),
       });
       setDate(todayStr);
       if (roundTrip && returnDate && returnDate < todayStr) {
@@ -67,7 +70,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
     if (newDate && newDate < todayStr) {
       setAlertConfig({
         isOpen: true,
-        title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+        title: t('errReturnDatePast'),
       });
       setReturnDate(minDate);
       return;
@@ -75,7 +78,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
     if (date && newDate && date > newDate) {
       setAlertConfig({
         isOpen: true,
-        title: 'Ngày đi không được lớn hơn ngày về',
+        title: t('errReturnDateBeforeDepart'),
       });
       setReturnDate(minDate);
       return;
@@ -89,28 +92,28 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
       if (!origin && !destination) {
         setAlertConfig({
           isOpen: true,
-          title: 'Vui lòng chọn điểm gửi và điểm nhận hàng',
+          title: t('errSenderReceiverBothRequired'),
         });
         return;
       }
       if (!origin) {
         setAlertConfig({
           isOpen: true,
-          title: 'Vui lòng chọn điểm gửi hàng để tiếp tục',
+          title: t('errSenderPointRequired'),
         });
         return;
       }
       if (!destination) {
         setAlertConfig({
           isOpen: true,
-          title: 'Vui lòng chọn điểm nhận hàng để tiếp tục',
+          title: t('errReceiverPointRequired'),
         });
         return;
       }
       if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
         setAlertConfig({
           isOpen: true,
-          title: 'Điểm gửi và điểm nhận không được trùng nhau',
+          title: t('errSameSenderReceiver'),
         });
         return;
       }
@@ -123,28 +126,28 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
     if (!origin && !destination) {
       setAlertConfig({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đi và điểm đến để tìm chuyến xe',
+        title: t('errOriginDestBothRequired'),
       });
       return;
     }
     if (!origin) {
       setAlertConfig({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đi để tiếp tục',
+        title: t('errOriginRequired'),
       });
       return;
     }
     if (!destination) {
       setAlertConfig({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đến để tiếp tục',
+        title: t('errDestRequired'),
       });
       return;
     }
     if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
       setAlertConfig({
         isOpen: true,
-        title: 'Điểm đi và điểm đến không được trùng nhau',
+        title: t('errSameOriginDest'),
       });
       return;
     }
@@ -152,20 +155,20 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
     if (!date || date < todayStr) {
       setAlertConfig({
         isOpen: true,
-        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+        title: t('errDepartDatePast'),
       });
       setDate(todayStr);
       return;
     }
     if (roundTrip) {
       if (!returnDate) {
-        setAlertConfig({ isOpen: true, title: 'Vui lòng chọn ngày về' });
+        setAlertConfig({ isOpen: true, title: t('errReturnDateRequired') });
         return;
       }
       if (returnDate < todayStr) {
         setAlertConfig({
           isOpen: true,
-          title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+          title: t('errReturnDatePast'),
         });
         setReturnDate(date || todayStr);
         return;
@@ -173,7 +176,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
       if (date && returnDate && date > returnDate) {
         setAlertConfig({
           isOpen: true,
-          title: 'Ngày đi không được lớn hơn ngày về',
+          title: t('errReturnDateBeforeDepart'),
         });
         return;
       }
@@ -358,7 +361,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
         isOpen={alertConfig.isOpen}
         title={alertConfig.title}
         variant="warning"
-        confirmText="Đã hiểu"
+        confirmText={tBooking('btnUnderstood')}
         onClose={() => setAlertConfig({ isOpen: false, title: '' })}
       />
     </>

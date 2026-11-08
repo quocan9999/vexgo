@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 
 interface LuggageSummaryProps {
   totalWeight: number;
@@ -13,19 +14,29 @@ export const LuggageSummary: React.FC<LuggageSummaryProps> = ({
   fee,
   hasCargo = false,
 }) => {
+  const t = useTranslations('booking');
+  const locale = useLocale();
+
   const cargoIsPresent = hasCargo || totalWeight > 0 || fee > 0;
   if (!cargoIsPresent) return null;
+
+  const formattedFee =
+    fee > 0
+      ? locale === 'vi'
+        ? `${fee.toLocaleString('vi-VN')}đ`
+        : `${fee.toLocaleString('en-US')} VND`
+      : t('cargoFeeEstimatedAtTerminal');
 
   return (
     <div className="flex justify-between gap-3 text-sm">
       <span className="text-slate-500 font-semibold">
-        Hàng gửi hầm xe ({totalWeight}kg)
+        {t('cargoHoldItems')} ({totalWeight}kg)
         <span className="block text-[11px] text-amber-600 font-normal">
-          (Thanh toán tại bến khi gửi, không cộng vào tiền vé)
+          ({t('estimatedCargoFeeNotice')})
         </span>
       </span>
       <strong className={fee > 0 ? 'text-amber-700 font-bold' : 'text-slate-600'}>
-        {fee > 0 ? `${fee.toLocaleString('vi-VN')}đ` : 'Tính khi đặt vé'}
+        {formattedFee}
       </strong>
     </div>
   );
