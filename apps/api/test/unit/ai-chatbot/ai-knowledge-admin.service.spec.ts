@@ -96,7 +96,7 @@ describe('AiKnowledgeAdminService', () => {
       vi.mocked(mockPrisma.aiKnowledgeDocument.count).mockResolvedValue(0);
       vi.mocked(mockPrisma.aiKnowledgeDocument.findMany).mockResolvedValue([]);
 
-      await service.getDocuments({}, tenantAdminPrincipal);
+      await service.getDocuments({ page: 1, pageSize: 10 } as any, tenantAdminPrincipal);
 
       const callArgs = vi.mocked(mockPrisma.aiKnowledgeDocument.findMany).mock.calls[0][0];
       expect(callArgs?.where?.OR).toEqual([
@@ -107,7 +107,7 @@ describe('AiKnowledgeAdminService', () => {
 
     it('should throw ForbiddenException if TENANT_ADMIN attempts to query another carrier', async () => {
       await expect(
-        service.getDocuments({ nhaXeId: 99 }, tenantAdminPrincipal),
+        service.getDocuments({ page: 1, pageSize: 10, nhaXeId: 99 } as any, tenantAdminPrincipal),
       ).rejects.toThrow(ForbiddenException);
     });
   });
@@ -151,9 +151,9 @@ describe('AiKnowledgeAdminService', () => {
 
   describe('3. createDocument (Pipeline Chunking & Embedding)', () => {
     it('should allow SUPER_ADMIN to create a GLOBAL document and trigger chunking & embedding pipeline', async () => {
-      vi.mocked(mockPrisma.aiKnowledgeDocument.findUnique).mockImplementation(async ({ where }) => {
+      (mockPrisma.aiKnowledgeDocument.findUnique as any).mockImplementation(async ({ where }: any) => {
         if ('documentCode' in where) return null; // code not taken
-        return { id: 10, title: 'Quy định đón trả khách', chunks: [{ id: 1 }] } as any;
+        return { id: 10, title: 'Quy định đón trả khách', chunks: [{ id: 1 }] };
       });
       vi.mocked(mockPrisma.aiKnowledgeDocument.create).mockResolvedValue({ id: 10 } as any);
 

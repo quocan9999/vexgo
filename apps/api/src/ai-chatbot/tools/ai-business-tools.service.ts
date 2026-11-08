@@ -1,4 +1,11 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { TripsService } from '../../trips/trips.service.js';
 import { TicketsService } from '../../tickets/tickets.service.js';
@@ -7,6 +14,20 @@ import { PromotionsService } from '../../promotions/promotions.service.js';
 import { LocationsService } from '../../locations/locations.service.js';
 import { locationSearchTerms } from '../../locations/location-search.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import {
+  normalizePhone,
+  VIETNAM_PHONE_NUMBER_REGEX,
+} from '../../common/validation/vietnamese-phone.js';
+
+function verifiedLookupPhone(phone?: string): string {
+  if (!phone || !VIETNAM_PHONE_NUMBER_REGEX.test(phone.trim())) {
+    throw new BadRequestException({
+      error: 'AI_LOOKUP_PHONE_REQUIRED',
+      message: 'Cần số điện thoại đầy đủ để xác minh tra cứu.',
+    });
+  }
+  return normalizePhone(phone.trim());
+}
 
 export interface TripSearchResultItem {
   tripId: number;
@@ -37,6 +58,7 @@ export interface TicketLookupResult {
   paymentStatus: string;
   cancellationEligible: boolean;
   cancellationFeeRate: number;
+  cancellationReason?: string;
 }
 
 export interface ShipmentLookupResult {
@@ -90,7 +112,14 @@ export class AiBusinessToolsService {
     maxPrice?: number;
     nhaXeId?: number;
   }): Promise<{ trips: TripSearchResultItem[]; totalFound: number }> {
-    const { originQuery, destinationQuery, departureDate, timeOfDay, maxPrice, nhaXeId } = params;
+    const {
+      originQuery,
+      destinationQuery,
+      departureDate,
+      timeOfDay,
+      maxPrice,
+      nhaXeId,
+    } = params;
 
     // Chuẩn hóa ngày tìm kiếm
     let dateFilter: Prisma.DateTimeFilter | Date;
@@ -144,8 +173,12 @@ export class AiBusinessToolsService {
     }
 
     // Lấy bảng giá niêm yết cho các chuyến
-    const latestDate = new Date(Math.max(...trips.map((t) => t.ngayKhoiHanh.getTime())));
-    const earliestDate = new Date(Math.min(...trips.map((t) => t.ngayKhoiHanh.getTime())));
+    const latestDate = new Date(
+      Math.max(...trips.map((t) => t.ngayKhoiHanh.getTime())),
+    );
+    const earliestDate = new Date(
+      Math.min(...trips.map((t) => t.ngayKhoiHanh.getTime())),
+    );
 
     const fares = await this.prisma.bangGia.findMany({
       where: {
@@ -158,7 +191,9 @@ export class AiBusinessToolsService {
     const mappedTrips: TripSearchResultItem[] = [];
 
     for (const trip of trips) {
-      const availableSeats = trip.gheChuyenXes.filter((g) => g.trangThai === 'TRONG').length;
+      const availableSeats = trip.gheChuyenXes.filter(
+        (g) => g.trangThai === 'TRONG',
+      ).length;
       if (availableSeats === 0) continue;
 
       // Tìm giá vé
@@ -185,7 +220,9 @@ export class AiBusinessToolsService {
       }
 
       const depTimeStr = trip.gioKhoiHanh.toISOString().slice(11, 16);
-      const arrTimeStr = trip.gioDen ? trip.gioDen.toISOString().slice(11, 16) : null;
+      const arrTimeStr = trip.gioDen
+        ? trip.gioDen.toISOString().slice(11, 16)
+        : null;
 
       mappedTrips.push({
         tripId: trip.chuyenXeId,
@@ -215,6 +252,7 @@ export class AiBusinessToolsService {
     ticketCode: string;
     phoneNumber?: string;
   }): Promise<TicketLookupResult> {
+    const phone = verifiedLookupPhone(params.phoneNumber);
     const rawCode = params.ticketCode.trim();
 
     // Tìm vé theo mã vé, mã phiếu đặt hoặc mã đơn giao dịch
@@ -232,7 +270,10 @@ export class AiBusinessToolsService {
             donGiaoDich: {
               include: {
                 thanhToans: {
-                  where: { loaiGiaoDich: 'THANH_TOAN', trangThai: 'THANH_CONG' },
+                  where: {
+                    loaiGiaoDich: 'THANH_TOAN',
+                    trangThai: 'THANH_CONG',
+                  },
                   take: 1,
                 },
               },
@@ -253,24 +294,36 @@ export class AiBusinessToolsService {
     });
 
     if (!ticket) {
-      throw new Error(`TICKET_NOT_FOUND: Không tìm thấy vé hoặc mã đơn "${rawCode}".`);
+      throw new Error(
+        `TICKET_NOT_FOUND: Không tìm thấy vé hoặc mã đơn "${rawCode}".`,
+      );
     }
 
     const customerPhone = ticket.phieuDatVe.donGiaoDich.soDienThoaiKhachHang;
-    if (params.phoneNumber) {
-      const cleanInput = params.phoneNumber.replace(/\D/g, '');
-      const cleanDb = customerPhone.replace(/\D/g, '');
-      if (cleanInput.slice(-9) !== cleanDb.slice(-9)) {
-        throw new Error('PHONE_MISMATCH: Số điện thoại xác thực không khớp với thông tin đặt vé.');
-      }
+    if (phone !== normalizePhone(customerPhone)) {
+      throw new NotFoundException({
+        error: 'TICKET_NOT_FOUND',
+        message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+      });
     }
+
+    if (!this.ticketsService)
+      throw new ServiceUnavailableException(
+        'Chưa kiểm tra được điều kiện hủy vé.',
+      );
+    const verified = await this.ticketsService.lookupTicket({
+      ticketCode: ticket.maVe,
+      phoneNumber: phone,
+    });
+    const cancellation = verified.data.cancellation;
 
     const trip = ticket.gheChuyenXe.chuyenXe;
     const depDateStr = trip.ngayKhoiHanh.toISOString().slice(0, 10);
     const depTimeStr = trip.gioKhoiHanh.toISOString().slice(11, 16);
 
-    const price = Number(ticket.giaThucTe || ticket.giaNiemYet);
-    const hasSuccessfulPayment = ticket.phieuDatVe.donGiaoDich.thanhToans.length > 0;
+    const price = Number(ticket.giaThucTe ?? ticket.giaNiemYet);
+    const hasSuccessfulPayment =
+      ticket.phieuDatVe.donGiaoDich.thanhToans.length > 0;
 
     return {
       ticketCode: ticket.maVe,
@@ -284,8 +337,9 @@ export class AiBusinessToolsService {
       seatName: ticket.gheChuyenXe.ghe.tenGhe,
       price,
       paymentStatus: hasSuccessfulPayment ? 'ĐÃ_THANH_TOÁN' : 'CHỜ_THANH_TOÁN',
-      cancellationEligible: ticket.trangThai !== 'HUY',
-      cancellationFeeRate: 0.1,
+      cancellationEligible: cancellation.eligible,
+      cancellationFeeRate: cancellation.cancelFeeRate,
+      cancellationReason: cancellation.reason,
     };
   }
 
@@ -296,6 +350,7 @@ export class AiBusinessToolsService {
     shipmentCode: string;
     phoneNumber?: string;
   }): Promise<ShipmentLookupResult> {
+    const phone = verifiedLookupPhone(params.phoneNumber);
     const rawCode = params.shipmentCode.trim().toUpperCase();
 
     const shipment = await this.prisma.phieuGuiHang.findFirst({
@@ -322,20 +377,20 @@ export class AiBusinessToolsService {
     });
 
     if (!shipment) {
-      throw new Error(`SHIPMENT_NOT_FOUND: Không tìm thấy vận đơn "${rawCode}".`);
+      throw new Error(
+        `SHIPMENT_NOT_FOUND: Không tìm thấy vận đơn "${rawCode}".`,
+      );
     }
 
-    if (params.phoneNumber) {
-      const cleanInput = params.phoneNumber.replace(/\D/g, '');
-      const senderPhone = shipment.donGiaoDich.soDienThoaiKhachHang.replace(/\D/g, '');
-      const receiverPhone = shipment.soDienThoaiNguoiNhan.replace(/\D/g, '');
-
-      if (
-        cleanInput.slice(-9) !== senderPhone.slice(-9) &&
-        cleanInput.slice(-9) !== receiverPhone.slice(-9)
-      ) {
-        throw new Error('PHONE_MISMATCH: Số điện thoại không khớp với người gửi hoặc người nhận.');
-      }
+    const senderPhone = normalizePhone(
+      shipment.donGiaoDich.soDienThoaiKhachHang,
+    );
+    const receiverPhone = normalizePhone(shipment.soDienThoaiNguoiNhan);
+    if (phone !== senderPhone && phone !== receiverPhone) {
+      throw new NotFoundException({
+        error: 'SHIPMENT_NOT_FOUND',
+        message: 'Không tìm thấy vận đơn hoặc thông tin xác minh không khớp.',
+      });
     }
 
     const statusTexts: Record<string, string> = {
@@ -402,7 +457,10 @@ export class AiBusinessToolsService {
       .map((p) => ({
         code: p.maKhuyenMai,
         name: p.tenChuongTrinh,
-        discountType: p.loaiGiamGia === 'PHAN_TRAM' ? 'Giảm theo phần trăm' : 'Giảm tiền mặt',
+        discountType:
+          p.loaiGiamGia === 'PHAN_TRAM'
+            ? 'Giảm theo phần trăm'
+            : 'Giảm tiền mặt',
         discountValue: Number(p.giaTriGiam),
         maxDiscount: p.giamToiDa ? Number(p.giamToiDa) : null,
         minOrderValue: p.giaTriDonToiThieu ? Number(p.giaTriDonToiThieu) : null,

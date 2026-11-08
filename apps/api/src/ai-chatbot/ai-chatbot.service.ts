@@ -5,6 +5,7 @@ import {
   type ChatbotResponse,
 } from './orchestrator/ai-chatbot-orchestrator.service.js';
 import type { SendMessageDto } from './dto/send-message.dto.js';
+import { assertAiSessionAccess } from './ai-session-access.js';
 
 export interface DefaultSuggestion {
   id: string;
@@ -56,7 +57,10 @@ export class AiChatbotService {
   /**
    * Xử lý tin nhắn người dùng và sinh câu trả lời có căn cứ
    */
-  async sendMessage(dto: SendMessageDto, taiKhoanId?: number): Promise<ChatbotResponse> {
+  async sendMessage(
+    dto: SendMessageDto,
+    taiKhoanId?: number,
+  ): Promise<ChatbotResponse> {
     return this.orchestrator.processUserMessage({
       message: dto.message,
       sessionToken: dto.sessionToken,
@@ -68,12 +72,12 @@ export class AiChatbotService {
   /**
    * Khôi phục lịch sử tin nhắn của phiên hội thoại AI
    */
-  async getSessionMessages(sessionToken: string) {
+  async getSessionMessages(sessionToken: string, taiKhoanId?: number) {
     const session = await this.prisma.aiChatSession.findUnique({
       where: { sessionToken },
       include: {
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
             role: true,
@@ -91,10 +95,11 @@ export class AiChatbotService {
     if (!session) {
       throw new NotFoundException({
         error: 'SESSION_NOT_FOUND',
-        message: `Không tìm thấy phiên hội thoại với mã "${sessionToken}".`,
+        message: 'Không tìm thấy phiên hội thoại.',
       });
     }
 
+    await assertAiSessionAccess(this.prisma, session.khachHangId, taiKhoanId);
     return {
       sessionToken: session.sessionToken,
       status: session.status,

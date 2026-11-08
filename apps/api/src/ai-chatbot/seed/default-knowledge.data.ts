@@ -19,7 +19,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Chính sách Hủy vé và Hoàn tiền VexGo',
     category: 'CHINH_SACH_HOAN_HUY',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương II: Đổi trả và Hủy vé] > [Điều 1: Biểu phí & Điều kiện]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương II: Đổi trả và Hủy vé] > [Điều 1: Biểu phí & Điều kiện]',
     rawContent: `1. Thời gian và mức phí hủy vé xe trực tuyến:
 - Hủy vé trước giờ khởi hành trên 24 tiếng: Mức phí hủy vé là 10% giá vé thực tế. Hành khách được hoàn lại 90% số tiền đã thanh toán.
 - Hủy vé trong khoảng từ 2.5 tiếng (2 giờ 30 phút) đến 24 tiếng trước giờ khởi hành: Mức phí hủy vé áp dụng là 20% giá vé. Hành khách được hoàn lại 80% số tiền.
@@ -27,14 +28,15 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
 
 2. Điều kiện ràng buộc khi hủy vé:
 - Đối với đơn đặt vé combo có kèm dịch vụ ký gửi hàng hóa hoặc bưu kiện: Hành khách không thể hủy vé trực tuyến nếu bưu kiện đang trong trạng thái xử lý hoặc chưa được hủy. Vui lòng hủy bưu kiện trước hoặc liên hệ bộ phận hỗ trợ.
-- Tiền hoàn sẽ được hệ thống xử lý tự động và chuyển về tài khoản ngân hàng hoặc ví điện tử hành khách đã dùng để thanh toán trong vòng 24 đến 48 giờ làm việc.`,
+- VexGo không hoàn tiền trực tuyến. Sau khi hủy vé, khách hàng cần liên hệ hỗ trợ hoặc nhà xe để được xác minh và hướng dẫn hoàn tiền. Điều kiện, phí hủy và số tiền dự kiến phải xem tại báo giá hủy của vé cụ thể; AI không tự xác nhận việc hoàn tiền.`,
   },
   {
     documentCode: 'DOC-BAGGAGE-POLICY',
     title: 'Quy định Hành lý Xách tay và Ký gửi',
     category: 'QUY_DINH_HANH_LY',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương III: Hành lý và Hàng gửi kèm] > [Điều 2: Tiêu chuẩn miễn cước]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương III: Hành lý và Hàng gửi kèm] > [Điều 2: Tiêu chuẩn miễn cước]',
     rawContent: `1. Tiêu chuẩn hành lý xách tay và ký gửi miễn cước:
 - Mỗi hành khách có vé hợp lệ được mang theo tối đa 20kg hành lý ký gửi (được cất giữ tại hầm xe) và 01 kiện hành lý xách tay nhỏ gọn (đặt tại vị trí ghế ngồi không làm ảnh hưởng đến hành khách khác).
 - Kích thước tối đa của kiện hành lý ký gửi tiêu chuẩn không vượt quá kích thước vali size 28 (dài x rộng x cao không quá 158cm tổng ba chiều).
@@ -48,7 +50,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Quy định Đặt chỗ, Giữ vé và Thanh toán',
     category: 'THANH_TOAN_GIU_CHO',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương I: Đặt chỗ và Thanh toán] > [Điều 3: Thời hạn giữ chỗ]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương I: Đặt chỗ và Thanh toán] > [Điều 3: Thời hạn giữ chỗ]',
     rawContent: `1. Thời gian giữ chỗ thanh toán (Payment Deadline):
 - Sau khi hành khách chọn chuyến, chọn ghế và hoàn tất bước xác nhận thông tin đặt vé, hệ thống VexGo sẽ tự động khóa và giữ ghế trong thời gian tối đa 10 phút (600 giây).
 - Trong thời gian 10 phút này, ghế được đảm bảo độc quyền cho quý khách và không thể bị người khác đặt trùng.
@@ -64,7 +67,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Quy định Vận chuyển Hàng hóa và Bưu kiện',
     category: 'VAN_CHUYEN_HANG_HOA',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương IV: Dịch vụ Vận chuyển Hàng hóa] > [Điều 4: Phân loại & Tiếp nhận]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương IV: Dịch vụ Vận chuyển Hàng hóa] > [Điều 4: Phân loại & Tiếp nhận]',
     rawContent: `1. Phân loại hàng hóa gửi theo xe khách:
 - Hàng nhẹ (Bưu phẩm, giấy tờ, bưu kiện dưới 5kg): Được bảo quản trong ngăn riêng chống ẩm và va đập.
 - Hàng tiêu chuẩn & cồng kềnh: Thùng carton, bao tải hàng gia dụng, thiết bị máy móc đóng thùng gỗ.
@@ -80,7 +84,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Chương trình Khuyến mãi và Điểm Tích lũy VexGo',
     category: 'KHUYEN_MAI_LOYALTY',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương V: Ưu đãi & Khách hàng thân thiết] > [Điều 5: Mã giảm giá]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương V: Ưu đãi & Khách hàng thân thiết] > [Điều 5: Mã giảm giá]',
     rawContent: `1. Áp dụng mã khuyến mãi khi đặt vé:
 - Khách hàng có thể nhập mã giảm giá tại bước thanh toán đặt vé để được khấu trừ trực tiếp vào giá vé (giảm theo % hoặc giảm số tiền cố định theo điều kiện từng chương trình).
 - Mỗi mã khuyến mãi có điều kiện riêng về giá trị đơn hàng tối thiểu, mức giảm tối đa, thời hạn hiệu lực và số lượt áp dụng còn lại trong hạn mức ngân sách của nhà xe.
@@ -95,7 +100,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Quy định Điểm Đón Trả Khách và Xe Trung Chuyển',
     category: 'FAQ_CHUNG',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương I: Đặt chỗ và Hành trình] > [Điều 6: Đón trả & Trung chuyển]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương I: Đặt chỗ và Hành trình] > [Điều 6: Đón trả & Trung chuyển]',
     rawContent: `1. Thời gian có mặt tại điểm đón:
 - Hành khách cần có mặt tại bến xe, trạm dừng hoặc văn phòng đón khách trước giờ khởi hành dự kiến ít nhất 15 phút để nhân viên nhà xe sắp xếp hành lý và soát vé lên xe.
 - Đối với trường hợp đón dọc đường trên lộ trình được cấp phép, tài xế hoặc phụ xe sẽ chủ động liên hệ trước 15-30 phút qua số điện thoại đặt vé. Hành khách vui lòng giữ máy liên lạc thông suốt.
@@ -109,7 +115,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Quy định Vé Trẻ em và Đối tượng Ưu tiên',
     category: 'FAQ_CHUNG',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương I: Đặt chỗ và Hành trình] > [Điều 7: Trẻ em & Đối tượng chính sách]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương I: Đặt chỗ và Hành trình] > [Điều 7: Trẻ em & Đối tượng chính sách]',
     rawContent: `1. Quy định vé dành cho trẻ em:
 - Trẻ em dưới 6 tuổi hoặc chiều cao dưới 100cm đi cùng người lớn được miễn phí vé nếu ngồi chung ghế/giường với người lớn đi kèm (mỗi người lớn được kèm tối đa 01 trẻ em).
 - Trẻ em từ 6 tuổi trở lên hoặc chiều cao từ 100cm trở lên bắt buộc phải mua vé riêng để đảm bảo an toàn và tiêu chuẩn chỗ ngồi suốt hành trình.
@@ -122,7 +129,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Quy định Vận chuyển Thú cưng và Vật nuôi',
     category: 'FAQ_CHUNG',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương III: Hành lý và Hàng gửi kèm] > [Điều 8: Thú cưng & Động vật sống]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương III: Hành lý và Hàng gửi kèm] > [Điều 8: Thú cưng & Động vật sống]',
     rawContent: `1. Điều kiện tiếp nhận vận chuyển thú cưng (chó, mèo cảnh):
 - Vì lý do vệ sinh chung và tránh gây dị ứng hoặc ảnh hưởng đến các hành khách khác, thú cưng tuyệt đối KHÔNG được mang lên khoang hành khách ngồi chung.
 - Thú cưng bắt buộc phải được nhốt trong lồng/chuồng chuyên dụng có khóa chắc chắn, có khay hứng chất thải và có giấy chứng nhận tiêm phòng dại hợp lệ.
@@ -136,7 +144,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Quy định Xuất Hóa đơn Điện tử VAT',
     category: 'FAQ_CHUNG',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương VI: Hóa đơn & Chứng từ] > [Điều 9: Hóa đơn GTGT]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương VI: Hóa đơn & Chứng từ] > [Điều 9: Hóa đơn GTGT]',
     rawContent: `1. Thời hạn và quy trình yêu cầu xuất hóa đơn VAT:
 - Giá vé xe và cước vận chuyển niêm yết trên VexGo đã bao gồm thuế giá trị gia tăng (VAT) theo quy định hiện hành.
 - Khách hàng có nhu cầu xuất hóa đơn điện tử cho cơ quan, doanh nghiệp cần cung cấp thông tin xuất hóa đơn (Tên công ty, Mã số thuế, Địa chỉ, Email nhận hóa đơn) trong quá trình đặt vé hoặc trong vòng 24 giờ sau khi chuyến xe khởi hành.
@@ -149,7 +158,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Quy trình Xử lý Hành lý Thất lạc và Bỏ quên',
     category: 'FAQ_CHUNG',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương VII: Hỗ trợ Khách hàng] > [Điều 10: Thất lạc hành lý]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương VII: Hỗ trợ Khách hàng] > [Điều 10: Thất lạc hành lý]',
     rawContent: `1. Xử lý khi hành khách để quên đồ đạc trên xe:
 - Ngay khi phát hiện để quên tài sản trên xe sau khi xuống xe, hành khách vui lòng liên hệ ngay với tổng đài CSKH của VexGo hoặc hotline nhà xe, cung cấp mã vé, số ghế, biển số xe và mô tả chi tiết tài sản.
 - Đội ngũ điều hành sẽ lập tức liên lạc với tài xế và phụ xe để kiểm tra thực tế trên xe.
@@ -163,7 +173,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Bảo mật Tài khoản và Xác thực Mã OTP',
     category: 'FAQ_CHUNG',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương VIII: An toàn Thông tin] > [Điều 11: Tài khoản & OTP]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương VIII: An toàn Thông tin] > [Điều 11: Tài khoản & OTP]',
     rawContent: `1. Đăng ký và bảo vệ tài khoản:
 - Tài khoản khách hàng trên VexGo được định danh chính xác bằng số điện thoại di động chính chủ.
 - Mọi yêu cầu đăng ký mới, đăng nhập lần đầu trên thiết bị lạ hoặc đổi mật khẩu đều bắt buộc phải vượt qua bước xác thực mã OTP gửi về số điện thoại.
@@ -176,7 +187,8 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
     title: 'Các Câu hỏi Thường gặp khi Đặt vé tại VexGo',
     category: 'FAQ_CHUNG',
     scope: 'GLOBAL',
-    hierarchyPath: '[Quy chế VexGo] > [Chương IX: Hướng dẫn Sử dụng] > [Điều 12: Câu hỏi thường gặp]',
+    hierarchyPath:
+      '[Quy chế VexGo] > [Chương IX: Hướng dẫn Sử dụng] > [Điều 12: Câu hỏi thường gặp]',
     rawContent: `1. Tôi có cần in vé giấy ra không?
 - Không cần. Sau khi thanh toán thành công, bạn sẽ nhận được tin nhắn SMS và email chứa mã vé và mã QR soát vé. Khi lên xe, bạn chỉ cần xuất trình mã QR trên màn hình điện thoại cho tài xế hoặc nhân viên soát vé.
 
