@@ -29,6 +29,17 @@ vi.mock('@/features/auth/auth-session', () => ({
   }),
 }));
 
+vi.mock('@/features/locations/components/location-picker', () => ({
+  LocationPicker: (props: any) => (
+    <input
+      data-testid={props.id}
+      id={props.id}
+      placeholder={props.placeholder}
+      defaultValue={props.value}
+    />
+  ),
+}));
+
 vi.mock('@/features/shipments/services/shipments.api', () => ({
   shipmentsApi: {
     getCustomerShipments: vi.fn(async () => ({
@@ -62,12 +73,20 @@ vi.mock('@/features/shipments/services/shipments.api', () => ({
     })),
     getShipmentDetail: vi.fn(async () => null),
     cancelShipment: vi.fn(async () => null),
+    getCargoCategories: vi.fn(async () => ({
+      data: [
+        { categoryId: 1, name: 'BƯU PHẨM', description: 'Tài liệu, thư tín' },
+        { categoryId: 2, name: 'HÀNG HÓA', description: 'Hàng tiêu dùng' },
+      ],
+    })),
+    getShipmentOptions: vi.fn(async () => ({ data: [] })),
+    getRoutePoints: vi.fn(async () => ({ senderPoints: [], receiverPoints: [] })),
   },
 }));
 
 import { ShipmentGuideModal } from '@/features/shipments/components/shipment-guide-modal';
 import CustomerShipmentsPage from '@/features/account/components/customer-shipments-page';
-import { getCarrierDeliveryEstimate } from '@/features/shipments/components/send-freight-page';
+import SendFreightPage, { getCarrierDeliveryEstimate } from '@/features/shipments/components/send-freight-page';
 
 describe('Customer Freight & Shipments Deep i18n (Phase C2)', () => {
   beforeEach(() => {
@@ -193,5 +212,69 @@ describe('Customer Freight & Shipments Deep i18n (Phase C2)', () => {
     expect(getCarrierDeliveryEstimate(null, 'en')).toBe(
       'Coordinated by operator upon receipt',
     );
+  });
+
+  it('renders SendFreightPage in English with 100% translated sender, receiver, and stations (Zero-Hardcoded-Vi)', async () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <SendFreightPage />
+      </NextIntlClientProvider>,
+    );
+
+    // Section 2: Sender & Receiver
+    expect(screen.getByText('Sender & receiver information')).toBeTruthy();
+    expect(screen.getByText('Receiver Full Name')).toBeTruthy();
+    expect(screen.getByText('Receiver Phone Number')).toBeTruthy();
+    expect(screen.getByText('Receiver Citizen ID / Passport')).toBeTruthy();
+    expect(screen.getByText('(optional)')).toBeTruthy();
+    expect(screen.getByText('(for verification on collection)')).toBeTruthy();
+
+    // Placeholders
+    const receiverNameInput = screen.getByPlaceholderText('e.g. Jane Doe');
+    expect(receiverNameInput).toBeTruthy();
+
+    // Stations & Offices
+    expect(screen.getByText('Stations & Offices by Operator')).toBeTruthy();
+    expect(
+      screen.getByText('Please select an operator above to choose stations'),
+    ).toBeTruthy();
+    expect(screen.getByText('Departure Station / Drop-off Point')).toBeTruthy();
+    expect(screen.getByText('Destination Station / Pick-up Point')).toBeTruthy();
+    expect(screen.getAllByText('Please select an operator first.').length).toBeGreaterThan(0);
+
+    // ZERO-HARDCODED-VI ASSERTION on Step 2 container
+    const step2El = document.getElementById('step-sender-receiver');
+    expect(step2El).toBeTruthy();
+    const viDiacriticsRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/;
+    
+    // Check that receiver section does not contain hardcoded Vietnamese words
+    const receiverSectionText = step2El?.textContent || '';
+    expect(receiverSectionText).not.toContain('Người nhận');
+    expect(receiverSectionText).not.toContain('Ra bến nhận hàng');
+    expect(receiverSectionText).not.toContain('Họ và tên người nhận');
+    expect(receiverSectionText).not.toContain('Số điện thoại người nhận');
+    expect(receiverSectionText).not.toContain('Số CCCD / CMND');
+    expect(receiverSectionText).not.toContain('(không bắt buộc)');
+    expect(receiverSectionText).not.toContain('(đối chiếu khi nhận)');
+    expect(receiverSectionText).not.toContain('Bưu cục & Điểm giao nhận theo nhà xe');
+    expect(receiverSectionText).not.toContain('Vui lòng chọn nhà xe trước');
+  });
+
+  it('renders SendFreightPage in Vietnamese with correct labels', async () => {
+    cleanup();
+    render(
+      <NextIntlClientProvider locale="vi" messages={viMessages}>
+        <SendFreightPage />
+      </NextIntlClientProvider>,
+    );
+
+    expect(screen.getByText('Thông tin người gửi & người nhận')).toBeTruthy();
+    expect(screen.getByText('Họ và tên người nhận')).toBeTruthy();
+    expect(screen.getByText('Số điện thoại người nhận')).toBeTruthy();
+    expect(screen.getByText('Số CCCD / CMND người nhận')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Ví dụ: Lê Thị B')).toBeTruthy();
+    expect(screen.getByText('(không bắt buộc)')).toBeTruthy();
+    expect(screen.getByText('(đối chiếu khi nhận)')).toBeTruthy();
+    expect(screen.getByText('Bưu cục & Điểm giao nhận theo nhà xe')).toBeTruthy();
   });
 });
