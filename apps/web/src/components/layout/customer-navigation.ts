@@ -9,8 +9,16 @@ export const ACCOUNT_NAVIGATION_ITEMS = [
 
 export type AccountNavigationItem = (typeof ACCOUNT_NAVIGATION_ITEMS)[number];
 
+function stripLocale(pathname: string | null | undefined): string {
+  if (!pathname) return '/';
+  const match = pathname.match(/^\/(vi|en)(\/.*|$)/);
+  if (match) return match[2] || '/';
+  return pathname;
+}
+
 export function isAccountNavigationItemActive(item: AccountNavigationItem, pathname: string) {
-  return item.href === pathname || item.aliases.some((alias) => alias === pathname);
+  const normalized = stripLocale(pathname);
+  return item.href === normalized || item.aliases.some((alias) => alias === normalized);
 }
 
 export function getMobileMenuLabel(isOpen: boolean) {
