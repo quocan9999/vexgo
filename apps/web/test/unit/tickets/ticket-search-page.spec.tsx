@@ -1,6 +1,23 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TicketSearchPage } from '../../../src/features/tickets/components/ticket-search-page';
+import viMessages from '../../../src/messages/vi.json';
+
+vi.mock('next-intl', () => ({
+  useLocale: () => 'vi',
+  useTranslations: (namespace?: string) => {
+    const messages = namespace ? (viMessages as Record<string, any>)[namespace] || {} : viMessages;
+    return (key: string, values?: Record<string, any>) => {
+      let text = messages[key] ?? key;
+      if (values && typeof text === 'string') {
+        Object.entries(values).forEach(([k, v]) => {
+          text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+        });
+      }
+      return text;
+    };
+  },
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),

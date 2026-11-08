@@ -1127,10 +1127,10 @@ export default function CustomerActivityPage() {
               <Trash2 className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-1">
-              Xóa đánh giá chuyến xe?
+              {t('deleteReview')}
             </h3>
             <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-              Bạn có chắc chắn muốn xóa đánh giá của mình cho chuyến đi này không? Sau khi xóa, bạn có thể thực hiện đánh giá lại bất kỳ lúc nào.
+              {t('deleteReviewConfirm')}
             </p>
             <div className="flex items-center justify-end gap-3 w-full">
               <button
@@ -1139,7 +1139,7 @@ export default function CustomerActivityPage() {
                 disabled={isDeletingReview}
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
               >
-                Hủy bỏ
+                {t('cancelFilter') || 'Hủy bỏ'}
               </button>
               <button
                 type="button"
@@ -1150,10 +1150,10 @@ export default function CustomerActivityPage() {
                 {isDeletingReview ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Đang xóa...</span>
+                    <span>{t('loading')}</span>
                   </>
                 ) : (
-                  <span>Xác nhận xóa</span>
+                  <span>{t('deleteReview')}</span>
                 )}
               </button>
             </div>

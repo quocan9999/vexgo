@@ -259,7 +259,7 @@ export default function CustomerShipmentsPage() {
           setShipmentsError(
             err instanceof Error && err.message.trim()
               ? err.message
-              : 'Không thể tải danh sách đơn gửi hàng. Vui lòng thử lại.',
+              : t('cannotLoadShipments'),
           );
         }
       } finally {
@@ -299,7 +299,7 @@ export default function CustomerShipmentsPage() {
         setShipmentDetailError(
           err instanceof Error && err.message.trim()
             ? err.message
-            : 'Không thể tải chi tiết vận đơn.',
+            : t('cannotLoadShipmentDetail'),
         );
       } finally {
         setIsLoadingShipmentDetail(false);
@@ -355,7 +355,7 @@ export default function CustomerShipmentsPage() {
       setCancelError(
         err instanceof Error && err.message.trim()
           ? err.message
-          : 'Không thể hủy đơn gửi hàng.',
+          : t('cannotCancelShipment'),
       );
     } finally {
       setIsCancelling(false);
@@ -519,7 +519,7 @@ export default function CustomerShipmentsPage() {
                             onClick={handleRetry}
                             className="mt-3 rounded-full border border-red-200 px-5 py-2 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 cursor-pointer"
                           >
-                            Thử lại
+                            {tCommon('retry')}
                           </button>
                         </td>
                       </tr>
@@ -574,8 +574,8 @@ export default function CustomerShipmentsPage() {
                                   onClick={(e) =>
                                     handleCopyWaybill(item.waybillCode, e)
                                   }
-                                  title="Sao chép mã vận đơn"
-                                  aria-label={`Sao chép mã vận đơn ${item.waybillCode}`}
+                                  title={t('copyWaybillCode')}
+                                  aria-label={t('copyWaybillCodeAria', { code: item.waybillCode })}
                                   className="p-1 rounded-md text-slate-400 hover:text-accent hover:bg-orange-50 transition-colors cursor-pointer"
                                 >
                                   {isCopied ? (
@@ -891,7 +891,7 @@ export default function CustomerShipmentsPage() {
                           )}
                         </div>
                         <div className="text-right font-semibold text-slate-700">
-                          {itm.quantity} {locale === 'en' ? 'items' : 'kiện'} · {itm.weight} kg
+                          {t('itemsCount', { count: itm.quantity })} · {itm.weight} kg
                           {itm.dimensions ? ` (${itm.dimensions})` : ''}
                         </div>
                       </div>
