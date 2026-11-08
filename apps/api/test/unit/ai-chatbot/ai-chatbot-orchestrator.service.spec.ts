@@ -135,5 +135,18 @@ describe('AiChatbotOrchestratorService', () => {
       expect(prompt).toContain(userQuery);
       expect(prompt).toContain('</user_query>');
     });
+
+    it('should strip technical document codes and brackets from reply text (Clean Output)', () => {
+      const dirtyReply =
+        'Thời gian hoàn tiền 【DOC-CANCEL-POLICY】 sẽ từ 24-48 giờ làm việc. Quy định hành lý [DOC-BAGGAGE] áp dụng tối đa 20kg. (Nguồn: Quy chế chung)';
+      const cleaned = orchestrator.cleanReplyText(dirtyReply);
+
+      expect(cleaned).not.toContain('【DOC-CANCEL-POLICY】');
+      expect(cleaned).not.toContain('[DOC-BAGGAGE]');
+      expect(cleaned).not.toContain('(Nguồn: Quy chế chung)');
+      expect(cleaned).toBe(
+        'Thời gian hoàn tiền sẽ từ 24-48 giờ làm việc. Quy định hành lý áp dụng tối đa 20kg.',
+      );
+    });
   });
 });

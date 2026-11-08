@@ -12,6 +12,8 @@ import { TextChunkerService } from './chunking/text-chunker.service.js';
 import { HybridRetrievalService } from './retrieval/hybrid-retrieval.service.js';
 import { AiBusinessToolsService } from './tools/ai-business-tools.service.js';
 import { AiChatbotOrchestratorService } from './orchestrator/ai-chatbot-orchestrator.service.js';
+import { AiKnowledgeAdminController } from './admin/ai-knowledge-admin.controller.js';
+import { AiKnowledgeAdminService } from './admin/ai-knowledge-admin.service.js';
 
 @Module({
   imports: [
@@ -22,7 +24,7 @@ import { AiChatbotOrchestratorService } from './orchestrator/ai-chatbot-orchestr
     PromotionsModule,
     LocationsModule,
   ],
-  controllers: [AiChatbotController],
+  controllers: [AiChatbotController, AiKnowledgeAdminController],
   providers: [
     EmbeddingProviderService,
     TextChunkerService,
@@ -30,12 +32,14 @@ import { AiChatbotOrchestratorService } from './orchestrator/ai-chatbot-orchestr
     AiBusinessToolsService,
     AiChatbotOrchestratorService,
     AiChatbotService,
+    AiKnowledgeAdminService,
   ],
   exports: [
     AiChatbotService,
     AiChatbotOrchestratorService,
     HybridRetrievalService,
     EmbeddingProviderService,
+    AiKnowledgeAdminService,
   ],
 })
 export class AiChatbotModule {}
