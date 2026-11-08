@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canAccessAiKnowledge,
   canAccessSupportChat,
   canAccessTenantPath,
   canManagePlatformRbac,
@@ -90,6 +91,8 @@ describe('admin access scope and permissions', () => {
     expect(getRequiredAdminPermissions('/booking-management-extra')).toBeNull();
     expect(getRequiredAdminPermissions('/shipments')).toEqual(['shipment:read']);
     expect(getRequiredAdminPermissions('/shipments/789')).toEqual(['shipment:read']);
+    expect(getRequiredAdminPermissions('/ai-knowledge')).toEqual(['chat:read']);
+    expect(getRequiredAdminPermissions('/ai-knowledge/123')).toEqual(['chat:read']);
     expect(getRequiredAdminPermissions('/vehicle-types-extra')).toBeNull();
   });
 
@@ -325,5 +328,24 @@ describe('admin access scope and permissions', () => {
 
     // getFirstAccessibleAdminPath resolves to /support-chat for session having only chat:manage
     expect(getFirstAccessibleAdminPath(sessionWithManage)).toBe('/support-chat');
+  });
+
+  it('allows access to ai-knowledge for both platform and tenant sessions with appropriate permissions', () => {
+    const tenantWithRead = makeTenantSession(['NHAN_VIEN_CSKH'], ['chat:read']);
+    const tenantWithManage = makeTenantSession(['NHAN_VIEN_CSKH'], ['chat:manage']);
+    const tenantWithoutChat = makeTenantSession(['NHAN_VIEN_DIEU_HANH'], ['vehicle:read']);
+    const platformSession = makePlatformSession();
+
+    // canAccessAiKnowledge
+    expect(canAccessAiKnowledge(tenantWithRead)).toBe(true);
+    expect(canAccessAiKnowledge(tenantWithManage)).toBe(true);
+    expect(canAccessAiKnowledge(tenantWithoutChat)).toBe(false);
+    expect(canAccessAiKnowledge(platformSession)).toBe(true);
+    expect(canAccessAiKnowledge(null)).toBe(false);
+
+    // canAccessTenantPath for /ai-knowledge
+    expect(canAccessTenantPath(tenantWithRead, '/ai-knowledge')).toBe(true);
+    expect(canAccessTenantPath(tenantWithManage, '/ai-knowledge')).toBe(true);
+    expect(canAccessTenantPath(tenantWithoutChat, '/ai-knowledge')).toBe(false);
   });
 });
