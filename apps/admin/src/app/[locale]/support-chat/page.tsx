@@ -8,6 +8,7 @@ import { SuperAdminLayout } from '@/features/super-admin-layout/components/super
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 import { canAccessSupportChat } from '@/features/admin-auth/services/admin-access';
+import { useTranslations } from 'next-intl';
 import { AdminChatMessenger } from '@/features/support-chat/components/admin-chat-messenger';
 import { AdminSessionGuard } from '@/features/admin-auth/components/admin-session-guard';
 
@@ -20,6 +21,7 @@ export default function SupportChatPage() {
 }
 
 function SupportChatContent() {
+  const t = useTranslations('supportChat');
   const router = useRouter();
   const authState = useAdminSession();
 
@@ -38,17 +40,17 @@ function SupportChatContent() {
   const isSuperAdmin = scope === 'platform';
   const hasChatPermission = canAccessSupportChat(session);
 
-  // SUPER ADMIN HOẶC TÀI KHOẢN KHÔNG CÓ QUYỀN CHAT BỊ TỪ CHỐI TRUY CẬP
+  // SUPER ADMIN OR ACCOUNTS WITHOUT CHAT PERMISSION ACCESS DENIED
   if (isSuperAdmin || !hasChatPermission) {
     return (
       <SuperAdminLayout activeSection="overview">
         <div className="admin-page-content admin-ui">
           <ResourceState error>
-            <h1 className="text-lg font-semibold">Truy cập bị từ chối</h1>
+            <h1 className="text-lg font-semibold">{t('accessDenied')}</h1>
             <p className="max-w-md">
               {isSuperAdmin
-                ? 'Tài khoản Quản trị hệ thống không có quyền truy cập chức năng chăm sóc khách hàng của nhà xe.'
-                : 'Tài khoản của bạn không có quyền xem hoặc quản lý chức năng chăm sóc khách hàng.'}
+                ? t('accessDeniedSuperAdmin')
+                : t('accessDeniedTenant')}
             </p>
           </ResourceState>
         </div>
@@ -60,8 +62,8 @@ function SupportChatContent() {
     <SuperAdminLayout activeSection="support-chat">
       <div className="admin-page-content admin-ui space-y-4">
         <AdminPageHeader
-          eyebrow="CHĂM SÓC KHÁCH HÀNG"
-          title="Hỗ trợ khách hàng"
+          eyebrow={t('eyebrow')}
+          title={t('pageTitle')}
           titleId="support-chat-heading"
         />
         <AdminChatMessenger key={session.accountId} session={session} />

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { QRCodeSVG } from 'qrcode.react';
 import type { ShipmentDetail } from '../../types/shipment';
 import {
@@ -12,6 +13,7 @@ interface ShipmentReceiptProps {
 }
 
 export function ShipmentReceipt({ shipment }: ShipmentReceiptProps) {
+  const t = useTranslations('shipments');
   const isPreAcceptance = shipment.status === 'MOI_TAO';
   const isReceiverPaying = shipment.feeSummary?.freightPayer === 'NGUOI_NHAN';
   const feeSummary = shipment.feeSummary;
@@ -21,38 +23,38 @@ export function ShipmentReceipt({ shipment }: ShipmentReceiptProps) {
     <div className="print-receipt-container font-sans">
       {isPreAcceptance && (
         <div className="print-watermark">
-          CƯỚC DỰ KIẾN – CHƯA TIẾP NHẬN
+          {t('watermarkEstimated')}
         </div>
       )}
 
-      {/* Header Nhà xe */}
+      {/* Carrier Header */}
       <div className="text-center pb-2 border-b-2 border-slate-900">
         <div className="font-black text-sm uppercase tracking-wide text-slate-950">
           {shipment.carrier?.name || 'VEXGO LOGISTICS'}
         </div>
         <div className="text-[10px] text-slate-600">
-          Tổng đài hỗ trợ & Tra cứu: 1900 6067
+          {t('receiptSupport')}
         </div>
         <div className="font-black text-xs uppercase tracking-wider text-slate-900 mt-1.5">
-          PHIẾU BIÊN NHẬN GỬI HÀNG
+          {t('receiptTitle')}
         </div>
       </div>
 
-      {/* Thông tin vận đơn */}
+      {/* Waybill info */}
       <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-[11px]">
         <div className="flex justify-between items-baseline">
-          <span className="text-slate-500">Mã vận đơn:</span>
+          <span className="text-slate-500">{t('waybillCodeColon')}</span>
           <strong className="admin-data-mono font-black text-xs text-slate-950">
             {shipment.waybillCode}
           </strong>
         </div>
         <div className="flex justify-between items-baseline">
-          <span className="text-slate-500">Ngày gửi:</span>
+          <span className="text-slate-500">{t('sentDateColon')}</span>
           <span className="text-slate-700">{formatDateTime(shipment.sentAt)}</span>
         </div>
         {shipment.trip?.code && (
           <div className="flex justify-between items-baseline">
-            <span className="text-slate-500">Chuyến xe:</span>
+            <span className="text-slate-500">{t('busTripColon')}</span>
             <span className="admin-data-mono font-bold text-slate-800">
               {shipment.trip.code}
             </span>
@@ -60,11 +62,11 @@ export function ShipmentReceipt({ shipment }: ShipmentReceiptProps) {
         )}
       </div>
 
-      {/* Tuyến bưu cục gửi & nhận */}
+      {/* Origin & Destination post route */}
       <div className="py-2 border-b border-dashed border-slate-400 space-y-1.5 text-[11px]">
         <div>
           <div className="text-[9px] font-bold text-slate-500 uppercase">
-            BƯU CỤC GỬI:
+            {t('originPostColon')}
           </div>
           <div className="font-bold text-slate-900">
             {shipment.originPoint?.name}
@@ -76,7 +78,7 @@ export function ShipmentReceipt({ shipment }: ShipmentReceiptProps) {
 
         <div>
           <div className="text-[9px] font-bold text-slate-500 uppercase">
-            BƯU CỤC ĐÍCH (NHẬN):
+            {t('destPostColon')}
           </div>
           <div className="font-extrabold text-slate-950 text-blue-900">
             {shipment.destinationPoint?.name}
@@ -87,31 +89,31 @@ export function ShipmentReceipt({ shipment }: ShipmentReceiptProps) {
         </div>
       </div>
 
-      {/* Thông tin người gửi / nhận */}
+      {/* Sender / Recipient info */}
       <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-[11px]">
         <div className="flex justify-between items-baseline gap-1">
-          <span className="text-slate-500 shrink-0">Người gửi:</span>
+          <span className="text-slate-500 shrink-0">{t('senderColon')}</span>
           <span className="font-bold text-slate-800 text-right truncate">
             {shipment.sender.fullName} ({shipment.sender.phoneNumber})
           </span>
         </div>
         <div className="flex justify-between items-baseline gap-1">
-          <span className="text-slate-500 shrink-0 font-bold">Người nhận:</span>
+          <span className="text-slate-500 shrink-0 font-bold">{t('recipientColon')}</span>
           <strong className="font-extrabold text-slate-950 text-right truncate">
             {shipment.receiver.fullName} ({shipment.receiver.phoneNumber})
           </strong>
         </div>
         {shipment.note && (
           <div className="text-[10px] text-slate-600 italic pt-0.5">
-            Ghi chú: {shipment.note}
+            {t('noteColon')} {shipment.note}
           </div>
         )}
       </div>
 
-      {/* Danh sách kiện hàng */}
+      {/* Cargo package list */}
       <div className="py-2 border-b border-dashed border-slate-400">
         <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">
-          CHI TIẾT HÀNG HÓA ({items.length} mục)
+          {t('cargoDetailsCount', { count: items.length })}
         </div>
         <div className="space-y-1">
           {items.map((item, idx) => (
@@ -131,50 +133,50 @@ export function ShipmentReceipt({ shipment }: ShipmentReceiptProps) {
         </div>
       </div>
 
-      {/* Bảng chi tiết cước phí */}
+      {/* Freight fee breakdown */}
       <div className="py-2 border-b-2 border-slate-900 space-y-1 text-[11px]">
         <div className="flex justify-between items-baseline text-slate-600">
-          <span>Cước chính:</span>
+          <span>{t('mainFeeColon')}</span>
           <span>{formatCurrency(feeSummary?.mainFee ?? 0)}</span>
         </div>
         {(feeSummary?.serviceFee ?? 0) > 0 && (
           <div className="flex justify-between items-baseline text-slate-600">
-            <span>Phụ phí dịch vụ:</span>
+            <span>{t('serviceFeeColon')}</span>
             <span>+{formatCurrency(feeSummary.serviceFee)}</span>
           </div>
         )}
         {(feeSummary?.discountAmount ?? 0) > 0 && (
           <div className="flex justify-between items-baseline text-emerald-700">
-            <span>Giảm trừ khuyến mại:</span>
+            <span>{t('discountFeeColon')}</span>
             <span>-{formatCurrency(feeSummary.discountAmount)}</span>
           </div>
         )}
 
         <div className="flex justify-between items-baseline font-black text-sm text-slate-950 pt-1 border-t border-slate-200">
-          <span>TỔNG CƯỚC:</span>
+          <span>{t('totalFreightColon')}</span>
           <span>{formatCurrency(shipment.totalFee)}</span>
         </div>
 
         <div className="flex justify-between items-baseline text-[10px] text-slate-600 pt-0.5">
-          <span>Người thanh toán:</span>
+          <span>{t('payerColon')}</span>
           <span className="font-bold">
             {FREIGHT_PAYER_LABELS[feeSummary?.freightPayer] || feeSummary?.freightPayer}
           </span>
         </div>
 
         <div className="flex justify-between items-baseline text-[11px] font-bold text-slate-900">
-          <span>Số tiền cần thu:</span>
+          <span>{t('amountDueColon')}</span>
           <span className="text-sm font-black text-rose-700">
             {isReceiverPaying
               ? formatCurrency(feeSummary?.outstandingAmount ?? shipment.totalFee)
               : feeSummary?.outstandingAmount && feeSummary.outstandingAmount > 0
                 ? formatCurrency(feeSummary.outstandingAmount)
-                : '0 đ (ĐÃ THU)'}
+                : t('paidStatus')}
           </span>
         </div>
       </div>
 
-      {/* QR Code tra cứu & Footer */}
+      {/* Tracking QR code & footer */}
       <div className="pt-3 text-center flex flex-col items-center">
         <div className="p-1 bg-white border border-slate-300 rounded mb-1">
           <QRCodeSVG
@@ -182,14 +184,14 @@ export function ShipmentReceipt({ shipment }: ShipmentReceiptProps) {
             size={72}
             level="M"
             role="img"
-            aria-label={`Mã QR tra cứu ${shipment.waybillCode}`}
+            aria-label={t('qrTrackingAria', { code: shipment.waybillCode })}
           />
         </div>
         <div className="text-[9px] text-slate-500 font-medium">
-          Quét mã QR để tra cứu lộ trình vận chuyển
+          {t('qrScanPrompt')}
         </div>
         <div className="text-[8px] text-slate-400 mt-2 border-t border-dotted border-slate-300 pt-1 w-full">
-          Quý khách vui lòng giữ biên nhận để đối chiếu khi nhận hàng. Cảm ơn quý khách!
+          {t('receiptFooter')}
         </div>
       </div>
     </div>

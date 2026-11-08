@@ -347,14 +347,14 @@ export function SuperAdminDashboard() {
             identity,
             refresh,
             error:
-              cause instanceof Error ? cause.message : 'Không thể tải tổng quan.',
+              cause instanceof Error ? cause.message : t('cannotLoadOverview'),
           });
       });
     return () => {
       current = false;
       controller.abort();
     };
-  }, [canRead, identity, refresh]);
+  }, [canRead, identity, refresh, t]);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -375,7 +375,7 @@ export function SuperAdminDashboard() {
       <div className="admin-ui admin-page-content space-y-6">
         {/* Context Command Bar */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-1">
-          <h1 className="sr-only">Tổng quan nền tảng VexGo</h1>
+          <h1 className="sr-only">{t('platformOverviewTitle')}</h1>
 
           {/* Left Context */}
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -433,7 +433,8 @@ export function SuperAdminDashboard() {
                   className="text-xs text-muted-foreground hidden lg:inline-block tabular-nums"
                   dateTime={overview.generatedAt}
                   aria-label={
-                    'Cập nhật ' +
+                    t('updatedAt') +
+                    ': ' +
                     displayTimestamp(overview.generatedAt, overview.timeZone)
                   }
                 >
@@ -502,10 +503,10 @@ export function SuperAdminDashboard() {
 
             {overview && (
               <>
-                {/* 1. 3 Thẻ KPI Chỉ số Nền tảng */}
+                {/* 1. 3 KPI metric cards */}
                 <div
                   role="region"
-                  aria-label="Chỉ số nền tảng hiện tại"
+                  aria-label={t('currentPlatformMetrics')}
                   aria-busy={loading}
                   className="grid gap-4 md:grid-cols-3"
                 >
@@ -575,9 +576,9 @@ export function SuperAdminDashboard() {
                   </Metric>
                 </div>
 
-                {/* 2. Cụm Bento Grid 8:4 Cân đối */}
+                {/* 2. Balanced 8:4 Bento Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  {/* Cột chính (8/12 cột): Nhà xe mới nhất & Biểu đồ Onboarding */}
+                  {/* Main column (8/12 cols): Recent Companies & Onboarding Chart */}
                   <div className="lg:col-span-8 space-y-6">
                     <Card className="min-w-0 gap-0 py-0 border-border shadow-xs">
                       <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6 border-b border-border/80">
@@ -611,9 +612,9 @@ export function SuperAdminDashboard() {
                     <OnboardingChart overview={overview} />
                   </div>
 
-                  {/* Cột phụ (4/12 cột): Cảnh báo việc khẩn & Lối tắt thao tác nhanh */}
+                  {/* Secondary column (4/12 cols): Urgent Alerts & Shortcuts */}
                   <div className="lg:col-span-4 space-y-6">
-                    {/* Cảnh báo bổ sung admin */}
+                    {/* Administrator provisioning warning */}
                     {needing > 0 ? (
                       <Card
                         id="companies-needing-admin"
@@ -626,10 +627,10 @@ export function SuperAdminDashboard() {
                             </span>
                             <div>
                               <h2 className="text-xs font-semibold text-foreground">
-                                {number(needing)} nhà xe cần bổ sung admin
+                                {t('needingAdminCount', { count: number(needing) })}
                               </h2>
                               <p className="text-[11px] text-amber-800/80">
-                                Chưa có quản trị viên hoạt động
+                                {t('noActiveAdmins')}
                               </p>
                             </div>
                           </div>
@@ -643,7 +644,7 @@ export function SuperAdminDashboard() {
                             }
                             href="/admin-accounts"
                           >
-                            Cấp tài khoản
+                            {t('provisionAccount')}
                           </Link>
                         </div>
                         <ul className="divide-y divide-amber-200/50">
@@ -683,7 +684,7 @@ export function SuperAdminDashboard() {
                       </Card>
                     )}
 
-                    {/* Lối tắt thao tác nhanh */}
+                    {/* Quick actions shortcuts */}
                     <PlatformQuickActions />
                   </div>
                 </div>

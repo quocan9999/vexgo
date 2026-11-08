@@ -57,6 +57,7 @@ function getSelfLockoutWarning(
   role: TenantRbacRole,
   nextPermissionKeys: readonly string[],
   sessionRoles: readonly string[],
+  tRbac: (key: any) => string,
 ): string | null {
   if (!sessionRoles.includes(role.roleName)) return null;
 
@@ -77,31 +78,35 @@ function getSelfLockoutWarning(
   const losesRead = !nextEffectivePermissions.has('role:read');
   const losesAssign = !nextEffectivePermissions.has('permission:assign');
   if (losesRead && losesAssign) {
-    return 'Thay đổi này có thể làm mất quyền mở trang phân quyền nhà xe và quyền sửa cấu hình. Hãy bảo đảm còn tài khoản quản trị khác có thể khôi phục quyền.';
+    return tRbac('riskAllNotice');
   }
   if (losesRead) {
-    return 'Thay đổi này có thể làm mất quyền mở trang phân quyền nhà xe của tài khoản hiện tại. Hãy bảo đảm còn tài khoản quản trị khác có thể khôi phục quyền.';
+    return tRbac('riskPageNotice');
   }
   if (losesAssign) {
-    return 'Thay đổi này có thể khiến tài khoản hiện tại chỉ xem được cấu hình phân quyền.';
+    return tRbac('riskEditNotice');
   }
-  return 'Đây là vai trò đang gắn với tài khoản hiện tại; thay đổi sẽ ảnh hưởng quyền của phiên sau khi đồng bộ.';
+  return tRbac('riskRoleNotice');
 }
 
 function PermissionKeyList({
   emptyLabel,
   permissionKeys,
+  zeroPermissionsLabel,
+  listAriaLabel,
 }: {
   emptyLabel: string;
   permissionKeys: readonly string[] | null;
+  zeroPermissionsLabel?: string;
+  listAriaLabel?: string;
 }) {
   if (permissionKeys === null) return <p>{emptyLabel}</p>;
-  if (permissionKeys.length === 0) return <p>0 quyền</p>;
+  if (permissionKeys.length === 0) return <p>{zeroPermissionsLabel ?? '0 permissions'}</p>;
 
   return (
     <ul
       tabIndex={0}
-      aria-label="Danh sách mã quyền"
+      aria-label={listAriaLabel ?? 'Permission keys'}
       className="max-h-40 space-y-2 overflow-y-auto rounded-md text-xs focus-visible:outline-2 focus-visible:outline-ring"
     >
       {permissionKeys.map((key) => (
@@ -154,7 +159,7 @@ export function TenantRbacManagement() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setLoadError(getErrorMessage(error, 'Không thể tải cấu hình quyền.'));
+        setLoadError(getErrorMessage(error, tRbac('cannotLoadPermissions')));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -183,6 +188,7 @@ export function TenantRbacManagement() {
           selectedRole,
           selectedDraft,
           session.roles,
+          tRbac,
         )
       : null;
   const resetSelfLockoutWarning =
@@ -192,6 +198,7 @@ export function TenantRbacManagement() {
           selectedRole,
           selectedRole.defaultPermissionKeys,
           session.roles,
+          tRbac,
         )
       : null;
 
@@ -241,9 +248,7 @@ export function TenantRbacManagement() {
     try {
       await reloadAdminSession();
     } catch {
-      toast.warning(
-        'Thay đổi đã được lưu nhưng phiên chưa đồng bộ. Hãy tải lại trang để cập nhật quyền đang dùng.',
-      );
+      toast.warning(tRbac('sessionSyncReloadNotice'));
     }
   }
 
@@ -266,12 +271,12 @@ export function TenantRbacManagement() {
       setConfirmation(null);
       toast.success(
         permissionKeys.length === 0
-          ? `Đã lưu override rỗng cho ${savedRole.roleName}.`
-          : `Đã lưu override cho ${savedRole.roleName}.`,
+          ? tRbac('overrideSavedEmpty', { role: savedRole.roleName })
+          : tRbac('overrideSaved', { role: savedRole.roleName }),
       );
       await syncTrustedSession();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
+      toast.error(getErrorMessage(error, tRbac('cannotSavePermissions')));
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -290,12 +295,12 @@ export function TenantRbacManagement() {
       updateConfigRole(restoredRole);
       setConfirmation(null);
       toast.success(
-        `Đã khôi phục quyền mặc định cho ${restoredRole.roleName}.`,
+        tRbac('restoreDefaultSuccess', { role: restoredRole.roleName }),
       );
       await syncTrustedSession();
     } catch (error) {
       toast.error(
-        getErrorMessage(error, 'Không thể khôi phục quyền mặc định.'),
+        getErrorMessage(error, tRbac('cannotRestoreDefault')),
       );
     } finally {
       savingRef.current = false;
@@ -344,9 +349,7 @@ export function TenantRbacManagement() {
 
         {!canEdit && canRead && (
           <ResourceNotice kind="info">
-            Tài khoản hiện chỉ có quyền xem; cần quyền{' '}
-            <code className="admin-data-mono">permission:assign</code> để lưu
-            hoặc khôi phục cấu hình.
+            {tRbac('viewOnlyNotice')}
           </ResourceNotice>
         )}
         {loading && !config && (
@@ -369,7 +372,7 @@ export function TenantRbacManagement() {
         )}
         {config && loadError && (
           <ResourceNotice kind="error">
-            Không thể làm mới; đang giữ cấu hình đã tải trước đó. {loadError}
+            {tRbac('keepPreviousConfigNotice', { error: loadError })}
           </ResourceNotice>
         )}
 
@@ -391,12 +394,12 @@ export function TenantRbacManagement() {
 
             <Card
               role="region"
-              aria-label="Trạng thái cấu hình quyền"
+              aria-label={tRbac('permissionConfigStatusAriaLabel')}
               className="min-w-0 gap-5 p-4 sm:p-5"
             >
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:break-all">
                 <div>
-                  <p className="eyebrow">PHẠM VI NHÀ XE</p>
+                  <p className="eyebrow">{tRbac('scopeTenantBanner')}</p>
                   <h2 className="admin-data-mono">{selectedRole.roleName}</h2>
                 </div>
                 <Badge
@@ -405,34 +408,40 @@ export function TenantRbacManagement() {
                   }
                 >
                   {selectedRole.source === 'global'
-                    ? 'Kế thừa mặc định'
-                    : 'Override riêng'}
+                    ? tRbac('inheritsDefault')
+                    : tRbac('overrideCustom')}
                 </Badge>
               </div>
               <div className="grid min-w-0 gap-4 lg:grid-cols-3 [&>section]:min-w-0 [&>section]:space-y-3 [&>section]:rounded-lg [&>section]:border [&>section]:p-4 [&_h3]:text-[13px] [&_h3]:font-semibold [&_p]:text-xs [&_p]:text-muted-foreground">
                 <section aria-labelledby="tenant-rbac-default-title">
-                  <h3 id="tenant-rbac-default-title">Quyền mặc định</h3>
+                  <h3 id="tenant-rbac-default-title">{tRbac('defaultPermissions')}</h3>
                   <PermissionKeyList
-                    emptyLabel="Vai trò chưa có quyền mặc định."
+                    emptyLabel={tRbac('roleHasNoDefaultPermissions')}
                     permissionKeys={defaultRolePermissions}
+                    zeroPermissionsLabel={tRbac('zeroPermissions')}
+                    listAriaLabel={tRbac('permissionListAriaLabel')}
                   />
                 </section>
                 <section aria-labelledby="tenant-rbac-override-title">
-                  <h3 id="tenant-rbac-override-title">Override của nhà xe</h3>
+                  <h3 id="tenant-rbac-override-title">{tRbac('operatorOverrides')}</h3>
                   {overridePermissionKeys === null ? (
-                    <p>Chưa cấu hình override</p>
+                    <p>{tRbac('noOverridesConfigured')}</p>
                   ) : (
                     <PermissionKeyList
                       emptyLabel=""
                       permissionKeys={overridePermissionKeys}
+                      zeroPermissionsLabel={tRbac('zeroPermissions')}
+                      listAriaLabel={tRbac('permissionListAriaLabel')}
                     />
                   )}
                 </section>
                 <section aria-labelledby="tenant-rbac-effective-title">
-                  <h3 id="tenant-rbac-effective-title">Quyền đang áp dụng</h3>
+                  <h3 id="tenant-rbac-effective-title">{tRbac('effectivePermissions')}</h3>
                   <PermissionKeyList
-                    emptyLabel="Vai trò hiện không có quyền."
+                    emptyLabel={tRbac('roleHasNoEffectivePermissions')}
                     permissionKeys={effectivePermissionKeys}
+                    zeroPermissionsLabel={tRbac('zeroPermissions')}
+                    listAriaLabel={tRbac('permissionListAriaLabel')}
                   />
                 </section>
               </div>
@@ -447,8 +456,8 @@ export function TenantRbacManagement() {
                     className="text-xs text-muted-foreground"
                   >
                     {isDirty
-                      ? `Có thay đổi chưa lưu cho ${selectedRole.roleName}.`
-                      : 'Cấu hình đã đồng bộ.'}
+                      ? tRbac('hasUnsavedChanges', { role: selectedRole.roleName })
+                      : tRbac('configSyncSaved')}
                   </p>
                   <div>
                     <Button
@@ -457,7 +466,7 @@ export function TenantRbacManagement() {
                       variant="outline"
                     >
                       <RotateCcw aria-hidden="true" size={16} />
-                      Hoàn tác
+                      {tRbac('undo')}
                     </Button>
                     {selectedRole.source === 'override' && (
                       <Button
@@ -467,7 +476,7 @@ export function TenantRbacManagement() {
                         }}
                         variant="outline"
                       >
-                        Khôi phục mặc định
+                        {tRbac('resetToDefault')}
                       </Button>
                     )}
                     <Button
@@ -476,7 +485,7 @@ export function TenantRbacManagement() {
                         setConfirmation('save');
                       }}
                     >
-                      Lưu thay đổi
+                      {tRbac('saveChanges')}
                     </Button>
                   </div>
                 </div>
@@ -496,13 +505,13 @@ export function TenantRbacManagement() {
           <ResourceConfirmation
             title={
               confirmation === 'save'
-                ? 'Xác nhận thay thế quyền tenant'
-                : 'Xác nhận khôi phục quyền mặc định'
+                ? tRbac('confirmReplaceTenantTitle')
+                : tRbac('confirmResetDefaultTitle')
             }
             description={
               confirmation === 'save'
-                ? `Bạn sắp thay thế toàn bộ quyền áp dụng cho vai trò ${selectedRole.roleName} trong nhà xe này. Thay đổi không ảnh hưởng nhà xe khác hoặc quyền mặc định toàn hệ thống.`
-                : `Cấu hình riêng của vai trò ${selectedRole.roleName} sẽ bị xóa để vai trò này kế thừa quyền mặc định toàn hệ thống.`
+                ? tRbac('confirmReplaceTenantDesc', { role: selectedRole.roleName })
+                : tRbac('confirmResetDefaultDesc', { role: selectedRole.roleName })
             }
             busy={saving}
             onClose={() => {
@@ -511,8 +520,7 @@ export function TenantRbacManagement() {
           >
             {confirmation === 'save' && selectedDraft.length === 0 && (
               <ResourceNotice kind="info">
-                Vai trò sẽ có override rỗng, không nhận quyền nào trong nhà xe
-                này.
+                {tRbac('emptyOverrideWarning')}
               </ResourceNotice>
             )}
             {((confirmation === 'save' && selectedSelfLockoutWarning) ||
@@ -533,10 +541,10 @@ export function TenantRbacManagement() {
               }
             >
               {saving
-                ? 'Đang lưu…'
+                ? tRbac('saving')
                 : confirmation === 'save'
-                  ? 'Xác nhận lưu'
-                  : 'Xác nhận khôi phục'}
+                  ? tRbac('confirmSaveAction')
+                  : tRbac('confirmResetAction')}
             </Button>
           </ResourceConfirmation>
         )}

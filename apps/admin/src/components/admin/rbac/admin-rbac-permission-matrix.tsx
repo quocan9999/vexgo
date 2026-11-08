@@ -124,7 +124,7 @@ export function AdminRbacPermissionMatrix({
         </ResourceNotice>
       )}
       {permissionGroups.length === 0 ? (
-        <ResourceState>Danh mục chưa có quyền thuộc scope này.</ResourceState>
+        <ResourceState>{tRbac('noPermissionsInScope')}</ResourceState>
       ) : (
         <div className="grid min-w-0 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {permissionGroups.map((group) => (
@@ -147,7 +147,10 @@ export function AdminRbacPermissionMatrix({
                   >
                     <Checkbox
                       className="mt-0.5"
-                      aria-label={`Gán quyền ${permission.key} cho ${roleName}`}
+                      aria-label={tRbac('assignPermissionAriaLabel', {
+                        key: permission.key,
+                        role: roleName,
+                      })}
                       checked={selectedKeys.includes(permission.key)}
                       disabled={disabled || isProtected}
                       onCheckedChange={(checked) =>

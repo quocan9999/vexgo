@@ -23,6 +23,7 @@ import {
 } from '@/components/admin/resource-ui';
 import { Button } from '@/components/ui/action-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTranslations } from 'next-intl';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
@@ -40,23 +41,24 @@ import type {
 } from '../types/shipment-rate';
 import { ShipmentRateFormDialog } from './shipment-rate-form-dialog';
 
-const STATUS_LABELS: Record<ShipmentRateStatus, string> = {
-  HOAT_DONG: 'Đang hoạt động',
-  TAM_NGUNG: 'Tạm ngưng',
+export const STATUS_LABELS: Record<ShipmentRateStatus, string> = {
+  HOAT_DONG: 'Active',
+  TAM_NGUNG: 'Paused',
 };
 
-const EFFECTIVE_LABELS: Record<ShipmentRateEffectiveState, string> = {
-  CHUA_DEN_NGAY: 'Chưa đến ngày',
-  DANG_HIEU_LUC: 'Đang hiệu lực',
-  HET_HIEU_LUC: 'Hết hiệu lực',
+export const EFFECTIVE_LABELS: Record<ShipmentRateEffectiveState, string> = {
+  CHUA_DEN_NGAY: 'Upcoming',
+  DANG_HIEU_LUC: 'Active',
+  HET_HIEU_LUC: 'Expired',
 };
 
 export function formatWeightBand(
   weightFrom: number,
   weightTo: number | null,
+  tAbove?: string,
 ): string {
   if (weightTo === null) {
-    return `Trên ${weightFrom} kg`;
+    return tAbove ? `${tAbove} ${weightFrom} kg` : `Over ${weightFrom} kg`;
   }
   return `${weightFrom} → ${weightTo} kg`;
 }
@@ -96,8 +98,29 @@ export function ShipmentRateWorkspace({
   onChanged,
   onMissing,
 }: ShipmentRateWorkspaceProps) {
+  const tShipments = useTranslations('shipments');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canUpdate = can('shipment:update') || can('fare-price:update');
+
+  function getLocalizedRateStatus(st: ShipmentRateStatus): string {
+    return st === 'HOAT_DONG'
+      ? tShipments('ratesStatusActive')
+      : tShipments('ratesStatusPaused');
+  }
+
+  function getLocalizedEffectiveState(eff: ShipmentRateEffectiveState): string {
+    switch (eff) {
+      case 'CHUA_DEN_NGAY':
+        return tShipments('validityUpcoming');
+      case 'DANG_HIEU_LUC':
+        return tShipments('validityActive');
+      case 'HET_HIEU_LUC':
+        return tShipments('validityExpired');
+      default:
+        return eff;
+    }
+  }
 
   const [detailState, setDetailState] = useState<RateDetailState>(
     initialRate
@@ -133,20 +156,20 @@ export function ShipmentRateWorkspace({
             err instanceof ShipmentRateApiError &&
             err.statusCode === 404
           ) {
-            onMissingRef.current?.('Mức cước gửi hàng không còn tồn tại.');
+            onMissingRef.current?.(tShipments('rateNotFound'));
           }
           setDetailState({
             status: 'error',
             message:
               err instanceof Error
                 ? err.message
-                : 'Không thể tải chi tiết mức cước gửi hàng.',
+                : tShipments('rateLoadError'),
           });
         }
       });
 
     return () => controller.abort();
-  }, [rateId, retryCount, onChanged]);
+  }, [rateId, retryCount, onChanged, tShipments]);
 
   useEffect(() => {
     if (!editOpen) return;
@@ -176,7 +199,7 @@ export function ShipmentRateWorkspace({
             error:
               err instanceof Error
                 ? err.message
-                : 'Không thể tải danh mục tuyến đường và loại hàng.',
+                : tShipments('cannotLoadRoutesOrCargo'),
           });
         }
       }
@@ -184,13 +207,15 @@ export function ShipmentRateWorkspace({
 
     void loadOptions();
     return () => controller.abort();
-  }, [editOpen, optionsReloadTick]);
+  }, [editOpen, optionsReloadTick, tShipments]);
 
   const rate = detailState.status === 'success' ? detailState.rate : null;
   const nextStatus: ShipmentRateStatus =
     rate?.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG';
   const nextStatusLabel =
-    nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng' : 'Kích hoạt lại';
+    nextStatus === 'TAM_NGUNG'
+      ? tShipments('ratesStatusPaused')
+      : tShipments('rateConfirmResumeBtn');
 
   async function handleConfirmStatus() {
     if (!rate || statusLoading) return;
@@ -205,8 +230,8 @@ export function ShipmentRateWorkspace({
       setStatusLoading(false);
       const message =
         nextStatus === 'TAM_NGUNG'
-          ? 'Đã tạm ngưng mức cước gửi hàng.'
-          : 'Đã kích hoạt lại mức cước gửi hàng.';
+          ? tShipments('ratePauseSuccess')
+          : tShipments('rateResumeSuccess');
       toast.success(message);
       onChanged?.(updated, message);
     } catch (statusError) {
@@ -216,13 +241,13 @@ export function ShipmentRateWorkspace({
         statusError instanceof ShipmentRateApiError &&
         statusError.statusCode === 404
       ) {
-        onMissingRef.current?.('Mức cước gửi hàng không còn tồn tại.');
+        onMissingRef.current?.(tShipments('rateNotFound'));
         return;
       }
       const message =
         statusError instanceof Error
           ? statusError.message
-          : 'Không thể cập nhật trạng thái mức cước gửi hàng.';
+          : tShipments('rateStatusUpdateError');
       toast.error(message);
     }
   }
@@ -231,11 +256,11 @@ export function ShipmentRateWorkspace({
     <SuperAdminLayout
       activeSection="shipments"
       breadcrumbs={[
-        { label: 'Danh mục cước & hành lý', href: '/shipments/rates' },
+        { label: tShipments('rateBreadcrumbRates'), href: '/shipments/rates' },
         {
           label: rate
             ? `${rate.route.code} · ${rate.cargoType.name}`
-            : 'Chi tiết mức cước',
+            : tShipments('rateBreadcrumbDetail'),
         },
       ]}
     >
@@ -249,7 +274,7 @@ export function ShipmentRateWorkspace({
                 variant="outline"
               >
                 <ArrowLeft aria-hidden />
-                Danh mục cước
+                {tShipments('rateBreadcrumbRates')}
               </Button>
 
               {canUpdate && rate && (
@@ -263,7 +288,7 @@ export function ShipmentRateWorkspace({
                   </Button>
                   <Button onClick={() => setEditOpen(true)}>
                     <Pencil aria-hidden />
-                    Chỉnh sửa
+                    {tCommon('edit')}
                   </Button>
                 </>
               )}
@@ -274,13 +299,13 @@ export function ShipmentRateWorkspace({
               />
             </div>
           }
-          title="Chi tiết mức cước gửi hàng"
+          title={tShipments('rateDetailTitle')}
           titleId="shipment-rate-workspace-title"
         />
 
         {detailState.status === 'loading' && (
           <ResourceState loading>
-            Đang tải thông tin mức cước gửi hàng…
+            {tShipments('rateLoadingText')}
           </ResourceState>
         )}
 
@@ -292,13 +317,13 @@ export function ShipmentRateWorkspace({
                 onClick={() => setRetryCount((count) => count + 1)}
                 variant="outline"
               >
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button
                 nativeButton={false}
                 render={<Link href="/shipments/rates" />}
               >
-                Về danh mục cước
+                {tShipments('rateBreadcrumbRates')}
               </Button>
             </div>
           </ResourceState>
@@ -330,14 +355,20 @@ export function ShipmentRateWorkspace({
                       {rate.route.origin} → {rate.route.destination}
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                      Nấc áp dụng: {formatWeightBand(rate.weightFrom, rate.weightTo)}
+                      {tShipments('rateBracketApplied', {
+                        bracket: formatWeightBand(
+                          rate.weightFrom,
+                          rate.weightTo,
+                          tShipments('rateAboveKg', { kg: '' }),
+                        ),
+                      })}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-col items-start gap-3 sm:items-end">
                   <div className="text-left sm:text-right">
-                    <span className="text-xs text-muted-foreground">Mức cước cơ bản</span>
+                    <span className="text-xs text-muted-foreground">{tShipments('rateBaseFee')}</span>
                     <p className="text-2xl font-bold tabular-nums text-foreground sm:text-3xl">
                       {formatVnd(rate.fee)}
                     </p>
@@ -346,7 +377,7 @@ export function ShipmentRateWorkspace({
                     <ResourceStatusBadge
                       tone={rate.status === 'HOAT_DONG' ? 'active' : 'muted'}
                     >
-                      {STATUS_LABELS[rate.status]}
+                      {getLocalizedRateStatus(rate.status)}
                     </ResourceStatusBadge>
                     <ResourceStatusBadge
                       tone={
@@ -355,7 +386,7 @@ export function ShipmentRateWorkspace({
                           : 'muted'
                       }
                     >
-                      {EFFECTIVE_LABELS[rate.effectiveState]}
+                      {getLocalizedEffectiveState(rate.effectiveState)}
                     </ResourceStatusBadge>
                   </div>
                 </div>
@@ -364,95 +395,95 @@ export function ShipmentRateWorkspace({
 
             {/* Bento Grid 3 Cards */}
             <div className="grid gap-6 md:grid-cols-3">
-              {/* Card 1: Tuyến đường */}
+              {/* Card 1: Route */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2 text-primary">
                     <MapPin size={18} />
                     <CardTitle className="text-base font-semibold">
-                      Tuyến đường
+                      {tShipments('rateRouteCardTitle')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Mã tuyến xe</dt>
+                      <dt>{tShipments('rateRouteCodeLabel')}</dt>
                       <dd className="admin-data-mono font-semibold">
                         {rate.route.code}
                       </dd>
                     </div>
                     <div>
-                      <dt>Điểm xuất phát</dt>
+                      <dt>{tShipments('rateOriginLabel')}</dt>
                       <dd>{rate.route.origin}</dd>
                     </div>
                     <div>
-                      <dt>Điểm đích đến</dt>
+                      <dt>{tShipments('rateDestinationLabel')}</dt>
                       <dd>{rate.route.destination}</dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
 
-              {/* Card 2: Quy cách & Khối lượng */}
+              {/* Card 2: Specifications & Weight */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2 text-primary">
                     <Scale size={18} />
                     <CardTitle className="text-base font-semibold">
-                      Quy cách & Khối lượng
+                      {tShipments('rateSpecsCardTitle')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Loại hàng hóa</dt>
+                      <dt>{tShipments('rateCargoTypeLabel')}</dt>
                       <dd>{rate.cargoType.name}</dd>
                     </div>
                     <div>
-                      <dt>Nấc khối lượng</dt>
-                      <dd>{formatWeightBand(rate.weightFrom, rate.weightTo)}</dd>
+                      <dt>{tShipments('rateWeightBracketLabel')}</dt>
+                      <dd>{formatWeightBand(rate.weightFrom, rate.weightTo, tShipments('rateAboveKg', { kg: '' }))}</dd>
                     </div>
                     <div>
-                      <dt>Khối lượng tối thiểu</dt>
+                      <dt>{tShipments('rateMinWeightLabel')}</dt>
                       <dd className="tabular-nums">{rate.weightFrom} kg</dd>
                     </div>
                     <div>
-                      <dt>Khối lượng tối đa</dt>
+                      <dt>{tShipments('rateMaxWeightLabel')}</dt>
                       <dd className="tabular-nums">
-                        {rate.weightTo !== null ? `${rate.weightTo} kg` : 'Không giới hạn'}
+                        {rate.weightTo !== null ? `${rate.weightTo} kg` : tShipments('unlimited')}
                       </dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
 
-              {/* Card 3: Thời hạn hiệu lực */}
+              {/* Card 3: Validity Period */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2 text-primary">
                     <Calendar size={18} />
                     <CardTitle className="text-base font-semibold">
-                      Thời hạn hiệu lực
+                      {tShipments('rateValidityCardTitle')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Hiệu lực từ ngày</dt>
+                      <dt>{tShipments('rateValidFromLabel')}</dt>
                       <dd className="tabular-nums">{formatDateOnly(rate.validFrom)}</dd>
                     </div>
                     <div>
-                      <dt>Hiệu lực đến ngày</dt>
+                      <dt>{tShipments('rateValidToLabel')}</dt>
                       <dd className="tabular-nums">
-                        {rate.validTo ? formatDateOnly(rate.validTo) : 'Không giới hạn'}
+                        {rate.validTo ? formatDateOnly(rate.validTo) : tShipments('unlimited')}
                       </dd>
                     </div>
                     <div>
-                      <dt>Tình trạng áp dụng</dt>
-                      <dd>{EFFECTIVE_LABELS[rate.effectiveState]}</dd>
+                      <dt>{tShipments('rateStatusLabel')}</dt>
+                      <dd>{getLocalizedEffectiveState(rate.effectiveState)}</dd>
                     </div>
                   </dl>
                 </CardContent>
@@ -470,7 +501,7 @@ export function ShipmentRateWorkspace({
             onSaved={(updated) => {
               setDetailState({ status: 'success', rate: updated });
               setEditOpen(false);
-              onChanged?.(updated, 'Đã cập nhật mức cước gửi hàng thành công.');
+              onChanged?.(updated, tShipments('rateUpdateSuccess'));
             }}
             open={editOpen}
             options={formOptions}
@@ -483,16 +514,24 @@ export function ShipmentRateWorkspace({
             busy={statusLoading}
             description={
               nextStatus === 'TAM_NGUNG'
-                ? `Mức cước tuyến ${rate.route.code} (${rate.cargoType.name}, ${formatWeightBand(rate.weightFrom, rate.weightTo)}) sẽ chuyển sang trạng thái tạm ngưng.`
-                : `Mức cước tuyến ${rate.route.code} (${rate.cargoType.name}, ${formatWeightBand(rate.weightFrom, rate.weightTo)}) sẽ hoạt động trở lại nếu khoảng ngày không trùng lặp.`
+                ? tShipments('rateConfirmPauseDesc', {
+                    code: rate.route.code,
+                    name: rate.cargoType.name,
+                    bracket: formatWeightBand(rate.weightFrom, rate.weightTo, tShipments('rateAboveKg', { kg: '' })),
+                  })
+                : tShipments('rateConfirmResumeDesc', {
+                    code: rate.route.code,
+                    name: rate.cargoType.name,
+                    bracket: formatWeightBand(rate.weightFrom, rate.weightTo, tShipments('rateAboveKg', { kg: '' })),
+                  })
             }
             onClose={() => {
               if (!statusLoading) setConfirmOpen(false);
             }}
             title={
               nextStatus === 'TAM_NGUNG'
-                ? 'Tạm ngưng mức cước?'
-                : 'Kích hoạt lại mức cước?'
+                ? tShipments('rateConfirmPauseTitle')
+                : tShipments('rateConfirmResumeTitle')
             }
           >
             <Button
@@ -502,10 +541,10 @@ export function ShipmentRateWorkspace({
               variant={nextStatus === 'TAM_NGUNG' ? 'destructive' : 'default'}
             >
               {statusLoading
-                ? 'Đang cập nhật…'
+                ? tShipments('updatingStatus')
                 : nextStatus === 'TAM_NGUNG'
-                  ? 'Xác nhận tạm ngưng'
-                  : 'Xác nhận kích hoạt'}
+                  ? tShipments('rateConfirmPauseBtn')
+                  : tShipments('rateConfirmResumeBtn')}
             </Button>
           </ResourceConfirmation>
         )}

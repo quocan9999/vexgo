@@ -144,7 +144,7 @@ export function ResourceConfirmation({
   children,
   footer,
   busy = false,
-  cancelLabel = 'Hủy',
+  cancelLabel,
   onClose,
 }: {
   title: string;
@@ -155,6 +155,8 @@ export function ResourceConfirmation({
   cancelLabel?: string;
   onClose: () => void;
 }) {
+  const tCommon = useTranslations('common');
+  const resolvedCancelLabel = cancelLabel ?? tCommon('cancel');
   const cancelRef = useRef<HTMLButtonElement>(null);
   return (
     <AlertDialog
@@ -177,7 +179,7 @@ export function ResourceConfirmation({
             ref={cancelRef}
             variant="outline"
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </Button>
         )}
       </AlertDialogContent>
@@ -367,13 +369,15 @@ export function ResourceTableSkeleton({
 }: {
   resourceLabel: string;
 }) {
+  const tCommon = useTranslations('common');
+  const loadingText = tCommon('loadingData', { resource: resourceLabel });
   return (
     <div
       className="space-y-5 p-5"
       role="status"
-      aria-label={`Đang tải danh sách ${resourceLabel}`}
+      aria-label={loadingText}
     >
-      <span className="sr-only">Đang tải dữ liệu {resourceLabel}…</span>
+      <span className="sr-only">{loadingText}</span>
       {Array.from({ length: 5 }, (_, row) => (
         <div
           aria-hidden

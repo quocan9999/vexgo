@@ -27,13 +27,13 @@ function toLoadError(error: unknown): RevenueReportLoadError {
   }
   if (error instanceof TypeError) {
     return {
-      message: 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.',
+      message: 'Unable to connect to API server. Please try again.',
       accessDenied: false,
       retryable: true,
     };
   }
   return {
-    message: 'Không thể tải báo cáo doanh thu. Vui lòng thử lại.',
+    message: 'Unable to load revenue report. Please try again.',
     accessDenied: false,
     retryable: true,
   };

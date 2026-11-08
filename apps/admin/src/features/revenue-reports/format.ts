@@ -16,22 +16,30 @@ export function formatRevenueVnd(value: string): string {
   return formatVnd(value === '-0' ? '0' : value);
 }
 
-export function formatCompactRevenueVnd(value: bigint): string {
+export function formatCompactRevenueVnd(value: bigint, locale?: string): string {
   const sign = value < BigInt(0) ? '−' : '';
   const absolute = value < BigInt(0) ? -value : value;
-  const units = [
-    { divisor: BigInt(1_000_000_000_000), label: 'nghìn tỷ' },
-    { divisor: BigInt(1_000_000_000), label: 'tỷ' },
-    { divisor: BigInt(1_000_000), label: 'triệu' },
-    { divisor: BigInt(1_000), label: 'nghìn' },
-  ];
+  const isEn = locale === 'en';
+  const units = isEn
+    ? [
+        { divisor: BigInt(1_000_000_000_000), label: 'T' },
+        { divisor: BigInt(1_000_000_000), label: 'B' },
+        { divisor: BigInt(1_000_000), label: 'M' },
+        { divisor: BigInt(1_000), label: 'K' },
+      ]
+    : [
+        { divisor: BigInt(1_000_000_000_000), label: ' ngh\u00ECn t\u1EF7' },
+        { divisor: BigInt(1_000_000_000), label: ' t\u1EF7' },
+        { divisor: BigInt(1_000_000), label: ' tri\u1EC7u' },
+        { divisor: BigInt(1_000), label: ' ngh\u00ECn' },
+      ];
 
   for (const unit of units) {
     if (absolute >= unit.divisor) {
       const whole = absolute / unit.divisor;
       const tenth = ((absolute % unit.divisor) * BigInt(10)) / unit.divisor;
-      const amount = `${vietnameseInteger.format(whole)}${tenth > BigInt(0) ? `,${tenth}` : ''}`;
-      return `${sign}${amount} ${unit.label} ₫`;
+      const amount = `${vietnameseInteger.format(whole)}${tenth > BigInt(0) ? (isEn ? `.${tenth}` : `,${tenth}`) : ''}`;
+      return `${sign}${amount}${isEn ? '' : ' '}${unit.label} ₫`;
     }
   }
 
@@ -55,15 +63,15 @@ export function formatPeriod(
   }
   const match = /^(\d{4})-Q([1-4])$/.exec(value);
   if (!match) return value;
-  return locale === 'en' ? `Q${match[2]}/${match[1]}` : `Quý ${match[2]}/${match[1]}`;
+  return locale === 'en' ? `Q${match[2]}/${match[1]}` : `Qu\u00FD ${match[2]}/${match[1]}`;
 }
 
 export function formatReportRange(meta: RevenueReportMeta): string {
   return `${formatDateOnly(meta.fromDate)} – ${formatDateOnly(meta.toDate)}`;
 }
 
-export function groupByLabel(groupBy: RevenueReportGroupBy): string {
-  if (groupBy === 'month') return 'tháng';
-  if (groupBy === 'quarter') return 'quý';
-  return 'ngày';
+export function groupByLabel(groupBy: RevenueReportGroupBy, locale?: string): string {
+  if (groupBy === 'month') return locale === 'en' ? 'month' : 'th\u00E1ng';
+  if (groupBy === 'quarter') return locale === 'en' ? 'quarter' : 'qu\u00FD';
+  return locale === 'en' ? 'day' : 'ng\u00E0y';
 }

@@ -113,7 +113,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                   <TableBody>
                     {trips.map((trip) => (
                       <TableRow key={trip.tripId} className="hover:bg-slate-50/70">
-                        {/* Giờ xuất bến */}
+                        {/* Departure time */}
                         <TableCell className="font-semibold text-slate-900">
                           <div className="flex items-center gap-1.5 font-mono text-sm">
                             <Clock className="size-3.5 text-primary shrink-0" />
@@ -124,7 +124,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                           </span>
                         </TableCell>
 
-                        {/* Tuyến xe */}
+                        {/* Route */}
                         <TableCell>
                           <div className="font-medium text-foreground">
                             {trip.routeName}
@@ -136,7 +136,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                           </div>
                         </TableCell>
 
-                        {/* Phương tiện */}
+                        {/* Vehicle */}
                         <TableCell>
                           <span className="font-mono text-xs font-semibold px-1.5 py-0.5 bg-slate-100 rounded text-slate-800">
                             {trip.licensePlate}
@@ -146,7 +146,7 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                           </div>
                         </TableCell>
 
-                        {/* Tiến độ lấp đầy */}
+                        {/* Occupancy progress */}
                         <TableCell>
                           <div className="space-y-1.5">
                             <div className="flex items-center justify-between text-xs">
@@ -177,15 +177,15 @@ export function TenantUpcomingTrips({ trips }: TenantUpcomingTripsProps) {
                           </div>
                         </TableCell>
 
-                        {/* Trạng thái */}
+                        {/* Status */}
                         <TableCell>{getTripStatusBadge(trip.status, t)}</TableCell>
 
-                        {/* Thao tác */}
+                        {/* Actions */}
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Link
                               href={`/trips/${trip.tripId}/seats`}
-                              title="Xem sơ đồ ghế"
+                              title={t('viewSeatMap')}
                               className={
                                 buttonVariants({ variant: 'outline', size: 'sm' }) +
                                 ' h-7 px-2 text-xs gap-1 text-primary hover:text-primary'

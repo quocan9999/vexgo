@@ -24,7 +24,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     throw new AdminChatApiError(
       res.status,
       errorBody.error || 'API_ERROR',
-      errorBody.message || 'Có lỗi xảy ra khi kết nối tới máy chủ.',
+      errorBody.message || 'An error occurred while connecting to the server.',
     );
   }
   const envelope = await res.json();
@@ -33,7 +33,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const adminSupportChatApi = {
   /**
-   * Lấy danh sách cuộc trò chuyện thuộc phạm vi nhà xe
+   * Get list of conversations within operator scope
    */
   async listConversations(
     params: {
@@ -73,14 +73,14 @@ export const adminSupportChatApi = {
       throw new AdminChatApiError(
         res.status,
         errorBody.error || 'API_ERROR',
-        errorBody.message || 'Có lỗi xảy ra khi tải danh sách cuộc trò chuyện.',
+        errorBody.message || 'An error occurred while loading conversation list.',
       );
     }
     return res.json();
   },
 
   /**
-   * Lấy chi tiết cuộc trò chuyện
+   * Get conversation details
    */
   async getConversationById(
     id: number,
@@ -98,7 +98,7 @@ export const adminSupportChatApi = {
   },
 
   /**
-   * Lấy lịch sử tin nhắn (hỗ trợ beforeId để tải tin cũ hơn)
+   * Get message history (supports beforeId for older messages)
    */
   async getMessages(
     conversationId: number,
@@ -131,7 +131,7 @@ export const adminSupportChatApi = {
   },
 
   /**
-   * Nhân viên gửi tin nhắn phản hồi
+   * Staff sends reply message
    */
   async sendMessage(
     conversationId: number,
@@ -158,7 +158,7 @@ export const adminSupportChatApi = {
   },
 
   /**
-   * Nhân viên tiếp nhận cuộc trò chuyện
+   * Staff claims conversation
    */
   async claimConversation(
     conversationId: number,
@@ -177,7 +177,7 @@ export const adminSupportChatApi = {
   },
 
   /**
-   * Kết thúc cuộc trò chuyện
+   * End conversation
    */
   async closeConversation(
     conversationId: number,
@@ -199,7 +199,7 @@ export const adminSupportChatApi = {
   },
 
   /**
-   * Đánh dấu đã đọc
+   * Mark messages as read
    */
   async markMessagesAsRead(
     conversationId: number,

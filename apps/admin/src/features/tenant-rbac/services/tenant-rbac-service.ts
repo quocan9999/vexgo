@@ -14,7 +14,7 @@ function getTenantRolePermissionsUrl(): string {
 function getPlatformTenantRolePermissionsUrl(nhaXeId: number): string {
   if (!Number.isSafeInteger(nhaXeId) || nhaXeId <= 0) {
     throw new AdminTenantRbacApiError(
-      'Mã nhà xe không hợp lệ.',
+      'Invalid bus operator ID.',
       'INVALID_TENANT_ID',
     );
   }
@@ -46,7 +46,7 @@ function parseApiError(body: unknown, status: number): AdminTenantRbacApiError {
   const message =
     isRecord(body) && typeof body.message === 'string'
       ? body.message
-      : `Không thể tải cấu hình phân quyền nhà xe (HTTP ${status}).`;
+      : `Unable to load operator permissions configuration (HTTP ${status}).`;
   const code =
     isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
   return new AdminTenantRbacApiError(message, code);
@@ -54,7 +54,7 @@ function parseApiError(body: unknown, status: number): AdminTenantRbacApiError {
 
 function invalidResponse(): never {
   throw new AdminTenantRbacApiError(
-    'API trả về cấu hình phân quyền nhà xe không hợp lệ.',
+    'API returned invalid operator permissions configuration.',
     'INVALID_TENANT_RBAC_RESPONSE',
   );
 }
@@ -229,7 +229,7 @@ export async function replaceTenantRolePermissions(
     permissionKeys.some((key) => !catalog.has(key))
   ) {
     throw new AdminTenantRbacApiError(
-      'Danh sách quyền không hợp lệ với vai trò đã chọn.',
+      'Invalid permission list for the selected role.',
       'INVALID_PERMISSION_LIST',
     );
   }
@@ -261,7 +261,7 @@ export async function replacePlatformTenantRolePermissions(
     permissionKeys.some((key) => !catalog.has(key))
   ) {
     throw new AdminTenantRbacApiError(
-      'Danh sách quyền không hợp lệ với vai trò đã chọn.',
+      'Invalid permission list for the selected role.',
       'INVALID_PERMISSION_LIST',
     );
   }
@@ -284,7 +284,7 @@ export async function resetTenantRolePermissions(
 ): Promise<TenantRbacRole> {
   if (role.scope !== 'tenant' || role.isProtected) {
     throw new AdminTenantRbacApiError(
-      'Không thể khôi phục cấu hình cho vai trò này.',
+      'Cannot reset configuration for this role.',
       'ROLE_NOT_MANAGEABLE',
     );
   }
@@ -304,7 +304,7 @@ export async function resetPlatformTenantRolePermissions(
   const url = getPlatformTenantRolePermissionsUrl(nhaXeId);
   if (role.scope !== 'tenant' || role.isProtected) {
     throw new AdminTenantRbacApiError(
-      'Không thể khôi phục cấu hình cho vai trò này.',
+      'Cannot reset configuration for this role.',
       'ROLE_NOT_MANAGEABLE',
     );
   }

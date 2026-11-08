@@ -193,10 +193,10 @@ export function AdminAccountWorkspace({
     } catch (requestError: unknown) {
       toast.error(
         requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          ? tAccounts('networkError')
           : requestError instanceof Error
             ? requestError.message
-            : 'Không thể cập nhật trạng thái tài khoản.',
+            : tAccounts('cannotUpdateStatus'),
       );
     } finally {
       statusSubmittingRef.current = false;
@@ -325,7 +325,7 @@ export function AdminAccountWorkspace({
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Thông tin định danh & nhân sự */}
+              {/* Card 1: Identity & Staff Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-base font-semibold">
@@ -374,7 +374,7 @@ export function AdminAccountWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 2: Phạm vi và vai trò */}
+              {/* Card 2: Scope & Roles */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-base font-semibold">
@@ -404,7 +404,7 @@ export function AdminAccountWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 3: Thông tin bảo mật & hệ thống */}
+              {/* Card 3: Security & System Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-base font-semibold">

@@ -38,6 +38,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { useTranslations } from 'next-intl';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { canDispatchShipment } from '../services/shipment-operations';
@@ -54,26 +55,26 @@ import type {
 import { ShipmentOperations } from './shipment-operations';
 
 export const SHIPMENT_STATUS_LABELS: Record<ShipmentStatus, string> = {
-  MOI_TAO: 'Chờ mang hàng đến gửi',
-  DA_TIEP_NHAN: 'Đã tiếp nhận',
-  DANG_VAN_CHUYEN: 'Đang vận chuyển',
-  DA_GIAO: 'Đã giao',
-  DA_HUY: 'Đã hủy',
+  MOI_TAO: 'Created',
+  DA_TIEP_NHAN: 'Received',
+  DANG_VAN_CHUYEN: 'In Transit',
+  DA_GIAO: 'Delivered',
+  DA_HUY: 'Cancelled',
 };
 
 export const FREIGHT_PAYER_LABELS: Record<FreightPayer, string> = {
-  NGUOI_GUI: 'Người gửi trả',
-  NGUOI_NHAN: 'Người nhận trả',
+  NGUOI_GUI: 'Sender',
+  NGUOI_NHAN: 'Recipient',
 };
 
 export function getPaymentStatusLabel(status: string): string {
   switch (status) {
     case 'CHO_THANH_TOAN':
-      return 'Chờ thanh toán';
+      return 'Pending';
     case 'DA_THANH_TOAN':
-      return 'Đã thanh toán';
+      return 'Paid';
     case 'DA_HUY':
-      return 'Đã hủy';
+      return 'Cancelled';
     default:
       return status;
   }
@@ -114,8 +115,8 @@ export function formatDateTime(isoString?: string | null): string {
 }
 
 export function formatCurrency(amount?: number | null): string {
-  if (amount == null || Number.isNaN(amount)) return '0 đ';
-  return `${amount.toLocaleString('vi-VN')} đ`;
+  if (amount == null || Number.isNaN(amount)) return '0 ₫';
+  return `${amount.toLocaleString('vi-VN')} ₫`;
 }
 
 export type StatusActionConfig = {
@@ -129,39 +130,45 @@ export type StatusActionConfig = {
 
 export function getAvailableStatusActions(
   status: ShipmentStatus,
+  t?: (key: string) => string,
 ): StatusActionConfig[] {
   switch (status) {
     case 'MOI_TAO':
       return [
         {
           targetStatus: 'DA_TIEP_NHAN',
-          title: 'Tiếp nhận hàng gửi?',
-          description:
-            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã tiếp nhận tại điểm gửi.',
-          actionLabel: 'Xác nhận đã tiếp nhận hàng',
-          confirmLabel: 'Xác nhận tiếp nhận',
+          title: t ? t('actionReceiveTitle') : 'Receive Cargo?',
+          description: t
+            ? t('actionReceiveDesc')
+            : 'Shipment will change to Received at origin counter.',
+          actionLabel: t
+            ? t('actionReceiveLabel')
+            : 'Confirm Cargo Received',
+          confirmLabel: t ? t('actionReceiveConfirm') : 'Confirm Receipt',
         },
       ];
     case 'DA_TIEP_NHAN':
       return [
         {
           targetStatus: 'DANG_VAN_CHUYEN',
-          title: 'Bắt đầu vận chuyển hàng?',
-          description:
-            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đang vận chuyển cùng chuyến xe.',
-          actionLabel: 'Bắt đầu vận chuyển',
-          confirmLabel: 'Bắt đầu vận chuyển',
+          title: t ? t('actionInTransitTitle') : 'Start Cargo Transit?',
+          description: t
+            ? t('actionInTransitDesc')
+            : 'Shipment will change to In Transit with vehicle.',
+          actionLabel: t ? t('actionInTransitLabel') : 'Start Transit',
+          confirmLabel: t ? t('actionInTransitConfirm') : 'Start Transit',
         },
       ];
     case 'DANG_VAN_CHUYEN':
       return [
         {
           targetStatus: 'DA_GIAO',
-          title: 'Xác nhận đã giao hàng?',
-          description:
-            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã giao và hoàn tất việc giao nhận.',
-          actionLabel: 'Xác nhận đã giao hàng',
-          confirmLabel: 'Xác nhận đã giao',
+          title: t ? t('actionDeliverTitle') : 'Confirm Delivery?',
+          description: t
+            ? t('actionDeliverDesc')
+            : 'Shipment will change to Delivered and complete fulfillment.',
+          actionLabel: t ? t('actionDeliverLabel') : 'Confirm Cargo Delivered',
+          confirmLabel: t ? t('actionDeliverConfirm') : 'Confirm Delivered',
         },
       ];
     default:
@@ -187,6 +194,50 @@ export function ShipmentWorkspace({
   onClose,
   onStatusUpdated,
 }: ShipmentWorkspaceProps) {
+  const tShipments = useTranslations('shipments');
+  const tCommon = useTranslations('common');
+
+  function getLocalizedShipmentStatus(st: ShipmentStatus): string {
+    switch (st) {
+      case 'MOI_TAO':
+        return tShipments('statusCreated');
+      case 'DA_TIEP_NHAN':
+        return tShipments('statusReceived');
+      case 'DANG_VAN_CHUYEN':
+        return tShipments('statusInTransit');
+      case 'DA_GIAO':
+        return tShipments('statusDelivered');
+      case 'DA_HUY':
+        return tShipments('statusCancelled');
+      default:
+        return SHIPMENT_STATUS_LABELS[st] ?? st;
+    }
+  }
+
+  function getLocalizedFreightPayer(payer: FreightPayer): string {
+    switch (payer) {
+      case 'NGUOI_GUI':
+        return tShipments('payerSender');
+      case 'NGUOI_NHAN':
+        return tShipments('payerReceiver');
+      default:
+        return FREIGHT_PAYER_LABELS[payer] ?? payer;
+    }
+  }
+
+  function getLocalizedPaymentStatus(pStatus: string): string {
+    switch (pStatus) {
+      case 'CHO_THANH_TOAN':
+        return tShipments('paymentPending');
+      case 'DA_THANH_TOAN':
+        return tShipments('paymentPaid');
+      case 'DA_HUY':
+        return tShipments('paymentCancelled');
+      default:
+        return getPaymentStatusLabel(pStatus);
+    }
+  }
+
   const submittingRef = useRef(false);
   const [loadedDetail, setLoadedDetail] = useState<{
     requestKey: string;
@@ -238,14 +289,14 @@ export function ShipmentWorkspace({
               message:
                 error instanceof Error
                   ? error.message
-                  : 'Không thể tải thông tin phiếu gửi hàng.',
+                  : tShipments('loadDetailError'),
             },
           });
         }
       });
 
     return () => controller.abort();
-  }, [shipmentId, retryCount]);
+  }, [shipmentId, retryCount, tShipments]);
 
   function retry() {
     setRetryCount((c) => c + 1);
@@ -267,7 +318,7 @@ export function ShipmentWorkspace({
   async function handleConfirmStatus() {
     if (!activeAction || submittingRef.current || actionLocked) return;
     if (activeAction.targetStatus === 'DA_HUY' && !note.trim()) {
-      toast.error('Vui lòng nhập lý do từ chối / hủy phiếu gửi hàng.');
+      toast.error(tShipments('cancelReasonRequired'));
       return;
     }
     submittingRef.current = true;
@@ -279,7 +330,9 @@ export function ShipmentWorkspace({
         note: note.trim() || undefined,
       });
       toast.success(
-        `Đã chuyển phiếu gửi sang trạng thái ${SHIPMENT_STATUS_LABELS[activeAction.targetStatus]}.`,
+        tShipments('statusUpdatedSuccess', {
+          status: getLocalizedShipmentStatus(activeAction.targetStatus),
+        }),
       );
       setActiveAction(null);
       setNote('');
@@ -295,7 +348,7 @@ export function ShipmentWorkspace({
       toast.error(
         err instanceof Error
           ? err.message
-          : 'Có lỗi xảy ra khi cập nhật trạng thái.',
+          : tShipments('statusUpdateFailed'),
       );
     } finally {
       submittingRef.current = false;
@@ -309,9 +362,13 @@ export function ShipmentWorkspace({
     <SuperAdminLayout
       activeSection="shipments"
       breadcrumbs={[
-        { label: 'Vận tải & Gửi hàng', href: '/shipments' },
-        { label: 'Phiếu gửi hàng', href: '/shipments' },
-        { label: shipment ? shipment.waybillCode : `Vận đơn #${shipmentId}` },
+        { label: tShipments('workspaceBreadcrumbSection'), href: '/shipments' },
+        { label: tShipments('workspaceBreadcrumbShipments'), href: '/shipments' },
+        {
+          label: shipment
+            ? shipment.waybillCode
+            : tShipments('workspaceWaybillPrefix', { id: shipmentId }),
+        },
       ]}
     >
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
@@ -329,7 +386,7 @@ export function ShipmentWorkspace({
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Danh sách phiếu gửi
+                {tShipments('backToList')}
               </Button>
 
               {shipment && shipment.status !== 'DA_HUY' && (
@@ -347,7 +404,7 @@ export function ShipmentWorkspace({
                     variant="outline"
                   >
                     <Tag className="size-3.5 text-muted-foreground" />
-                    In tem dán kiện
+                    {tShipments('printLabel')}
                   </Button>
                   <Button
                     className="gap-1.5"
@@ -362,7 +419,7 @@ export function ShipmentWorkspace({
                     variant="outline"
                   >
                     <Receipt className="size-3.5 text-muted-foreground" />
-                    In biên nhận
+                    {tShipments('printReceipt')}
                   </Button>
                 </>
               )}
@@ -373,14 +430,14 @@ export function ShipmentWorkspace({
               />
             </div>
           }
-          eyebrow="CHĂM SÓC KHÁCH HÀNG & GỬI HÀNG"
-          title="Chi tiết phiếu gửi"
+          eyebrow={tShipments('detailEyebrow')}
+          title={tShipments('detailTitle')}
           titleId="shipment-workspace-title"
         />
 
         {detail.status === 'loading' && (
           <ResourceState loading>
-            <p>Đang tải thông tin phiếu gửi hàng…</p>
+            <p>{tShipments('loadingDetail')}</p>
           </ResourceState>
         )}
 
@@ -389,10 +446,10 @@ export function ShipmentWorkspace({
             <p>{detail.message}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={retry} variant="outline">
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button nativeButton={false} render={<Link href="/shipments" />}>
-                Về danh sách phiếu gửi
+                {tShipments('backToList')}
               </Button>
             </div>
           </ResourceState>
@@ -415,29 +472,32 @@ export function ShipmentWorkspace({
                       {shipment.waybillCode}
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Ngày gửi: {formatDateTime(shipment.sentAt)}
+                      {tShipments('sentDate', {
+                        date: formatDateTime(shipment.sentAt),
+                      })}
                     </p>
                   </div>
                 </div>
                 <ResourceStatusBadge
                   tone={getShipmentStatusTone(shipment.status)}
                 >
-                  {SHIPMENT_STATUS_LABELS[shipment.status] ?? shipment.status}
+                  {getLocalizedShipmentStatus(shipment.status)}
                 </ResourceStatusBadge>
               </div>
 
               {shipment.note && (
                 <div className="mt-4 rounded-lg border bg-muted/40 p-3 text-[13px] break-words">
-                  <strong>Ghi chú:</strong> {shipment.note}
+                  <strong>{tShipments('note')}</strong> {shipment.note}
                 </div>
               )}
             </Card>
 
-            {/* Thao tác trạng thái */}
+            {/* Status Actions */}
             {canUpdate &&
               (() => {
                 const availableActions = getAvailableStatusActions(
                   shipment.status,
+                  tShipments,
                 ).filter((action) => action.targetStatus !== 'DA_TIEP_NHAN');
                 const canCancel =
                   shipment.status === 'MOI_TAO' ||
@@ -451,11 +511,10 @@ export function ShipmentWorkspace({
 
                 const cancelAction: StatusActionConfig = {
                   targetStatus: 'DA_HUY',
-                  title: 'Từ chối / Hủy đơn gửi hàng?',
-                  description:
-                    'Phiếu gửi sẽ chuyển sang trạng thái Đã hủy. Vui lòng nhập lý do bên dưới.',
-                  actionLabel: 'Từ chối / Hủy đơn',
-                  confirmLabel: 'Xác nhận hủy',
+                  title: tShipments('actionCancelTitle'),
+                  description: tShipments('actionCancelDesc'),
+                  actionLabel: tShipments('actionCancelLabel'),
+                  confirmLabel: tShipments('actionCancelConfirm'),
                   variant: 'destructive',
                 };
 
@@ -463,7 +522,7 @@ export function ShipmentWorkspace({
                   <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm border-blue-200/60 dark:border-blue-900/40 bg-blue-50/20 dark:bg-blue-950/10">
                     <CardHeader className="p-0 pb-3">
                       <CardTitle className="text-sm font-semibold text-foreground">
-                        Thao tác trạng thái:
+                        {tShipments('statusActions')}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -485,8 +544,7 @@ export function ShipmentWorkspace({
                             className="text-xs text-muted-foreground"
                             role="status"
                           >
-                            Cần phân chuyến và hoàn tất điều kiện thanh toán trước
-                            khi vận chuyển / giao hàng.
+                            {tShipments('dispatchConditionNotice')}
                           </p>
                         )}
                         {canCancel && (
@@ -506,7 +564,7 @@ export function ShipmentWorkspace({
                 );
               })()}
 
-            {/* Điều phối phân chuyến & cân đo */}
+            {/* Dispatch trip & weigh measurements */}
             {canUpdate && (
               <ShipmentOperations
                 onUpdated={() => {
@@ -519,7 +577,7 @@ export function ShipmentWorkspace({
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Card 1: Thông tin người gửi & Người nhận */}
+              {/* Card 1: Sender & Receiver */}
               <Card
                 aria-labelledby="shipment-contacts-heading"
                 className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm"
@@ -532,7 +590,7 @@ export function ShipmentWorkspace({
                       className="text-base font-semibold"
                       id="shipment-contacts-heading"
                     >
-                      Thông tin giao nhận
+                      {tShipments('deliveryInfoHeading')}
                     </CardTitle>
                   </div>
                 </CardHeader>
@@ -540,17 +598,17 @@ export function ShipmentWorkspace({
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-3 rounded-lg border bg-muted/20 p-3.5">
                       <h4 className="text-xs font-semibold text-primary uppercase tracking-wider">
-                        Người gửi
+                        {tShipments('senderHeading')}
                       </h4>
                       <dl className="grid gap-2 text-xs">
                         <div>
-                          <dt className="text-muted-foreground">Họ và tên</dt>
+                          <dt className="text-muted-foreground">{tShipments('fullName')}</dt>
                           <dd className="font-semibold text-foreground text-sm">
                             {shipment.sender.fullName}
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-muted-foreground">Số điện thoại</dt>
+                          <dt className="text-muted-foreground">{tShipments('phoneNumber')}</dt>
                           <dd className="admin-data-mono font-medium text-foreground">
                             {shipment.sender.phoneNumber}
                           </dd>
@@ -560,17 +618,17 @@ export function ShipmentWorkspace({
 
                     <div className="space-y-3 rounded-lg border bg-muted/20 p-3.5">
                       <h4 className="text-xs font-semibold text-primary uppercase tracking-wider">
-                        Người nhận
+                        {tShipments('receiverHeading')}
                       </h4>
                       <dl className="grid gap-2 text-xs">
                         <div>
-                          <dt className="text-muted-foreground">Họ và tên</dt>
+                          <dt className="text-muted-foreground">{tShipments('fullName')}</dt>
                           <dd className="font-semibold text-foreground text-sm">
                             {shipment.receiver.fullName}
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-muted-foreground">Số điện thoại</dt>
+                          <dt className="text-muted-foreground">{tShipments('phoneNumber')}</dt>
                           <dd className="admin-data-mono font-medium text-foreground">
                             {shipment.receiver.phoneNumber}
                           </dd>
@@ -581,7 +639,7 @@ export function ShipmentWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 2: Chuyến xe & Lộ trình */}
+              {/* Card 2: Trip & Route */}
               <Card
                 aria-labelledby="shipment-route-heading"
                 className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm"
@@ -594,7 +652,7 @@ export function ShipmentWorkspace({
                       className="text-base font-semibold"
                       id="shipment-route-heading"
                     >
-                      Chuyến xe & Lộ trình
+                      {tShipments('routeTripHeading')}
                     </CardTitle>
                   </div>
                 </CardHeader>
@@ -602,13 +660,13 @@ export function ShipmentWorkspace({
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5">
                     <div className="grid grid-cols-2 gap-3 border-b pb-2.5">
                       <div>
-                        <dt>Nhà xe vận chuyển</dt>
+                        <dt>{tShipments('carrier')}</dt>
                         <dd className="font-medium text-foreground">
                           {shipment.carrier?.name ?? '—'}
                         </dd>
                       </div>
                       <div>
-                        <dt>Tuyến đường</dt>
+                        <dt>{tShipments('route')}</dt>
                         <dd className="font-medium text-foreground">
                           {shipment.route
                             ? `${shipment.route.origin} → ${shipment.route.destination}`
@@ -618,13 +676,13 @@ export function ShipmentWorkspace({
                     </div>
                     <div className="grid grid-cols-2 gap-3 border-b pb-2.5">
                       <div>
-                        <dt>Mã chuyến xe</dt>
+                        <dt>{tShipments('tripCode')}</dt>
                         <dd className="admin-data-mono font-semibold text-foreground">
-                          {shipment.trip?.code ?? 'Chưa phân chuyến'}
+                          {shipment.trip?.code ?? tShipments('unassignedTrip')}
                         </dd>
                       </div>
                       <div>
-                        <dt>Thời gian khởi hành</dt>
+                        <dt>{tShipments('departureTime')}</dt>
                         <dd className="font-medium text-foreground">
                           {shipment.trip?.departureTime ?? '—'} ·{' '}
                           {shipment.trip?.departureDate.replace(
@@ -636,7 +694,7 @@ export function ShipmentWorkspace({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <dt>Điểm gửi (bốc hàng)</dt>
+                        <dt>{tShipments('originPoint')}</dt>
                         <dd>
                           <strong className="text-foreground">
                             {shipment.originPoint.name}
@@ -647,7 +705,7 @@ export function ShipmentWorkspace({
                         </dd>
                       </div>
                       <div>
-                        <dt>Điểm nhận (trả hàng)</dt>
+                        <dt>{tShipments('destinationPoint')}</dt>
                         <dd>
                           <strong className="text-foreground">
                             {shipment.destinationPoint.name}
@@ -663,7 +721,7 @@ export function ShipmentWorkspace({
               </Card>
             </div>
 
-            {/* Danh sách kiện hàng */}
+            {/* Cargo Items List */}
             <Card
               aria-labelledby="shipment-cargo-heading"
               className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm"
@@ -676,7 +734,7 @@ export function ShipmentWorkspace({
                     className="text-base font-semibold"
                     id="shipment-cargo-heading"
                   >
-                    Danh sách kiện hàng ({shipment.cargoItems.length})
+                    {tShipments('cargoListHeading', { count: shipment.cargoItems.length })}
                   </CardTitle>
                 </div>
               </CardHeader>
@@ -697,21 +755,21 @@ export function ShipmentWorkspace({
                       </div>
                       <dl className="grid grid-cols-2 gap-3 text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                         <div>
-                          <dt>Số lượng</dt>
-                          <dd>{item.quantity} kiện</dd>
+                          <dt>{tShipments('colPackageCount')}</dt>
+                          <dd>{tShipments('quantityCount', { count: item.quantity })}</dd>
                         </div>
                         <div>
-                          <dt>Khai báo / thực tế</dt>
+                          <dt>{tShipments('declaredVsActual')}</dt>
                           <dd>
                             {item.declaredWeightKg ?? item.weightKg} kg /{' '}
                             {item.actualWeightKg == null
-                              ? 'Chưa cân'
+                              ? tShipments('unweighed')
                               : `${item.actualWeightKg} kg`}
                           </dd>
                         </div>
                         {item.dimensions && (
                           <div>
-                            <dt>Kích thước (DxRxC)</dt>
+                            <dt>{tShipments('dimensionsDxRxC')}</dt>
                             <dd>
                               {item.dimensions.length}×{item.dimensions.width}×
                               {item.dimensions.height} cm
@@ -720,7 +778,7 @@ export function ShipmentWorkspace({
                         )}
                         {item.declaredValue != null && (
                           <div>
-                            <dt>Khai giá</dt>
+                            <dt>{tShipments('declaredValue')}</dt>
                             <dd className="text-primary font-semibold">
                               {formatCurrency(item.declaredValue)}
                             </dd>
@@ -729,7 +787,7 @@ export function ShipmentWorkspace({
                       </dl>
                       {item.description && (
                         <p className="text-xs text-muted-foreground border-t pt-2 break-words">
-                          <em>Mô tả:</em> {item.description}
+                          <em>{tShipments('descriptionLabel')}</em> {item.description}
                         </p>
                       )}
                     </div>
@@ -738,7 +796,7 @@ export function ShipmentWorkspace({
               </CardContent>
             </Card>
 
-            {/* Chi tiết cước & Thanh toán */}
+            {/* Freight Fee Details & Payment */}
             <Card
               aria-labelledby="shipment-fee-heading"
               className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm"
@@ -751,20 +809,20 @@ export function ShipmentWorkspace({
                     className="text-base font-semibold"
                     id="shipment-fee-heading"
                   >
-                    Chi tiết cước vận chuyển
+                    {tShipments('freightDetailsHeading')}
                   </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="p-0 space-y-4">
                 {shipment.cargoFeeDetails.length > 0 && (
                   <div className="overflow-hidden rounded-lg border">
-                    <Table aria-label="Chi tiết cước vận chuyển">
+                    <Table aria-label={tShipments('freightDetailsHeading')}>
                       <TableHeader>
                         <TableRow>
-                          <TableHead scope="col">Loại hàng</TableHead>
-                          <TableHead scope="col">Khối lượng tính cước</TableHead>
+                          <TableHead scope="col">{tShipments('tableCargoType')}</TableHead>
+                          <TableHead scope="col">{tShipments('tableChargeableWeight')}</TableHead>
                           <TableHead className="text-right" scope="col">
-                            Tiền cước
+                            {tShipments('tableFee')}
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -790,18 +848,18 @@ export function ShipmentWorkspace({
                 <div className="rounded-lg bg-muted/40 p-4">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-muted-foreground [&_dd]:font-medium [&_dd]:text-foreground">
                     <div className="flex justify-between border-b pb-2">
-                      <dt>Cước chính</dt>
+                      <dt>{tShipments('mainFee')}</dt>
                       <dd>{formatCurrency(shipment.feeSummary.mainFee)}</dd>
                     </div>
                     {shipment.feeSummary.serviceFee > 0 && (
                       <div className="flex justify-between border-b pb-2">
-                        <dt>Phí dịch vụ</dt>
+                        <dt>{tShipments('serviceFee')}</dt>
                         <dd>{formatCurrency(shipment.feeSummary.serviceFee)}</dd>
                       </div>
                     )}
                     {shipment.feeSummary.discountAmount > 0 && (
                       <div className="flex justify-between border-b pb-2">
-                        <dt>Giảm giá</dt>
+                        <dt>{tShipments('discountFee')}</dt>
                         <dd className="text-emerald-700 dark:text-emerald-400 font-semibold">
                           -{formatCurrency(shipment.feeSummary.discountAmount)}
                         </dd>
@@ -809,24 +867,23 @@ export function ShipmentWorkspace({
                     )}
                     <div className="flex justify-between items-center border-t pt-3">
                       <dt className="text-base font-semibold text-foreground">
-                        Tổng cước
+                        {tShipments('totalFee')}
                       </dt>
                       <dd className="text-xl font-bold text-primary">
                         {formatCurrency(shipment.feeSummary.totalFee)}
                       </dd>
                     </div>
                     <div className="flex justify-between border-t pt-2.5">
-                      <dt>Bên trả cước</dt>
+                      <dt>{tShipments('payerLabel')}</dt>
                       <dd className="font-semibold">
-                        {FREIGHT_PAYER_LABELS[shipment.feeSummary.freightPayer] ??
-                          shipment.feeSummary.freightPayer}
+                        {getLocalizedFreightPayer(shipment.feeSummary.freightPayer)}
                       </dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt>Thanh toán</dt>
+                      <dt>{tShipments('paymentLabel')}</dt>
                       <dd>
                         <span className="font-semibold">
-                          {getPaymentStatusLabel(shipment.paymentStatus)}
+                          {getLocalizedPaymentStatus(shipment.paymentStatus)}
                         </span>
                       </dd>
                     </div>
@@ -835,7 +892,7 @@ export function ShipmentWorkspace({
               </CardContent>
             </Card>
 
-            {/* Lịch sử trạng thái */}
+            {/* Status History */}
             <Card
               aria-labelledby="shipment-history-heading"
               className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm"
@@ -848,14 +905,14 @@ export function ShipmentWorkspace({
                     className="text-base font-semibold"
                     id="shipment-history-heading"
                   >
-                    Lịch sử trạng thái
+                    {tShipments('historyHeading')}
                   </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {shipment.history.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic py-3">
-                    Chưa có lịch sử trạng thái
+                    {tShipments('noHistory')}
                   </p>
                 ) : (
                   <ol className="relative border-l border-slate-200 dark:border-slate-800 ml-3 space-y-6 py-2">
@@ -869,7 +926,7 @@ export function ShipmentWorkspace({
                           <ResourceStatusBadge
                             tone={getShipmentStatusTone(item.status)}
                           >
-                            {SHIPMENT_STATUS_LABELS[item.status] ?? item.status}
+                            {getLocalizedShipmentStatus(item.status)}
                           </ResourceStatusBadge>
                           <time
                             className="admin-data-mono text-xs text-muted-foreground"
@@ -879,14 +936,14 @@ export function ShipmentWorkspace({
                           </time>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Người cập nhật:{' '}
+                          {tShipments('updatedBy')}{' '}
                           <strong className="text-foreground">
-                            {item.actor?.fullName || 'Hệ thống'}
+                            {item.actor?.fullName || tShipments('systemActor')}
                           </strong>
                         </p>
                         {item.note && (
                           <p className="mt-1 text-xs text-foreground bg-muted/40 rounded p-2 break-words">
-                            Ghi chú: {item.note}
+                            {tShipments('note')} {item.note}
                           </p>
                         )}
                       </li>
@@ -898,7 +955,7 @@ export function ShipmentWorkspace({
           </div>
         )}
 
-        {/* Dialog xác nhận trạng thái */}
+        {/* Status Confirmation Dialog */}
         {activeAction && (
           <ResourceConfirmation
             busy={submitting}
@@ -909,8 +966,8 @@ export function ShipmentWorkspace({
             <Field>
               <FieldLabel htmlFor="shipment-status-note">
                 {activeAction.targetStatus === 'DA_HUY'
-                  ? 'Lý do từ chối / hủy (bắt buộc)'
-                  : 'Ghi chú trạng thái (tùy chọn)'}
+                  ? tShipments('reasonCancelLabel')
+                  : tShipments('reasonOptionalLabel')}
               </FieldLabel>
               <Textarea
                 aria-describedby="shipment-status-note-count"
@@ -920,8 +977,8 @@ export function ShipmentWorkspace({
                 onChange={(e) => setNote(e.target.value)}
                 placeholder={
                   activeAction.targetStatus === 'DA_HUY'
-                    ? 'Ví dụ: Hàng cấm gửi, khách hàng không mang hàng ra bến...'
-                    : 'Nhập ghi chú hoặc lý do nếu có...'
+                    ? tShipments('reasonCancelPlaceholder')
+                    : tShipments('reasonOptionalPlaceholder')
                 }
                 rows={3}
                 value={note}
@@ -935,8 +992,7 @@ export function ShipmentWorkspace({
             </Field>
             {actionLocked && (
               <ResourceNotice kind="info">
-                Dữ liệu phiếu gửi đã thay đổi. Đóng hộp xác nhận và kiểm tra trạng
-                thái mới trước khi thao tác tiếp.
+                {tShipments('concurrentUpdateWarning')}
               </ResourceNotice>
             )}
             {!actionLocked && (
@@ -960,7 +1016,7 @@ export function ShipmentWorkspace({
                     className="motion-safe:animate-spin"
                   />
                 )}
-                {submitting ? 'Đang cập nhật…' : activeAction.confirmLabel}
+                {submitting ? tShipments('updatingStatus') : activeAction.confirmLabel}
               </Button>
             )}
           </ResourceConfirmation>

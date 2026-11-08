@@ -79,14 +79,14 @@ export function EditBusCompanyDialog({
     const code = values.code.trim();
     const name = values.name.trim();
 
-    if (!code) errors.code = 'Vui lòng nhập mã nhà xe.';
+    if (!code) errors.code = tCompanies('validationCodeRequired');
     else if (code.length > 50) {
-      errors.code = 'Mã nhà xe không được vượt quá 50 ký tự.';
+      errors.code = tCompanies('validationCodeMaxLength');
     }
 
-    if (!name) errors.name = 'Vui lòng nhập tên nhà xe.';
+    if (!name) errors.name = tCompanies('validationNameRequired');
     else if (name.length > 150) {
-      errors.name = 'Tên nhà xe không được vượt quá 150 ký tự.';
+      errors.name = tCompanies('validationNameMaxLength');
     }
 
     return errors;
@@ -127,7 +127,7 @@ export function EditBusCompanyDialog({
         setFormError(
           requestError instanceof Error
             ? requestError.message
-            : 'Không thể cập nhật nhà xe. Vui lòng thử lại.',
+            : tCompanies('cannotUpdate'),
         );
       }
     } finally {

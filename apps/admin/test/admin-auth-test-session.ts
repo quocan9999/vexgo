@@ -39,7 +39,7 @@ export function getTestLocale() {
 
 vi.mock('next-intl', () => ({
   useTranslations: (namespace?: string) => {
-    return (key: string, values?: Record<string, any>) => {
+    const t = (key: string, values?: Record<string, any>) => {
       const keys = namespace ? `${namespace}.${key}`.split('.') : key.split('.');
       const messages = currentTestLocale === 'en' ? enMessages : viMessages;
       let val: any = messages;
@@ -57,6 +57,9 @@ vi.mock('next-intl', () => ({
       }
       return key;
     };
+    t.rich = (key: string, values?: Record<string, any>) => t(key, values);
+    t.markup = (key: string, values?: Record<string, any>) => t(key, values);
+    return t;
   },
   useLocale: () => currentTestLocale,
   NextIntlClientProvider: ({

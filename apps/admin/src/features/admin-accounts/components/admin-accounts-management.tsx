@@ -53,19 +53,6 @@ import type {
 } from '../types/admin-account';
 import { AdminAccountFormDialog } from './admin-account-form-dialog';
 
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'HOAT_DONG', label: 'Đang hoạt động' },
-  { value: 'TAM_KHOA', label: 'Đang khóa' },
-];
-
-const SORT_OPTIONS: FilterOption[] = [
-  { value: 'createdAt', label: 'Ngày tạo' },
-  { value: 'fullName', label: 'Họ và tên' },
-  { value: 'phoneNumber', label: 'Số điện thoại' },
-  { value: 'status', label: 'Trạng thái' },
-  { value: 'updatedAt', label: 'Cập nhật' },
-];
-
 type FilterOptionsState =
   | { status: 'loading' }
   | { status: 'error'; message: string }

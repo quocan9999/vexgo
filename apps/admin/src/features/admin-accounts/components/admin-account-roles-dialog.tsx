@@ -68,14 +68,18 @@ function sameRoleSet(
   );
 }
 
-function requestErrorMessage(error: unknown): string {
+function requestErrorMessage(
+  error: unknown,
+  fallbackMessage: string,
+  networkErrorMessage: string,
+): string {
   if (error instanceof TypeError) {
-    return 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.';
+    return networkErrorMessage;
   }
   if (error instanceof AdminAccountApiError || error instanceof Error) {
     return error.message;
   }
-  return 'Không thể cập nhật vai trò tài khoản.';
+  return fallbackMessage;
 }
 
 export function AdminAccountRolesDialog({
@@ -114,7 +118,11 @@ export function AdminAccountRolesDialog({
         if (controller.signal.aborted) return;
         setRoles({
           status: 'error',
-          message: requestErrorMessage(requestError),
+          message: requestErrorMessage(
+            requestError,
+            tAccounts('cannotLoadRoles'),
+            tAccounts('networkError'),
+          ),
         });
       });
 
@@ -149,9 +157,7 @@ export function AdminAccountRolesDialog({
         (roleName) => !roles.roles.some((role) => role.roleName === roleName),
       )
     ) {
-      setError(
-        'Danh sách vai trò không còn hợp lệ. Vui lòng tải lại danh mục.',
-      );
+      setError(tAccounts('rolesInvalidReload'));
       return;
     }
 
@@ -166,12 +172,18 @@ export function AdminAccountRolesDialog({
       );
       toast.success(
         roleNames.length === 0
-          ? 'Đã thu hồi toàn bộ vai trò tài khoản.'
-          : 'Đã cập nhật vai trò tài khoản.',
+          ? tAccounts('allRolesRevoked')
+          : tAccounts('rolesUpdated'),
       );
       onSaved(updatedAccount);
     } catch (requestError: unknown) {
-      setError(requestErrorMessage(requestError));
+      setError(
+        requestErrorMessage(
+          requestError,
+          tAccounts('cannotUpdateRoles'),
+          tAccounts('networkError'),
+        ),
+      );
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -262,7 +274,7 @@ export function AdminAccountRolesDialog({
                   })}
                 {roles.status === 'success' && roles.roles.length === 0 && (
                   <ResourceNotice kind="error">
-                    Danh mục hiện không có vai trò nhà xe hợp lệ.
+                    {tAccounts('noRolesAvailable')}
                   </ResourceNotice>
                 )}
               {roles.status === 'error' && (
@@ -276,7 +288,7 @@ export function AdminAccountRolesDialog({
                     type="button"
                     variant="outline"
                   >
-                    Tải lại danh mục
+                    {tAccounts('reloadCatalog')}
                   </Button>
                 </ResourceNotice>
               )}
@@ -291,8 +303,8 @@ export function AdminAccountRolesDialog({
           onClose={() => {
             if (!submittingRef.current) setRevokeConfirmationOpen(false);
           }}
-          title="Thu hồi toàn bộ vai trò?"
-          description="Sau thao tác này, tài khoản sẽ không còn quyền quản trị và có thể không đăng nhập được vào Admin cho đến khi được gán lại vai trò."
+          title={tAccounts('revokeAllTitle')}
+          description={tAccounts('revokeAllDesc')}
         >
             {error && (
               <ResourceNotice kind="error">{error}</ResourceNotice>
@@ -310,7 +322,7 @@ export function AdminAccountRolesDialog({
                     size={15}
                   />
                 )}
-                {submitting ? 'Đang thu hồi…' : 'Thu hồi vai trò'}
+                {submitting ? tAccounts('revoking') : tAccounts('revokeRoles')}
             </Button>
         </ResourceConfirmation>
       )}

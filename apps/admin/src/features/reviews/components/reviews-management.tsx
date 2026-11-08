@@ -42,30 +42,6 @@ import { useReviews } from '../hooks/use-reviews';
 import type { AdminReviewSortKey, ReviewStatus } from '../types/review';
 import { ReviewStatsCards } from './review-stats-cards';
 
-const RATING_OPTIONS: FilterOption[] = [
-  { value: '5', label: '5 sao (Xuất sắc)' },
-  { value: '4', label: '4 sao (Tốt)' },
-  { value: '3', label: '3 sao (Bình thường)' },
-  { value: '2', label: '2 sao (Kém)' },
-  { value: '1', label: '1 sao (Rất tệ)' },
-];
-
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'HIEN_THI', label: 'Đang hiển thị' },
-  { value: 'DA_AN', label: 'Đã ẩn kiểm duyệt' },
-];
-
-const COMMENT_OPTIONS: FilterOption[] = [
-  { value: 'WITH_COMMENT', label: 'Có nhận xét viết kèm' },
-  { value: 'WITHOUT_COMMENT', label: 'Chỉ chấm sao (không chữ)' },
-];
-
-const TIME_RANGE_OPTIONS: FilterOption[] = [
-  { value: '7_DAYS', label: '7 ngày qua' },
-  { value: '30_DAYS', label: '30 ngày qua' },
-  { value: 'THIS_MONTH', label: 'Tháng này' },
-];
-
 function formatDate(isoString: string): string {
   try {
     const d = new Date(isoString);
@@ -210,7 +186,7 @@ export function ReviewsManagement() {
           actions={
             <ResourceRefreshAction loading={refreshing} onClick={refresh} />
           }
-          eyebrow="QUẢN TRỊ ĐÁNH GIÁ"
+          eyebrow={tReviews('eyebrow')}
           title={tReviews('reviewsTitle')}
           titleId="reviews-page-title"
         />
@@ -225,13 +201,13 @@ export function ReviewsManagement() {
           aria-labelledby="reviews-table-heading"
         >
           <h2 id="reviews-table-heading" className="sr-only">
-            Danh sách đánh giá và phản hồi của khách hàng
+            {tReviews('reviewsListCaption')}
           </h2>
 
           <Card className="overflow-hidden border">
-            {/* Filter toolbar (chia 2 tầng gọn gàng, cân đối) */}
+            {/* Filter toolbar */}
             <div className="border-b border-border divide-y divide-border">
-              {/* Tầng 1: Tìm kiếm từ khóa, Lọc Nhà xe (cho Super Admin) và Tuyến xe */}
+              {/* Row 1: Search keyword, Bus Company & Route filters */}
               <div className="flex flex-wrap items-end gap-3 p-4 sm:p-5">
                 <SearchInput
                   className="min-w-0 flex-[3_1_260px]"
@@ -270,7 +246,7 @@ export function ReviewsManagement() {
                 )}
               </div>
 
-              {/* Tầng 2: 4 tiêu chí lọc đều nhau và Nút xóa bộ lọc */}
+              {/* Row 2: 4 filter controls & reset action */}
               <div className="flex flex-wrap items-end gap-3 p-4 sm:p-5 bg-muted/20">
                 <SelectFilter
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
@@ -508,26 +484,28 @@ export function ReviewsManagement() {
                           {/* Actions */}
                           <TableCell className="align-top text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
-                              {/* Chỉ Admin Nhà xe mới được phản hồi đánh giá */}
                               {!isSuperAdmin && (
                                 <Button
-                                  aria-label={`Phản hồi đánh giá của ${review.customer.fullName}`}
+                                  aria-label={tReviews('replyToReview', {
+                                    name: review.customer.fullName,
+                                  })}
                                   onClick={() => openReplyModal(review)}
                                   size="sm"
                                   variant="ghost"
                                   className={`h-8 gap-1.5 ${review.reply ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
-                                  title={review.reply ? 'Xem hoặc chỉnh sửa phản hồi' : 'Gửi phản hồi từ nhà xe'}
+                                  title={review.reply ? tReviews('editReply') : tReviews('reply')}
                                 >
                                   <MessageSquareQuote size={14} />
                                   {review.reply ? tReviews('editReply') : tReviews('reply')}
                                 </Button>
                               )}
 
-                              {/* Chỉ Super Admin mới có quyền kiểm duyệt Ẩn/Hiện đánh giá */}
                               {isSuperAdmin && (
                                 review.status === 'HIEN_THI' ? (
                                   <Button
-                                    aria-label={`Ẩn đánh giá của ${review.customer.fullName}`}
+                                    aria-label={tReviews('hideReviewOf', {
+                                      name: review.customer.fullName,
+                                    })}
                                     onClick={() => setModeratingReview(review)}
                                     size="sm"
                                     variant="ghost"
@@ -538,7 +516,9 @@ export function ReviewsManagement() {
                                   </Button>
                                 ) : (
                                   <Button
-                                    aria-label={`Hiển thị lại đánh giá của ${review.customer.fullName}`}
+                                    aria-label={tReviews('unhideReviewOf', {
+                                      name: review.customer.fullName,
+                                    })}
                                     onClick={() => setModeratingReview(review)}
                                     size="sm"
                                     variant="ghost"
@@ -578,8 +558,14 @@ export function ReviewsManagement() {
             busy={modifyingStatus}
             description={
               moderatingReview.status === 'HIEN_THI'
-                ? `Đánh giá của "${moderatingReview.customer.fullName}" (${moderatingReview.rating} sao) sẽ bị ẩn khỏi hệ thống và khách hàng khác sẽ không nhìn thấy nhận xét này nữa. Bạn có chắc chắn muốn ẩn?`
-                : `Đánh giá của "${moderatingReview.customer.fullName}" (${moderatingReview.rating} sao) sẽ được công khai trở lại trên trang thông tin nhà xe/chuyến xe. Bạn có chắc chắn muốn bỏ ẩn?`
+                ? tReviews('confirmHideDesc', {
+                    name: moderatingReview.customer.fullName,
+                    rating: moderatingReview.rating,
+                  })
+                : tReviews('confirmUnhideDesc', {
+                    name: moderatingReview.customer.fullName,
+                    rating: moderatingReview.rating,
+                  })
             }
             footer={
               <div className="flex items-center justify-end gap-3">
@@ -618,7 +604,7 @@ export function ReviewsManagement() {
                 <span className="font-mono">{moderatingReview.customer.phoneNumber}</span>
               </div>
               <div className="flex items-center gap-1 text-amber-500 font-medium">
-                <span>{moderatingReview.rating} sao</span>
+                <span>{tReviews('starRatingHint', { rating: moderatingReview.rating })}</span>
               </div>
               {moderatingReview.comment && (
                 <p className="italic text-muted-foreground line-clamp-2">
@@ -645,7 +631,9 @@ export function ReviewsManagement() {
                     <MessageSquareQuote size={18} />
                   </div>
                   <h3 className="text-base font-bold text-slate-900">
-                    {replyingReview.reply ? 'Chỉnh sửa phản hồi' : 'Phản hồi đánh giá của khách'}
+                    {replyingReview.reply
+                      ? tReviews('replyDialogTitleEdit')
+                      : tReviews('replyDialogTitleCreate')}
                   </h3>
                 </div>
                 <button
@@ -669,29 +657,31 @@ export function ReviewsManagement() {
                 </div>
                 {replyingReview.trip?.routeName && (
                   <p className="text-slate-500">
-                    Tuyến: {replyingReview.trip.routeName}
+                    {tReviews('routeLabel', { route: replyingReview.trip.routeName })}
                   </p>
                 )}
                 <p className="text-slate-700 italic border-t border-slate-200/60 pt-1.5">
-                  {replyingReview.comment ? `“${replyingReview.comment}”` : '(Khách chỉ chấm sao, không để lại lời nhận xét)'}
+                  {replyingReview.comment
+                    ? `“${replyingReview.comment}”`
+                    : tReviews('onlyStarRatingNoComment')}
                 </p>
               </div>
 
               {/* Textarea */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">
-                  Nội dung phản hồi từ Nhà xe:
+                  {tReviews('replyContentLabel')}
                 </label>
                 <textarea
                   rows={4}
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   maxLength={1000}
-                  placeholder="Cảm ơn quý khách đã tin tưởng và góp ý cho nhà xe. Chúng tôi sẽ tiếp tục cải thiện chất lượng phục vụ..."
+                  placeholder={tReviews('replyPlaceholder')}
                   className="w-full p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 text-sm resize-none"
                 />
                 <div className="flex justify-end text-[11px] text-slate-400 font-medium">
-                  {replyText.length}/1000 ký tự
+                  {replyText.length}/1000 {tReviews('charCount')}
                 </div>
               </div>
 
@@ -706,7 +696,7 @@ export function ReviewsManagement() {
                     disabled={submittingReply}
                     className="text-rose-600 hover:bg-rose-50"
                   >
-                    Xóa phản hồi
+                    {tReviews('deleteReply')}
                   </Button>
                 ) : (
                   <div />
@@ -719,7 +709,7 @@ export function ReviewsManagement() {
                     onClick={closeReplyModal}
                     disabled={submittingReply}
                   >
-                    Hủy
+                    {tCommon('cancel')}
                   </Button>
                   <Button
                     type="button"
@@ -728,7 +718,7 @@ export function ReviewsManagement() {
                     disabled={submittingReply || !replyText.trim()}
                     className="bg-primary hover:bg-primary/90 text-white font-bold"
                   >
-                    {submittingReply ? 'Đang lưu...' : 'Lưu phản hồi'}
+                    {submittingReply ? tCommon('saving') : tReviews('saveReply')}
                   </Button>
                 </div>
               </div>

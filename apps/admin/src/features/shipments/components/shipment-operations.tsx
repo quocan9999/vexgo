@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
@@ -31,6 +32,7 @@ export function ShipmentOperations({
   shipment: ShipmentDetail;
   onUpdated: () => void;
 }) {
+  const t = useTranslations('shipments');
   const [operation, setOperation] = useState<Operation | null>(null);
   const [measurements, setMeasurements] = useState<MeasurementDraft[]>([]);
   const [trips, setTrips] = useState<EligibleShipmentTrip[]>([]);
@@ -72,7 +74,7 @@ export function ShipmentOperations({
         );
       } catch (err) {
         toast.error(
-          err instanceof Error ? err.message : 'Không tải được chuyến phù hợp.',
+          err instanceof Error ? err.message : t('cannotLoadTrips'),
         );
         return;
       } finally {
@@ -88,18 +90,18 @@ export function ShipmentOperations({
       let payload: unknown;
       if (operation === 'accept') {
         if (priceChange && !note.trim())
-          throw new Error('Nhập lý do thay đổi cước trước khi xác nhận.');
+          throw new Error(t('reasonRequired'));
         payload = {
           items: buildAcceptanceItems(measurements),
           note: note.trim() || undefined,
           confirmPriceChange: Boolean(priceChange),
         };
       } else if (operation === 'assignment') {
-        if (!tripId) throw new Error('Chọn một chuyến đủ điều kiện.');
+        if (!tripId) throw new Error(t('selectEligibleTrip'));
         payload = { tripId: Number(tripId), note: note.trim() || undefined };
       } else if (operation === 'collect-payment') {
         if (!Number.isSafeInteger(Number(amount)) || Number(amount) <= 0)
-          throw new Error('Nhập số tiền thực thu nguyên đồng lớn hơn 0.');
+          throw new Error(t('positiveAmountRequired'));
         payload = { amount: Number(amount), note: note.trim() || undefined };
       }
 locked.current = true;
@@ -110,7 +112,7 @@ locked.current = true;
         operation === 'assignment' ? 'PATCH' : 'POST',
         payload,
       );
-      toast.success('Đã ghi nhận thao tác vận đơn.');
+      toast.success(t('operationSuccess'));
       setOperation(null);
       onUpdated();
     } catch (err) {
@@ -123,7 +125,7 @@ locked.current = true;
         setPriceChange({ before: err.previousFee, after: err.totalFee });
       } else
         setError(
-          err instanceof Error ? err.message : 'Không thể thực hiện thao tác.',
+          err instanceof Error ? err.message : t('operationFailed'),
         );
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
@@ -133,24 +135,23 @@ locked.current = true;
   }
   const title =
     operation === 'accept'
-      ? 'Cân đo và tiếp nhận hàng'
+      ? t('weighAndReceive')
       : operation === 'assignment'
-        ? 'Phân / chuyển chuyến'
+        ? t('assignOrTransfer')
         : operation === 'collect-payment'
-          ? 'Ghi nhận tiền mặt thực thu'
-          : 'Đối soát hồ sơ tiền';
+          ? t('recordCashPayment')
+          : t('reconcileRecords');
   return (
     <>
       <Card className="min-w-0 gap-4 p-4">
-        <h3 className="text-base font-semibold">Tiếp nhận và điều phối</h3>
+        <h3 className="text-base font-semibold">{t('opsCardTitle')}</h3>
         <p className="text-[13px] text-muted-foreground">
-          Tiếp nhận hàng và thu tiền là hai thao tác riêng. Tài khoản đang đăng
-          nhập được lưu là người thực hiện.
+          {t('opsCardDesc')}
         </p>
         <div className="flex flex-wrap gap-3">
           {shipment.status === 'MOI_TAO' && (
             <Button disabled={busy} onClick={() => void open('accept')}>
-              Cân đo và tiếp nhận
+              {t('weighAndReceiveBtn')}
             </Button>
           )}
           {shipment.status === 'DA_TIEP_NHAN' && (
@@ -159,7 +160,7 @@ locked.current = true;
               variant="outline"
               onClick={() => void open('assignment')}
             >
-              {shipment.trip ? 'Chuyển chuyến' : 'Phân chuyến'}
+              {shipment.trip ? t('transferTrip') : t('assignTrip')}
             </Button>
           )}
           {shipment.status !== 'DA_HUY' &&
@@ -170,48 +171,48 @@ locked.current = true;
                 variant="outline"
                 onClick={() => void open('collect-payment')}
               >
-                Ghi nhận thu tiền mặt
+                {t('recordCashBtn')}
               </Button>
             )}
         </div>
         <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
           <div>
-            <dt className="text-muted-foreground">Hạn mang hàng đến bưu cục</dt>
+            <dt className="text-muted-foreground">{t('dropoffDeadline')}</dt>
             <dd>{formatDateTime(shipment.dropoffDeadline)}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Ngày dự kiến gửi</dt>
-            <dd>{shipment.expectedSendDate || 'Gửi linh hoạt (Hạn 72h)'}</dd>
+            <dt className="text-muted-foreground">{t('expectedSendDate')}</dt>
+            <dd>{shipment.expectedSendDate || t('flexibleSendDeadline')}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Cước ước tính</dt>
+            <dt className="text-muted-foreground">{t('estimatedFreight')}</dt>
             <dd>
               {shipment.feeSummary.estimatedFee == null
-                ? 'Chưa có dữ liệu'
+                ? t('noData')
                 : formatCurrency(shipment.feeSummary.estimatedFee)}
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Cước đã chốt</dt>
+            <dt className="text-muted-foreground">{t('finalizedFreight')}</dt>
             <dd>
               {shipment.feeSummary.confirmedAt
                 ? `${formatCurrency(shipment.totalFee)} · ${formatDateTime(shipment.feeSummary.confirmedAt)}`
-                : 'Chưa chốt tại quầy'}
+                : t('notFinalizedAtCounter')}
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Đã thu</dt>
+            <dt className="text-muted-foreground">{t('collectedAmount')}</dt>
             <dd>
               {shipment.feeSummary.paidAmount == null
-                ? 'Chưa có dữ liệu'
+                ? t('noData')
                 : formatCurrency(shipment.feeSummary.paidAmount)}
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Còn phải thu</dt>
+            <dt className="text-muted-foreground">{t('remainingAmount')}</dt>
             <dd>
               {shipment.feeSummary.outstandingAmount == null
-                ? 'Chưa có dữ liệu'
+                ? t('noData')
                 : formatCurrency(shipment.feeSummary.outstandingAmount)}
             </dd>
           </div>
@@ -221,7 +222,7 @@ locked.current = true;
       {operation && (
         <ResourceConfirmation
           title={title}
-          description="Kiểm tra số đo, chuyến xe và chứng từ thực tế trước khi ghi nhận."
+          description={t('opsConfirmationDesc')}
           busy={busy}
           onClose={() => setOperation(null)}
         >
@@ -240,10 +241,12 @@ locked.current = true;
                   className="grid gap-3 rounded-lg border p-3"
                 >
                   <legend className="px-1 text-[13px] font-semibold">
-                    {shipment.cargoItems[index].name} · Khai báo{' '}
-                    {shipment.cargoItems[index].declaredWeightKg ??
-                      shipment.cargoItems[index].weightKg}{' '}
-                    kg
+                    {t('declaredWeightLegend', {
+                      name: shipment.cargoItems[index].name,
+                      weight:
+                        shipment.cargoItems[index].declaredWeightKg ??
+                        shipment.cargoItems[index].weightKg,
+                    })}
                   </legend>
                   <div className="grid grid-cols-2 gap-3">
                     {(['weight', 'length', 'width', 'height'] as const).map(
@@ -254,10 +257,10 @@ locked.current = true;
                           >
                             {
                               {
-                                weight: 'Khối lượng thực tế (kg)',
-                                length: 'Dài (cm)',
-                                width: 'Rộng (cm)',
-                                height: 'Cao (cm)',
+                                weight: t('actualWeightKg'),
+                                length: t('lengthCm'),
+                                width: t('widthCm'),
+                                height: t('heightCm'),
                               }[key]
                             }
                           </FieldLabel>
@@ -289,7 +292,7 @@ locked.current = true;
             {operation === 'assignment' && (
               <>
                 <LabeledSelectFilter
-                  label="Chuyến mở nhận hàng phù hợp"
+                  label={t('eligibleTripLabel')}
                   value={tripId}
                   onChange={setTripId}
                   disabled={busy}
@@ -300,7 +303,7 @@ locked.current = true;
                 />
                 {!trips.length && (
                   <p role="status" className="text-[13px]">
-                    Chưa có chuyến đủ điều kiện. Không thể phân chuyến lúc này.
+                    {t('noEligibleTrips')}
                   </p>
                 )}
               </>
@@ -308,7 +311,7 @@ locked.current = true;
             {operation === 'collect-payment' && (
               <Field>
                 <FieldLabel htmlFor="shipment-actual-amount">
-                  Số tiền thực tế (đồng)
+                  {t('actualCashAmount')}
                 </FieldLabel>
                 <Input
                   id="shipment-actual-amount"
@@ -324,10 +327,9 @@ locked.current = true;
             )}
             <Field>
               <FieldLabel htmlFor="shipment-operation-note">
-                Ghi chú{' '}
                 {Boolean(priceChange)
-                  ? '(bắt buộc)'
-                  : '(tùy chọn)'}
+                  ? t('noteRequired')
+                  : t('noteOptional')}
               </FieldLabel>
               <Textarea
                 id="shipment-operation-note"
@@ -342,9 +344,10 @@ locked.current = true;
             </Field>
             {priceChange && (
               <ResourceNotice>
-                Cước thay đổi từ {formatCurrency(priceChange.before)} thành{' '}
-                {formatCurrency(priceChange.after)}. Chỉ xác nhận sau khi khách
-                đồng ý tại quầy.
+                {t('priceChangeNotice', {
+                  before: formatCurrency(priceChange.before),
+                  after: formatCurrency(priceChange.after),
+                })}
               </ResourceNotice>
             )}
             {error && (
@@ -363,10 +366,10 @@ locked.current = true;
               disabled={busy || (operation === 'assignment' && !tripId)}
             >
               {busy
-                ? 'Đang ghi nhận…'
+                ? t('recordingState')
                 : priceChange
-                  ? 'Khách đồng ý cước mới — tiếp nhận'
-                  : 'Xác nhận ghi nhận'}
+                  ? t('customerAgreedAccept')
+                  : t('confirmRecord')}
             </Button>
           </form>
         </ResourceConfirmation>

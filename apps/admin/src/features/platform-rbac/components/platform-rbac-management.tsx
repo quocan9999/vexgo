@@ -75,7 +75,7 @@ export function PlatformRbacManagement() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setLoadError(getErrorMessage(error, 'Không thể tải cấu hình quyền.'));
+        setLoadError(getErrorMessage(error, tRbac('cannotLoadPermissions')));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -170,7 +170,7 @@ export function PlatformRbacManagement() {
       setConfirmOpen(false);
       toast.success(tRbac('saveSuccessRole', { role: savedRole.roleName }));
     } catch (error) {
-      setSaveError(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
+      setSaveError(getErrorMessage(error, tRbac('cannotSavePermissions')));
     } finally {
       setSaving(false);
     }

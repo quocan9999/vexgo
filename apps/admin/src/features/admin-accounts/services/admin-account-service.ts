@@ -60,7 +60,7 @@ function parseApiError(body: unknown, status: number): AdminAccountApiError {
   return new AdminAccountApiError(
     isRecord(body) && typeof body.message === 'string'
       ? body.message
-      : `Không thể xử lý tài khoản quản trị (HTTP ${status}).`,
+      : `Unable to process admin account (HTTP ${status}).`,
     status,
     isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     isRecord(body) ? parseErrorDetails(body.details) : [],
@@ -69,7 +69,7 @@ function parseApiError(body: unknown, status: number): AdminAccountApiError {
 
 function invalidResponse(): never {
   throw new AdminAccountApiError(
-    'API trả về dữ liệu tài khoản quản trị không hợp lệ.',
+    'API returned invalid admin account data.',
     502,
     'INVALID_ADMIN_ACCOUNT_RESPONSE',
   );
@@ -133,7 +133,7 @@ async function readData<T>(
 function requireAccountId(accountId: number): void {
   if (!isPositiveInteger(accountId)) {
     throw new AdminAccountApiError(
-      'Mã tài khoản không hợp lệ.',
+      'Invalid admin account ID.',
       400,
       'INVALID_ADMIN_ACCOUNT_ID',
     );
@@ -150,7 +150,7 @@ function validateRoleNames(
     roleNames.some((role) => !TENANT_ROLE_SET.has(role))
   ) {
     throw new AdminAccountApiError(
-      'Danh sách vai trò nhà xe không hợp lệ.',
+      'Invalid tenant role list.',
       400,
       'INVALID_TENANT_ROLE_LIST',
     );

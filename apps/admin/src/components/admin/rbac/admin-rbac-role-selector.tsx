@@ -62,13 +62,18 @@ export function AdminRbacRoleSelector<RoleName extends string>({
       <div className="sm:hidden">
         <LabeledSelectFilter
           appearance="resource"
-          label="Vai trò"
+          label={tRbac('roleLabel')}
           value={selectedRoleName}
           disabled={disabled}
-          options={roles.map((role) => ({
-            value: role.roleName,
-            label: `${role.description ?? role.roleName}${dirtyRoleNames.has(role.roleName) ? ' · Chưa lưu' : ''}`,
-          }))}
+          options={roles.map((role) => {
+            const roleDesc = ROLE_DESC_KEYS[role.roleName]
+              ? tRbac(ROLE_DESC_KEYS[role.roleName] as any)
+              : (role.description ?? tRbac('noRoleDescription'));
+            return {
+              value: role.roleName,
+              label: `${roleDesc}${dirtyRoleNames.has(role.roleName) ? ` · ${tRbac('dirtyRoleSuffix')}` : ''}`,
+            };
+          })}
           onChange={(value) => {
             const role = roles.find(
               (candidate) => candidate.roleName === value,

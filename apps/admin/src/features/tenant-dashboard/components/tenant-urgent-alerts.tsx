@@ -63,7 +63,7 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
           </div>
         ) : (
           <>
-            {/* 1. Phiếu đặt vé chờ thanh toán */}
+            {/* 1. Pending payment bookings */}
             {alerts.pendingBookingsCount > 0 && (
               <div className="flex items-center justify-between gap-2.5 p-3 rounded-lg bg-amber-50/70 border border-amber-200/80">
                 <div className="flex items-start gap-2.5 min-w-0">
@@ -92,7 +92,7 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
               </div>
             )}
 
-            {/* 2. Kiện hàng chưa xếp chuyến */}
+            {/* 2. Unassigned cargo packages */}
             {alerts.unassignedShipmentsCount > 0 && (
               <div className="flex items-center justify-between gap-2.5 p-3 rounded-lg bg-blue-50/70 border border-blue-200/80">
                 <div className="flex items-start gap-2.5 min-w-0">
@@ -121,7 +121,7 @@ export function TenantUrgentAlerts({ alerts }: TenantUrgentAlertsProps) {
               </div>
             )}
 
-            {/* 3. Chuyến sắp chạy vắng khách */}
+            {/* 3. Low occupancy imminent trips */}
             {alerts.departingSoonLowOccupancyCount > 0 && (
               <div className="flex items-center justify-between gap-2.5 p-3 rounded-lg bg-rose-50/70 border border-rose-200/80">
                 <div className="flex items-start gap-2.5 min-w-0">

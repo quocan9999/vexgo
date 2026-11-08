@@ -41,14 +41,6 @@ import {
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { ShipmentScanDialog } from './shipment-scan-dialog';
 
-const STATUS_FILTER_OPTIONS: FilterOption[] = [
-  { value: 'MOI_TAO', label: 'Chờ mang hàng đến gửi' },
-  { value: 'DA_TIEP_NHAN', label: 'Đã tiếp nhận' },
-  { value: 'DANG_VAN_CHUYEN', label: 'Đang vận chuyển' },
-  { value: 'DA_GIAO', label: 'Đã giao' },
-  { value: 'DA_HUY', label: 'Đã hủy' },
-];
-
 export function ShipmentsManagement() {
   const tShipments = useTranslations('shipments');
   const tCommon = useTranslations('common');

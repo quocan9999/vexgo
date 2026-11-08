@@ -122,17 +122,17 @@ export function TenantDashboard() {
         {/* Success Data State: Bento Grid 8:4 */}
         {data && (
           <div className="space-y-6">
-            {/* 1. 4 Thẻ KPI Chỉ số Hôm nay */}
+            {/* 1. 4 Today KPI Metric Cards */}
             <TenantMetricsGrid metrics={data.metrics} />
 
-            {/* 2. Cụm Bento Grid 8:4 */}
+            {/* 2. 8:4 Bento Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Cột chính (8/12 cột): Chuyến xe sắp khởi hành */}
+              {/* Main column (8/12 cols): Upcoming departure trips */}
               <div className="lg:col-span-8">
                 <TenantUpcomingTrips trips={data.upcomingTrips} />
               </div>
 
-              {/* Cột phụ (4/12 cột): Cảnh báo việc khẩn & Lối tắt thao tác nhanh */}
+              {/* Secondary column (4/12 cols): Urgent alerts & shortcuts */}
               <div className="lg:col-span-4 space-y-6">
                 <TenantUrgentAlerts alerts={data.urgentAlerts} />
                 <TenantQuickActions />

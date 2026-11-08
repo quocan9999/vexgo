@@ -3,12 +3,12 @@ import type { ShipmentSummary } from '../types/shipment';
 import { normalizeScannedWaybill } from '../utils/waybill-code';
 
 /**
- * Tìm kiếm chính xác 1 phiếu gửi hàng theo mã vận đơn trong phạm vi nhà xe hiện tại.
- * Backend tìm kiếm theo `contains` (khớp chuỗi con), nên frontend sẽ lọc lại để chỉ
- * nhận bản ghi có mã vận đơn khớp tuyệt đối (không phân biệt hoa thường).
+ * Find exactly 1 shipment by waybill code within the current bus company scope.
+ * Backend searches with `contains` (substring), so frontend filters down to
+ * only exact matching records (case-insensitive).
  *
- * Lưu ý bảo mật: Phạm vi dữ liệu nhà xe (tenant scope) được backend kiểm tra và
- * giới hạn tự động dựa trên Access Token của nhân viên đăng nhập.
+ * Security notice: Bus company data scope (tenant scope) is verified and
+ * automatically restricted by the backend based on the staff's Access Token.
  */
 export async function findShipmentByWaybill(
   rawCode: string,

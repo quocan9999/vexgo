@@ -38,7 +38,7 @@ function parseApiError(body: unknown, status: number): AdminRbacApiError {
   const message =
     isRecord(body) && typeof body.message === 'string'
       ? body.message
-      : `Không thể cấu hình quyền quản trị (HTTP ${status}).`;
+      : `Unable to configure administrative permissions (HTTP ${status}).`;
   const code =
     isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
   return new AdminRbacApiError(message, code);
@@ -46,7 +46,7 @@ function parseApiError(body: unknown, status: number): AdminRbacApiError {
 
 function invalidResponse(): never {
   throw new AdminRbacApiError(
-    'API trả về cấu hình quyền quản trị không hợp lệ.',
+    'API returned invalid administrative permissions configuration.',
     'INVALID_RBAC_RESPONSE',
   );
 }
@@ -170,7 +170,7 @@ export async function replaceDefaultRolePermissions(
 ): Promise<AdminRbacRole> {
   if (role.roleName === 'SUPER_ADMIN' || role.isProtected) {
     throw new AdminRbacApiError(
-      'Không thể thay đổi quyền của vai trò SUPER_ADMIN.',
+      'Cannot modify permissions of protected role SUPER_ADMIN.',
       'SUPER_ADMIN_PERMISSION_IMMUTABLE',
     );
   }
@@ -182,7 +182,7 @@ export async function replaceDefaultRolePermissions(
     permissionKeys.some((key) => permissionsByKey.get(key)?.scope !== role.scope)
   ) {
     throw new AdminRbacApiError(
-      'Danh sách quyền không hợp lệ với vai trò đã chọn.',
+      'Invalid permission list for the selected role.',
       'INVALID_PERMISSION_LIST',
     );
   }

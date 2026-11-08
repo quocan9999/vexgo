@@ -61,7 +61,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
         </div>
       </Card>
 
-      {/* 2. Vé & {t('seatLoadFactor')} */}
+      {/* 2. Tickets & seat load factor */}
       <Card className="flex flex-col justify-between p-5.5 transition-all duration-200 hover:shadow-md hover:border-slate-300 border-border">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -142,7 +142,7 @@ export function TenantMetricsGrid({ metrics }: TenantMetricsGridProps) {
         </div>
       </Card>
 
-      {/* 4. {t('estimatedRevenue')} hôm nay */}
+      {/* 4. Estimated revenue today */}
       <Card className="flex flex-col justify-between p-5.5 transition-all duration-200 hover:shadow-md hover:border-slate-300 border-border">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">

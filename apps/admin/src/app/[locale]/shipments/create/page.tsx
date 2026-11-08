@@ -1,15 +1,23 @@
 import { AdminSessionGuard } from '@/features/admin-auth/components/admin-session-guard';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { ShipmentCreateView } from '@/features/shipments/components/shipment-create-view';
+import { getTranslations } from 'next-intl/server';
 
-export default function ShipmentCreatePage() {
+export default async function ShipmentCreatePage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const tShipments = await getTranslations({ locale, namespace: 'shipments' });
+
   return (
     <AdminSessionGuard>
       <SuperAdminLayout
         activeSection="shipments"
         breadcrumbs={[
-          { label: 'Danh sách phiếu gửi hàng', href: '/shipments' },
-          { label: 'Tạo phiếu gửi hàng' },
+          { label: tShipments('shipmentsTitle'), href: '/shipments' },
+          { label: tShipments('createShipment') },
         ]}
       >
         <ShipmentCreateView />

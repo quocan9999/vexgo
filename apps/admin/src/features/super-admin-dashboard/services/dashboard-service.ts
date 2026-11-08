@@ -78,11 +78,11 @@ export async function getDashboardOverview(
     throw new Error(
       record(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải tổng quan (HTTP ${response.status}).`,
+        : `Cannot load overview (HTTP ${response.status}).`,
     );
   }
   if (!record(body) || !overview(body.data)) {
-    throw new Error('Dữ liệu tổng quan trả về không hợp lệ. Vui lòng thử lại.');
+    throw new Error('Invalid dashboard overview data returned. Please try again.');
   }
   return body.data;
 }

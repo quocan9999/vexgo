@@ -47,11 +47,6 @@ import type {
   BusCompanyStatus,
 } from '../types/bus-company';
 
-const BUS_COMPANY_STATUS_FILTERS: FilterOption[] = [
-  { value: 'HOAT_DONG', label: 'Đang hoạt động' },
-  { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
-];
-
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
     dateStyle: 'medium',
@@ -61,7 +56,7 @@ function timestampFormat(value: string) {
 
 function initials(value: string) {
   return value
-    .replace(/^Nhà xe\s+/i, '')
+    .replace(/^(Nh\u00E0 xe|Bus)\s+/i, '')
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0])
@@ -69,12 +64,12 @@ function initials(value: string) {
     .toLocaleUpperCase('vi');
 }
 
-function statusLabel(status: BusCompanyStatus) {
+function statusLabel(status: BusCompanyStatus, tCompanies: (key: any) => string) {
   switch (status) {
     case 'HOAT_DONG':
-      return 'Đang hoạt động';
+      return tCompanies('statusActive');
     case 'TAM_NGUNG':
-      return 'Tạm ngưng';
+      return tCompanies('statusSuspended');
   }
 }
 

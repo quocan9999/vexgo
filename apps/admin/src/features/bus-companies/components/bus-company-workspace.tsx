@@ -33,7 +33,7 @@ function timestampFormat(value: string) {
 
 function initials(value: string) {
   return value
-    .replace(/^Nhà xe\s+/i, '')
+    .replace(/^(Nh\u00E0 xe|Bus)\s+/i, '')
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0])
@@ -41,12 +41,12 @@ function initials(value: string) {
     .toLocaleUpperCase('vi');
 }
 
-function statusLabel(status: BusCompanyStatus) {
+function statusLabel(status: BusCompanyStatus, tCompanies: (key: any) => string) {
   switch (status) {
     case 'HOAT_DONG':
-      return 'Đang hoạt động';
+      return tCompanies('statusActive');
     case 'TAM_NGUNG':
-      return 'Tạm ngưng';
+      return tCompanies('statusSuspended');
   }
 }
 
@@ -172,10 +172,10 @@ export function BusCompanyWorkspace({
     } catch (requestError: unknown) {
       toast.error(
         requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          ? tCompanies('networkError')
           : requestError instanceof Error
             ? requestError.message
-            : 'Không thể cập nhật trạng thái nhà xe.',
+            : tCompanies('cannotUpdateStatus'),
       );
     } finally {
       statusSubmittingRef.current = false;
@@ -296,7 +296,7 @@ export function BusCompanyWorkspace({
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Card 1: Thông tin liên hệ */}
+              {/* Card 1: Contact Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export function BusCompanyWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 2: Thông tin hệ thống */}
+              {/* Card 2: System Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground">

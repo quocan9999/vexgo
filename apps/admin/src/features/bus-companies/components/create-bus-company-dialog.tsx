@@ -89,18 +89,18 @@ export function CreateBusCompanyDialog({
     const code = values.code.trim();
     const name = values.name.trim();
 
-    if (!code) errors.code = 'Vui lòng nhập mã nhà xe.';
+    if (!code) errors.code = tCompanies('validationCodeRequired');
     else if (code.length > 50) {
-      errors.code = 'Mã nhà xe không được vượt quá 50 ký tự.';
+      errors.code = tCompanies('validationCodeMaxLength');
     }
 
-    if (!name) errors.name = 'Vui lòng nhập tên nhà xe.';
+    if (!name) errors.name = tCompanies('validationNameRequired');
     else if (name.length > 150) {
-      errors.name = 'Tên nhà xe không được vượt quá 150 ký tự.';
+      errors.name = tCompanies('validationNameMaxLength');
     }
 
     if (values.status !== 'HOAT_DONG' && values.status !== 'TAM_NGUNG') {
-      errors.status = 'Vui lòng chọn trạng thái hợp lệ.';
+      errors.status = tCompanies('validationStatusInvalid');
     }
 
     return errors;
@@ -136,7 +136,7 @@ export function CreateBusCompanyDialog({
           const hasFieldErrors = Object.keys(serverErrors).length > 0;
           setFieldErrors(serverErrors);
           if (requestError.code === 'VALIDATION_ERROR' && hasFieldErrors) {
-            setFormError('Vui lòng kiểm tra lại các trường được đánh dấu.');
+            setFormError(tCompanies('validationCheckMarkedFields'));
           } else {
             setFormError(hasFieldErrors ? null : requestError.message);
           }
@@ -145,7 +145,7 @@ export function CreateBusCompanyDialog({
         setFormError(
           requestError instanceof Error
             ? requestError.message
-            : 'Không thể tạo nhà xe. Vui lòng thử lại.',
+            : tCompanies('cannotCreate'),
         );
       }
     } finally {

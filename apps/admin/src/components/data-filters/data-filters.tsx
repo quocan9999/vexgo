@@ -87,10 +87,10 @@ export function DateRangeFilter({
         ? showDate(value.from)
         : `${showDate(value.from)} – ${showDate(value.to)}`
       : value?.from
-        ? `${fromLabel}: ${showDate(value.from)}`
+        ? `${displayFromLabel}: ${showDate(value.from)}`
         : value?.to
-          ? `${toLabel}: ${showDate(value.to)}`
-          : emptyValueLabel;
+          ? `${displayToLabel}: ${showDate(value.to)}`
+          : displayEmptyLabel;
   return (
     <div className="min-w-0 flex-[1_1_200px]">
       <label

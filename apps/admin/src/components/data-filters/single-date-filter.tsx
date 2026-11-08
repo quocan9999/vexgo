@@ -46,7 +46,7 @@ export function SingleDateFilter({
           aria-label={
             value
               ? `${label}: ${formattedDate}`
-              : `Lọc theo ${label.toLocaleLowerCase()}`
+              : `${tCommon('filter')}: ${label}`
           }
         >
           <span className="flex min-w-0 items-center gap-2">

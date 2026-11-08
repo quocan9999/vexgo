@@ -81,7 +81,7 @@ export function useShipmentRates() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : 'Không thể tải danh sách bảng cước gửi hàng.',
+            : 'Unable to load shipment rate list.',
         );
         setLoading(false);
       }

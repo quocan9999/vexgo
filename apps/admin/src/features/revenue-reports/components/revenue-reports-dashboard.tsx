@@ -48,18 +48,6 @@ import type { RevenueReportServiceKind } from '../types/revenue-report';
 import { RevenueReportChart } from './revenue-report-chart';
 import styles from './revenue-reports.module.css';
 
-const GROUP_OPTIONS = [
-  { value: 'day', label: 'Ngày' },
-  { value: 'month', label: 'Tháng' },
-  { value: 'quarter', label: 'Quý' },
-] as const;
-
-const SERVICE_LABELS: Record<RevenueReportServiceKind, string> = {
-  ticket: 'Vé xe',
-  standaloneShipment: 'Gửi hàng độc lập',
-  accompaniedShipment: 'Gửi hàng kèm vé',
-};
-
 function DashboardLoading() {
   const tReports = useTranslations('reports');
   return (
@@ -213,9 +201,7 @@ export function RevenueReportsDashboard() {
               label={tReports('dateRangeLabel')}
               emptyValueLabel={
                 report && !dateRange
-                  ? locale === 'en'
-                    ? `Month ${report.meta.fromDate.slice(5, 7)}/${report.meta.fromDate.slice(0, 4)}`
-                    : `Tháng ${report.meta.fromDate.slice(5, 7)}/${report.meta.fromDate.slice(0, 4)}`
+                  ? `${tReports('monthPrefix')}${report.meta.fromDate.slice(5, 7)}/${report.meta.fromDate.slice(0, 4)}`
                   : tReports('currentMonth')
               }
               onApply={updateDateRange}
