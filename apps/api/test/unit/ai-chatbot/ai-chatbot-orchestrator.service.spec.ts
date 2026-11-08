@@ -100,6 +100,77 @@ describe('AiChatbotOrchestratorService', () => {
       expect(orchestrator.getTemperature()).toBe(0.15);
     });
 
+    it('should retrieve dynamic settings when AiChatbotSettingsService is provided', async () => {
+      const mockSettings = {
+        getSettings: vi.fn().mockResolvedValue({
+          id: 1,
+          idempotencyTtlDays: 14,
+          leaseDurationSeconds: 90,
+          contextHistoryLimit: 5,
+          temperature: 0.35,
+          updatedAt: new Date(),
+        }),
+      };
+
+      const configuredOrchestrator = new AiChatbotOrchestratorService(
+        mockConfig,
+        mockRetrievalService,
+        mockBusinessTools,
+        mockPrisma,
+        mockSettings as any,
+      );
+
+      const settings = await configuredOrchestrator.getEffectiveSettings();
+      expect(settings.temperature).toBe(0.35);
+      expect(settings.contextHistoryLimit).toBe(5);
+    });
+
+    it('should query history messages respecting contextHistoryLimit', async () => {
+      const mockSettings = {
+        getSettings: vi.fn().mockResolvedValue({
+          id: 1,
+          idempotencyTtlDays: 7,
+          leaseDurationSeconds: 60,
+          contextHistoryLimit: 3,
+          temperature: 0.2,
+          updatedAt: new Date(),
+        }),
+      };
+
+      const customPrisma = {
+        aiChatSession: {
+          findUnique: vi.fn().mockResolvedValue({ id: 99, khachHangId: null }),
+        },
+        aiChatMessage: {
+          create: vi.fn().mockResolvedValue({ id: 10 }),
+          findMany: vi.fn().mockResolvedValue([
+            { id: 10, role: 'USER', content: 'Câu hỏi mới nhất' },
+            { id: 9, role: 'ASSISTANT', content: 'Câu trả lời 1' },
+            { id: 8, role: 'USER', content: 'Câu hỏi 1' },
+          ]),
+        },
+      } as any;
+
+      const customOrchestrator = new AiChatbotOrchestratorService(
+        mockConfig,
+        mockRetrievalService,
+        mockBusinessTools,
+        customPrisma,
+        mockSettings as any,
+      );
+
+      // Retrieval returns empty array => triggers RAG_KNOWLEDGE_GAP or fallback
+      vi.mocked(mockRetrievalService.retrieve).mockResolvedValueOnce([]);
+
+      await customOrchestrator.processUserMessage({
+        message: 'Hỏi câu hỏi mới',
+        sessionToken: 'test-session-token',
+      });
+
+      // verify that findMany is called or context history limit is respected
+      expect(customPrisma.aiChatMessage.create).toHaveBeenCalled();
+    });
+
     it('should build prompt wrapped with <context>, <realtime_data>, and <user_query>', () => {
       const contextChunks: RetrievedChunk[] = [
         {

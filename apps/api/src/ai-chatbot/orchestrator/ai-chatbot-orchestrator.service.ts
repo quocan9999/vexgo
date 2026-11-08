@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,7 @@ import {
   AiBusinessToolsService,
   type TripSearchResultItem,
 } from '../tools/ai-business-tools.service.js';
+import { AiChatbotSettingsService } from '../admin/ai-chatbot-settings.service.js';
 
 export interface ChatbotRequest {
   message: string;
@@ -104,6 +106,7 @@ export class AiChatbotOrchestratorService {
     private readonly retrievalService: HybridRetrievalService,
     private readonly businessTools: AiBusinessToolsService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly settingsService?: AiChatbotSettingsService,
   ) {
     this.groqApiKey = this.configService.get<string>('GROQ_API_KEY')?.trim();
     this.baseUrl =
@@ -116,6 +119,21 @@ export class AiChatbotOrchestratorService {
 
   getTemperature(): number {
     return GENERATION_TEMPERATURE;
+  }
+
+  /**
+   * Lấy cấu hình hệ thống AI hiện hành (từ DB hoặc giá trị mặc định)
+   */
+  async getEffectiveSettings() {
+    if (this.settingsService) {
+      return this.settingsService.getSettings();
+    }
+    return {
+      temperature: GENERATION_TEMPERATURE,
+      contextHistoryLimit: 10,
+      idempotencyTtlDays: 7,
+      leaseDurationSeconds: 60,
+    };
   }
 
   /**
@@ -434,6 +452,7 @@ ${userQuery}
     }));
 
     // 6. Sinh phản hồi qua LLM (Groq API hoặc Template Grounded Fallback)
+    const effectiveSettings = await this.getEffectiveSettings();
     const prompt = this.buildGroundedPrompt(
       retrievedChunks,
       realtimeData,
@@ -441,8 +460,38 @@ ${userQuery}
     );
     let reply = '';
 
+    // Lấy ngữ cảnh hội thoại gần nhất dựa trên contextHistoryLimit
+    let historyMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    if (
+      sessionId &&
+      effectiveSettings.contextHistoryLimit > 0 &&
+      this.prisma.aiChatMessage
+    ) {
+      try {
+        const pastRecords = await this.prisma.aiChatMessage.findMany({
+          where: { sessionId },
+          orderBy: { createdAt: 'desc' },
+          take: effectiveSettings.contextHistoryLimit + 1,
+        });
+        // Bỏ qua câu hỏi hiện tại vừa tạo ở bước 1 (index 0) và đảo ngược theo thứ tự thời gian
+        historyMessages = pastRecords
+          .slice(1)
+          .reverse()
+          .map((m) => ({
+            role: m.role === 'USER' ? ('user' as const) : ('assistant' as const),
+            content: m.content,
+          }));
+      } catch {
+        // Bỏ qua lỗi truy vấn lịch sử ngữ cảnh
+      }
+    }
+
     if (this.groqApiKey && !this.groqApiKey.includes('gsk....')) {
-      reply = await this.callGroqLlm(prompt);
+      reply = await this.callGroqLlm(
+        prompt,
+        effectiveSettings.temperature,
+        historyMessages,
+      );
     }
 
     if (!reply) {
@@ -487,9 +536,13 @@ ${userQuery}
   }
 
   /**
-   * Gọi Groq Cloud LLM (OpenAI compatible) với nhiệt độ T = 0.15
+   * Gọi Groq Cloud LLM (OpenAI compatible) với nhiệt độ và ngữ cảnh động theo cấu hình hệ thống
    */
-  private async callGroqLlm(prompt: string): Promise<string> {
+  private async callGroqLlm(
+    prompt: string,
+    temperature = GENERATION_TEMPERATURE,
+    historyMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+  ): Promise<string> {
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -499,7 +552,7 @@ ${userQuery}
         },
         body: JSON.stringify({
           model: this.modelName,
-          temperature: GENERATION_TEMPERATURE,
+          temperature,
           messages: [
             {
               role: 'system',
@@ -511,6 +564,7 @@ Không khẳng định đã kết nối nhân viên hoặc gửi khiếu nại: 
 TUYỆT ĐỐI KHÔNG chèn mã tài liệu kỹ thuật, mã văn bản hay các ký hiệu như 【DOC-...】, [DOC-...] vào câu trả lời. Trả lời văn phong tự nhiên, liền mạch, lịch sự và dễ hiểu cho khách hàng.
 Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
             },
+            ...historyMessages,
             {
               role: 'user',
               content: prompt,

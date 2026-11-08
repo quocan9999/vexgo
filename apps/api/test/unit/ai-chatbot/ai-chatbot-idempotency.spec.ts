@@ -109,6 +109,39 @@ describe('AiChatbotService - Idempotency & Request Recovery (Mục 3)', () => {
       expect(res.reply).toContain('Đà Lạt');
     });
 
+    it('should immediately apply new TTL and Lease duration when settings are changed', async () => {
+      // Giả lập admin thay đổi cấu hình sang TTL=30 ngày và Lease=180 giây
+      mockSettingsService.getSettings.mockResolvedValueOnce({
+        id: 1,
+        idempotencyTtlDays: 30,
+        leaseDurationSeconds: 180,
+        contextHistoryLimit: 20,
+        temperature: 0.25,
+        updatedAt: new Date(),
+      });
+
+      const before = Date.now();
+      await service.sendMessage({
+        message: 'Kiểm tra cấu hình mới',
+        requestId: 'custom-config-req-123',
+      });
+
+      expect(mockPrisma.aiChatRequest.create).toHaveBeenCalled();
+      const createCall = mockPrisma.aiChatRequest.create.mock.calls[0][0];
+      const { leaseUntil, expiresAt } = createCall.data;
+
+      // Kiểm tra leaseUntil = now + 180s (chênh lệch tối đa vài ms)
+      const leaseDiff = leaseUntil.getTime() - before;
+      expect(leaseDiff).toBeGreaterThanOrEqual(179 * 1000);
+      expect(leaseDiff).toBeLessThanOrEqual(185 * 1000);
+
+      // Kiểm tra expiresAt = now + 30 ngày (30 * 24 * 3600 * 1000)
+      const expectedTtlMs = 30 * 24 * 60 * 60 * 1000;
+      const ttlDiff = expiresAt.getTime() - before;
+      expect(ttlDiff).toBeGreaterThanOrEqual(expectedTtlMs - 5000);
+      expect(ttlDiff).toBeLessThanOrEqual(expectedTtlMs + 5000);
+    });
+
     it('should return cached response immediately without calling LLM when identical retry occurs', async () => {
       const dto = {
         message: 'Tìm xe đi Đà Lạt',
