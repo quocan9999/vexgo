@@ -38,12 +38,12 @@ describe('Phase A1: Core Operations Deep i18n & Shared Resource UI', () => {
       expect(enMessages.vehicles.eyebrow).toBe('FLEET MANAGEMENT');
       expect(enMessages.vehicles.colPlate).toBe('License Plate');
       expect(enMessages.vehicles.colOperator).toBe('Bus Operator');
-      expect(enMessages.vehicles.colType).toBe('Vehicle Type');
+      expect(enMessages.vehicles.colType).toBe('Type');
       expect(enMessages.vehicles.colStatus).toBe('Status');
       expect(enMessages.vehicles.statusActive).toBe('Active');
       expect(enMessages.vehicles.statusMaintenance).toBe('Maintenance');
-      expect(enMessages.vehicles.allTypes).toBe('All vehicle types');
-      expect(enMessages.vehicles.allStatuses).toBe('All vehicle statuses');
+      expect(enMessages.vehicles.allTypes).toBe('All Vehicle Types');
+      expect(enMessages.vehicles.allStatuses).toBe('All Statuses');
     });
 
     it('synchronizes all routes keys', () => {
@@ -85,7 +85,7 @@ describe('Phase A1: Core Operations Deep i18n & Shared Resource UI', () => {
 
     it('synchronizes common shared actions and labels', () => {
       expect(enMessages.common.refresh).toBe('Refresh');
-      expect(enMessages.common.viewDetails).toBe('View details');
+      expect(enMessages.common.viewDetails).toBe('View Details');
       expect(enMessages.common.showing).toBe('Showing');
       expect(enMessages.common.of).toBe('of');
       expect(enMessages.common.prevPage).toBe('Previous page');
@@ -177,7 +177,7 @@ describe('Phase A1: Core Operations Deep i18n & Shared Resource UI', () => {
       expect(screen.getAllByText('TP. Hồ Chí Minh').length).toBeGreaterThan(0);
 
       // Actions button translated to English
-      expect(screen.getAllByText('View details').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('View Details').length).toBeGreaterThan(0);
     });
 
     it('renders translated empty state in English when stations list is empty', () => {

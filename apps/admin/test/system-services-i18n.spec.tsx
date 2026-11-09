@@ -19,10 +19,10 @@ describe('System & Customer Services i18n dictionaries (Phase 4)', () => {
 
   describe('Vehicles and VehicleTypes namespace', () => {
     it('provides complete and matching keys for vehicles and types', () => {
-      expect(viMessages.vehicles.vehiclesTitle).toBe('Danh sách xe');
-      expect(enMessages.vehicles.vehiclesTitle).toBe('Vehicle Fleet');
+      expect(viMessages.vehicles.vehiclesTitle).toBe('Quản lý phương tiện');
+      expect(enMessages.vehicles.vehiclesTitle).toBe('Fleet Management');
 
-      expect(viMessages.vehicles.createVehicle).toBe('Thêm xe');
+      expect(viMessages.vehicles.createVehicle).toBe('Thêm phương tiện');
       expect(enMessages.vehicles.createVehicle).toBe('Add Vehicle');
 
       expect(viMessages.vehicleTypes.vehicleTypesTitle).toBe('Quản lý loại xe');

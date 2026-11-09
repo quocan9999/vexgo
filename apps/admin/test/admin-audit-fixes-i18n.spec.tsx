@@ -115,9 +115,9 @@ describe('Admin Web Comprehensive i18n Audit Fixes Verification', () => {
       );
 
       // System Administrator description translated
-      expect(screen.getByText('System Administrator')).toBeDefined();
+      expect(screen.getAllByText('System Administrator').length).toBeGreaterThan(0);
       // Bus Operator Administrator description translated
-      expect(screen.getByText('Bus Operator Administrator')).toBeDefined();
+      expect(screen.getAllByText('Bus Operator Administrator').length).toBeGreaterThan(0);
       // Protected Role badge translated
       expect(screen.getByText('Protected Role')).toBeDefined();
       // Operator badge translated

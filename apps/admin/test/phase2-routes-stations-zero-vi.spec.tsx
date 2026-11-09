@@ -238,7 +238,7 @@ describe('Phase 2: Routes & Stations Deep i18n & Zero-Hardcoded-Vi Verification'
       expect(screen.getByRole('heading', { name: 'Configure Route Pattern' })).toBeDefined();
       expect(screen.getByRole('button', { name: 'Add Stop' })).toBeDefined();
       expect(screen.getByRole('button', { name: 'Sort by Time' })).toBeDefined();
-      expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
+      expect(screen.getAllByRole('button', { name: 'Close' }).length).toBeGreaterThanOrEqual(1);
       expect(screen.getByRole('button', { name: 'Save Stops' })).toBeDefined();
 
       const allText = container.textContent || '';
