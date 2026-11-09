@@ -114,6 +114,44 @@ export function reconcileAdminMessages(
   });
 }
 
+export function SupportChatMessageText({
+  content,
+  isStaff,
+}: {
+  content: string;
+  isStaff?: boolean;
+}) {
+  if (!content) return null;
+
+  if (!content.includes('**')) {
+    return content;
+  }
+
+  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+          const inner = part.slice(2, -2);
+          return (
+            <strong
+              key={index}
+              className={
+                isStaff
+                  ? 'font-bold text-primary-foreground'
+                  : 'font-semibold text-foreground'
+              }
+            >
+              {inner}
+            </strong>
+          );
+        }
+        return <React.Fragment key={index}>{part}</React.Fragment>;
+      })}
+    </>
+  );
+}
+
 export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const token = getAdminAccessToken();
   const canManageChat = hasAdminPermission(session, 'chat:manage');
@@ -1312,9 +1350,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         return (
                           <p
                             key={msg.tinNhanId}
-                            className="mx-auto w-fit max-w-full rounded-lg bg-muted px-3 py-2 text-center text-xs text-muted-foreground"
+                            className="mx-auto w-fit max-w-full whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-center text-xs text-muted-foreground"
                           >
-                            {msg.noiDung}
+                            <SupportChatMessageText content={msg.noiDung} />
                           </p>
                         );
                       return (
@@ -1368,7 +1406,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                                   : 'border border-border/80 bg-card text-foreground rounded-tl-xs'
                               } ${pending ? 'opacity-70' : ''}`}
                             >
-                              {msg.noiDung}
+                              <SupportChatMessageText
+                                content={msg.noiDung}
+                                isStaff={staff}
+                              />
                             </div>
                             {pending ? (
                               <span className="flex items-center gap-1 text-xs text-muted-foreground">

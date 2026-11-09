@@ -25,4 +25,5 @@ output/
 .superpowers/
 backups/
 *.sql
+!prisma/migrations/**/*.sql
 *.sql.gz

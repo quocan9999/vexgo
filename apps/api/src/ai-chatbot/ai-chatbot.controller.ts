@@ -2,11 +2,13 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public, OptionalAuth } from '../auth/decorators/public.decorator.js';
@@ -14,6 +16,7 @@ import { OptionalPrincipal } from '../auth/decorators/current-principal.decorato
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { AiChatbotService } from './ai-chatbot.service.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
+import { AiChatbotHandoffDto } from './dto/ai-chatbot-handoff.dto.js';
 import { ApiErrorResponseDto } from '../common/swagger/api-response-envelope.dto.js';
 
 @ApiTags('Trợ lý ảo AI (AI Chatbot)')
@@ -77,6 +80,91 @@ export class AiChatbotController {
   ) {
     return this.chatbotService.getSessionMessages(
       sessionToken,
+      principal?.taiKhoanId,
+    );
+  }
+
+  @Post('sessions/:sessionToken/handoff')
+  @OptionalAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Chuyển giao phiên hội thoại AI sang chat với nhân viên CSKH nhà xe',
+    description:
+      'Tạo hoặc kết nối lại cuộc trò chuyện trong module support-chat và chuyển tóm tắt trao đổi với AI cho nhân viên tư vấn. Yêu cầu đăng nhập tài khoản khách hàng.',
+  })
+  @ApiParam({
+    name: 'sessionToken',
+    description: 'Mã định danh phiên hội thoại AI (UUID)',
+    example: 'c2e4293e-2b5d-4f1a-8c65-0d2d3e9501a2',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Chuyển giao thành công sang cuộc trò chuyện CSKH.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Yêu cầu đăng nhập tài khoản khách hàng hoặc không có quyền truy cập phiên.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy phiên AI hoặc không tìm thấy nhà xe.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'RequestId đã tồn tại với payload khác hoặc đang được xử lý.',
+    type: ApiErrorResponseDto,
+  })
+  async handoffSession(
+    @Param('sessionToken', new ParseUUIDPipe()) sessionToken: string,
+    @Body() dto: AiChatbotHandoffDto,
+    @OptionalPrincipal() principal?: AuthPrincipal,
+  ) {
+    const data = await this.chatbotService.handoffToSupportChat(
+      sessionToken,
+      dto,
+      principal,
+    );
+    return { data };
+  }
+
+  @Get('requests/:requestId')
+  @OptionalAuth()
+  @ApiOperation({
+    summary: 'Tra cứu trạng thái hoặc phục hồi kết quả yêu cầu theo requestId',
+    description:
+      'Kiểm tra trạng thái (PROCESSING, COMPLETED, FAILED) hoặc lấy lại kết quả của tin nhắn khi client gặp sự cố mạng hoặc timeout.',
+  })
+  @ApiParam({
+    name: 'requestId',
+    description: 'Mã định danh yêu cầu UUID v4',
+    example: 'b7c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Trạng thái và kết quả của yêu cầu.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền truy cập yêu cầu này hoặc thiếu mã xác minh.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy yêu cầu tương ứng với requestId.',
+    type: ApiErrorResponseDto,
+  })
+  async getRequestStatus(
+    @Param('requestId', new ParseUUIDPipe()) requestId: string,
+    @Headers('x-recovery-key') recoveryKeyHeader?: string,
+    @Query('recoveryKey') recoveryKeyQuery?: string,
+    @OptionalPrincipal() principal?: AuthPrincipal,
+  ) {
+    const recoveryKey = recoveryKeyHeader || recoveryKeyQuery;
+    return this.chatbotService.getRequestStatus(
+      requestId,
+      recoveryKey,
       principal?.taiKhoanId,
     );
   }

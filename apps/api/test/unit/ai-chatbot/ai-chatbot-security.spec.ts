@@ -398,12 +398,14 @@ describe('AI chatbot security and recovery regressions', () => {
     const updated = DEFAULT_KNOWLEDGE_DOCUMENTS.find(
       (d) => d.documentCode === 'DOC-CANCEL-POLICY',
     )!;
-    const manual =
-      '- VexGo không hoàn tiền trực tuyến. Sau khi hủy vé, khách hàng cần liên hệ hỗ trợ hoặc nhà xe để được xác minh và hướng dẫn hoàn tiền. Điều kiện, phí hủy và số tiền dự kiến phải xem tại báo giá hủy của vé cụ thể; AI không tự xác nhận việc hoàn tiền.';
-    const old = updated.rawContent.replace(
-      manual,
-      '- Tiền hoàn sẽ được hệ thống xử lý tự động và chuyển về tài khoản ngân hàng hoặc ví điện tử hành khách đã dùng để thanh toán trong vòng 24 đến 48 giờ làm việc.',
-    );
+    const old = `1. Thời gian và mức phí hủy vé xe trực tuyến:
+- Hủy vé trước giờ khởi hành trên 24 tiếng: Mức phí hủy vé là 10% giá vé thực tế. Hành khách được hoàn lại 90% số tiền đã thanh toán.
+- Hủy vé trong khoảng từ 2.5 tiếng (2 giờ 30 phút) đến 24 tiếng trước giờ khởi hành: Mức phí hủy vé áp dụng là 20% giá vé. Hành khách được hoàn lại 80% số tiền.
+- Thời gian dưới 2.5 tiếng trước giờ khởi hành hoặc khi chuyến xe đã xuất bến: Hệ thống trực tuyến không hỗ trợ hủy vé tự động. Hành khách cần liên hệ trực tiếp với tổng đài nhà xe hoặc quầy vé tại bến xe để được xem xét theo quy chế đặc thù.
+
+2. Điều kiện ràng buộc khi hủy vé:
+- Đối với đơn đặt vé combo có kèm dịch vụ ký gửi hàng hóa hoặc bưu kiện: Hành khách không thể hủy vé trực tuyến nếu bưu kiện đang trong trạng thái xử lý hoặc chưa được hủy. Vui lòng hủy bưu kiện trước hoặc liên hệ bộ phận hỗ trợ.
+- Tiền hoàn sẽ được hệ thống xử lý tự động và chuyển về tài khoản ngân hàng hoặc ví điện tử hành khách đã dùng để thanh toán trong vòng 24 đến 48 giờ làm việc.`;
     for (const customized of [false, true]) {
       let transactionActive = false;
       const tx = {

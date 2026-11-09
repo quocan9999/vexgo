@@ -18,6 +18,8 @@ import {
   ChevronDown,
   Sparkles,
   Loader2,
+  ArrowRightLeft,
+  PlusCircle,
 } from 'lucide-react';
 import { CustomerSupportChat } from '@/features/support-chat/components/customer-support-chat';
 import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
@@ -28,13 +30,120 @@ import type {
   AiSuggestionItem,
 } from '@/features/ai-chatbot/types/ai-chatbot.types';
 
+function convertMarkdownTablesToText(text: string): string {
+  if (!text || !text.includes('|')) return text;
+
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let inTable = false;
+  let headers: string[] = [];
+  const tableRows: string[][] = [];
+
+  const flushTable = () => {
+    if (tableRows.length > 0) {
+      for (const row of tableRows) {
+        const parts: string[] = [];
+        let title = '';
+
+        for (let i = 0; i < row.length; i++) {
+          const val = row[i];
+          const header = headers[i] || '';
+
+          if (!val) continue;
+
+          // Bỏ qua UUIDs (32 hex chars hoặc UUID format)
+          if (
+            /^[0-9a-f]{32}$/i.test(val) ||
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+          ) {
+            continue;
+          }
+
+          // Bỏ qua link đặt vé thô /trips/...
+          if (val.startsWith('/trips/') || val.startsWith('http')) {
+            continue;
+          }
+
+          // Bỏ qua cột mã chuyến hoặc link
+          if (/mã\s*chuyến/i.test(header) || /link/i.test(header)) {
+            continue;
+          }
+
+          // Chọn title chính (ưu tiên cột Nhà xe)
+          if (!title && (/nhà\s*xe/i.test(header) || i === 0 || i === 1)) {
+            title = val;
+            continue;
+          }
+
+          if (header && !/cột/i.test(header)) {
+            parts.push(`${header}: ${val}`);
+          } else {
+            parts.push(val);
+          }
+        }
+
+        if (title && parts.length > 0) {
+          result.push(`- **${title}**: ${parts.join(', ')}`);
+        } else if (title) {
+          result.push(`- **${title}**`);
+        } else if (parts.length > 0) {
+          result.push(`- ${parts.join(', ')}`);
+        }
+      }
+    }
+    inTable = false;
+    headers = [];
+    tableRows.length = 0;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const isTableRow = line.startsWith('|') && line.endsWith('|');
+    const isSeparator = isTableRow && /^\|(\s*:?-+:?\s*\|)+$/.test(line);
+
+    if (isSeparator) {
+      inTable = true;
+      continue;
+    }
+
+    if (isTableRow) {
+      const cells = line
+        .slice(1, -1)
+        .split('|')
+        .map((c) => c.trim());
+
+      if (!inTable) {
+        headers = cells;
+        inTable = true;
+      } else {
+        tableRows.push(cells);
+      }
+      continue;
+    }
+
+    if (inTable) {
+      flushTable();
+    }
+    result.push(lines[i]);
+  }
+
+  if (inTable) {
+    flushTable();
+  }
+
+  return result.join('\n');
+}
+
 function FormattedMessageText({ content, isUser }: { content: string; isUser: boolean }) {
   if (isUser) {
     return <span className="whitespace-pre-wrap">{content}</span>;
   }
 
+  // Chuyển đổi bảng Markdown sang văn bản gạch đầu dòng rõ ràng
+  const textWithoutTables = convertMarkdownTablesToText(content);
+
   // Loại bỏ triệt để mọi mã tài liệu kỹ thuật, thẻ [DOC-...], 【DOC-...】 hoặc (Nguồn: ...)
-  const cleaned = content
+  const cleaned = textWithoutTables
     .replace(/[【\[]\s*DOC-[A-Z0-9_-]+\s*[】\]]/gi, '')
     .replace(/【[^】]*】/g, '')
     .replace(/\(\s*Nguồn:[^)]*\)/gi, '')
@@ -84,41 +193,110 @@ function FormattedMessageText({ content, isUser }: { content: string; isUser: bo
   );
 }
 
+function generateUuidV4(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+const AI_CHAT_STORAGE_KEY = 'vexgo_ai_chat_data';
+const AI_CHAT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày tính theo Rolling TTL
+
+interface StoredAiChatData {
+  sessionToken: string;
+  lastActiveAt: number;
+  messages: AiChatMessageItem[];
+}
+
+const DEFAULT_WELCOME_MESSAGE: AiChatMessageItem = {
+  id: 'welcome',
+  text: 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, thông tin bưu kiện và giải đáp các chính sách của VexGo.',
+  sender: 'bot',
+  time: 'Vừa xong',
+};
+
+const persistChatData = (token: string, msgs: AiChatMessageItem[]) => {
+  try {
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+      const data: StoredAiChatData = {
+        sessionToken: token,
+        lastActiveAt: Date.now(),
+        messages: msgs,
+      };
+      window.localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch {
+    // Ignore storage quota or environment errors
+  }
+};
+
 export const SupportWidget: React.FC = () => {
   // Quản lý trạng thái mở/đóng độc lập cho 2 nút nổi (F-02)
   const [isBotOpen, setIsBotOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
+  const [pendingHandoffToken, setPendingHandoffToken] = useState<string | null>(null);
 
   const [sessionToken, setSessionToken] = useState<string>('');
-  const [messages, setMessages] = useState<AiChatMessageItem[]>([
-    {
-      id: 'welcome',
-      text: 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, thông tin bưu kiện và giải đáp các chính sách của VexGo.',
-      sender: 'bot',
-      time: 'Vừa xong',
-    },
-  ]);
+  const [messages, setMessages] = useState<AiChatMessageItem[]>([DEFAULT_WELCOME_MESSAGE]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<AiSuggestionItem[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Khởi tạo sessionToken từ sessionStorage khi client load
+  // Khởi tạo và khôi phục session/tin nhắn từ localStorage (Rolling TTL 7 ngày)
   useEffect(() => {
     try {
-      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
-        const stored = window.sessionStorage.getItem('vexgo_ai_session_token');
-        if (stored) {
-          setSessionToken(stored);
-        } else {
-          const newSession = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `session_${Date.now()}`;
-          window.sessionStorage.setItem('vexgo_ai_session_token', newSession);
-          setSessionToken(newSession);
+      if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+        const raw = window.localStorage.getItem(AI_CHAT_STORAGE_KEY);
+        if (raw) {
+          const parsed: StoredAiChatData = JSON.parse(raw);
+          const isUuidValid =
+            typeof parsed.sessionToken === 'string' &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              parsed.sessionToken,
+            );
+          const isNotExpired =
+            typeof parsed.lastActiveAt === 'number' &&
+            Date.now() - parsed.lastActiveAt < AI_CHAT_TTL_MS;
+
+          if (
+            isUuidValid &&
+            isNotExpired &&
+            Array.isArray(parsed.messages) &&
+            parsed.messages.length > 0
+          ) {
+            setSessionToken(parsed.sessionToken);
+            setMessages(parsed.messages);
+
+            // Kiểm tra tính hợp lệ với backend trong nền
+            aiChatbotService
+              .getSessionHistory(parsed.sessionToken)
+              .catch(() => {});
+            return;
+          }
         }
       }
     } catch {
-      // Ignore in non-browser environments
+      // Bỏ qua lỗi parse
+    }
+
+    // Nếu không có dữ liệu hoặc đã hết hạn quá 7 ngày, tạo phiên mới
+    const newSession = generateUuidV4();
+    setSessionToken(newSession);
+    setMessages([DEFAULT_WELCOME_MESSAGE]);
+    persistChatData(newSession, [DEFAULT_WELCOME_MESSAGE]);
+    try {
+      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+        window.sessionStorage.removeItem('vexgo_ai_session_token');
+      }
+    } catch {
+      // Ignore
     }
   }, []);
 
@@ -159,6 +337,20 @@ export const SupportWidget: React.FC = () => {
     });
   };
 
+  const handleResetChat = () => {
+    const newSession = generateUuidV4();
+    setSessionToken(newSession);
+    setMessages([DEFAULT_WELCOME_MESSAGE]);
+    persistChatData(newSession, [DEFAULT_WELCOME_MESSAGE]);
+    try {
+      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+        window.sessionStorage.removeItem('vexgo_ai_session_token');
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputValue).trim();
     if (!text || isLoading) return;
@@ -173,7 +365,9 @@ export const SupportWidget: React.FC = () => {
       }),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
+    persistChatData(sessionToken, nextMessages);
     setInputValue('');
     setIsLoading(true);
 
@@ -183,15 +377,10 @@ export const SupportWidget: React.FC = () => {
         sessionToken,
       });
 
+      let currentToken = sessionToken;
       if (res.sessionToken && res.sessionToken !== sessionToken) {
-        setSessionToken(res.sessionToken);
-        try {
-          if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
-            window.sessionStorage.setItem('vexgo_ai_session_token', res.sessionToken);
-          }
-        } catch {
-          // Ignore
-        }
+        currentToken = res.sessionToken;
+        setSessionToken(currentToken);
       }
 
       const botMessage: AiChatMessageItem = {
@@ -204,11 +393,16 @@ export const SupportWidget: React.FC = () => {
         }),
         citations: res.citations,
         suggestedTrips: res.suggestedTrips,
+        suggestedReturnTrips: res.suggestedReturnTrips,
+        isRoundTrip: res.isRoundTrip,
+        roundTripBookingUrl: res.roundTripBookingUrl,
         requiresHumanHandoff: res.requiresHumanHandoff,
         handoffReason: res.handoffReason,
       };
 
-      setMessages((prev) => [...prev, botMessage]);
+      const finalMessages = [...nextMessages, botMessage];
+      setMessages(finalMessages);
+      persistChatData(currentToken, finalMessages);
     } catch {
       const errorMessage: AiChatMessageItem = {
         id: (Date.now() + 1).toString(),
@@ -220,13 +414,16 @@ export const SupportWidget: React.FC = () => {
         }),
         requiresHumanHandoff: true,
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      const errorMessages = [...nextMessages, errorMessage];
+      setMessages(errorMessages);
+      persistChatData(sessionToken, errorMessages);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleConnectHuman = () => {
+    setPendingHandoffToken(sessionToken);
     setIsBotOpen(false);
     setIsStaffOpen(true);
   };
@@ -310,7 +507,10 @@ export const SupportWidget: React.FC = () => {
 
           {/* Body: CustomerSupportChat Component */}
           <div className="flex-1 overflow-hidden flex flex-col">
-            <CustomerSupportChat />
+            <CustomerSupportChat
+              handoffSessionToken={pendingHandoffToken || undefined}
+              onHandoffCompleted={() => setPendingHandoffToken(null)}
+            />
           </div>
         </div>
       )}
@@ -340,6 +540,15 @@ export const SupportWidget: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleResetChat}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
+                title="Đoạn chat mới"
+                aria-label="Đoạn chat mới"
+              >
+                <PlusCircle className="w-4 h-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => setIsBotOpen(false)}
@@ -402,8 +611,152 @@ export const SupportWidget: React.FC = () => {
                     <FormattedMessageText content={msg.text} isUser={msg.sender === 'user'} />
                   </div>
 
-                  {/* 1. HIỂN THỊ DANH SÁCH THẺ CHUYẾN XE GỢI Ý (SUGGESTED TRIPS) */}
-                  {msg.suggestedTrips && msg.suggestedTrips.length > 0 && (
+                  {/* 1. HIỂN THỊ DANH SÁCH CHUYẾN XE KHÚ HỒI HOẶC 1 CHIỀU */}
+                  {msg.isRoundTrip ? (
+                    <div className="w-full space-y-3 mt-1.5">
+                      {/* KHỐI LƯỢT ĐI */}
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                          <span>🛫</span>
+                          <span>
+                            Chiều đi:{' '}
+                            {msg.suggestedTrips?.[0]
+                              ? `${msg.suggestedTrips[0].origin} → ${msg.suggestedTrips[0].destination}`
+                              : 'Lộ trình đi'}
+                          </span>
+                        </div>
+                        {msg.suggestedTrips && msg.suggestedTrips.length > 0 ? (
+                          msg.suggestedTrips.map((trip) => (
+                            <div
+                              key={`outbound-${trip.tripId}`}
+                              className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs hover:border-emerald-500 hover:shadow-sm transition-all"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-800 text-xs">
+                                  {trip.operator}
+                                </span>
+                                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                                  Còn {trip.availableSeats} ghế
+                                </span>
+                              </div>
+
+                              <div className="mt-1.5 text-[11px] text-slate-600 flex items-center gap-2">
+                                <span className="flex items-center gap-1 font-medium text-slate-800">
+                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  {trip.departureTime}
+                                </span>
+                                <span>•</span>
+                                <span>
+                                  {trip.origin} → {trip.destination}
+                                </span>
+                              </div>
+
+                              <div className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-slate-400" />
+                                {trip.departureDate} ({trip.vehicleType})
+                              </div>
+
+                              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+                                <span className="font-bold text-rose-600 text-xs">
+                                  {trip.price
+                                    ? trip.price.toLocaleString('vi-VN') + ' đ'
+                                    : 'Liên hệ'}
+                                </span>
+                                <Link
+                                  href={`/trips/${trip.tripId}`}
+                                  className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors"
+                                >
+                                  Chi tiết
+                                  <ArrowRight className="w-3 h-3" />
+                                </Link>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-2.5 bg-slate-100 rounded-xl text-[11px] text-slate-500 text-center">
+                            Chưa tìm thấy chuyến đi phù hợp.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* KHỐI LƯỢT VỀ */}
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-bold text-teal-800 bg-teal-50 border border-teal-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                          <span>🛬</span>
+                          <span>
+                            Chiều về:{' '}
+                            {msg.suggestedReturnTrips?.[0]
+                              ? `${msg.suggestedReturnTrips[0].origin} → ${msg.suggestedReturnTrips[0].destination}`
+                              : 'Lộ trình về'}
+                          </span>
+                        </div>
+                        {msg.suggestedReturnTrips && msg.suggestedReturnTrips.length > 0 ? (
+                          msg.suggestedReturnTrips.map((trip) => (
+                            <div
+                              key={`return-${trip.tripId}`}
+                              className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs hover:border-teal-500 hover:shadow-sm transition-all"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-800 text-xs">
+                                  {trip.operator}
+                                </span>
+                                <span className="text-[10px] text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full font-semibold border border-teal-200">
+                                  Còn {trip.availableSeats} ghế
+                                </span>
+                              </div>
+
+                              <div className="mt-1.5 text-[11px] text-slate-600 flex items-center gap-2">
+                                <span className="flex items-center gap-1 font-medium text-slate-800">
+                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  {trip.departureTime}
+                                </span>
+                                <span>•</span>
+                                <span>
+                                  {trip.origin} → {trip.destination}
+                                </span>
+                              </div>
+
+                              <div className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-slate-400" />
+                                {trip.departureDate} ({trip.vehicleType})
+                              </div>
+
+                              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+                                <span className="font-bold text-rose-600 text-xs">
+                                  {trip.price
+                                    ? trip.price.toLocaleString('vi-VN') + ' đ'
+                                    : 'Liên hệ'}
+                                </span>
+                                <Link
+                                  href={`/trips/${trip.tripId}`}
+                                  className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg font-medium flex items-center gap-1 transition-colors"
+                                >
+                                  Chi tiết
+                                  <ArrowRight className="w-3 h-3" />
+                                </Link>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-2.5 bg-slate-100 rounded-xl text-[11px] text-slate-500 text-center">
+                            Chưa tìm thấy chuyến về phù hợp.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* NÚT CTA CHÍNH: ĐẶT VÉ KHỨ HỒI */}
+                      {msg.roundTripBookingUrl && (
+                        <Link
+                          href={msg.roundTripBookingUrl}
+                          className="w-full mt-2 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
+                        >
+                          <ArrowRightLeft className="w-4 h-4" />
+                          <span>Đặt vé khứ hồi ngay</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                      )}
+                    </div>
+                  ) : msg.suggestedTrips && msg.suggestedTrips.length > 0 ? (
                     <div className="w-full space-y-2 mt-1">
                       <div className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5">
                         <Bus className="w-3.5 h-3.5 text-emerald-600" />
@@ -452,7 +805,7 @@ export const SupportWidget: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                  )}
+                  ) : null}
 
                   {/* 2. NÚT CHUYỂN TIẾP NHÂN VIÊN (HUMAN HANDOFF) */}
                   {msg.requiresHumanHandoff && (

@@ -159,3 +159,42 @@ export async function sendTestChatMessage(
   ) as AiChatTestResponse;
   return data;
 }
+
+export interface AiChatbotSettings {
+  id: number;
+  idempotencyTtlDays: number;
+  leaseDurationSeconds: number;
+  contextHistoryLimit: number;
+  temperature: number;
+  updatedAt: string;
+}
+
+export interface UpdateAiSettingsInput {
+  idempotencyTtlDays?: number;
+  leaseDurationSeconds?: number;
+  contextHistoryLimit?: number;
+  temperature?: number;
+}
+
+function getSettingsApiUrl() {
+  return `${getApiBaseUrl()}/api/v1/ai-chatbot/admin/settings`;
+}
+
+export async function getAiSettings(): Promise<AiChatbotSettings> {
+  const response = await adminApiFetch(getSettingsApiUrl());
+  const json = await handleApiResponse<{ data: AiChatbotSettings }>(response);
+  return json.data;
+}
+
+export async function updateAiSettings(
+  input: UpdateAiSettingsInput,
+): Promise<AiChatbotSettings> {
+  const response = await adminApiFetch(getSettingsApiUrl(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const json = await handleApiResponse<{ data: AiChatbotSettings }>(response);
+  return json.data;
+}
+

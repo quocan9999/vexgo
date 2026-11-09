@@ -25,10 +25,12 @@ import {
   Calendar,
   Check,
   CheckCheck,
+  Sparkles,
 } from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { supportChatApi } from '../services/support-chat.api';
 import { useSupportChatSocket } from '../hooks/use-support-chat-socket';
+import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
 import { BusCompany, SupportConversation, SupportMessage } from '../types';
 
 /**
@@ -105,13 +107,68 @@ export function reconcileMessages(
   });
 }
 
-export function CustomerSupportChat() {
-  const { user } = useAuthSession();
-  // A different account must never inherit a mounted conversation or its callbacks.
-  return <CustomerSupportChatSession key={user?.accountId ?? 'guest'} />;
+export function SupportChatMessageText({
+  content,
+  isMe,
+}: {
+  content: string;
+  isMe?: boolean;
+}) {
+  if (!content) return null;
+
+  if (!content.includes('**')) {
+    return content;
+  }
+
+  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+          const inner = part.slice(2, -2);
+          return (
+            <strong
+              key={index}
+              className={
+                isMe
+                  ? 'font-bold text-white'
+                  : 'font-semibold text-slate-900'
+              }
+            >
+              {inner}
+            </strong>
+          );
+        }
+        return <React.Fragment key={index}>{part}</React.Fragment>;
+      })}
+    </>
+  );
 }
 
-function CustomerSupportChatSession() {
+export interface CustomerSupportChatProps {
+  handoffSessionToken?: string;
+  onHandoffCompleted?: () => void;
+}
+
+export function CustomerSupportChat({
+  handoffSessionToken,
+  onHandoffCompleted,
+}: CustomerSupportChatProps = {}) {
+  const { user } = useAuthSession();
+  // A different account must never inherit a mounted conversation or its callbacks.
+  return (
+    <CustomerSupportChatSession
+      key={user?.accountId ?? 'guest'}
+      handoffSessionToken={handoffSessionToken}
+      onHandoffCompleted={onHandoffCompleted}
+    />
+  );
+}
+
+function CustomerSupportChatSession({
+  handoffSessionToken,
+  onHandoffCompleted,
+}: CustomerSupportChatProps) {
   const { isAuthenticated, accessToken, user, executeWithAuth } =
     useAuthSession();
   const chatApi = useMemo(
@@ -235,6 +292,16 @@ function CustomerSupportChatSession() {
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
+
+  // Khi có yêu cầu chuyển giao mới từ AI, mở lại màn hình chọn nhà xe để khách hàng chỉ định đích đến
+  useEffect(() => {
+    if (handoffSessionToken) {
+      setSelectedCompany(null);
+      setActiveConversation(null);
+      setMessages([]);
+      setShowHistoryList(false);
+    }
+  }, [handoffSessionToken]);
 
   const scrollToBottom = useCallback(() => {
     if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
@@ -579,6 +646,32 @@ function CustomerSupportChatSession() {
     setHistoryTotalPages(1);
 
     try {
+      // Nếu có yêu cầu chuyển giao phiên hội thoại từ Trợ lý AI
+      if (handoffSessionToken && accessToken) {
+        try {
+          const reqId =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+                  const r = (Math.random() * 16) | 0;
+                  const v = c === 'x' ? r : (r & 0x3) | 0x8;
+                  return v.toString(16);
+                });
+          await aiChatbotService.handoffToSupport(
+            handoffSessionToken,
+            {
+              nhaXeId: company.busCompanyId,
+              requestId: reqId,
+            },
+            accessToken,
+          );
+          onHandoffCompleted?.();
+        } catch (handoffErr) {
+          console.warn('[CustomerSupportChat] Handoff call error:', handoffErr);
+          // Không chặn mở chat nếu handoff thất bại
+        }
+      }
+
       const [active, convsRes] = await Promise.all([
         chatApi.getActiveConversation(company.busCompanyId, accessToken),
         chatApi.listConversations(
@@ -1212,6 +1305,12 @@ function CustomerSupportChatSession() {
 
         {!selectedCompany ? (
           <div className="flex-1 flex flex-col p-3 overflow-hidden">
+            {handoffSessionToken && (
+              <div className="mb-2 p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] rounded-lg flex items-center gap-1.5 shadow-2xs animate-in fade-in duration-200">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Chọn nhà xe để chuyển tiếp nội dung trao đổi từ Trợ lý AI.</span>
+              </div>
+            )}
             <div className="mb-2">
               <input
                 type="text"
@@ -1432,8 +1531,8 @@ function CustomerSupportChatSession() {
               if (isSystem) {
                 return (
                   <div key={msg.tinNhanId} className="text-center my-2">
-                    <span className="inline-block text-[10px] text-slate-500 bg-slate-200/60 px-2.5 py-0.5 rounded-full font-medium">
-                      {msg.noiDung}
+                    <span className="inline-block text-[10px] text-slate-500 bg-slate-200/60 px-2.5 py-0.5 rounded-full font-medium whitespace-pre-wrap">
+                      <SupportChatMessageText content={msg.noiDung} />
                     </span>
                   </div>
                 );
@@ -1504,7 +1603,7 @@ function CustomerSupportChatSession() {
                           );
                         else messageElementsRef.current.delete(msg.tinNhanId);
                       }}
-                      className={`p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words transition-opacity ${
+                      className={`p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words whitespace-pre-wrap transition-opacity ${
                         isMe
                           ? isFailed
                             ? 'bg-rose-50 border border-rose-300 text-rose-800 rounded-tr-none'
@@ -1514,7 +1613,7 @@ function CustomerSupportChatSession() {
                           : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
                       }`}
                     >
-                      {msg.noiDung}
+                      <SupportChatMessageText content={msg.noiDung} isMe={isMe} />
                     </div>
                     {isFailed && (
                       <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-rose-600">

@@ -28,7 +28,13 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
 
 2. Điều kiện ràng buộc khi hủy vé:
 - Đối với đơn đặt vé combo có kèm dịch vụ ký gửi hàng hóa hoặc bưu kiện: Hành khách không thể hủy vé trực tuyến nếu bưu kiện đang trong trạng thái xử lý hoặc chưa được hủy. Vui lòng hủy bưu kiện trước hoặc liên hệ bộ phận hỗ trợ.
-- VexGo không hoàn tiền trực tuyến. Sau khi hủy vé, khách hàng cần liên hệ hỗ trợ hoặc nhà xe để được xác minh và hướng dẫn hoàn tiền. Điều kiện, phí hủy và số tiền dự kiến phải xem tại báo giá hủy của vé cụ thể; AI không tự xác nhận việc hoàn tiền.`,
+- VexGo không hoàn tiền trực tuyến. Sau khi hủy vé, khách hàng cần liên hệ hỗ trợ hoặc nhà xe để được xác minh và hướng dẫn hoàn tiền. Điều kiện, phí hủy và số tiền dự kiến phải xem tại báo giá hủy của vé cụ thể; AI không tự xác nhận việc hoàn tiền.
+
+3. Hướng dẫn thao tác hủy vé trên website:
+- Hành khách truy cập mục "Hủy vé" trên thanh điều hướng đầu trang (hoặc từ trang "Tra cứu vé xe" / "Vé của tôi", chọn vé cần hủy và bấm "Yêu cầu hủy vé").
+- Bước 1: Điền Mã vé và Số điện thoại đặt vé rồi bấm nút "Tra cứu vé".
+- Bước 2: Xem mức phí hủy và số tiền hoàn dự kiến, tích chọn ghế cần hủy và tick đồng ý điều khoản chính sách.
+- Bước 3: Bấm nút "Xác nhận hủy vé" để hoàn tất yêu cầu và nhận mã giao dịch hủy vé. Hành khách không cần gửi mã vé hoặc số điện thoại vào khung chat này.`,
   },
   {
     documentCode: 'DOC-BAGGAGE-POLICY',
@@ -193,7 +199,7 @@ export const DEFAULT_KNOWLEDGE_DOCUMENTS: SeedKnowledgeDocument[] = [
 - Không cần. Sau khi thanh toán thành công, bạn sẽ nhận được tin nhắn SMS và email chứa mã vé và mã QR soát vé. Khi lên xe, bạn chỉ cần xuất trình mã QR trên màn hình điện thoại cho tài xế hoặc nhân viên soát vé.
 
 2. Làm thế nào để kiểm tra vé đã đặt thành công chưa?
-- Bạn có thể vào mục "Tra cứu vé" trên website hoặc ứng dụng VexGo, nhập mã vé (hoặc mã đơn hàng) cùng số điện thoại đặt vé để xem chi tiết trạng thái vé, vị trí ghế và thông tin chuyến xe.
+- Bạn vào mục "Tra cứu" trên thanh điều hướng đầu trang website VexGo, chọn "Tra cứu vé xe" (hoặc mục "Vé của tôi" nếu đã đăng nhập), điền Mã vé và Số điện thoại đặt vé rồi bấm nút "Tra cứu vé" để xem chi tiết vé, vị trí ghế và mã QR lên xe. Khách hàng không cần gửi mã vé hoặc số điện thoại vào khung chat này.
 
 3. Tôi có thể đổi giờ đi sang chuyến khác được không?
 - Bạn có thể liên hệ tổng đài nhà xe hoặc yêu cầu hủy vé cũ theo chính sách hoàn hủy của hệ thống rồi tiến hành đặt vé mới cho khung giờ phù hợp.`,

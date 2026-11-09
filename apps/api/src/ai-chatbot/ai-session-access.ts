@@ -1,6 +1,9 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service.js';
 
+/** Thời hạn không hoạt động của phiên chat AI (Rolling TTL: 7 ngày tính từ tin nhắn gần nhất) */
+export const SESSION_INACTIVITY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** Guest UUIDs are capabilities. An account-owned session additionally requires
  * that account's verified principal, for both reads and writes. Never claim a
  * guest session on login: a holder of its old capability must not see new PII. */
