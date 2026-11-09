@@ -178,7 +178,8 @@ describe('AiChatbotOrchestratorService', () => {
 
       const customPrisma = {
         aiChatSession: {
-          findUnique: vi.fn().mockResolvedValue({ id: 99, khachHangId: null }),
+          findUnique: vi.fn().mockResolvedValue({ id: 99, khachHangId: null, status: 'ACTIVE', updatedAt: new Date() }),
+          update: vi.fn().mockResolvedValue({ id: 99 }),
         },
         aiChatMessage: {
           create: vi.fn().mockResolvedValue({ id: 10 }),

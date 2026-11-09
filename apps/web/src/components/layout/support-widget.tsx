@@ -204,6 +204,37 @@ function generateUuidV4(): string {
   });
 }
 
+const AI_CHAT_STORAGE_KEY = 'vexgo_ai_chat_data';
+const AI_CHAT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày tính theo Rolling TTL
+
+interface StoredAiChatData {
+  sessionToken: string;
+  lastActiveAt: number;
+  messages: AiChatMessageItem[];
+}
+
+const DEFAULT_WELCOME_MESSAGE: AiChatMessageItem = {
+  id: 'welcome',
+  text: 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, thông tin bưu kiện và giải đáp các chính sách của VexGo.',
+  sender: 'bot',
+  time: 'Vừa xong',
+};
+
+const persistChatData = (token: string, msgs: AiChatMessageItem[]) => {
+  try {
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+      const data: StoredAiChatData = {
+        sessionToken: token,
+        lastActiveAt: Date.now(),
+        messages: msgs,
+      };
+      window.localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch {
+    // Ignore storage quota or environment errors
+  }
+};
+
 export const SupportWidget: React.FC = () => {
   // Quản lý trạng thái mở/đóng độc lập cho 2 nút nổi (F-02)
   const [isBotOpen, setIsBotOpen] = useState(false);
@@ -211,35 +242,61 @@ export const SupportWidget: React.FC = () => {
   const [pendingHandoffToken, setPendingHandoffToken] = useState<string | null>(null);
 
   const [sessionToken, setSessionToken] = useState<string>('');
-  const [messages, setMessages] = useState<AiChatMessageItem[]>([
-    {
-      id: 'welcome',
-      text: 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, thông tin bưu kiện và giải đáp các chính sách của VexGo.',
-      sender: 'bot',
-      time: 'Vừa xong',
-    },
-  ]);
+  const [messages, setMessages] = useState<AiChatMessageItem[]>([DEFAULT_WELCOME_MESSAGE]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<AiSuggestionItem[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Khởi tạo sessionToken từ sessionStorage khi client load (đảm bảo UUID v4 hợp lệ)
+  // Khởi tạo và khôi phục session/tin nhắn từ localStorage (Rolling TTL 7 ngày)
   useEffect(() => {
     try {
-      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
-        const stored = window.sessionStorage.getItem('vexgo_ai_session_token');
-        if (stored && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stored)) {
-          setSessionToken(stored);
-        } else {
-          const newSession = generateUuidV4();
-          window.sessionStorage.setItem('vexgo_ai_session_token', newSession);
-          setSessionToken(newSession);
+      if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+        const raw = window.localStorage.getItem(AI_CHAT_STORAGE_KEY);
+        if (raw) {
+          const parsed: StoredAiChatData = JSON.parse(raw);
+          const isUuidValid =
+            typeof parsed.sessionToken === 'string' &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              parsed.sessionToken,
+            );
+          const isNotExpired =
+            typeof parsed.lastActiveAt === 'number' &&
+            Date.now() - parsed.lastActiveAt < AI_CHAT_TTL_MS;
+
+          if (
+            isUuidValid &&
+            isNotExpired &&
+            Array.isArray(parsed.messages) &&
+            parsed.messages.length > 0
+          ) {
+            setSessionToken(parsed.sessionToken);
+            setMessages(parsed.messages);
+
+            // Kiểm tra tính hợp lệ với backend trong nền
+            aiChatbotService
+              .getSessionHistory(parsed.sessionToken)
+              .catch(() => {});
+            return;
+          }
         }
       }
     } catch {
-      // Ignore in non-browser environments
+      // Bỏ qua lỗi parse
+    }
+
+    // Nếu không có dữ liệu hoặc đã hết hạn quá 7 ngày, tạo phiên mới
+    const newSession = generateUuidV4();
+    setSessionToken(newSession);
+    setMessages([DEFAULT_WELCOME_MESSAGE]);
+    persistChatData(newSession, [DEFAULT_WELCOME_MESSAGE]);
+    try {
+      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+        window.sessionStorage.removeItem('vexgo_ai_session_token');
+      }
+    } catch {
+      // Ignore
     }
   }, []);
 
@@ -283,21 +340,15 @@ export const SupportWidget: React.FC = () => {
   const handleResetChat = () => {
     const newSession = generateUuidV4();
     setSessionToken(newSession);
+    setMessages([DEFAULT_WELCOME_MESSAGE]);
+    persistChatData(newSession, [DEFAULT_WELCOME_MESSAGE]);
     try {
       if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
-        window.sessionStorage.setItem('vexgo_ai_session_token', newSession);
+        window.sessionStorage.removeItem('vexgo_ai_session_token');
       }
     } catch {
       // Ignore
     }
-    setMessages([
-      {
-        id: 'welcome',
-        text: 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, thông tin bưu kiện và giải đáp các chính sách của VexGo.',
-        sender: 'bot',
-        time: 'Vừa xong',
-      },
-    ]);
   };
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -314,7 +365,9 @@ export const SupportWidget: React.FC = () => {
       }),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
+    persistChatData(sessionToken, nextMessages);
     setInputValue('');
     setIsLoading(true);
 
@@ -324,15 +377,10 @@ export const SupportWidget: React.FC = () => {
         sessionToken,
       });
 
+      let currentToken = sessionToken;
       if (res.sessionToken && res.sessionToken !== sessionToken) {
-        setSessionToken(res.sessionToken);
-        try {
-          if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
-            window.sessionStorage.setItem('vexgo_ai_session_token', res.sessionToken);
-          }
-        } catch {
-          // Ignore
-        }
+        currentToken = res.sessionToken;
+        setSessionToken(currentToken);
       }
 
       const botMessage: AiChatMessageItem = {
@@ -352,7 +400,9 @@ export const SupportWidget: React.FC = () => {
         handoffReason: res.handoffReason,
       };
 
-      setMessages((prev) => [...prev, botMessage]);
+      const finalMessages = [...nextMessages, botMessage];
+      setMessages(finalMessages);
+      persistChatData(currentToken, finalMessages);
     } catch {
       const errorMessage: AiChatMessageItem = {
         id: (Date.now() + 1).toString(),
@@ -364,7 +414,9 @@ export const SupportWidget: React.FC = () => {
         }),
         requiresHumanHandoff: true,
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      const errorMessages = [...nextMessages, errorMessage];
+      setMessages(errorMessages);
+      persistChatData(sessionToken, errorMessages);
     } finally {
       setIsLoading(false);
     }

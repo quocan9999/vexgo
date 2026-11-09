@@ -15,7 +15,10 @@ import {
 } from './orchestrator/ai-chatbot-orchestrator.service.js';
 import type { SendMessageDto } from './dto/send-message.dto.js';
 import type { AiChatbotHandoffDto } from './dto/ai-chatbot-handoff.dto.js';
-import { assertAiSessionAccess } from './ai-session-access.js';
+import {
+  assertAiSessionAccess,
+  SESSION_INACTIVITY_TTL_MS,
+} from './ai-session-access.js';
 import { AiChatbotSettingsService } from './admin/ai-chatbot-settings.service.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { SupportChatService } from '../support-chat/support-chat.service.js';
@@ -403,6 +406,32 @@ export class AiChatbotService {
     }
 
     await assertAiSessionAccess(this.prisma, session.khachHangId, taiKhoanId);
+
+    // Kiểm tra TTL 7 ngày (Rolling TTL tính từ hoạt động gần nhất)
+    const lastMessage = session.messages[session.messages.length - 1];
+    const lastActivityTime = lastMessage
+      ? new Date(lastMessage.createdAt).getTime()
+      : new Date(session.updatedAt || session.createdAt).getTime();
+
+    const isExpired =
+      session.status === 'EXPIRED' ||
+      Date.now() - lastActivityTime > SESSION_INACTIVITY_TTL_MS;
+
+    if (isExpired) {
+      if (session.status !== 'EXPIRED') {
+        await this.prisma.aiChatSession
+          .update({
+            where: { id: session.id },
+            data: { status: 'EXPIRED' },
+          })
+          .catch(() => {});
+      }
+      throw new NotFoundException({
+        error: 'SESSION_EXPIRED',
+        message: 'Phiên hội thoại đã hết hạn sau 7 ngày không hoạt động.',
+      });
+    }
+
     return {
       sessionToken: session.sessionToken,
       status: session.status,

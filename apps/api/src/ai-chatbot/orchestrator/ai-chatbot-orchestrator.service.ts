@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
-import { assertAiSessionAccess } from '../ai-session-access.js';
+import {
+  assertAiSessionAccess,
+  SESSION_INACTIVITY_TTL_MS,
+} from '../ai-session-access.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
@@ -291,7 +294,7 @@ ${userQuery}
     const cleanNormalized = removeVietnameseDiacritics(rawMessage);
 
     // 1. Quản lý phiên hội thoại AI (Session)
-    const sessionToken = request.sessionToken?.trim() || crypto.randomUUID();
+    let sessionToken = request.sessionToken?.trim() || crypto.randomUUID();
     let sessionId: number | undefined;
     let resolvedKhachHangId = request.khachHangId;
 
@@ -313,7 +316,13 @@ ${userQuery}
       }
       const session = await this.prisma.aiChatSession.findUnique({
         where: { sessionToken },
-        select: { id: true, khachHangId: true },
+        select: {
+          id: true,
+          khachHangId: true,
+          status: true,
+          updatedAt: true,
+          createdAt: true,
+        },
       });
       if (session) {
         await assertAiSessionAccess(
@@ -321,7 +330,47 @@ ${userQuery}
           session.khachHangId,
           request.taiKhoanId,
         );
-        sessionId = session.id;
+        const lastActivityTime = new Date(
+          session.updatedAt || session.createdAt,
+        ).getTime();
+        const isExpired =
+          session.status === 'EXPIRED' ||
+          Date.now() - lastActivityTime > SESSION_INACTIVITY_TTL_MS;
+
+        if (isExpired) {
+          if (
+            session.status !== 'EXPIRED' &&
+            typeof this.prisma.aiChatSession?.update === 'function'
+          ) {
+            await this.prisma.aiChatSession
+              .update({
+                where: { id: session.id },
+                data: { status: 'EXPIRED' },
+              })
+              .catch(() => {});
+          }
+          // Sinh phiên mới thay thế phiên đã hết hạn
+          sessionToken = crypto.randomUUID();
+          const created = await this.prisma.aiChatSession.create({
+            data: {
+              sessionToken,
+              khachHangId: resolvedKhachHangId ?? null,
+              status: 'ACTIVE',
+            },
+          });
+          sessionId = created.id;
+        } else {
+          sessionId = session.id;
+          // Cập nhật updatedAt để gia hạn rolling TTL
+          if (typeof this.prisma.aiChatSession?.update === 'function') {
+            await this.prisma.aiChatSession
+              .update({
+                where: { id: session.id },
+                data: { updatedAt: new Date() },
+              })
+              .catch(() => {});
+          }
+        }
       } else {
         const created = await this.prisma.aiChatSession.create({
           data: {
