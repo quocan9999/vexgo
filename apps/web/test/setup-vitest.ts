@@ -3,6 +3,7 @@ import viMessages from '../src/messages/vi.json';
 
 vi.mock('next-intl', () => ({
   useLocale: () => 'vi',
+  NextIntlClientProvider: ({ children }: { children?: any }) => children,
   useTranslations: (namespace?: string) => {
     const messages = namespace
       ? (viMessages as Record<string, any>)[namespace] || {}
