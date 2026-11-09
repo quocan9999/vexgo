@@ -741,7 +741,89 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     return 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, theo dõi bưu kiện hoặc giải đáp các chính sách hoàn hủy và hành lý của nhà xe.';
   }
 
-  private parseTripSearchQuery(msg: string): {
+  /**
+   * Bóc tách ngày tháng linh hoạt từ tin nhắn người dùng:
+   * - DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+   * - YYYY-MM-DD, YYYY/MM/DD
+   * - "ngày DD tháng MM năm YYYY", "DD tháng MM"
+   * - "ngày DD/MM"
+   * - "hôm nay", "ngày mai", "ngày mốt"
+   */
+  extractDateFromMessage(
+    msg: string,
+    referenceDate = new Date(),
+  ): { date?: string; textToStrip?: string } {
+    // 1. DD/MM/YYYY hoặc DD-MM-YYYY hoặc DD.MM.YYYY
+    const dmyMatch = msg.match(/\b(\d{1,2})[-\/\.](\d{1,2})[-\/\.](202\d)\b/);
+    if (dmyMatch) {
+      const day = dmyMatch[1].padStart(2, '0');
+      const month = dmyMatch[2].padStart(2, '0');
+      const year = dmyMatch[3];
+      return { date: `${year}-${month}-${day}`, textToStrip: dmyMatch[0] };
+    }
+
+    // 2. YYYY-MM-DD hoặc YYYY/MM/DD
+    const ymdMatch = msg.match(/\b(202\d)[-\/\.](\d{1,2})[-\/\.](\d{1,2})\b/);
+    if (ymdMatch) {
+      const year = ymdMatch[1];
+      const month = ymdMatch[2].padStart(2, '0');
+      const day = ymdMatch[3].padStart(2, '0');
+      return { date: `${year}-${month}-${day}`, textToStrip: ymdMatch[0] };
+    }
+
+    // 3. "ngày DD tháng MM năm YYYY" hoặc "DD tháng MM"
+    const textMonthMatch = msg.match(
+      /(?:ngày\s+)?(\d{1,2})\s*(?:tháng|thg)\s*(\d{1,2})(?:\s*(?:năm)?\s*(202\d))?/iu,
+    );
+    if (textMonthMatch) {
+      const day = textMonthMatch[1].padStart(2, '0');
+      const month = textMonthMatch[2].padStart(2, '0');
+      const year = textMonthMatch[3] || String(referenceDate.getFullYear());
+      return { date: `${year}-${month}-${day}`, textToStrip: textMonthMatch[0] };
+    }
+
+    // 4. "ngày DD/MM" hoặc "vào DD/MM" (không kèm năm)
+    const dmMatch = msg.match(/(?:ngày\s+|vào\s+)\b(\d{1,2})[-\/\.](\d{1,2})\b/iu);
+    if (dmMatch) {
+      const day = dmMatch[1].padStart(2, '0');
+      const month = dmMatch[2].padStart(2, '0');
+      const year = String(referenceDate.getFullYear());
+      return { date: `${year}-${month}-${day}`, textToStrip: dmMatch[0] };
+    }
+
+    // 5. Ngày tương đối: hôm nay, ngày mai, ngày mốt
+    const todayMatch = msg.match(/\b(?:hôm nay|hom nay)\b/iu);
+    if (todayMatch) {
+      const y = referenceDate.getFullYear();
+      const m = String(referenceDate.getMonth() + 1).padStart(2, '0');
+      const d = String(todayMatch ? referenceDate.getDate() : 1).padStart(2, '0');
+      return { date: `${y}-${m}-${d}`, textToStrip: todayMatch[0] };
+    }
+
+    const tomorrowMatch = msg.match(/\b(?:ngày mai|ngay mai|mai)\b/iu);
+    if (tomorrowMatch) {
+      const tomorrow = new Date(referenceDate);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const y = tomorrow.getFullYear();
+      const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const d = String(tomorrow.getDate()).padStart(2, '0');
+      return { date: `${y}-${m}-${d}`, textToStrip: tomorrowMatch[0] };
+    }
+
+    const dayAfterMatch = msg.match(/\b(?:ngày mốt|ngay mot|mốt|mot)\b/iu);
+    if (dayAfterMatch) {
+      const dayAfter = new Date(referenceDate);
+      dayAfter.setDate(dayAfter.getDate() + 2);
+      const y = dayAfter.getFullYear();
+      const m = String(dayAfter.getMonth() + 1).padStart(2, '0');
+      const d = String(dayAfter.getDate()).padStart(2, '0');
+      return { date: `${y}-${m}-${d}`, textToStrip: dayAfterMatch[0] };
+    }
+
+    return {};
+  }
+
+  parseTripSearchQuery(msg: string): {
     origin: string;
     destination: string;
     date?: string;
@@ -749,11 +831,20 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     let origin = '';
     let destination = '';
 
-    const dateMatch = msg.match(/\b(202\d-\d{2}-\d{2})\b/);
-    const date = dateMatch ? dateMatch[1] : undefined;
+    const parsedDate = this.extractDateFromMessage(msg);
+    const date = parsedDate.date;
 
-    // Loại bỏ chuỗi ngày tháng trước khi bóc tách điểm đi / điểm đến để tránh ký tự '-' trong ngày gây nhầm lẫn
-    const cleanMsg = msg.replace(/\b202\d-\d{2}-\d{2}\b/g, '').trim();
+    // Loại bỏ chuỗi ngày tháng trước khi bóc tách điểm đi / điểm đến để tránh ký tự '-', '/' trong ngày gây nhầm lẫn
+    let cleanMsg = msg;
+    if (parsedDate.textToStrip) {
+      cleanMsg = cleanMsg.replace(parsedDate.textToStrip, ' ').trim();
+    }
+    cleanMsg = cleanMsg
+      .replace(/\b202\d[-\/\.]\d{1,2}[-\/\.]\d{1,2}\b/g, '')
+      .replace(/\b\d{1,2}[-\/\.]\d{1,2}[-\/\.]202\d\b/g, '')
+      .replace(/(?:vào\s+)?(?:ngày|ngay)\s*$/iu, '')
+      .trim();
+
     const lower = cleanMsg.toLowerCase();
 
     const match = lower.match(
@@ -775,6 +866,16 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
           .replace(/^(?:tìm xe|tim xe|vé xe|ve xe|chuyến|chuyen)\s*/iu, '')
           .trim();
         destination = match2[2]
+          .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
+          .trim();
+      }
+    }
+
+    if (!destination) {
+      const destMatch = lower.match(/(?:đến|den|về|ve|đi|di)\s+([^?.,;]+)/iu);
+      if (destMatch) {
+        destination = destMatch[1]
+          .replace(/^(?:xe|chuyến|chuyen)\s*/iu, '')
           .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
           .trim();
       }

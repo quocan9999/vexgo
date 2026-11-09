@@ -13,11 +13,38 @@ import { ShipmentsService } from '../../shipments/shipments.service.js';
 import { PromotionsService } from '../../promotions/promotions.service.js';
 import { LocationsService } from '../../locations/locations.service.js';
 import { locationSearchTerms } from '../../locations/location-search.js';
+import {
+  normalizeLocation,
+  stripLocationPrefix,
+  type LocationOption,
+} from '../../locations/location-catalog.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import {
   normalizePhone,
   VIETNAM_PHONE_NUMBER_REGEX,
 } from '../../common/validation/vietnamese-phone.js';
+
+const COMMON_LOCATION_SYNONYMS: Record<string, string[]> = {
+  hcm: ['TP.HCM', 'Hồ Chí Minh', 'TP HCM', 'Sài Gòn', 'TP. Hồ Chí Minh'],
+  'ho chi minh': ['TP.HCM', 'Hồ Chí Minh', 'TP HCM', 'Sài Gòn', 'TP. Hồ Chí Minh'],
+  'sai gon': ['TP.HCM', 'Hồ Chí Minh', 'TP HCM', 'Sài Gòn', 'TP. Hồ Chí Minh'],
+  'tp hcm': ['TP.HCM', 'Hồ Chí Minh', 'TP HCM', 'Sài Gòn', 'TP. Hồ Chí Minh'],
+  'tphcm': ['TP.HCM', 'Hồ Chí Minh', 'TP HCM', 'Sài Gòn', 'TP. Hồ Chí Minh'],
+  'lam dong': ['Lâm Đồng', 'Đà Lạt', 'Bảo Lộc', 'TP. Đà Lạt'],
+  'da lat': ['Đà Lạt', 'Lâm Đồng', 'TP. Đà Lạt'],
+  'khanh hoa': ['Khánh Hòa', 'Nha Trang', 'Cam Ranh'],
+  'nha trang': ['Nha Trang', 'Khánh Hòa', 'TP. Nha Trang'],
+  'binh thuan': ['Bình Thuận', 'Phan Thiết', 'Mũi Né'],
+  'phan thiet': ['Phan Thiết', 'Bình Thuận', 'Mũi Né'],
+  'ba ria': ['Bà Rịa', 'Vũng Tàu', 'Bà Rịa - Vũng Tàu'],
+  'vung tau': ['Vũng Tàu', 'Bà Rịa', 'Bà Rịa - Vũng Tàu'],
+  'ba ria - vung tau': ['Bà Rịa - Vũng Tàu', 'Vũng Tàu', 'Bà Rịa'],
+  'dak lak': ['Đắk Lắk', 'Buôn Ma Thuột', 'BMT'],
+  'buon ma thuot': ['Buôn Ma Thuột', 'Đắk Lắk', 'BMT'],
+  'can tho': ['Cần Thơ'],
+  'da nang': ['Đà Nẵng'],
+  'ha noi': ['Hà Nội', 'HN'],
+};
 
 function verifiedLookupPhone(phone?: string): string {
   if (!phone || !VIETNAM_PHONE_NUMBER_REGEX.test(phone.trim())) {
@@ -121,10 +148,18 @@ export class AiBusinessToolsService {
       nhaXeId,
     } = params;
 
-    // Chuẩn hóa ngày tìm kiếm
+    // Chuẩn hóa ngày tìm kiếm (hỗ trợ YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY)
     let dateFilter: Prisma.DateTimeFilter | Date;
-    if (departureDate && /^\d{4}-\d{2}-\d{2}$/.test(departureDate)) {
-      dateFilter = new Date(`${departureDate}T00:00:00.000Z`);
+    let normalizedDate = departureDate?.trim();
+    if (
+      normalizedDate &&
+      /^\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{4}$/.test(normalizedDate)
+    ) {
+      const parts = normalizedDate.split(/[-\/\.]/);
+      normalizedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    if (normalizedDate && /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+      dateFilter = new Date(`${normalizedDate}T00:00:00.000Z`);
     } else {
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
@@ -140,16 +175,66 @@ export class AiBusinessToolsService {
       where.nhaXeId = nhaXeId;
     }
 
+    // Tải danh mục địa điểm để mở rộng từ khóa tìm kiếm (hỗ trợ quận/huyện, bến xe, tỉnh gộp)
+    let catalogue: LocationOption[] = [];
+    if (this.locationsService) {
+      try {
+        catalogue = (await this.locationsService.list()).data;
+      } catch {
+        catalogue = [];
+      }
+    }
+
+    const resolveTerms = (val?: string): string[] => {
+      if (!val || !val.trim()) return [];
+      const trimmed = val.trim();
+      let terms = locationSearchTerms(trimmed, catalogue);
+      const norm = normalizeLocation(trimmed);
+
+      // Nếu terms chỉ có 1 phần tử (chưa khớp trực tiếp tên/value), kiểm tra theo alias
+      if (terms.length <= 1) {
+        const found = catalogue.find(
+          (item) =>
+            normalizeLocation(item.name) === norm ||
+            normalizeLocation(item.value) === norm ||
+            (item.aliases &&
+              item.aliases.some((a) => normalizeLocation(a) === norm)),
+        );
+        if (found) {
+          terms = locationSearchTerms(found.name, catalogue);
+        }
+      }
+
+      // Bổ sung các từ đồng nghĩa thông dụng
+      const synonyms = COMMON_LOCATION_SYNONYMS[norm];
+      if (synonyms) {
+        terms.push(...synonyms);
+      }
+
+      terms.push(trimmed);
+      const cleaned = stripLocationPrefix(trimmed);
+      if (cleaned) terms.push(cleaned);
+
+      return [...new Set(terms.filter(Boolean))];
+    };
+
+    const originTerms = resolveTerms(originQuery);
+    const destinationTerms = resolveTerms(destinationQuery);
+
     // Lọc theo tuyến đường (điểm đi, điểm đến)
     const andFilters: Prisma.ChuyenXeWhereInput[] = [];
-    if (originQuery && originQuery.trim()) {
+    if (originTerms.length > 0) {
       andFilters.push({
-        tuyenXe: { diemDi: { contains: originQuery.trim() } },
+        tuyenXe: {
+          OR: originTerms.map((t) => ({ diemDi: { contains: t } })),
+        },
       });
     }
-    if (destinationQuery && destinationQuery.trim()) {
+    if (destinationTerms.length > 0) {
       andFilters.push({
-        tuyenXe: { diemDen: { contains: destinationQuery.trim() } },
+        tuyenXe: {
+          OR: destinationTerms.map((t) => ({ diemDen: { contains: t } })),
+        },
       });
     }
 
