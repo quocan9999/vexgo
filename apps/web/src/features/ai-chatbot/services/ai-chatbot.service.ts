@@ -83,4 +83,43 @@ export const aiChatbotService = {
     const json = await res.json();
     return json.data || json;
   },
+
+  /**
+   * Chuyển giao phiên hội thoại AI sang nhân viên CSKH nhà xe
+   */
+  async handoffToSupport(
+    sessionToken: string,
+    payload: {
+      nhaXeId: number;
+      requestId: string;
+      clientNote?: string;
+    },
+    token?: string,
+  ): Promise<{ conversationId: number; status: string; created: boolean }> {
+    const res = await fetch(
+      `${API_BASE_URL}/ai-chatbot/sessions/${encodeURIComponent(sessionToken)}/handoff`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      throw new Error(
+        errJson?.message || `Chuyển giao thất bại (HTTP ${res.status})`,
+      );
+    }
+
+    const json = await res.json();
+    return (json.data || json) as {
+      conversationId: number;
+      status: string;
+      created: boolean;
+    };
+  },
 };

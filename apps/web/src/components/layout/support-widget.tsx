@@ -84,10 +84,22 @@ function FormattedMessageText({ content, isUser }: { content: string; isUser: bo
   );
 }
 
+function generateUuidV4(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export const SupportWidget: React.FC = () => {
   // Quản lý trạng thái mở/đóng độc lập cho 2 nút nổi (F-02)
   const [isBotOpen, setIsBotOpen] = useState(false);
   const [isStaffOpen, setIsStaffOpen] = useState(false);
+  const [pendingHandoffToken, setPendingHandoffToken] = useState<string | null>(null);
 
   const [sessionToken, setSessionToken] = useState<string>('');
   const [messages, setMessages] = useState<AiChatMessageItem[]>([
@@ -104,15 +116,15 @@ export const SupportWidget: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Khởi tạo sessionToken từ sessionStorage khi client load
+  // Khởi tạo sessionToken từ sessionStorage khi client load (đảm bảo UUID v4 hợp lệ)
   useEffect(() => {
     try {
       if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
         const stored = window.sessionStorage.getItem('vexgo_ai_session_token');
-        if (stored) {
+        if (stored && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stored)) {
           setSessionToken(stored);
         } else {
-          const newSession = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `session_${Date.now()}`;
+          const newSession = generateUuidV4();
           window.sessionStorage.setItem('vexgo_ai_session_token', newSession);
           setSessionToken(newSession);
         }
@@ -227,6 +239,7 @@ export const SupportWidget: React.FC = () => {
   };
 
   const handleConnectHuman = () => {
+    setPendingHandoffToken(sessionToken);
     setIsBotOpen(false);
     setIsStaffOpen(true);
   };
@@ -310,7 +323,10 @@ export const SupportWidget: React.FC = () => {
 
           {/* Body: CustomerSupportChat Component */}
           <div className="flex-1 overflow-hidden flex flex-col">
-            <CustomerSupportChat />
+            <CustomerSupportChat
+              handoffSessionToken={pendingHandoffToken || undefined}
+              onHandoffCompleted={() => setPendingHandoffToken(null)}
+            />
           </div>
         </div>
       )}
