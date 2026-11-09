@@ -1,8 +1,17 @@
 'use client';
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import {
+  ResourceState,
+  ResourceConfirmation,
+  ResourceStatusBadge,
+  ResourceRefreshAction,
+} from '@/components/admin/resource-ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/action-button';
+import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import {
   Armchair,
   ArrowLeft,
@@ -14,34 +23,22 @@ import {
   Trash2,
   Truck,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import {
-  ResourceConfirmation,
-  ResourceRefreshAction,
-  ResourceState,
-  ResourceStatusBadge,
-} from '@/components/admin/resource-ui';
-import { Button } from '@/components/ui/action-button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
-import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
-import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useVehicleFilterOptions } from '../hooks/use-vehicle-filter-options';
 import {
   deleteVehicle,
   getVehicleById,
   updateVehicleStatus,
 } from '../services/vehicle-service';
-import type {
-  VehicleDetail,
-  VehicleStatus,
-} from '../types/vehicle';
+import type { VehicleDetail, VehicleStatus } from '../types/vehicle';
 import { VehicleFormDialog } from './vehicle-form-dialog';
 
-interface VehicleWorkspaceProps {
+type VehicleWorkspaceProps = {
   vehicleId: number;
-}
+};
 
 type DetailState =
   | { status: 'loading' }
@@ -50,10 +47,6 @@ type DetailState =
 
 function statusTone(status: VehicleStatus) {
   return status === 'HOAT_DONG' ? 'active' : 'muted';
-}
-
-function statusLabel(status: VehicleStatus) {
-  return status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Bảo trì';
 }
 
 function timestampFormat(value: string) {
@@ -69,15 +62,14 @@ function timestampFormat(value: string) {
 }
 
 export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
+  const tVehicles = useTranslations('vehicles');
+  const tCommon = useTranslations('common');
   const router = useRouter();
-  const authState = useAdminSession();
-  const session = authState.status === 'authenticated' ? authState.session : null;
+  const { can } = useAdminPermissions();
 
-  const canUpdate = hasAdminPermission(session, 'vehicle:update');
-  const canDelete = hasAdminPermission(session, 'vehicle:delete');
-  const canConfigureSeats =
-    hasAdminPermission(session, 'vehicle:read') &&
-    hasAdminPermission(session, 'seat:read');
+  const canUpdate = can('vehicle:update');
+  const canDelete = can('vehicle:delete');
+  const canConfigureSeats = can('vehicle:read') && can('seat:read');
 
   const options = useVehicleFilterOptions();
 
@@ -93,6 +85,12 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const deleteSubmittingRef = useRef(false);
 
+  function getStatusLabel(status: VehicleStatus) {
+    return status === 'HOAT_DONG'
+      ? tVehicles('statusActive')
+      : tVehicles('statusMaintenance');
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
@@ -107,10 +105,10 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
             status: 'error',
             message:
               error instanceof TypeError
-                ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+                ? tVehicles('networkError')
                 : error instanceof Error
                   ? error.message
-                  : 'Không thể tải thông tin xe.',
+                  : tVehicles('loadDetailsError'),
           });
         }
       });
@@ -119,7 +117,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
       current = false;
       controller.abort();
     };
-  }, [retryCount, vehicleId]);
+  }, [retryCount, vehicleId, tVehicles]);
 
   function retry() {
     setDetailState({ status: 'loading' });
@@ -129,7 +127,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
   function handleVehicleSaved(vehicle: VehicleDetail) {
     setDetailState({ status: 'success', vehicle });
     setEditDialogOpen(false);
-    toast.success('Cập nhật thông tin xe thành công.');
+    toast.success(tVehicles('updateVehicleSuccess'));
   }
 
   async function confirmStatusChange() {
@@ -150,16 +148,16 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
       setStatusDialogOpen(false);
       toast.success(
         nextStatus === 'BAO_TRI'
-          ? 'Đã chuyển trạng thái xe sang Bảo trì.'
-          : 'Đã đưa xe vào trạng thái Đang hoạt động.',
+          ? tVehicles('statusChangedToMaintenance')
+          : tVehicles('statusChangedToActive'),
       );
     } catch (requestError: unknown) {
       toast.error(
         requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          ? tVehicles('networkError')
           : requestError instanceof Error
             ? requestError.message
-            : 'Không thể cập nhật trạng thái xe. Vui lòng thử lại.',
+            : tVehicles('saveError'),
       );
     } finally {
       statusSubmittingRef.current = false;
@@ -178,15 +176,15 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
     try {
       await deleteVehicle(vehicleId);
       setDeleteDialogOpen(false);
-      toast.success('Xóa xe thành công.');
+      toast.success(tVehicles('deleteVehicleSuccess'));
       router.push('/vehicles');
     } catch (requestError: unknown) {
       toast.error(
         requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          ? tVehicles('networkError')
           : requestError instanceof Error
             ? requestError.message
-            : 'Không thể xóa xe. Vui lòng thử lại.',
+            : tVehicles('deleteError'),
       );
     } finally {
       deleteSubmittingRef.current = false;
@@ -207,8 +205,8 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
     <SuperAdminLayout
       activeSection="vehicles"
       breadcrumbs={[
-        { label: 'Danh sách xe', href: '/vehicles' },
-        { label: vehicle ? vehicle.licensePlate : 'Chi tiết xe' },
+        { label: tVehicles('vehiclesTitle'), href: '/vehicles' },
+        { label: vehicle ? vehicle.licensePlate : tVehicles('vehicleDetails') },
       ]}
     >
       <div className="admin-page-content space-y-6">
@@ -221,7 +219,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Quay lại danh sách
+                {tVehicles('backToVehicles')}
               </Button>
               {canConfigureSeats && vehicle && (
                 <Button
@@ -230,7 +228,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                   variant="outline"
                 >
                   <Armchair aria-hidden="true" />
-                  Cấu hình ghế
+                  {tVehicles('manageSeats')}
                 </Button>
               )}
               {canUpdate && vehicle && nextStatus && (
@@ -239,14 +237,14 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                   variant="outline"
                 >
                   {vehicle.status === 'HOAT_DONG'
-                    ? 'Chuyển sang bảo trì'
-                    : 'Đưa vào hoạt động'}
+                    ? tVehicles('switchToMaintenance')
+                    : tVehicles('switchToActive')}
                 </Button>
               )}
               {canUpdate && vehicle && (
                 <Button onClick={() => setEditDialogOpen(true)}>
                   <Pencil aria-hidden="true" />
-                  Chỉnh sửa
+                  {tCommon('edit')}
                 </Button>
               )}
               {canDelete && vehicle && (
@@ -255,7 +253,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                   variant="destructive"
                 >
                   <Trash2 aria-hidden="true" />
-                  Xóa xe
+                  {tVehicles('deleteVehicle')}
                 </Button>
               )}
               <ResourceRefreshAction
@@ -264,13 +262,17 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
               />
             </div>
           }
-          eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
-          title={vehicle ? `Chi tiết xe ${vehicle.licensePlate}` : 'Chi tiết xe'}
+          eyebrow={tVehicles('eyebrow')}
+          title={
+            vehicle
+              ? tVehicles('vehicleDetailsTitle', { plate: vehicle.licensePlate })
+              : tVehicles('vehicleDetails')
+          }
           titleId="vehicle-workspace-title"
         />
 
         {detailState.status === 'loading' && (
-          <ResourceState loading>Đang tải thông tin xe…</ResourceState>
+          <ResourceState loading>{tVehicles('loadingDetails')}</ResourceState>
         )}
 
         {detailState.status === 'error' && (
@@ -278,10 +280,10 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
             <p>{detailState.message}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={retry} variant="outline">
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button nativeButton={false} render={<Link href="/vehicles" />}>
-                Về danh sách xe
+                {tVehicles('backToVehicles')}
               </Button>
             </div>
           </ResourceState>
@@ -304,7 +306,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                       {vehicle.licensePlate}
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Mã phương tiện:{' '}
+                      {tVehicles('vehicleCodeLabel')}:{' '}
                       <strong className="admin-data-mono">
                         #{vehicle.vehicleId}
                       </strong>
@@ -312,66 +314,66 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                   </div>
                 </div>
                 <ResourceStatusBadge tone={statusTone(vehicle.status)}>
-                  {statusLabel(vehicle.status)}
+                  {getStatusLabel(vehicle.status)}
                 </ResourceStatusBadge>
               </div>
             </Card>
 
             {/* Bento Grid Layout */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Đơn vị và loại xe */}
+              {/* Card 1: Operator and vehicle type */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Building2 className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Đơn vị & Loại xe
+                      {tVehicles('operatorAndType')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Nhà xe vận hành</dt>
+                      <dt>{tVehicles('colOperator')}</dt>
                       <dd className="font-medium text-foreground">
                         {vehicle.busCompany.name}
                       </dd>
                     </div>
                     <div>
-                      <dt>Mã định danh nhà xe</dt>
+                      <dt>{tVehicles('operatorCodeLabel')}</dt>
                       <dd className="admin-data-mono font-medium">
                         {vehicle.busCompany.code}
                       </dd>
                     </div>
                     <div>
-                      <dt>Phân loại phương tiện</dt>
+                      <dt>{tVehicles('vehicleType')}</dt>
                       <dd className="font-medium text-foreground">
                         {vehicle.vehicleType.name}
                       </dd>
                     </div>
                     <div>
-                      <dt>Mô tả quy cách loại xe</dt>
+                      <dt>{tVehicles('typeDescriptionLabel')}</dt>
                       <dd className="text-muted-foreground">
-                        {vehicle.vehicleType.description || 'Chưa có mô tả'}
+                        {vehicle.vehicleType.description || tVehicles('noDescription')}
                       </dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
 
-              {/* Card 2: Sơ đồ ghế & Cấu hình */}
+              {/* Card 2: Seat layout and configuration */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Armchair className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Bố trí sơ đồ ghế
+                      {tVehicles('visualSeatLayout')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4 p-0">
                   <CardDescription className="text-xs">
-                    Xem và tinh chỉnh ma trận ghế ngồi, vị trí hàng ghế và tầng xe phục vụ xếp chỗ khách hàng.
+                    {tVehicles('visualSeatLayoutDesc')}
                   </CardDescription>
                   {canConfigureSeats ? (
                     <Button
@@ -381,23 +383,23 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                       variant="outline"
                     >
                       <Armchair aria-hidden="true" />
-                      Mở sơ đồ ghế chi tiết
+                      {tVehicles('manageSeats')}
                     </Button>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Bạn không có quyền quản lý sơ đồ ghế xe này.
+                      {tVehicles('noSeatManagePermission')}
                     </p>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Card 3: Thông tin hồ sơ & Thời gian */}
+              {/* Card 3: Record and timeline info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Thông tin hồ sơ
+                      {tVehicles('timelineInfo')}
                     </CardTitle>
                   </div>
                 </CardHeader>
@@ -406,7 +408,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                     <div>
                       <dt className="flex items-center gap-1.5">
                         <Clock className="size-3.5" />
-                        Ngày tạo hồ sơ
+                        {tVehicles('createdAtLabel')}
                       </dt>
                       <dd className="text-muted-foreground tabular-nums">
                         {timestampFormat(vehicle.createdAt)}
@@ -415,7 +417,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                     <div>
                       <dt className="flex items-center gap-1.5">
                         <Clock className="size-3.5" />
-                        Cập nhật lần cuối
+                        {tVehicles('updatedAtLabel')}
                       </dt>
                       <dd className="text-muted-foreground tabular-nums">
                         {timestampFormat(vehicle.updatedAt)}
@@ -446,13 +448,13 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
             onClose={() => setStatusDialogOpen(false)}
             title={
               nextStatus === 'BAO_TRI'
-                ? 'Chuyển xe sang bảo trì?'
-                : 'Đưa xe vào hoạt động?'
+                ? tVehicles('confirmMaintenanceTitle')
+                : tVehicles('confirmActiveTitle')
             }
             description={
               nextStatus === 'BAO_TRI'
-                ? 'Xe sẽ được chuyển sang trạng thái Bảo trì. Thao tác này không xóa dữ liệu và có thể đưa xe hoạt động lại sau.'
-                : 'Xe sẽ được chuyển sang trạng thái Đang hoạt động.'
+                ? tVehicles('confirmMaintenanceDesc')
+                : tVehicles('confirmActiveDesc')
             }
           >
             <Button
@@ -467,10 +469,10 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
                 />
               )}
               {statusSubmitting
-                ? 'Đang cập nhật…'
+                ? tVehicles('updatingStatus')
                 : nextStatus === 'BAO_TRI'
-                  ? 'Chuyển sang bảo trì'
-                  : 'Đưa vào hoạt động'}
+                  ? tVehicles('switchToMaintenance')
+                  : tVehicles('switchToActive')}
             </Button>
           </ResourceConfirmation>
         )}
@@ -479,8 +481,8 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
           <ResourceConfirmation
             busy={deleteSubmitting}
             onClose={() => setDeleteDialogOpen(false)}
-            title={`Xóa xe ${vehicle.licensePlate}?`}
-            description="Xe cùng sơ đồ ghế sẽ bị xóa vĩnh viễn. Chỉ xe chưa từng gắn với chuyến nào mới xóa được; xe đã có chuyến, kể cả chuyến đã hủy, sẽ được giữ lại."
+            title={tVehicles('deleteVehicleConfirmTitle', { plate: vehicle.licensePlate })}
+            description={tVehicles('deleteVehicleConfirmDesc')}
           >
             <Button
               aria-busy={deleteSubmitting}
@@ -493,7 +495,7 @@ export function VehicleWorkspace({ vehicleId }: VehicleWorkspaceProps) {
               ) : (
                 <Trash2 aria-hidden />
               )}
-              {deleteSubmitting ? 'Đang xóa…' : 'Xóa xe'}
+              {deleteSubmitting ? tVehicles('deletingVehicle') : tVehicles('deleteVehicle')}
             </Button>
           </ResourceConfirmation>
         )}

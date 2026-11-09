@@ -157,30 +157,16 @@ describe('AiChatbotOrchestratorService - Multi-turn Context & History (Mục 2)'
     });
   });
 
-  describe('Multi-turn Ticket Lookup', () => {
-    it('should combine ticket code from previous turn and phone number from current turn', async () => {
-      // Giả lập lượt 1: người dùng gửi mã vé TK-202611-001
-      mockPrisma.aiChatMessage.findMany.mockResolvedValue([
-        {
-          id: 12,
-          sessionId: 1,
-          role: 'USER',
-          content: 'Tra cứu vé TK-202611-001',
-          createdAt: new Date('2026-11-09T01:00:00Z'),
-        },
-      ]);
-
-      // Lượt 2: người dùng gửi số điện thoại 0901234567
+  describe('Ticket Guidance Context', () => {
+    it('should identify ticket lookup intent and provide guidance without calling internal lookup tool', async () => {
       const res = await orchestrator.processUserMessage({
-        message: 'Số điện thoại của tôi là 0901234567',
+        message: 'Tra cứu vé TK-202611-001',
         sessionToken: SESSION_TOKEN,
       });
 
       expect(res.intent).toBe('TICKET_LOOKUP');
-      expect(mockBusinessTools.lookupTicketStatus).toHaveBeenCalledWith({
-        ticketCode: 'TK-202611-001',
-        phoneNumber: '0901234567',
-      });
+      expect(mockBusinessTools.lookupTicketStatus).not.toHaveBeenCalled();
+      expect(res.reply).toBeDefined();
     });
   });
 

@@ -8,6 +8,7 @@ import React, {
   useMemo,
 } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import {
   Building2,
   Phone,
@@ -32,6 +33,68 @@ import { supportChatApi } from '../services/support-chat.api';
 import { useSupportChatSocket } from '../hooks/use-support-chat-socket';
 import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
 import { BusCompany, SupportConversation, SupportMessage } from '../types';
+
+const CHAT_FALLBACK: Record<string, string> = {
+  title: 'Hỗ trợ khách hàng',
+  loginRequiredTitle: 'Yêu cầu đăng nhập',
+  loginRequiredDesc: 'Vui lòng đăng nhập tài khoản Khách hàng để kết nối trực tiếp với nhân viên hỗ trợ của nhà xe.',
+  loginNow: 'Đăng nhập ngay',
+  back: 'Quay lại',
+  supportHistoryWith: 'Lịch sử hỗ trợ - {name}',
+  newChat: 'Tạo chat mới',
+  noClosedChats: 'Chưa có lịch sử cuộc trò chuyện nào đã đóng.',
+  closed: 'Đã đóng',
+  loadMoreHistory: 'Tải thêm lịch sử',
+  loadingMore: 'Đang tải thêm...',
+  selectCompany: 'Chọn nhà xe cần hỗ trợ',
+  historyButton: 'Lịch sử ({count})',
+  changeCompany: 'Đổi nhà xe',
+  searchCompanyPlaceholder: 'Tìm kiếm nhà xe theo tên...',
+  loadingCompanies: 'Đang tải danh sách nhà xe...',
+  noCompaniesFound: 'Không tìm thấy nhà xe nào.',
+  contactLabel: 'Liên hệ: {contact}',
+  noContactInfo: 'Chưa cập nhật thông tin liên hệ',
+  initialQuestionPrompt: 'Nhập câu hỏi hoặc vấn đề của bạn:',
+  initialQuestionPlaceholder: 'Ví dụ: Em cần hỗ trợ đổi vé chuyến 19h tối nay từ Hà Nội đi Đà Nẵng...',
+  startChat: 'Bắt đầu trò chuyện với nhà xe',
+  connecting: 'Đang kết nối...',
+  chatEnded: 'Cuộc trò chuyện đã kết thúc',
+  waitingForStaff: 'Đang chờ nhân viên tiếp nhận',
+  supportStaffDefault: 'Nhân viên CSKH',
+  endChatTooltip: 'Kết thúc hỗ trợ',
+  historyTooltip: 'Lịch sử hỗ trợ',
+  changeCompanyTooltip: 'Đổi nhà xe',
+  inputPlaceholder: 'Nhập tin nhắn...',
+  send: 'Gửi',
+  loadOlderMessages: 'Tải tin nhắn cũ hơn',
+  sendFailed: 'Gửi thất bại',
+  retry: 'Thử lại',
+  you: 'Bạn',
+  loadingMessages: 'Đang tải tin nhắn...',
+  loadingOlderMessages: 'Đang tải tin nhắn cũ...',
+  sendingStatus: 'Đang gửi',
+  seen: 'Đã xem',
+  delivered: 'Đã gửi',
+  staffTyping: 'Nhân viên hỗ trợ đang nhập...',
+  chatEndedNotice: 'Cuộc trò chuyện này đã kết thúc.',
+  startNewChat: 'Bắt đầu cuộc trò chuyện mới',
+};
+
+function useSafeChatTranslations() {
+  try {
+    return useTranslations('chat');
+  } catch {
+    return ((key: string, values?: Record<string, any>) => {
+      let text = CHAT_FALLBACK[key] || key;
+      if (values) {
+        for (const [k, v] of Object.entries(values)) {
+          text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+        }
+      }
+      return text;
+    }) as any;
+  }
+}
 
 /**
  * Reconciles server snapshot/fresh messages with existing messages in state.
@@ -169,6 +232,7 @@ function CustomerSupportChatSession({
   handoffSessionToken,
   onHandoffCompleted,
 }: CustomerSupportChatProps) {
+  const t = useSafeChatTranslations();
   const { isAuthenticated, accessToken, user, executeWithAuth } =
     useAuthSession();
   const chatApi = useMemo(
@@ -1163,18 +1227,17 @@ function CustomerSupportChatSession({
         </div>
         <div>
           <h4 className="font-semibold text-slate-800 text-sm">
-            Yêu cầu đăng nhập
+            {t('loginRequiredTitle')}
           </h4>
           <p className="text-xs text-slate-500 mt-1">
-            Vui lòng đăng nhập tài khoản Khách hàng để kết nối trực tiếp với
-            nhân viên hỗ trợ của nhà xe.
+            {t('loginRequiredDesc')}
           </p>
         </div>
         <Link
           href="/login"
           className="px-4 py-2 bg-brand text-white text-xs font-semibold rounded-lg hover:bg-brand-hover transition-colors shadow-sm"
         >
-          Đăng nhập ngay
+          {t('loginNow')}
         </Link>
       </div>
     );
@@ -1190,10 +1253,10 @@ function CustomerSupportChatSession({
               onClick={() => setShowHistoryList(false)}
               className="text-xs text-slate-500 hover:text-brand flex items-center gap-1"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Quay lại
+              <ArrowLeft className="w-3.5 h-3.5" /> {t('back')}
             </button>
             <span className="text-xs font-semibold text-slate-700 ml-1">
-              Lịch sử hỗ trợ - {selectedCompany.name}
+              {t('supportHistoryWith', { name: selectedCompany.name })}
             </span>
           </div>
           <button
@@ -1203,14 +1266,14 @@ function CustomerSupportChatSession({
             }}
             className="text-xs text-brand font-medium hover:underline flex items-center gap-1"
           >
-            <PlusCircle className="w-3.5 h-3.5" /> Tạo chat mới
+            <PlusCircle className="w-3.5 h-3.5" /> {t('newChat')}
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {pastConversations.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-xs">
-              Chưa có lịch sử cuộc trò chuyện nào đã đóng.
+              {t('noClosedChats')}
             </div>
           ) : (
             pastConversations.map((c) => (
@@ -1224,7 +1287,7 @@ function CustomerSupportChatSession({
                     {c.tieuDe || c.maCuocTroChuyen}
                   </span>
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 shrink-0">
-                    Đã đóng
+                    {t('closed')}
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-1">
@@ -1250,11 +1313,10 @@ function CustomerSupportChatSession({
               >
                 {loadingMoreHistory ? (
                   <span className="flex items-center gap-1 justify-center">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải
-                    thêm...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('loadingMore')}
                   </span>
                 ) : (
-                  'Tải thêm lịch sử'
+                  t('loadMoreHistory')
                 )}
               </button>
             </div>
@@ -1270,7 +1332,7 @@ function CustomerSupportChatSession({
       <div className="flex flex-col h-full bg-slate-50">
         <div className="p-3 bg-white border-b border-slate-100 flex items-center justify-between">
           <span className="text-xs font-semibold text-slate-700">
-            Chọn nhà xe cần hỗ trợ
+            {t('selectCompany')}
           </span>
           {selectedCompany && (
             <div className="flex items-center gap-2">
@@ -1279,8 +1341,7 @@ function CustomerSupportChatSession({
                   onClick={() => setShowHistoryList(true)}
                   className="text-xs text-slate-600 hover:text-brand flex items-center gap-1"
                 >
-                  <History className="w-3.5 h-3.5" /> Lịch sử (
-                  {pastConversations.length})
+                  <History className="w-3.5 h-3.5" /> {t('historyButton', { count: pastConversations.length })}
                 </button>
               )}
               <button
@@ -1290,7 +1351,7 @@ function CustomerSupportChatSession({
                 }}
                 className="text-xs text-brand hover:underline flex items-center gap-1"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> Đổi nhà xe
+                <ArrowLeft className="w-3.5 h-3.5" /> {t('changeCompany')}
               </button>
             </div>
           )}
@@ -1314,7 +1375,7 @@ function CustomerSupportChatSession({
             <div className="mb-2">
               <input
                 type="text"
-                placeholder="Tìm kiếm nhà xe theo tên..."
+                placeholder={t('searchCompanyPlaceholder')}
                 value={searchCompany}
                 onChange={(e) => setSearchCompany(e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-brand"
@@ -1324,12 +1385,11 @@ function CustomerSupportChatSession({
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {loadingCompanies ? (
                 <div className="flex items-center justify-center py-8 text-slate-400 gap-2 text-xs">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh
-                  sách nhà xe...
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t('loadingCompanies')}
                 </div>
               ) : busCompanies.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
-                  Không tìm thấy nhà xe nào.
+                  {t('noCompaniesFound')}
                 </div>
               ) : (
                 busCompanies.map((c) => (
@@ -1349,8 +1409,8 @@ function CustomerSupportChatSession({
                         <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                         <span className="truncate">
                           {c.contactInfo
-                            ? `Liên hệ: ${c.contactInfo}`
-                            : 'Chưa cập nhật thông tin liên hệ'}
+                            ? t('contactLabel', { contact: c.contactInfo })
+                            : t('noContactInfo')}
                         </span>
                       </div>
                     </div>
@@ -1372,21 +1432,23 @@ function CustomerSupportChatSession({
                   </h5>
                   <p className="text-[11px] text-slate-500 truncate">
                     {selectedCompany.contactInfo
-                      ? `Liên hệ: ${selectedCompany.contactInfo}`
-                      : 'Chưa cập nhật thông tin liên hệ'}
+                      ? t('contactLabel', {
+                          contact: selectedCompany.contactInfo,
+                        })
+                      : t('noContactInfo')}
                   </p>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Nhập câu hỏi hoặc vấn đề của bạn:
+                  {t('initialQuestionPrompt')}
                 </label>
                 <textarea
                   rows={4}
                   value={initialMessage}
                   onChange={(e) => setInitialMessage(e.target.value)}
-                  placeholder="Ví dụ: Em cần hỗ trợ đổi vé chuyến 19h tối nay từ Hà Nội đi Đà Nẵng..."
+                  placeholder={t('initialQuestionPlaceholder')}
                   className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand resize-none"
                 />
               </div>
@@ -1399,10 +1461,10 @@ function CustomerSupportChatSession({
             >
               {startingChat ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Đang kết nối...
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t('connecting')}
                 </>
               ) : (
-                <>Bắt đầu trò chuyện với nhà xe</>
+                <>{t('startChat')}</>
               )}
             </button>
           </div>
@@ -1414,7 +1476,7 @@ function CustomerSupportChatSession({
   // MÀN HÌNH TRÒ CHUYỆN REAL-TIME VỚI NHÂN VIÊN NHÀ XE (HOẶC XEM LỊCH SỬ ĐÃ ĐÓNG)
   const isClosed = activeConversation.trangThai === 'DA_DONG';
   const staffName =
-    activeConversation.nhanVien?.taiKhoan.hoTen || 'Nhân viên CSKH';
+    activeConversation.nhanVien?.taiKhoan.hoTen || t('supportStaffDefault');
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -1438,7 +1500,7 @@ function CustomerSupportChatSession({
             <div className="text-[10px] text-slate-500 flex items-center gap-1 truncate">
               {isClosed ? (
                 <span className="text-slate-500 font-medium">
-                  Cuộc trò chuyện đã kết thúc
+                  {t('chatEnded')}
                 </span>
               ) : activeConversation.nhanVien ? (
                 <span className="text-emerald-600 font-medium">
@@ -1446,7 +1508,7 @@ function CustomerSupportChatSession({
                 </span>
               ) : (
                 <span className="text-amber-600 font-medium">
-                  Đang chờ nhân viên tiếp nhận
+                  {t('waitingForStaff')}
                 </span>
               )}
             </div>
@@ -1457,7 +1519,7 @@ function CustomerSupportChatSession({
           {pastConversations.length > 0 && (
             <button
               onClick={() => setShowHistoryList(true)}
-              title="Lịch sử hỗ trợ"
+              title={t('historyTooltip')}
               className="text-[11px] text-slate-500 hover:text-brand p-1.5 rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-0.5"
             >
               <History className="w-3.5 h-3.5" />
@@ -1466,7 +1528,7 @@ function CustomerSupportChatSession({
           {!isClosed && (
             <button
               onClick={handleCloseChat}
-              title="Kết thúc hỗ trợ"
+              title={t('endChatTooltip')}
               className="text-[11px] text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
             >
               <XCircle className="w-4 h-4" />
@@ -1477,10 +1539,10 @@ function CustomerSupportChatSession({
               setActiveConversation(null);
               setSelectedCompany(null);
             }}
-            title="Đổi nhà xe"
+            title={t('changeCompanyTooltip')}
             className="text-[11px] text-slate-500 hover:text-brand px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
           >
-            Đổi nhà xe
+            {t('changeCompany')}
           </button>
         </div>
       </div>
@@ -1500,7 +1562,7 @@ function CustomerSupportChatSession({
       >
         {loadingMessages ? (
           <div className="flex items-center justify-center py-8 text-slate-400 gap-2 text-xs">
-            <Loader2 className="w-4 h-4 animate-spin" /> Đang tải tin nhắn...
+            <Loader2 className="w-4 h-4 animate-spin" /> {t('loadingMessages')}
           </div>
         ) : (
           <>
@@ -1513,11 +1575,10 @@ function CustomerSupportChatSession({
                 >
                   {loadingOlderMessages ? (
                     <span className="flex items-center gap-1 justify-center">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Đang tải tin
-                      nhắn cũ...
+                      <Loader2 className="w-3 h-3 animate-spin" /> {t('loadingOlderMessages')}
                     </span>
                   ) : (
-                    'Tải tin nhắn cũ hơn'
+                    t('loadOlderMessages')
                   )}
                 </button>
               </div>
@@ -1561,12 +1622,11 @@ function CustomerSupportChatSession({
                   >
                     <div className="flex items-center gap-1">
                       <span className="text-[10px] text-slate-400">
-                        {isMe ? 'Bạn' : msg.taiKhoanGui?.hoTen || staffName}
+                        {isMe ? t('you') : msg.taiKhoanGui?.hoTen || staffName}
                       </span>
                       {isPending && (
                         <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                          <Clock className="w-2.5 h-2.5 animate-spin" /> Đang
-                          gửi
+                          <Clock className="w-2.5 h-2.5 animate-spin" /> {t('sendingStatus')}
                         </span>
                       )}
                       {!isPending && !isFailed && isMe && (
@@ -1574,20 +1634,20 @@ function CustomerSupportChatSession({
                           className="text-[9px] flex items-center gap-0.5"
                           data-testid="message-delivery-status"
                           title={
-                            msg.trangThai === 'DA_DOC' ? 'Đã xem' : 'Đã gửi'
+                            msg.trangThai === 'DA_DOC' ? t('seen') : t('delivered')
                           }
                         >
                           {msg.trangThai === 'DA_DOC' ? (
                             <>
                               <CheckCheck className="w-3 h-3 text-sky-500" />
                               <span className="text-sky-600 font-medium">
-                                Đã xem
+                                {t('seen')}
                               </span>
                             </>
                           ) : (
                             <>
                               <Check className="w-2.5 h-2.5 text-slate-400" />
-                              <span className="text-slate-400">Đã gửi</span>
+                              <span className="text-slate-400">{t('delivered')}</span>
                             </>
                           )}
                         </span>
@@ -1618,14 +1678,14 @@ function CustomerSupportChatSession({
                     {isFailed && (
                       <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-rose-600">
                         <AlertCircle className="w-3 h-3" />
-                        <span>Gửi thất bại</span>
+                        <span>{t('sendFailed')}</span>
                         <button
                           type="button"
                           onClick={() => handleRetryMessage(msg)}
                           disabled={sending}
                           className="font-semibold underline hover:text-rose-700 flex items-center gap-0.5 ml-1"
                         >
-                          <RotateCw className="w-2.5 h-2.5" /> Thử lại
+                          <RotateCw className="w-2.5 h-2.5" /> {t('retry')}
                         </button>
                       </div>
                     )}
@@ -1637,7 +1697,7 @@ function CustomerSupportChatSession({
             {staffTyping && (
               <div className="flex items-center gap-2 text-xs text-slate-400 italic">
                 <Headphones className="w-3.5 h-3.5 animate-pulse" />
-                <span>Nhân viên hỗ trợ đang nhập...</span>
+                <span>{t('staffTyping')}</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -1650,7 +1710,7 @@ function CustomerSupportChatSession({
         {isClosed ? (
           <div className="space-y-2">
             <div className="p-2 bg-slate-100 text-slate-500 text-xs rounded-xl text-center font-medium">
-              Cuộc trò chuyện này đã kết thúc.
+              {t('chatEndedNotice')}
             </div>
             <button
               onClick={() => {
@@ -1659,7 +1719,7 @@ function CustomerSupportChatSession({
               }}
               className="w-full py-2 bg-brand text-white text-xs font-semibold rounded-xl hover:bg-brand-hover transition-colors flex items-center justify-center gap-1.5"
             >
-              <PlusCircle className="w-3.5 h-3.5" /> Bắt đầu cuộc trò chuyện mới
+              <PlusCircle className="w-3.5 h-3.5" /> {t('startNewChat')}
             </button>
           </div>
         ) : (
@@ -1669,7 +1729,7 @@ function CustomerSupportChatSession({
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder="Nhập tin nhắn..."
+              placeholder={t('inputPlaceholder')}
               disabled={sending}
               className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-brand text-xs"
             />

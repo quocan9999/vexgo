@@ -38,7 +38,7 @@ async function readResponse(
     throw new CustomerApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải ${resource} (HTTP ${response.status}).`,
+        : `Unable to fetch ${resource} (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -75,7 +75,7 @@ export async function getCustomers(
         signal,
       },
     ),
-    'danh sách khách hàng',
+    'customer list',
   );
 
   return body as CustomerPageResponse;
@@ -93,7 +93,7 @@ export async function getCustomerById(
         signal,
       },
     ),
-    'thông tin khách hàng',
+    'customer details',
   )) as CustomerDetailResponse;
 
   return body.data;
@@ -114,7 +114,7 @@ export async function updateCustomerStatus(
         signal,
       },
     ),
-    'cập nhật trạng thái khách hàng',
+    'customer status update',
   )) as UpdateCustomerStatusResponse;
 
   return body.data;
@@ -148,7 +148,7 @@ export async function getCustomerTransactions(
         signal,
       },
     ),
-    'lịch sử giao dịch khách hàng',
+    'customer transaction history',
   );
 
   return body as CustomerTransactionsResponse;
@@ -179,7 +179,7 @@ export async function getCustomerTickets(
         signal,
       },
     ),
-    'lịch sử vé của khách hàng',
+    'customer ticket history',
   );
 
   return body as CustomerTicketsResponse;
@@ -210,7 +210,7 @@ export async function getCustomerShipments(
         signal,
       },
     ),
-    'lịch sử gửi hàng của khách hàng',
+    'customer shipment history',
   );
 
   return body as CustomerShipmentsResponse;

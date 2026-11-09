@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   ArrowRightLeft,
   Bus,
@@ -65,6 +66,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const setReturnDate = setControlledReturnDate ?? setInternalReturnDate;
   const [ticketCount, setTicketCount] = useState(1);
   const router = useRouter();
+  const t = useTranslations('home');
   const [returnDateAlert, setReturnDateAlert] = useState<{
     isOpen: boolean;
     title: string;
@@ -89,7 +91,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (val && val < todayStr) {
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+        title: t('departureDatePastError'),
       });
       setSelectedPrice(todayStr);
     }
@@ -106,7 +108,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (val && val < todayStr) {
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+        title: t('returnDatePastError'),
       });
       setReturnDate(minAllowed);
       return;
@@ -114,7 +116,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (selectedPrice && val && selectedPrice > val) {
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày đi không được lớn hơn ngày về',
+        title: t('returnDateBeforeDepError'),
       });
       setReturnDate(minAllowed);
     }
@@ -129,7 +131,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đi và điểm đến để tìm chuyến xe',
+        title: t('selectOriginAndDestError'),
       });
       return;
     }
@@ -138,7 +140,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đi để tiếp tục',
+        title: t('selectOriginError'),
       });
       return;
     }
@@ -147,7 +149,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Vui lòng chọn điểm đến để tiếp tục',
+        title: t('selectDestError'),
       });
       return;
     }
@@ -156,7 +158,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Điểm đi và điểm đến không được trùng nhau',
+        title: t('sameOriginDestError'),
       });
       return;
     }
@@ -165,7 +167,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       if (e) e.preventDefault();
       setReturnDateAlert({
         isOpen: true,
-        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+        title: t('departureDatePastError'),
       });
       setSelectedPrice(todayStr);
       return;
@@ -174,14 +176,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     if (tripType === 'round-trip') {
       if (!returnDate) {
         if (e) e.preventDefault();
-        setReturnDateAlert({ isOpen: true, title: 'Vui lòng chọn ngày về' });
+        setReturnDateAlert({ isOpen: true, title: t('selectReturnDateError') });
         return;
       }
       if (returnDate < todayStr) {
         if (e) e.preventDefault();
         setReturnDateAlert({
           isOpen: true,
-          title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+          title: t('returnDatePastError'),
         });
         setReturnDate(selectedPrice || todayStr);
         return;
@@ -190,7 +192,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         if (e) e.preventDefault();
         setReturnDateAlert({
           isOpen: true,
-          title: 'Ngày đi không được lớn hơn ngày về',
+          title: t('returnDateBeforeDepError'),
         });
         return;
       }
@@ -231,10 +233,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-transparent" />
         <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center pt-8 px-4 text-center">
           <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-wider drop-shadow-lg shadow-black">
-            <span className="text-accent">VỮNG TIN</span> & PHÁT TRIỂN
+            <span className="text-accent">{t('heroTitlePrefix')}</span>{t('heroTitleSuffix')}
           </h1>
           <p className="mt-4 text-white/90 text-sm md:text-lg font-bold drop-shadow-md bg-black/20 px-4 py-1.5 rounded-full backdrop-blur-sm">
-            Chất lượng là danh dự - Hàng ngàn chuyến đi mỗi ngày
+            {t('heroSubtitle')}
           </p>
         </div>
       </div>
@@ -254,7 +256,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 }`}
               >
                 <Bus className="w-4 h-4" />
-                Đặt vé
+                {t('tabBus')}
               </button>
               <button
                 type="button"
@@ -266,7 +268,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 }`}
               >
                 <PackageCheck className="w-4 h-4" />
-                Gửi hàng
+                {t('tabFreight')}
               </button>
             </div>
 
@@ -283,7 +285,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     }}
                     className="accent-[#2563EB] w-4 h-4 cursor-pointer"
                   />
-                  Một chiều
+                  {t('oneWay')}
                 </label>
                 <label className="inline-flex items-center gap-2 cursor-pointer hover:text-slate-900 transition-colors">
                   <input
@@ -293,7 +295,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     onChange={() => setTripType('round-trip')}
                     className="accent-[#2563EB] w-4 h-4 cursor-pointer"
                   />
-                  Khứ hồi
+                  {t('roundTrip')}
                 </label>
               </div>
             )}
@@ -310,13 +312,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
                     >
                       <MapPin className="w-3.5 h-3.5 text-[#2563EB]" />
-                      Điểm đi
+                      {t('origin')}
                     </label>
                     <LocationPicker
                       id="hero-origin"
                       value={selectedProvince}
                       onChange={setSelectedProvince}
-                      placeholder="Chọn điểm đi"
+                      placeholder={t('originPlaceholder')}
                     />
                   </div>
 
@@ -337,13 +339,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
                     >
                       <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                      Điểm đến
+                      {t('destination')}
                     </label>
                     <LocationPicker
                       id="hero-destination"
                       value={selectedDistrict}
                       onChange={setSelectedDistrict}
-                      placeholder="Chọn điểm đến"
+                      placeholder={t('destinationPlaceholder')}
                     />
                   </div>
                 </div>
@@ -353,7 +355,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <div className="flex-1 space-y-1.5">
                     <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                       <CalendarDays className="w-3.5 h-3.5 text-[#2563EB]" />
-                      Ngày đi
+                      {t('departureDate')}
                     </label>
                     <input
                       type="date"
@@ -371,7 +373,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <div className="flex-1 space-y-1.5">
                       <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                         <CalendarDays className="w-3.5 h-3.5 text-[#2563EB]" />
-                        Ngày về
+                        {t('returnDate')}
                       </label>
                       <input
                         type="date"
@@ -391,7 +393,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <div className="flex-1 md:w-28 md:flex-none lg:w-28 lg:flex-none space-y-1.5">
                     <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5 text-[#2563EB]" />
-                      Số ghế
+                      {t('ticketQuantity')}
                     </label>
                     <input
                       type="number"
@@ -413,7 +415,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   onClick={() => setShowBookingGuide(true)}
                   className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
                 >
-                  Hướng dẫn đặt vé
+                  {t('bookingGuide')}
                 </button>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
@@ -422,7 +424,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     className="w-full sm:w-[170px] h-12 px-7 rounded-xl bg-gradient-to-r from-[#FF5722] to-[#FF7043] hover:from-[#E64A19] hover:to-[#FF5722] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-[#FF5722]/25 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <Search className="w-4 h-4 shrink-0" />
-                    Tìm chuyến
+                    {t('searchBuses')}
                   </button>
                 </div>
               </div>
@@ -437,13 +439,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
                   >
                     <MapPin className="w-3.5 h-3.5 text-brand" />
-                    Nơi gửi
+                    {t('senderLocation')}
                   </label>
                   <LocationPicker
                     id="hero-origin"
                     value={selectedProvince}
                     onChange={setSelectedProvince}
-                    placeholder="Chọn nơi gửi"
+                    placeholder={t('senderPlaceholder')}
                   />
                 </div>
 
@@ -464,19 +466,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
                   >
                     <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                    Nơi nhận
+                    {t('receiverLocation')}
                   </label>
                   <LocationPicker
                     id="hero-destination"
                     value={selectedDistrict}
                     onChange={setSelectedDistrict}
-                    placeholder="Chọn nơi nhận"
+                    placeholder={t('receiverPlaceholder')}
                   />
                 </div>
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                     <CalendarDays className="w-3.5 h-3.5 text-brand" />
-                    Ngày gửi
+                    {t('sendDate')}
                   </label>
                   <input
                     type="date"
@@ -508,7 +510,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   onClick={() => setShowShipmentGuide(true)}
                   className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
                 >
-                  Hướng dẫn gửi hàng
+                  {t('shipmentGuide')}
                 </button>
                 <div>
                   <button
@@ -567,7 +569,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FF5722] to-[#FF7043] px-7 text-sm font-black text-white shadow-md shadow-[#FF5722]/25 hover:from-[#E64A19] hover:to-[#FF5722] sm:w-[170px] cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <Search className="w-4 h-4 shrink-0" />
-                    Tìm nhà xe
+                    {t('findBusCompany')}
                   </button>
                 </div>
               </div>

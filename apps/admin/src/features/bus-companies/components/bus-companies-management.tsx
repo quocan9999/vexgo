@@ -38,6 +38,7 @@ import {
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import { CreateBusCompanyDialog } from './create-bus-company-dialog';
 import type {
@@ -45,11 +46,6 @@ import type {
   BusCompanySortKey,
   BusCompanyStatus,
 } from '../types/bus-company';
-
-const BUS_COMPANY_STATUS_FILTERS: FilterOption[] = [
-  { value: 'HOAT_DONG', label: 'Đang hoạt động' },
-  { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
-];
 
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
@@ -60,7 +56,7 @@ function timestampFormat(value: string) {
 
 function initials(value: string) {
   return value
-    .replace(/^Nhà xe\s+/i, '')
+    .replace(/^(Nh\u00E0 xe|Bus)\s+/i, '')
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0])
@@ -68,12 +64,12 @@ function initials(value: string) {
     .toLocaleUpperCase('vi');
 }
 
-function statusLabel(status: BusCompanyStatus) {
+function statusLabel(status: BusCompanyStatus, tCompanies: (key: any) => string) {
   switch (status) {
     case 'HOAT_DONG':
-      return 'Đang hoạt động';
+      return tCompanies('statusActive');
     case 'TAM_NGUNG':
-      return 'Tạm ngưng';
+      return tCompanies('statusSuspended');
   }
 }
 
@@ -89,6 +85,8 @@ function CompanyMark({ name }: { name: string }) {
 }
 
 export function BusCompaniesManagement() {
+  const tCompanies = useTranslations('busCompanies');
+  const tCommon = useTranslations('common');
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const canCreateCompany = hasPlatformAdminPermission(
@@ -113,6 +111,11 @@ export function BusCompaniesManagement() {
   } = useBusCompanies();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
+  const statusFilters: FilterOption[] = [
+    { value: 'HOAT_DONG', label: tCompanies('statusActive') },
+    { value: 'TAM_NGUNG', label: tCompanies('statusSuspended') },
+  ];
+
   function openCreateDialog() {
     if (!canCreateCompany) return;
     setCreateDialogOpen(true);
@@ -120,7 +123,7 @@ export function BusCompaniesManagement() {
 
   function handleCompanyCreated(company: BusCompany) {
     setCreateDialogOpen(false);
-    toast.success(`Đã thêm nhà xe ${company.name}.`);
+    toast.success(tCompanies('createdSuccessMessage', { name: company.name }));
     refresh();
   }
 
@@ -131,9 +134,9 @@ export function BusCompaniesManagement() {
         aria-label={`${label}, ${
           selected
             ? sortDirection === 'asc'
-              ? 'tăng dần'
-              : 'giảm dần'
-            : 'chưa sắp xếp'
+              ? tCommon('ascending')
+              : tCommon('descending')
+            : 'none'
         }`}
         className="-ml-3 h-8 px-2"
         onClick={() => sortCompanies(column)}
@@ -169,37 +172,37 @@ export function BusCompaniesManagement() {
             <div className="flex flex-wrap items-center gap-2">
               {canCreateCompany && (
                 <ResourceCreateAction
-                  label="Thêm nhà xe"
+                  label={tCompanies('createBusCompany')}
                   onClick={openCreateDialog}
                 />
               )}
               <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
-          eyebrow="ĐỐI TÁC NỀN TẢNG"
-          title="Quản lý nhà xe"
+          eyebrow={tCompanies('eyebrowPartners')}
+          title={tCompanies('busCompaniesTitle')}
           titleId="page-title"
         />
-        <section aria-label="Danh sách nhà xe" aria-busy={loading}>
+        <section aria-label={tCompanies('busCompaniesTitle')} aria-busy={loading}>
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label="Tìm nhà xe"
+                label={tCompanies('searchBusCompanyLabel')}
                 onChange={updateSearch}
-                placeholder="Tìm theo mã, tên hoặc thông tin liên hệ"
+                placeholder={tCompanies('searchBusCompanyPlaceholder')}
                 value={searchInput}
               />
               <SelectFilter
-                allLabel="Tất cả trạng thái"
-                label="Lọc theo trạng thái"
+                allLabel={tCompanies('allStatuses')}
+                label={tCompanies('filterStatus')}
                 onChange={updateFilters}
-                options={BUS_COMPANY_STATUS_FILTERS}
+                options={statusFilters}
                 value={status}
               />
               <DateRangeFilter
                 appearance="resource"
-                emptyValueLabel="Tất cả ngày"
-                label="Ngày tạo"
+                emptyValueLabel={tCommon('all')}
+                label={tCommon('createdAt')}
                 onApply={updateCreatedDateRange}
                 value={createdDateRange}
               />
@@ -208,21 +211,21 @@ export function BusCompaniesManagement() {
             {!error && companyPage && companyPage.data.length > 0 && (
               <div className="flex items-end gap-3 border-b p-4 md:hidden">
                 <SelectFilter
-                  allLabel="Tên nhà xe"
-                  label="Sắp xếp theo"
+                  allLabel={tCompanies('colName')}
+                  label={tCommon('sortBy')}
                   onChange={(value) => {
                     const field = (value || 'name') as BusCompanySortKey;
                     if (field !== sortBy) sortCompanies(field);
                   }}
                   options={[
-                    { value: 'code', label: 'Mã nhà xe' },
-                    { value: 'status', label: 'Trạng thái' },
-                    { value: 'createdAt', label: 'Ngày tạo' },
+                    { value: 'code', label: tCompanies('colCode') },
+                    { value: 'status', label: tCommon('status') },
+                    { value: 'createdAt', label: tCommon('createdAt') },
                   ]}
                   value={sortBy === 'name' ? '' : sortBy}
                 />
                 <Button
-                  aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                  aria-label={`${tCommon('toggleSortOrder', { order: sortDirection === 'asc' ? tCommon('ascending') : tCommon('descending') })}`}
                   onClick={() => sortCompanies(sortBy)}
                   variant="outline"
                 >
@@ -231,19 +234,19 @@ export function BusCompaniesManagement() {
                   ) : (
                     <ArrowDown aria-hidden className="size-4" />
                   )}
-                  {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                  {sortDirection === 'asc' ? tCommon('sortAscending') : tCommon('sortDescending')}
                 </Button>
               </div>
             )}
 
             {loading && !companyPage && (
-              <ResourceTableSkeleton resourceLabel="nhà xe" />
+              <ResourceTableSkeleton resourceLabel={tCompanies('unit')} />
             )}
             {error && (
               <ResourceState error>
                 <p>{error}</p>
                 <Button onClick={refresh} variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
@@ -254,8 +257,8 @@ export function BusCompaniesManagement() {
                 <ResourceState>
                   <p>
                     {hasFilters
-                      ? 'Không tìm thấy nhà xe phù hợp.'
-                      : 'Chưa có nhà xe trong hệ thống.'}
+                      ? tCompanies('emptyFiltered')
+                      : tCompanies('emptyNoData')}
                   </p>
                   {hasFilters && (
                     <Button
@@ -266,7 +269,7 @@ export function BusCompaniesManagement() {
                       }}
                       variant="outline"
                     >
-                      Xóa bộ lọc
+                      {tCommon('clearFilters')}
                     </Button>
                   )}
                 </ResourceState>
@@ -277,17 +280,17 @@ export function BusCompaniesManagement() {
                 <div className="hidden md:block" aria-busy={loading}>
                   <Table className="min-w-[920px]">
                     <TableCaption className="sr-only">
-                      Danh sách nhà xe
+                      {tCompanies('busCompaniesTitle')}
                     </TableCaption>
                     <TableHeader>
                       <TableRow>
                         {(
                           [
-                            { key: 'name', label: 'Nhà xe' },
-                            { key: 'code', label: 'Mã nhà xe' },
-                            { key: null, label: 'Thông tin liên hệ' },
-                            { key: 'status', label: 'Trạng thái' },
-                            { key: 'createdAt', label: 'Ngày tạo' },
+                            { key: 'name', label: tCompanies('colCompany') },
+                            { key: 'code', label: tCompanies('colCode') },
+                            { key: null, label: tCompanies('contactInfo') },
+                            { key: 'status', label: tCommon('status') },
+                            { key: 'createdAt', label: tCommon('createdAt') },
                           ] as const
                         ).map((column) => (
                           <TableHead
@@ -309,7 +312,7 @@ export function BusCompaniesManagement() {
                           </TableHead>
                         ))}
                         <TableHead scope="col">
-                          <span className="sr-only">Thao tác</span>
+                          <span className="sr-only">{tCommon('actions')}</span>
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -331,7 +334,7 @@ export function BusCompaniesManagement() {
                             {company.code}
                           </TableCell>
                           <TableCell className="max-w-64 whitespace-normal break-words text-muted-foreground">
-                            {company.contactInfo || 'Chưa cập nhật'}
+                            {company.contactInfo || tCompanies('noContactInfo')}
                           </TableCell>
                           <TableCell>
                             <ResourceStatusBadge
@@ -341,7 +344,7 @@ export function BusCompaniesManagement() {
                                   : 'muted'
                               }
                             >
-                              {statusLabel(company.status)}
+                              {company.status === 'HOAT_DONG' ? tCompanies('statusActive') : tCompanies('statusSuspended')}
                             </ResourceStatusBadge>
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -382,22 +385,22 @@ export function BusCompaniesManagement() {
                               : 'muted'
                           }
                         >
-                          {statusLabel(company.status)}
+                          {company.status === 'HOAT_DONG' ? tCompanies('statusActive') : tCompanies('statusSuspended')}
                         </ResourceStatusBadge>
                       </div>
                       <p className="break-words text-[13px] text-muted-foreground">
-                        {company.contactInfo || 'Chưa cập nhật liên hệ'}
+                        {company.contactInfo || tCompanies('noContactInfo')}
                       </p>
                       <dl className="grid grid-cols-2 gap-3 border-t pt-3 text-[13px]">
                         <div className="space-y-1">
                           <dt className="text-xs text-muted-foreground">
-                            Ngày tạo
+                            {tCommon('createdAt')}
                           </dt>
                           <dd>{timestampFormat(company.createdAt)}</dd>
                         </div>
                         <div className="space-y-1">
                           <dt className="text-xs text-muted-foreground">
-                            Cập nhật
+                            {tCommon('updatedAt')}
                           </dt>
                           <dd>{timestampFormat(company.updatedAt)}</dd>
                         </div>
@@ -417,7 +420,7 @@ export function BusCompaniesManagement() {
                   disabled={loading}
                   onPageChange={changePage}
                   pageSize={companyPage.meta.pageSize}
-                  summaryLabel="nhà xe"
+                  summaryLabel={tCompanies('unit')}
                   totalItems={companyPage.meta.totalItems}
                   totalPages={companyPage.meta.totalPages}
                 />

@@ -1,5 +1,5 @@
-/* eslint-disable */
-// /src/modules/client/my-posts/components/MyPostsTable.tsx
+'use client';
+
 import React from 'react';
 import {
   Bus,
@@ -17,6 +17,7 @@ import {
   History,
   Calendar,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { CustomerActivity } from '@/features/account/types/customer-activity';
 import { ActionDropdown, type ActionMenuItem } from '@/components/ui/action-dropdown';
 import { Pagination } from '@/components/ui/pagination';
@@ -50,11 +51,13 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
   onMarkCompleted,
   onRenew,
 }) => {
+  const t = useTranslations('account.activity');
+
   const getActionItems = (post: CustomerActivity): ActionMenuItem[] => {
     const items: ActionMenuItem[] = [
       {
         key: 'view',
-        label: 'Xem chi tiết',
+        label: t('viewDetail'),
         icon: <Eye className="w-4 h-4 text-slate-500" />,
         onClick: () => onViewDetail(post),
       },
@@ -63,7 +66,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
     if (post.status === 'DRAFT' || post.status === 'REJECTED' || post.status === 'APPROVED') {
       items.push({
         key: 'edit',
-        label: 'Chỉnh sửa yêu cầu',
+        label: t('editAction'),
         icon: <Edit className="w-4 h-4 text-brand" />,
         variant: 'success',
         onClick: () => onEdit(post),
@@ -73,7 +76,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
     if (post.status === 'APPROVED') {
       items.push({
         key: 'hide',
-        label: 'Hủy vé / vận đơn',
+        label: t('cancelAction'),
         icon: <EyeOff className="w-4 h-4 text-slate-500" />,
         onClick: () => onToggleHide(post),
       });
@@ -82,7 +85,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
     if (post.status === 'HIDDEN') {
       items.push({
         key: 'unhide',
-        label: 'Khôi phục yêu cầu',
+        label: t('restoreAction'),
         icon: <Eye className="w-4 h-4 text-brand" />,
         variant: 'success',
         onClick: () => onToggleHide(post),
@@ -92,7 +95,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
     if (post.status === 'APPROVED' || post.status === 'HIDDEN') {
       items.push({
         key: 'complete',
-        label: 'Đánh dấu đã sử dụng',
+        label: t('completeAction'),
         icon: <CheckCheck className="w-4 h-4 text-sky-600" />,
         onClick: () => onMarkCompleted(post),
       });
@@ -101,7 +104,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
     if (post.status === 'EXPIRED') {
       items.push({
         key: 'renew',
-        label: 'Thanh toán lại',
+        label: t('repayAction'),
         icon: <RotateCw className="w-4 h-4 text-orange-600" />,
         variant: 'warning',
         onClick: () => onRenew(post),
@@ -110,7 +113,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
 
     items.push({
       key: 'delete',
-      label: 'Xóa khỏi danh sách',
+      label: t('deleteAction'),
       icon: <Trash2 className="w-4 h-4 text-rose-500" />,
       variant: 'danger',
       onClick: () => onDelete(post.id),
@@ -125,19 +128,19 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-              <th className="py-3.5 px-4 min-w-[280px]">Tuyến / Dịch Vụ</th>
-              <th className="py-3.5 px-4 w-28 whitespace-nowrap">Loại</th>
-              <th className="py-3.5 px-4 w-36 whitespace-nowrap">Giá & Ghế/Kg</th>
-              <th className="py-3.5 px-4 w-32 whitespace-nowrap">Ngày Tạo</th>
-              <th className="py-3.5 px-4 w-28 text-center whitespace-nowrap">Tra Cứu</th>
-              <th className="py-3.5 px-4 w-36 whitespace-nowrap">Trạng Thái</th>
-              <th className="py-3.5 px-4 w-20 text-center whitespace-nowrap">Thao Tác</th>
+              <th className="py-3.5 px-4 min-w-[280px]">{t('colRouteService')}</th>
+              <th className="py-3.5 px-4 w-28 whitespace-nowrap">{t('colType')}</th>
+              <th className="py-3.5 px-4 w-36 whitespace-nowrap">{t('colPriceAndSeat')}</th>
+              <th className="py-3.5 px-4 w-32 whitespace-nowrap">{t('colCreatedAt')}</th>
+              <th className="py-3.5 px-4 w-28 text-center whitespace-nowrap">{t('colLookup')}</th>
+              <th className="py-3.5 px-4 w-36 whitespace-nowrap">{t('colStatus')}</th>
+              <th className="py-3.5 px-4 w-20 text-center whitespace-nowrap">{t('colActions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
             {posts.map((post) => (
               <tr key={post.id} className="hover:bg-slate-50/70 transition-colors">
-                {/* 1. Title & Info (FIRST COLUMN) */}
+                {/* 1. Title & Info */}
                 <td className="py-4 px-4">
                   <div className="space-y-1 max-w-md">
                     <button
@@ -171,7 +174,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
                     ) : (
                       <PackageCheck className="w-3 h-3" />
                     )}
-                    <span>{post.needType === 'BUY' ? 'ĐẶT VÉ' : 'GỬI HÀNG'}</span>
+                    <span>{post.needType === 'BUY' ? t('ticketBooking') : t('freightShipping')}</span>
                   </span>
                 </td>
 
@@ -183,7 +186,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
                   </div>
                 </td>
 
-                {/* 4. Created At (Ngày Đăng) */}
+                {/* 4. Created At */}
                 <td className="py-4 px-4 whitespace-nowrap text-xs text-slate-600 font-medium">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -191,7 +194,7 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
                   </div>
                 </td>
 
-                {/* 5. Views Count (Lượt Xem) */}
+                {/* 5. Views Count */}
                 <td className="py-4 px-4 whitespace-nowrap text-center text-xs font-semibold text-slate-700">
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px]">
                     <Eye className="w-3.5 h-3.5 text-slate-400" />
@@ -204,48 +207,48 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
                   {post.status === 'APPROVED' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 text-brand border border-emerald-200">
                       <ShieldCheck className="w-3 h-3" />
-                      <span>Đã thanh toán</span>
+                      <span>{t('statusPaid')}</span>
                     </span>
                   )}
                   {post.status === 'PENDING' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                       <Clock className="w-3 h-3" />
-                      <span>Chờ thanh toán</span>
+                      <span>{t('statusPending')}</span>
                     </span>
                   )}
                   {post.status === 'REJECTED' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                       <XCircle className="w-3 h-3" />
-                      <span>Thanh toán lỗi</span>
+                      <span>{t('statusFailed')}</span>
                     </span>
                   )}
                   {post.status === 'HIDDEN' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                       <EyeOff className="w-3 h-3" />
-                      <span>Đã hủy</span>
+                      <span>{t('statusCancelled')}</span>
                     </span>
                   )}
                   {post.status === 'COMPLETED' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
                       <CheckCheck className="w-3 h-3" />
-                      <span>Đã sử dụng</span>
+                      <span>{t('statusUsed')}</span>
                     </span>
                   )}
                   {post.status === 'EXPIRED' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-orange-700 border border-orange-200">
                       <History className="w-3 h-3" />
-                      <span>Quá hạn</span>
+                      <span>{t('statusExpired')}</span>
                     </span>
                   )}
                   {post.status === 'DRAFT' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                       <FileEdit className="w-3 h-3" />
-                      <span>Bản nháp</span>
+                      <span>{t('statusDraft')}</span>
                     </span>
                   )}
                 </td>
 
-                {/* 7. Actions 3 dots dropdown */}
+                {/* 7. Actions */}
                 <td className="py-4 px-4 text-center whitespace-nowrap">
                   <ActionDropdown items={getActionItems(post)} align="right" />
                 </td>
@@ -258,9 +261,11 @@ export const MyPostsTable: React.FC<MyPostsTableProps> = ({
       {/* Table Pagination Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-slate-200/80 bg-slate-50/40">
         <div className="text-xs font-semibold text-slate-500">
-          Hiển thị <strong className="text-slate-800 font-bold">{Math.min((currentPage - 1) * pageSize + 1, totalItems)}</strong> -{' '}
-          <strong className="text-slate-800 font-bold">{Math.min(currentPage * pageSize, totalItems)}</strong> trên tổng số{' '}
-          <strong className="text-slate-800 font-bold">{totalItems}</strong> vé/vận đơn
+          {t('showingPagination', {
+            from: Math.min((currentPage - 1) * pageSize + 1, totalItems),
+            to: Math.min(currentPage * pageSize, totalItems),
+            total: totalItems,
+          })}
         </div>
 
         <Pagination

@@ -10,6 +10,7 @@ import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/routes/17',
 }));
 
 vi.mock('next/link', () => ({

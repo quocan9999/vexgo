@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useTenantDashboard } from '../hooks/use-tenant-dashboard';
 import { TenantDashboardHeader } from './tenant-dashboard-header';
 import { TenantMetricsGrid } from './tenant-metrics-grid';
@@ -13,6 +14,8 @@ import { TenantUrgentAlerts } from './tenant-urgent-alerts';
 import { TenantQuickActions } from './tenant-quick-actions';
 
 export function TenantDashboard() {
+  const t = useTranslations('dashboard');
+  const tCommon = useTranslations('common');
   const {
     data,
     loading,
@@ -42,7 +45,7 @@ export function TenantDashboard() {
           <div
             className="space-y-6"
             role="status"
-            aria-label="Đang tải dữ liệu tổng quan"
+            aria-label={t('loadingTenantData')}
           >
             {/* Metrics Skeleton */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -98,7 +101,7 @@ export function TenantDashboard() {
               <AlertCircle className="size-6" />
             </div>
             <h2 className="text-base font-semibold text-rose-950">
-              Không thể tải dữ liệu điều hành nhà xe
+              {t('cannotLoadTenantData')}
             </h2>
             <p className="text-sm text-rose-700 mt-1 max-w-md mx-auto">
               {error}
@@ -111,7 +114,7 @@ export function TenantDashboard() {
               className="mt-4 gap-1.5 border-rose-300 text-rose-800 hover:bg-rose-100"
             >
               <RefreshCw className="size-3.5" />
-              <span>Thử lại</span>
+              <span>{tCommon('retry')}</span>
             </Button>
           </Card>
         )}
@@ -119,17 +122,17 @@ export function TenantDashboard() {
         {/* Success Data State: Bento Grid 8:4 */}
         {data && (
           <div className="space-y-6">
-            {/* 1. 4 Thẻ KPI Chỉ số Hôm nay */}
+            {/* 1. 4 Today KPI Metric Cards */}
             <TenantMetricsGrid metrics={data.metrics} />
 
-            {/* 2. Cụm Bento Grid 8:4 */}
+            {/* 2. 8:4 Bento Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Cột chính (8/12 cột): Chuyến xe sắp khởi hành */}
+              {/* Main column (8/12 cols): Upcoming departure trips */}
               <div className="lg:col-span-8">
                 <TenantUpcomingTrips trips={data.upcomingTrips} />
               </div>
 
-              {/* Cột phụ (4/12 cột): Cảnh báo việc khẩn & Lối tắt thao tác nhanh */}
+              {/* Secondary column (4/12 cols): Urgent alerts & shortcuts */}
               <div className="lg:col-span-4 space-y-6">
                 <TenantUrgentAlerts alerts={data.urgentAlerts} />
                 <TenantQuickActions />

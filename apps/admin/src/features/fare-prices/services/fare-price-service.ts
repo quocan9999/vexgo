@@ -126,7 +126,7 @@ async function readResponse(response: Response, resource: string): Promise<unkno
     throw new FarePriceApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải ${resource} (HTTP ${response.status}).`,
+        : `Failed to load ${resource} (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
       isRecord(body) ? getErrorDetails(body.details) : [],
     );
@@ -157,10 +157,10 @@ export async function getFarePrices(
       cache: 'no-store',
       signal,
     }),
-    'danh sách bảng giá',
+    'fare prices',
   );
   if (!isPaginatedFarePrices(body)) {
-    throw new Error('API trả về danh sách bảng giá không hợp lệ.');
+    throw new Error('API returned invalid fare price list.');
   }
   return body;
 }
@@ -174,10 +174,10 @@ export async function getFarePriceById(
       cache: 'no-store',
       signal,
     }),
-    'thông tin bảng giá',
+    'fare price details',
   );
   if (!isRecord(body) || !isFarePrice(body.data)) {
-    throw new Error('API trả về thông tin bảng giá không hợp lệ.');
+    throw new Error('API returned invalid fare price details.');
   }
   return body.data;
 }
@@ -191,10 +191,10 @@ export async function createFarePrice(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     }),
-    'bảng giá',
+    'fare price',
   );
   if (!isRecord(body) || !isFarePrice(body.data)) {
-    throw new Error('API trả về thông tin bảng giá không hợp lệ.');
+    throw new Error('API returned invalid fare price details.');
   }
   return body.data;
 }
@@ -209,10 +209,10 @@ export async function updateFarePrice(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     }),
-    'bảng giá',
+    'fare price',
   );
   if (!isRecord(body) || !isFarePrice(body.data)) {
-    throw new Error('API trả về thông tin bảng giá không hợp lệ.');
+    throw new Error('API returned invalid fare price details.');
   }
   return body.data;
 }
@@ -227,10 +227,10 @@ export async function updateFarePriceStatus(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     }),
-    'trạng thái bảng giá',
+    'fare price status',
   );
   if (!isRecord(body) || !isFarePrice(body.data)) {
-    throw new Error('API trả về thông tin bảng giá không hợp lệ.');
+    throw new Error('API returned invalid fare price details.');
   }
   return body.data;
 }
@@ -243,7 +243,7 @@ async function loadRemainingPages<T>(
 ): Promise<T[]> {
   const { totalPages } = firstPage.meta;
   if (!Number.isSafeInteger(totalPages) || totalPages < 0) {
-    throw new Error('API trả về thông tin phân trang bộ lọc không hợp lệ.');
+    throw new Error('API returned invalid filter pagination meta.');
   }
   const remaining = await Promise.all(
     Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>

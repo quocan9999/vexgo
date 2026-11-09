@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { Trash2, ChevronDown, CheckCircle2, PackageCheck } from 'lucide-react';
+import { useTranslations, useLocale } from 'next-intl';
 import type { CargoCategory } from '@/features/shipments/services/shipments.api';
 
 export interface LuggageSizePackage {
@@ -193,10 +194,11 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
   onChange,
   onRemove,
 }) => {
+  const t = useTranslations('booking');
+  const locale = useLocale();
   const packagesList = packages && packages.length > 0 ? packages : LUGGAGE_SIZE_PACKAGES;
   const isMotorbike = item.type === 'Xe máy';
   const isBicycle = item.type === 'Xe đạp';
-  const isVehicle = isMotorbike || isBicycle;
 
   const activePackage = React.useMemo(() => {
     if (item.packageSize) {
@@ -235,6 +237,72 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
     onChange,
   ]);
 
+  const currencyUnit = locale === 'vi' ? 'đ' : ' VND';
+  const formatMoney = (val?: number) => {
+    if (typeof val !== 'number') return '';
+    return locale === 'vi' ? `${val.toLocaleString('vi-VN')}đ` : `${val.toLocaleString('en-US')} VND`;
+  };
+
+  const getPackageDisplayName = (pkg: LuggageSizePackage) => {
+    if (locale === 'en') {
+      switch (pkg.code) {
+        case 'S':
+          return 'Small Package (Size S)';
+        case 'M':
+          return 'Standard Package (Size M)';
+        case 'L':
+          return 'Large Package (Size L)';
+        case 'XL':
+          return 'Bulky Package (Size XL)';
+        default:
+          return pkg.name;
+      }
+    }
+    return pkg.name;
+  };
+
+  const getPackageRuleText = (pkg: LuggageSizePackage) => {
+    if (locale === 'en') {
+      switch (pkg.code) {
+        case 'S':
+          return 'Max 5kg • Within 40×25×25cm';
+        case 'M':
+          return 'Max 10kg • Within 50×40×25cm';
+        case 'L':
+          return 'Max 20kg • Within 60×40×40cm';
+        case 'XL':
+          return 'Max 35kg • Within 80×50×40cm';
+        default:
+          return pkg.ruleText;
+      }
+    }
+    return pkg.ruleText;
+  };
+
+  const getPackageExamples = (pkg: LuggageSizePackage) => {
+    if (locale === 'en') {
+      switch (pkg.code) {
+        case 'S':
+          return 'Travel backpack, small gift bag, small box';
+        case 'M':
+          return 'Medium suitcase (20–24 inch), medium fruit crate';
+        case 'L':
+          return 'Large suitcase (28 inch), large foam box, heavy item';
+        case 'XL':
+          return 'Seafood container, oversized box, bulky cargo';
+        default:
+          return pkg.examples;
+      }
+    }
+    return pkg.examples;
+  };
+
+  const headerTitle = isMotorbike
+    ? t('cargoItemVehicleName', { index: index + 1, name: t('packageMotorbike') })
+    : isBicycle
+      ? t('cargoItemVehicleName', { index: index + 1, name: t('packageBicycle') })
+      : t('cargoItemPackageName', { index: index + 1, name: '' }).replace(': ', '');
+
   return (
     <div className="p-4 border border-slate-200 rounded-xl bg-slate-50/80 relative shadow-2xs">
       <div className="flex justify-between items-center mb-3 pb-2.5 border-b border-slate-200/70">
@@ -243,30 +311,26 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
             {index + 1}
           </span>
           <h4 className="text-sm font-black text-slate-900">
-            {isMotorbike
-              ? `Phương tiện ký gửi: Xe máy`
-              : isBicycle
-                ? `Phương tiện ký gửi: Xe đạp`
-                : `Kiện hàng hầm xe #${index + 1}`}
+            {headerTitle}
           </h4>
         </div>
         <button
           type="button"
           onClick={() => onRemove(item.id)}
           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-          title="Xóa kiện này"
+          title={t('deleteCargoItem')}
         >
           <Trash2 className="w-3.5 h-3.5" />
-          <span>Xóa</span>
+          <span>{t('deleteItemText')}</span>
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         <label className="block">
-          <span className="text-xs font-bold text-slate-700">Phân loại đồ gửi</span>
+          <span className="text-xs font-bold text-slate-700">{t('cargoCategoryLabel')}</span>
           <div className="relative mt-1">
             <select
-              aria-label="Loại hành lý"
+              aria-label={t('luggageType')}
               className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
               value={item.type}
               onChange={(e) => {
@@ -318,25 +382,25 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
                 }
               }}
             >
-              <option value="Vali">Vali du lịch</option>
-              <option value="Balo / Túi du lịch">Balo lớn / Túi đồ quê</option>
-              <option value="Thùng xốp / Thùng carton">Thùng xốp / Thùng carton</option>
-              <option value="Nông sản / Đặc sản / Quà biếu">Nông sản / Đặc sản / Quà biếu</option>
-              <option value="Thiết bị điện tử / Đồ gia dụng">Thiết bị điện tử / Đồ gia dụng</option>
-              <option value="Hành lý / Đồ cồng kềnh khác">Kiện hàng cồng kềnh khác</option>
-              <option value="Xe máy">Phương tiện: Xe máy</option>
-              <option value="Xe đạp">Phương tiện: Xe đạp</option>
-              <option value="Khác">Khác (Tự nhập tên đồ gửi...)</option>
+              <option value="Vali">{locale === 'vi' ? 'Vali du lịch' : 'Travel suitcase'}</option>
+              <option value="Balo / Túi du lịch">{locale === 'vi' ? 'Balo lớn / Túi đồ quê' : 'Large backpack / Travel bag'}</option>
+              <option value="Thùng xốp / Thùng carton">{locale === 'vi' ? 'Thùng xốp / Thùng carton' : 'Foam box / Carton'}</option>
+              <option value="Nông sản / Đặc sản / Quà biếu">{locale === 'vi' ? 'Nông sản / Đặc sản / Quà biếu' : 'Produce / Specialties / Gifts'}</option>
+              <option value="Thiết bị điện tử / Đồ gia dụng">{locale === 'vi' ? 'Thiết bị điện tử / Đồ gia dụng' : 'Electronics / Appliances'}</option>
+              <option value="Hành lý / Đồ cồng kềnh khác">{locale === 'vi' ? 'Kiện hàng cồng kềnh khác' : 'Other bulky luggage'}</option>
+              <option value="Xe máy">{locale === 'vi' ? 'Phương tiện: Xe máy' : 'Vehicle: Motorbike'}</option>
+              <option value="Xe đạp">{locale === 'vi' ? 'Phương tiện: Xe đạp' : 'Vehicle: Bicycle'}</option>
+              <option value="Khác">{locale === 'vi' ? 'Khác (Tự nhập tên đồ gửi...)' : 'Other (Custom item name...)'}</option>
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           </div>
         </label>
 
         <label className="block">
-          <span className="text-xs font-bold text-slate-700">Số lượng kiện</span>
+          <span className="text-xs font-bold text-slate-700">{t('cargoQuantityLabel')}</span>
           <input
             type="number"
-            aria-label="Số lượng"
+            aria-label={t('cargoQuantityLabel')}
             min="1"
             max="5"
             className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
@@ -346,7 +410,7 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
         </label>
         <input
           type="number"
-          aria-label="Khối lượng ước tính (kg)"
+          aria-label={t('cargoWeightAria')}
           className="sr-only"
           value={item.weight || ''}
           onChange={(e) => {
@@ -384,14 +448,14 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
         <div className="mt-3">
           <label className="block">
             <span className="text-xs font-bold text-slate-700">
-              Tên đồ gửi cụ thể <span className="text-rose-500">*</span>
+              {t('cargoItemSpecificName')} <span className="text-rose-500">*</span>
             </span>
             <input
               type="text"
               className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
               value={item.customTypeName || ''}
               onChange={(e) => onChange(item.id, 'customTypeName', e.target.value)}
-              placeholder="Nhập tên loại đồ gửi (VD: Đàn guitar, Cây cảnh nhỏ, Bao gạo, Máy tính để bàn...)"
+              placeholder={t('cargoItemSpecificNamePlaceholder')}
             />
           </label>
         </div>
@@ -402,28 +466,38 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
         <div className="mt-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <label className="block">
-              <span className="text-xs font-bold text-slate-700">Gói cước theo dòng xe máy</span>
+              <span className="text-xs font-bold text-slate-700">{t('motorbikePackageFeeLabel')}</span>
               <div className="relative mt-1">
                 <select
                   className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
                   value={item.motorbikeType || 'Xe số'}
                   onChange={(e) => onChange(item.id, 'motorbikeType', e.target.value)}
                 >
-                  <option value="Xe số">Xe số: Wave, Sirius, Future... ({(vehicles?.motorcycleWave ?? 180_000).toLocaleString('vi-VN')}đ)</option>
-                  <option value="Xe tay ga">Xe tay ga: Vision, AirBlade, Lead... ({(vehicles?.motorcycleScooter ?? 220_000).toLocaleString('vi-VN')}đ)</option>
-                  <option value="Xe tay ga lớn / SH">Xe tay ga lớn: SH, NVX, Vespa... ({(vehicles?.motorcycleBig ?? 250_000).toLocaleString('vi-VN')}đ)</option>
-                  <option value="Xe côn tay / Moto">Xe côn tay / PKL: Winner, Exciter... ({(vehicles?.motorcycleBig ?? 250_000).toLocaleString('vi-VN')}đ)</option>
-                  <option value="Xe máy điện">Xe máy điện: VinFast, Dat Bike... ({(vehicles?.motorcycleWave ?? 180_000).toLocaleString('vi-VN')}đ)</option>
+                  <option value="Xe số">
+                    {locale === 'vi' ? 'Xe số' : 'Manual / semi-auto'}: Wave, Sirius, Future... ({formatMoney(vehicles?.motorcycleWave ?? 180_000)})
+                  </option>
+                  <option value="Xe tay ga">
+                    {locale === 'vi' ? 'Xe tay ga' : 'Scooter'}: Vision, AirBlade, Lead... ({formatMoney(vehicles?.motorcycleScooter ?? 220_000)})
+                  </option>
+                  <option value="Xe tay ga lớn / SH">
+                    {locale === 'vi' ? 'Xe tay ga lớn' : 'Large scooter'}: SH, NVX, Vespa... ({formatMoney(vehicles?.motorcycleBig ?? 250_000)})
+                  </option>
+                  <option value="Xe côn tay / Moto">
+                    {locale === 'vi' ? 'Xe côn tay / PKL' : 'Clutch / Sport bike'}: Winner, Exciter... ({formatMoney(vehicles?.motorcycleBig ?? 250_000)})
+                  </option>
+                  <option value="Xe máy điện">
+                    {locale === 'vi' ? 'Xe máy điện' : 'Electric motorbike'}: VinFast, Dat Bike... ({formatMoney(vehicles?.motorcycleWave ?? 180_000)})
+                  </option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               </div>
             </label>
 
             <label className="block">
-              <span className="text-xs font-bold text-slate-700">Biển số xe ký gửi</span>
+              <span className="text-xs font-bold text-slate-700">{t('motorbikeLicensePlateLabel')}</span>
               <input
                 type="text"
-                placeholder="Ví dụ: 59A1-123.45"
+                placeholder={t('motorbikeLicensePlatePlaceholder')}
                 className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white uppercase"
                 value={item.licensePlate || ''}
                 onChange={(e) => onChange(item.id, 'licensePlate', e.target.value.toUpperCase())}
@@ -436,25 +510,16 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] text-white">
                 📌
               </span>
-              <span>Quy định nhận & bàn giao xe máy tại bến:</span>
+              <span>{t('motorbikeRulesTitle')}</span>
             </div>
             <ul className="space-y-1.5 pl-1 text-[12px] text-slate-700">
               <li className="flex items-start gap-2">
                 <span className="text-amber-600 font-bold">•</span>
-                <span>
-                  <strong>Thời gian ra bến:</strong> Có mặt trước giờ khởi hành{' '}
-                  <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 font-bold text-amber-900">
-                    90–120 phút
-                  </span>{' '}
-                  để làm thủ tục rút xăng và bọc xe.
-                </span>
+                <span>{t('motorbikeArrivalNotice')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-600 font-bold">•</span>
-                <span>
-                  <strong>Giấy tờ bắt buộc:</strong> Xuất trình{' '}
-                  <strong className="text-slate-900">cà-vẹt xe (bản gốc)</strong> khi bàn giao phương tiện.
-                </span>
+                <span>{t('motorbikePaperNotice')}</span>
               </li>
             </ul>
           </div>
@@ -463,18 +528,20 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
         <div className="mt-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <label className="block">
-              <span className="text-xs font-bold text-slate-700">Loại xe đạp (Đồng giá {(vehicles?.bicycle ?? 80_000).toLocaleString('vi-VN')}đ/chiếc)</span>
+              <span className="text-xs font-bold text-slate-700">
+                {t('bicycleTypeLabel', { fee: (vehicles?.bicycle ?? 80_000).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US') })}
+              </span>
               <div className="relative mt-1">
                 <select
                   className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
                   value={item.bicycleType || 'Xe đạp thường'}
                   onChange={(e) => onChange(item.id, 'bicycleType', e.target.value)}
                 >
-                  <option value="Xe đạp thường">Xe đạp thông thường / mini</option>
-                  <option value="Xe đạp thể thao">Xe đạp thể thao / địa hình (MTB)</option>
-                  <option value="Xe đạp đua / cuộc">Xe đạp đua / Road bike</option>
-                  <option value="Xe đạp điện">Xe đạp điện / Trợ lực điện</option>
-                  <option value="Xe đạp gấp">Xe đạp gấp gọn</option>
+                  <option value="Xe đạp thường">{locale === 'vi' ? 'Xe đạp thông thường / mini' : 'Standard bicycle / city bike'}</option>
+                  <option value="Xe đạp thể thao">{locale === 'vi' ? 'Xe đạp thể thao / địa hình (MTB)' : 'Mountain bike (MTB)'}</option>
+                  <option value="Xe đạp đua / cuộc">{locale === 'vi' ? 'Xe đạp đua / Road bike' : 'Road bike / Racing bicycle'}</option>
+                  <option value="Xe đạp điện">{locale === 'vi' ? 'Xe đạp điện / Trợ lực điện' : 'Electric bicycle / E-bike'}</option>
+                  <option value="Xe đạp gấp">{locale === 'vi' ? 'Xe đạp gấp gọn' : 'Folding bicycle'}</option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               </div>
@@ -486,11 +553,8 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-[10px] text-white">
                 🚲
               </span>
-              <span>Lưu ý gửi xe đạp theo chuyến:</span>
+              <span>{t('bicycleArrivalNotice')}</span>
             </div>
-            <p className="text-[12px] text-slate-700 leading-relaxed">
-              Quý khách vui lòng có mặt tại bến trước giờ xe chạy <strong>20–30 phút</strong> để phụ xe hỗ trợ tháo bánh trước/hạ yên và chằng buộc an toàn vào khoang hầm lớn.
-            </p>
           </div>
         </div>
       ) : (
@@ -499,10 +563,10 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
               <PackageCheck className="w-4 h-4 text-accent" />
-              Chọn gói kích thước & khối lượng kiện hàng
+              {t('packageSizeTitle')}
             </span>
             <span className="text-[11px] font-semibold text-slate-500">
-              Đã bao gồm quy chuẩn kích thước hầm xe
+              {t('packageSizeStandardDesc')}
             </span>
           </div>
 
@@ -540,7 +604,7 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
                           isSelected ? 'text-slate-950' : 'text-slate-800'
                         }`}
                       >
-                        {pkg.name}
+                        {getPackageDisplayName(pkg)}
                       </span>
                     </div>
                     <span
@@ -550,16 +614,16 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
-                      {pkg.baseFee.toLocaleString('vi-VN')}đ/kiện
+                      {formatMoney(pkg.baseFee)}/{locale === 'vi' ? 'kiện' : 'pkg'}
                     </span>
                   </div>
 
                   <div className="pl-5.5 space-y-0.5">
                     <div className="text-[11px] font-bold text-slate-700">
-                      {pkg.ruleText}
+                      {getPackageRuleText(pkg)}
                     </div>
                     <div className="text-[11px] text-slate-500 leading-snug">
-                      Gợi ý: {pkg.examples}
+                      {locale === 'vi' ? 'Gợi ý: ' : 'Examples: '}{getPackageExamples(pkg)}
                     </div>
                   </div>
                 </button>
@@ -570,7 +634,7 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
       )}
 
       <label className="block mt-3.5">
-        <span className="text-xs font-bold text-slate-700">Ghi chú kiện hàng (Không bắt buộc)</span>
+        <span className="text-xs font-bold text-slate-700">{t('cargoItemNoteLabel')}</span>
         <input
           type="text"
           className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
@@ -578,8 +642,8 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({
           onChange={(e) => onChange(item.id, 'note', e.target.value)}
           placeholder={
             isMotorbike
-              ? 'Ví dụ: Xe Wave Alpha màu đỏ, bọc kỹ dàn áo...'
-              : 'Ví dụ: Thùng dâu tây Đà Lạt, Vali nhựa màu đen...'
+              ? t('cargoItemNoteMotorbikePlaceholder')
+              : t('cargoItemNotePackagePlaceholder')
           }
         />
       </label>

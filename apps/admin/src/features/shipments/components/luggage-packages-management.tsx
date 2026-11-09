@@ -11,6 +11,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/action-button';
 import {
   Card,
@@ -40,6 +41,7 @@ function parseCurrencyInput(text: string): number {
 }
 
 export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesManagementProps) {
+  const t = useTranslations('shipments');
   const [data, setData] = useState<BusCompanyLuggageRatesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,12 +64,12 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
       setRouteOverrides(res.routes || {});
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Không thể tải cấu hình cước hành lý',
+        err instanceof Error ? err.message : t('luggageLoadError'),
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadData();
@@ -151,14 +153,14 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
   const handleResetToDefaultVexGo = () => {
     if (isDefaultScope) {
       setDefaultPricing(DEFAULT_VEXGO_LUGGAGE_RATES);
-      toast.info('Đã khôi phục về bảng giá sàn mặc định của VexGo.');
+      toast.info(t('luggageResetDefaultInfo'));
     } else {
       setRouteOverrides((prev) => {
         const copy = { ...prev };
         delete copy[selectedScope];
         return copy;
       });
-      toast.info('Đã xóa giá riêng, tuyến sẽ dùng giá mặc định tất cả tuyến.');
+      toast.info(t('luggageRemoveOverrideInfo'));
     }
   };
 
@@ -172,10 +174,10 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
       setData(res);
       setDefaultPricing(res.default);
       setRouteOverrides(res.routes || {});
-      toast.success('Đã lưu cấu hình bảng cước hành lý thành công!');
+      toast.success(t('luggageSaveSuccess'));
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Không thể lưu cấu hình cước hành lý',
+        err instanceof Error ? err.message : t('luggageSaveError'),
       );
     } finally {
       setSaving(false);
@@ -186,7 +188,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border bg-card p-6 text-muted-foreground shadow-sm">
         <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        <span className="text-sm font-medium">Đang tải cấu hình cước hành lý...</span>
+        <span className="text-sm font-medium">{t('luggageLoading')}</span>
       </div>
     );
   }
@@ -207,19 +209,22 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   <Layers className="size-4" />
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Phạm vi áp dụng bảng giá
+                  {t('luggageScopeCardTitle')}
                 </span>
               </div>
               <p className="text-sm text-foreground">
                 {isDefaultScope
-                  ? 'Đang cấu hình mức cước mặc định chung cho tất cả tuyến.'
-                  : `Đang cấu hình cho tuyến: ${selectedRouteObj?.origin} → ${selectedRouteObj?.destination}`}
+                  ? t('luggageScopeDefaultActive')
+                  : t('luggageScopeRouteActive', {
+                      origin: selectedRouteObj?.origin ?? '',
+                      destination: selectedRouteObj?.destination ?? '',
+                    })}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <label htmlFor="scope-select" className="sr-only">
-                Chọn phạm vi cước
+                {t('luggageSelectScopeLabel')}
               </label>
               <select
                 id="scope-select"
@@ -227,11 +232,15 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                 onChange={(e) => setSelectedScope(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-muted/50 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="default">⭐ Mặc định tất cả tuyến</option>
+                <option value="default">{t('luggageOptionDefault')}</option>
                 {data?.availableRoutes.map((route) => (
                   <option key={route.routeId} value={String(route.routeId)}>
                     {route.hasOverride ? '🏷️ ' : ''}
-                    Tuyến: {route.origin} → {route.destination} ({route.code})
+                    {t('luggageOptionRoute', {
+                      origin: route.origin,
+                      destination: route.destination,
+                      code: route.code,
+                    })}
                   </option>
                 ))}
               </select>
@@ -250,13 +259,13 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   htmlFor="inherit-toggle"
                   className="cursor-pointer font-medium text-foreground select-none"
                 >
-                  Kế thừa mức cước mặc định tất cả tuyến
+                  {t('luggageInheritSwitch')}
                 </label>
               </div>
               <span className="text-xs text-muted-foreground">
                 {isInheriting
-                  ? 'Tuyến này đang tự động sử dụng bảng giá mặc định chung của tất cả tuyến.'
-                  : 'Đang áp dụng bảng giá riêng cho tuyến đường này.'}
+                  ? t('luggageInheritOnDesc')
+                  : t('luggageInheritOffDesc')}
               </span>
             </div>
           )}
@@ -268,15 +277,15 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-foreground">
-              4 Gói quy chuẩn hành lý ký gửi kèm vé xe
+              {t('luggagePackagesSectionTitle')}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Kích thước chuẩn theo hầm xe khách. Khách hàng sẽ chọn các gói này khi đặt vé.
+              {t('luggagePackagesSectionDesc')}
             </p>
           </div>
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
             <CheckCircle2 className="size-3.5" />
-            Chuẩn hầm xe VexGo
+            {t('luggageVexGoStandard')}
           </span>
         </div>
 
@@ -292,18 +301,18 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   ≤ {activePricing.packageSMaxKg ?? 5}kg
                 </span>
               </div>
-              <CardTitle className="mt-2 text-sm font-bold">Gói Kiện Nhỏ (Size S)</CardTitle>
+              <CardTitle className="mt-2 text-sm font-bold">{t('packageSizeSTitle')}</CardTitle>
               <CardDescription className="text-xs">
-                Tối đa {activePricing.packageSMaxKg ?? 5}kg • Không quá 40×25×25cm
+                {t('packageSizeSDesc', { kg: activePricing.packageSMaxKg ?? 5 })}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="text-[11px] text-muted-foreground italic">
-                Gợi ý: Balo du lịch, túi quà nhỏ, hộp carton nhỏ
+                {t('packageSizeSTip')}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Giới hạn kg</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageKgLimit')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="number"
@@ -320,7 +329,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   </div>
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Mức cước</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageFee')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="text"
@@ -330,7 +339,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                       className="font-mono pr-7 font-semibold text-foreground h-9"
                     />
                     <span className="pointer-events-none absolute right-2.5 top-2 text-xs font-medium text-muted-foreground">
-                      đ
+                      ₫
                     </span>
                   </div>
                 </div>
@@ -349,18 +358,18 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   ≤ {activePricing.packageMMaxKg ?? 10}kg
                 </span>
               </div>
-              <CardTitle className="mt-2 text-sm font-bold">Gói Tiêu Chuẩn (Size M)</CardTitle>
+              <CardTitle className="mt-2 text-sm font-bold">{t('packageSizeMTitle')}</CardTitle>
               <CardDescription className="text-xs">
-                Tối đa {activePricing.packageMMaxKg ?? 10}kg • Không quá 50×40×25cm
+                {t('packageSizeMDesc', { kg: activePricing.packageMMaxKg ?? 10 })}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="text-[11px] text-muted-foreground italic">
-                Gợi ý: Vali cỡ vừa (20–24 inch), thùng trái cây vừa
+                {t('packageSizeMTip')}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Giới hạn kg</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageKgLimit')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="number"
@@ -377,7 +386,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   </div>
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Mức cước</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageFee')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="text"
@@ -387,7 +396,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                       className="font-mono pr-7 font-semibold text-foreground h-9"
                     />
                     <span className="pointer-events-none absolute right-2.5 top-2 text-xs font-medium text-muted-foreground">
-                      đ
+                      ₫
                     </span>
                   </div>
                 </div>
@@ -406,18 +415,18 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   ≤ {activePricing.packageLMaxKg ?? 20}kg
                 </span>
               </div>
-              <CardTitle className="mt-2 text-sm font-bold">Gói Kiện Lớn (Size L)</CardTitle>
+              <CardTitle className="mt-2 text-sm font-bold">{t('packageSizeLTitle')}</CardTitle>
               <CardDescription className="text-xs">
-                Tối đa {activePricing.packageLMaxKg ?? 20}kg • Không quá 60×40×40cm
+                {t('packageSizeLDesc', { kg: activePricing.packageLMaxKg ?? 20 })}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="text-[11px] text-muted-foreground italic">
-                Gợi ý: Vali đại (28 inch), thùng xốp lớn, kiện nặng
+                {t('packageSizeLTip')}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Giới hạn kg</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageKgLimit')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="number"
@@ -434,7 +443,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   </div>
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Mức cước</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageFee')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="text"
@@ -444,7 +453,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                       className="font-mono pr-7 font-semibold text-foreground h-9"
                     />
                     <span className="pointer-events-none absolute right-2.5 top-2 text-xs font-medium text-muted-foreground">
-                      đ
+                      ₫
                     </span>
                   </div>
                 </div>
@@ -463,18 +472,18 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   ≤ {activePricing.packageXLMaxKg ?? 35}kg
                 </span>
               </div>
-              <CardTitle className="mt-2 text-sm font-bold">Gói Cồng Kềnh (Size XL)</CardTitle>
+              <CardTitle className="mt-2 text-sm font-bold">{t('packageSizeXLTitle')}</CardTitle>
               <CardDescription className="text-xs">
-                Tối đa {activePricing.packageXLMaxKg ?? 35}kg • Không quá 80×50×40cm
+                {t('packageSizeXLDesc', { kg: activePricing.packageXLMaxKg ?? 35 })}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="text-[11px] text-muted-foreground italic">
-                Gợi ý: Thùng hải sản/trái cây lớn, kiện cồng kềnh
+                {t('packageSizeXLTip')}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Giới hạn kg</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageKgLimit')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="number"
@@ -491,7 +500,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   </div>
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-foreground">Mức cước</label>
+                  <label className="text-[12px] font-semibold text-foreground">{t('packageFee')}</label>
                   <div className="relative mt-1">
                     <Input
                       type="text"
@@ -501,7 +510,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                       className="font-mono pr-7 font-semibold text-foreground h-9"
                     />
                     <span className="pointer-events-none absolute right-2.5 top-2 text-xs font-medium text-muted-foreground">
-                      đ
+                      ₫
                     </span>
                   </div>
                 </div>
@@ -513,7 +522,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
 
       {/* Vehicles & Surcharges Section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Phương tiện đi kèm */}
+        {/* Accompanying Vehicles */}
         <Card className={isInheriting ? 'opacity-85' : ''}>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -521,16 +530,16 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                 <Bike className="size-4" />
               </span>
               <CardTitle className="text-sm font-bold">
-                Cước vận chuyển phương tiện kèm theo
+                {t('vehicleSectionTitle')}
               </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Mức cước ký gửi xe máy và xe đạp của hành khách khi đi xe.
+              {t('vehicleSectionDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3.5">
             <div className="grid grid-cols-2 items-center gap-3">
-              <span className="text-xs font-medium text-foreground">Xe số thông thường:</span>
+              <span className="text-xs font-medium text-foreground">{t('vehicleManualBike')}</span>
               <div className="relative">
                 <Input
                   type="text"
@@ -540,13 +549,13 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   className="font-mono pr-8 text-right font-medium text-xs h-8"
                 />
                 <span className="pointer-events-none absolute right-2.5 top-2 text-xs text-muted-foreground">
-                  đ
+                  ₫
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 items-center gap-3">
-              <span className="text-xs font-medium text-foreground">Xe tay ga (Lead, AirBlade...):</span>
+              <span className="text-xs font-medium text-foreground">{t('vehicleScooter')}</span>
               <div className="relative">
                 <Input
                   type="text"
@@ -556,13 +565,13 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   className="font-mono pr-8 text-right font-medium text-xs h-8"
                 />
                 <span className="pointer-events-none absolute right-2.5 top-2 text-xs text-muted-foreground">
-                  đ
+                  ₫
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 items-center gap-3">
-              <span className="text-xs font-medium text-foreground">Xe tay ga lớn / Moto (SH, Côn tay):</span>
+              <span className="text-xs font-medium text-foreground">{t('vehicleBigScooter')}</span>
               <div className="relative">
                 <Input
                   type="text"
@@ -572,13 +581,13 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   className="font-mono pr-8 text-right font-medium text-xs h-8"
                 />
                 <span className="pointer-events-none absolute right-2.5 top-2 text-xs text-muted-foreground">
-                  đ
+                  ₫
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 items-center gap-3">
-              <span className="text-xs font-medium text-foreground">Xe đạp các loại:</span>
+              <span className="text-xs font-medium text-foreground">{t('vehicleBicycle')}</span>
               <div className="relative">
                 <Input
                   type="text"
@@ -588,14 +597,14 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   className="font-mono pr-8 text-right font-medium text-xs h-8"
                 />
                 <span className="pointer-events-none absolute right-2.5 top-2 text-xs text-muted-foreground">
-                  đ
+                  ₫
                 </span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Phụ phí & Quy chuẩn miễn cước */}
+        {/* Surcharges & Free Carry-On Allowance */}
         <Card className={isInheriting ? 'opacity-85' : ''}>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -603,16 +612,16 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                 <ShieldCheck className="size-4" />
               </span>
               <CardTitle className="text-sm font-bold">
-                Phụ phí dịch vụ bảo quản &amp; Miễn cước xách tay
+                {t('surchargeSectionTitle')}
               </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Quy định phụ phí dịch vụ bảo quản đặc biệt (Dễ vỡ, Giá trị cao khi gửi hàng bưu kiện) và định mức hành lý xách tay miễn phí khi đi xe.
+              {t('surchargeSectionDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3.5">
             <div className="grid grid-cols-2 items-center gap-3">
-              <span className="text-xs font-medium text-foreground">Phụ phí hàng dễ vỡ (yêu cầu chèn lót):</span>
+              <span className="text-xs font-medium text-foreground">{t('surchargeFragile')}</span>
               <div className="relative">
                 <Input
                   type="text"
@@ -622,13 +631,13 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   className="font-mono pr-8 text-right font-medium text-xs h-8"
                 />
                 <span className="pointer-events-none absolute right-2.5 top-2 text-xs text-muted-foreground">
-                  đ
+                  ₫
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 items-center gap-3">
-              <span className="text-xs font-medium text-foreground">Phụ phí hàng giá trị cao (bảo hiểm riêng):</span>
+              <span className="text-xs font-medium text-foreground">{t('surchargeHighValue')}</span>
               <div className="relative">
                 <Input
                   type="text"
@@ -638,13 +647,13 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
                   className="font-mono pr-8 text-right font-medium text-xs h-8"
                 />
                 <span className="pointer-events-none absolute right-2.5 top-2 text-xs text-muted-foreground">
-                  đ
+                  ₫
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 items-center gap-3">
-              <span className="text-xs font-medium text-foreground">Miễn cước hành lý xách tay:</span>
+              <span className="text-xs font-medium text-foreground">{t('freeCarryOnLimit')}</span>
               <div className="relative">
                 <Input
                   type="number"
@@ -660,7 +669,9 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
             </div>
 
             <div className="rounded-md bg-muted/50 p-2.5 text-[11px] text-muted-foreground">
-              💡 <strong>Lưu ý:</strong> Hành lý xách tay dưới định mức này khách hàng được mang lên khoang ghế ngồi hoàn toàn miễn phí.
+              {t.rich('freeCarryOnNotice', {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </div>
           </CardContent>
         </Card>
@@ -678,7 +689,7 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
               className="text-xs"
             >
               <RotateCcw className="mr-1.5 size-3.5" />
-              {isDefaultScope ? 'Đặt lại mặc định sàn VexGo' : 'Hủy giá riêng của tuyến'}
+              {isDefaultScope ? t('btnResetDefault') : t('btnCancelRouteOverride')}
             </Button>
           </div>
 
@@ -694,12 +705,12 @@ export function LuggagePackagesManagement({ canUpdate = true }: LuggagePackagesM
               {saving ? (
                 <>
                   <div className="mr-1.5 size-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Đang lưu...
+                  {t('btnSubmitting')}
                 </>
               ) : (
                 <>
                   <Save className="mr-1.5 size-3.5" />
-                  {isDefaultScope ? 'Lưu cấu hình mặc định tất cả tuyến' : 'Lưu mức cước riêng cho tuyến'}
+                  {isDefaultScope ? t('btnSaveDefaultScope') : t('btnSaveRouteScope')}
                 </>
               )}
             </Button>

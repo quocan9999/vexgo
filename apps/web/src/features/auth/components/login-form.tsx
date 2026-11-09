@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuthSession } from '../auth-session';
@@ -14,12 +15,15 @@ import { sanitizeLoginRedirect } from '../services/login-redirect';
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('auth.login');
+  const locale = useLocale();
   const { signIn, isAuthenticated, isHydrated } = useAuthSession();
   const nextParam = searchParams.get('next') || searchParams.get('redirect');
   const nextUrl = sanitizeLoginRedirect(nextParam);
+  const basePath = `/${locale}`;
   const forgotPasswordHref = nextParam
-    ? `/forgot-password?next=${encodeURIComponent(nextParam)}`
-    : '/forgot-password';
+    ? `${basePath}/forgot-password?next=${encodeURIComponent(nextParam)}`
+    : `${basePath}/forgot-password`;
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -49,15 +53,15 @@ export function LoginForm() {
     const isVietnamesePhone = /^(0|84)(3|5|7|8|9)\d{8}$/.test(cleanedPhone);
 
     if (!phone.trim()) {
-      setPhoneError('Vui lòng nhập số điện thoại');
+      setPhoneError(t('phoneRequired'));
       hasError = true;
     } else if (!isVietnamesePhone) {
-      setPhoneError('Số điện thoại không hợp lệ');
+      setPhoneError(t('phoneInvalid'));
       hasError = true;
     }
 
     if (!password.trim()) {
-      setPasswordError('Vui lòng nhập mật khẩu');
+      setPasswordError(t('passwordRequired'));
       hasError = true;
     }
     if (hasError) return;
@@ -76,7 +80,7 @@ export function LoginForm() {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+        setErrorMsg(t('connectionError'));
       }
     } finally {
       setIsLoading(false);
@@ -92,9 +96,9 @@ export function LoginForm() {
       )}
 
       <Input
-        label="Số điện thoại"
+        label={t('phoneLabel')}
         type="tel"
-        placeholder="Nhập số điện thoại..."
+        placeholder={t('phonePlaceholder')}
         value={phone}
         error={phoneError}
         onChange={(e) => {
@@ -107,9 +111,9 @@ export function LoginForm() {
 
       <div className="space-y-1">
         <Input
-          label="Mật khẩu"
+          label={t('passwordLabel')}
           type={showPassword ? 'text' : 'password'}
-          placeholder="Nhập mật khẩu..."
+          placeholder={t('passwordPlaceholder')}
           value={password}
           error={passwordError}
           onChange={(e) => {
@@ -137,7 +141,7 @@ export function LoginForm() {
             href={forgotPasswordHref}
             className="text-sm font-semibold text-emerald-600 hover:text-emerald-900 transition-colors"
           >
-            Quên mật khẩu?
+            {t('forgotPassword')}
           </Link>
         </div>
       </div>
@@ -150,7 +154,7 @@ export function LoginForm() {
         isLoading={isLoading}
         leftIcon={<LogIn className="w-5 h-5" />}
       >
-        Đăng nhập
+        {t('loginButton')}
       </Button>
     </form>
   );

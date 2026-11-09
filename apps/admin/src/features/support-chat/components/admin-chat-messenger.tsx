@@ -34,6 +34,7 @@ import {
   type AdminSession,
 } from '@/features/admin-auth/services/admin-auth';
 import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
+import { useTranslations } from 'next-intl';
 import { adminSupportChatApi } from '../services/admin-support-chat.api';
 import { useAdminChatSocket } from '../hooks/use-admin-chat-socket';
 import { AdminSupportConversation, AdminSupportMessage } from '../types';
@@ -153,6 +154,7 @@ export function SupportChatMessageText({
 }
 
 export function AdminChatMessenger({ session }: { session: AdminSession }) {
+  const tChat = useTranslations('supportChat');
   const token = getAdminAccessToken();
   const canManageChat = hasAdminPermission(session, 'chat:manage');
 
@@ -229,7 +231,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     scrollToBottom();
   }, [messageSequence, scrollToBottom]);
 
-  // Debounce search query (400ms) để tìm kiếm server-side có tenant scope (F-06)
+  // Debounce search query (400ms) for server-side search with tenant scope (F-06)
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
@@ -239,7 +241,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Tải trang 1 danh sách cuộc trò chuyện theo filter/search
+  // Load page 1 of conversations by filter/search
   useEffect(() => {
     if (!token) return;
     let active = true;
@@ -266,7 +268,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         setErrorMessage(
           err instanceof Error
             ? err.message
-            : 'Không thể tải danh sách cuộc trò chuyện.',
+            : tChat('cannotLoadConversations'),
         );
       })
       .finally(() => {
@@ -278,7 +280,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     };
   }, [token, activeTab, debouncedSearch, refreshTrigger]);
 
-  // Tải thêm cuộc trò chuyện (Load more pagination - F-06)
+  // Load more conversations pagination
   const handleLoadMore = async () => {
     if (!token || loadingMore || page >= totalPages) return;
     setLoadingMore(true);
@@ -308,7 +310,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       setErrorMessage(
         err instanceof Error
           ? err.message
-          : 'Không thể tải thêm cuộc trò chuyện.',
+          : tChat('cannotLoadMoreConversations'),
       );
     } finally {
       setLoadingMore(false);
@@ -471,7 +473,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     };
   }, [messages, selectedConvId, token, loadingMessages, documentVisible]);
 
-  // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện (chỉ fetch khi selectedConvId thay đổi - F-NEW-02 & F-NEW-03)
+  // Load message history when selecting a conversation (only fetch when selectedConvId changes - F-NEW-02 & F-NEW-03)
   useEffect(() => {
     if (!selectedConvId || !token) return;
 
@@ -516,7 +518,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
           );
         }
 
-        // Chống ghi đè tin nhắn realtime đã nhận trong lúc fetch đang in-flight (F-NEW-03)
+        // Prevent overwriting realtime messages received while fetch was in-flight
         setMessages((prev) =>
           reconcileAdminMessages(
             prev.filter((message) => message.cuocTroChuyenId === targetConvId),
@@ -529,7 +531,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
           setErrorMessage(
             err instanceof Error
               ? err.message
-              : 'Không thể tải tin nhắn cuộc trò chuyện.',
+              : tChat('cannotLoadMessages'),
           );
         }
       })
@@ -544,7 +546,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     };
   }, [selectedConvId, token]);
 
-  // Tải tin nhắn cũ hơn (Load older messages - F-NEW-04)
+  // Load older messages
   const handleLoadOlderMessages = async () => {
     if (!selectedConvId || !token || loadingOlderMessages || !hasOlderMessages)
       return;
@@ -581,7 +583,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         setErrorMessage(
           err instanceof Error
             ? err.message
-            : 'Không thể tải thêm tin nhắn cũ.',
+            : tChat('cannotLoadOlderMessages'),
         );
       }
     } finally {
@@ -591,7 +593,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     }
   };
 
-  // Đồng bộ lại khi Socket reconnect (F-NEW-01, F-NEW-02, F-NEW-04)
+  // Resync when Socket reconnects (F-NEW-01, F-NEW-02, F-NEW-04)
   const handleReconnected = useCallback(async () => {
     setRefreshTrigger((k) => k + 1);
 
@@ -670,12 +672,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     } catch (err) {
       if (current()) {
         console.warn('[AdminChat] Reconnect sync error:', err);
-        setErrorMessage('Chưa đồng bộ đủ tin nhắn. Vui lòng thử kết nối lại.');
+        setErrorMessage(tChat('syncMessagesIncompleteNotice'));
       }
     }
   }, [selectedConvId, token, setHasOlderMessages, setErrorMessage]);
 
-  // Callback khi có tin nhắn mới từ WebSocket
+  // Callback when new message arrives via WebSocket
   const handleNewMessage = useCallback((newMsg: AdminSupportMessage) => {
     if (
       !conversationsRef.current.some(
@@ -688,7 +690,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     const isCurrentlyOpen =
       selectedConvIdRef.current === newMsg.cuocTroChuyenId;
 
-    // 1. Cập nhật tin nhắn trong khung chat hiện tại nếu trùng cuocTroChuyenId
+    // 1. Update message in current chat viewport if matched cuocTroChuyenId
     if (isCurrentlyOpen) {
       const msgWithStatus: AdminSupportMessage = {
         ...newMsg,
@@ -716,7 +718,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       });
     }
 
-    // 2. Cập nhật preview tin nhắn cuối trong danh sách cuộc trò chuyện
+    // 2. Update preview of last message in conversation list
     setConversations((prev) =>
       prev.map((c) => {
         if (c.cuocTroChuyenId === newMsg.cuocTroChuyenId) {
@@ -737,7 +739,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     );
   }, []);
 
-  // Callback khi có nhân viên tiếp nhận
+  // Callback when staff claims conversation
   const handleConversationClaimed = useCallback(
     (claimedConv: AdminSupportConversation) => {
       setConversations((prev) =>
@@ -756,7 +758,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     [],
   );
 
-  // Callback khi cuộc trò chuyện kết thúc
+  // Callback when conversation is closed
   const handleConversationClosed = useCallback(
     (closedConv: AdminSupportConversation) => {
       setConversations((prev) =>
@@ -775,7 +777,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     [],
   );
 
-  // Callback khi nhận read receipt từ socket
+  // Callback when read receipt arrives from socket
   const handleMessagesReadReceipt = useCallback(
     (payload: {
       cuocTroChuyenId: number;
@@ -807,7 +809,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     [session.accountId],
   );
 
-  // Hook WebSocket kết nối namespace /chat
+  // WebSocket hook connecting to namespace /chat
   const {
     isConnected: socketConnected,
     customerTyping,
@@ -826,7 +828,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     onReconnected: handleReconnected,
   });
 
-  // Tiếp nhận cuộc trò chuyện (Claim)
+  // Claim conversation
   const handleClaim = async () => {
     if (!selectedConv || !token || actionLoading) return;
     setActionLoading(true);
@@ -850,19 +852,19 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         );
         handleConversationClaimed(restConv);
       }
-      toast.success('Đã tiếp nhận cuộc trò chuyện.');
+      toast.success(tChat('conversationClaimedSuccess'));
     } catch (err: unknown) {
       toast.error(
         err instanceof Error
           ? err.message
-          : 'Không thể tiếp nhận cuộc trò chuyện.',
+          : tChat('cannotClaimConversation'),
       );
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Đóng cuộc trò chuyện (Close)
+  // Close conversation
   const handleClose = async () => {
     if (!selectedConv || !token || actionLoading) return;
 
@@ -874,7 +876,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       if (socketConnected) {
         const socketRes = await closeSocketConversation(
           selectedConv.cuocTroChuyenId,
-          'Nhân viên CSKH kết thúc hỗ trợ',
+          tChat('staffCloseReason'),
         );
         if (socketRes.success && socketRes.data) {
           closed = true;
@@ -885,24 +887,24 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         const restConv = await adminSupportChatApi.closeConversation(
           selectedConv.cuocTroChuyenId,
           token,
-          'Nhân viên CSKH kết thúc hỗ trợ',
+          tChat('staffCloseReason'),
         );
         handleConversationClosed(restConv);
       }
       setCloseOpen(false);
-      toast.success('Đã kết thúc cuộc trò chuyện.');
+      toast.success(tChat('conversationClosedSuccess'));
     } catch (err: unknown) {
       toast.error(
         err instanceof Error
           ? err.message
-          : 'Không thể kết thúc cuộc trò chuyện.',
+          : tChat('cannotCloseConversation'),
       );
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Gửi tin nhắn phản hồi (F-03 timeout resilience & F-04 delivery states)
+  // Send reply message (F-03 timeout resilience & F-04 delivery states)
   const handleSendMessage = async () => {
     if (!selectedConv || !inputValue.trim() || !token || sending) return;
 
@@ -913,7 +915,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     setSending(true);
     setErrorMessage(null);
 
-    // Optimistic message với deliveryStatus = DANG_GUI
+    // Optimistic message with deliveryStatus = DANG_GUI
     const tempMsg: AdminSupportMessage = {
       tinNhanId: tempId,
       cuocTroChuyenId: selectedConv.cuocTroChuyenId,
@@ -935,7 +937,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
     try {
       let sentSuccess = false;
-      // 1. Gửi qua socket (có timeout 5000ms - F-03)
+      // 1. Send via socket (5000ms timeout - F-03)
       if (socketConnected) {
         const socketRes = await sendSocketMessage(
           selectedConv.cuocTroChuyenId,
@@ -948,7 +950,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         }
       }
 
-      // 2. Fallback REST nếu socket timeout/lỗi (BẮT BUỘC dùng lại cùng clientMsgId để backend deduplicate)
+      // 2. Fallback REST if socket timeouts/fails (MUST reuse clientMsgId for backend deduplication)
       if (!sentSuccess) {
         const restMsg = await adminSupportChatApi.sendMessage(
           selectedConv.cuocTroChuyenId,
@@ -959,7 +961,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         handleNewMessage({ ...restMsg, deliveryStatus: 'DA_GUI' });
       }
     } catch (err: unknown) {
-      // Đánh dấu tin nhắn là thất bại để nhân viên có thể bấm Thử lại (F-04)
+      // Mark message as failed so staff can retry
       setMessages((prev) =>
         prev.map((m) =>
           m.clientMessageId === clientMsgId
@@ -970,15 +972,14 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       toast.error(
         err instanceof Error
           ? err.message
-          : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.',
+          : tChat('cannotSendMessage'),
       );
     } finally {
-      // Luôn luôn giải phóng sending để input không bao giờ bị khóa vô hạn (F-03)
       setSending(false);
     }
   };
 
-  // Thử lại tin nhắn đã gửi thất bại (F-04)
+  // Retry sending failed message
   const handleRetryMessage = async (failedMsg: AdminSupportMessage) => {
     if (!selectedConv || !token || sending) return;
 
@@ -1029,7 +1030,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         ),
       );
       toast.error(
-        err instanceof Error ? err.message : 'Gửi lại tin nhắn thất bại.',
+        err instanceof Error ? err.message : tChat('cannotResendMessage'),
       );
     } finally {
       setSending(false);
@@ -1058,20 +1059,20 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       )}
       <div className={styles.workspace}>
         <aside
-          aria-label="Hộp thư hỗ trợ"
+          aria-label={tChat('supportMailboxAria')}
           className={`${styles.inbox} ${selectedConv ? 'hidden md:flex' : 'flex'}`}
         >
           <div className="shrink-0 space-y-4 border-b bg-card p-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-base font-semibold">
                 <MessageSquare aria-hidden className="size-4 text-primary" />
-                Hộp thư <Badge variant="secondary">{totalItems}</Badge>
+                {tChat('inbox')} <Badge variant="secondary">{totalItems}</Badge>
               </h2>
               <Button
                 variant="ghost"
                 size="icon"
                 disabled={loadingConversations}
-                aria-label="Làm mới danh sách"
+                aria-label={tChat('refreshListAria')}
                 onClick={() => {
                   setLoadingConversations(true);
                   setRefreshTrigger((k) => k + 1);
@@ -1088,19 +1089,19 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               </Button>
             </div>
             <SearchInput
-              label="Tìm cuộc trò chuyện"
-              placeholder="Tên khách hàng, số điện thoại…"
+              label={tChat('searchConversations')}
+              placeholder={tChat('searchPlaceholder')}
               value={searchQuery}
               onChange={setSearchQuery}
             />
             <SelectFilter
-              label="Trạng thái hội thoại"
-              allLabel="Tất cả hội thoại"
+              label={tChat('statusFilterLabel')}
+              allLabel={tChat('allConversations')}
               value={activeTab === 'ALL' ? '' : activeTab}
               options={[
-                { value: 'CHO_TIEP_NHAN', label: 'Chờ tiếp nhận' },
-                { value: 'DANG_XU_LY', label: 'Đang xử lý' },
-                { value: 'DA_DONG', label: 'Đã đóng' },
+                { value: 'CHO_TIEP_NHAN', label: tChat('tabPending') },
+                { value: 'DANG_XU_LY', label: tChat('tabProcessing') },
+                { value: 'DA_DONG', label: tChat('tabClosed') },
               ]}
               onChange={(value) => setActiveTab((value || 'ALL') as FilterTab)}
             />
@@ -1110,9 +1111,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             aria-busy={loadingConversations}
           >
             {loadingConversations ? (
-              <ResourceState loading>Đang tải cuộc trò chuyện…</ResourceState>
+              <ResourceState loading>{tChat('loadingOlderMessages')}</ResourceState>
             ) : conversations.length === 0 ? (
-              <ResourceState>Không có cuộc trò chuyện phù hợp.</ResourceState>
+              <ResourceState>{tChat('emptyConversations')}</ResourceState>
             ) : (
               <ul className="space-y-2 p-3">
                 {conversations.map((c) => {
@@ -1153,7 +1154,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             {unread && (
                               <Badge
                                 data-testid="unread-badge"
-                                aria-label={`${c.soTinChuaDoc} tin chưa đọc`}
+                                aria-label={tChat('unreadCountAria', { count: c.soTinChuaDoc ?? 0 })}
                               >
                                 {c.soTinChuaDoc}
                               </Badge>
@@ -1163,7 +1164,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             {c.khachHang.taiKhoan.soDienThoai}
                           </span>
                           <span className="line-clamp-2 text-[13px] text-muted-foreground">
-                            {c.tinNhanCuoi?.noiDung || 'Cuộc trò chuyện mới'}
+                            {c.tinNhanCuoi?.noiDung || tChat('newConversation')}
                           </span>
                           <span className="flex flex-wrap items-center justify-between gap-2">
                             <ResourceStatusBadge
@@ -1176,10 +1177,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                               }
                             >
                               {c.trangThai === 'CHO_TIEP_NHAN'
-                                ? 'Chờ tiếp nhận'
+                                ? tChat('tabPending')
                                 : c.trangThai === 'DANG_XU_LY'
-                                  ? 'Đang xử lý'
-                                  : 'Đã đóng'}
+                                  ? tChat('tabProcessing')
+                                  : tChat('tabClosed')}
                             </ResourceStatusBadge>
                             <time
                               className="text-xs text-muted-foreground"
@@ -1212,22 +1213,22 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   {loadingMore && (
                     <Loader2 aria-hidden className="motion-safe:animate-spin" />
                   )}
-                  {loadingMore ? 'Đang tải…' : 'Tải thêm hội thoại'}
+                  {loadingMore ? tChat('loadingOlderMessages') : tChat('loadMore')}
                 </Button>
               </div>
             )}
           </div>
         </aside>
         <section
-          aria-label="Nội dung hội thoại"
+          aria-label={tChat('conversationContentAria')}
           className={`${styles.detail} ${selectedConv ? 'flex' : 'hidden md:flex'}`}
         >
           <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 text-xs text-muted-foreground">
-            <span>Hỗ trợ khách hàng</span>
+            <span>{tChat('supportChatTitle')}</span>
             <ResourceStatusBadge tone={socketConnected ? 'active' : 'muted'}>
               {socketConnected
-                ? 'Đã kết nối realtime'
-                : 'Chưa kết nối realtime'}
+                ? tChat('realtimeConnected')
+                : tChat('realtimeDisconnected')}
             </ResourceStatusBadge>
           </div>
           {!selectedConv ? (
@@ -1237,10 +1238,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   aria-hidden
                   className="mx-auto size-10 text-primary/60"
                 />
-                <h2 className="text-lg font-semibold">Chọn cuộc trò chuyện</h2>
+                <h2 className="text-lg font-semibold">{tChat('noConversationSelected')}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Chọn khách hàng trong hộp thư để xem nội dung và phản hồi hỗ
-                  trợ.
+                  {tChat('selectConversationPrompt')}
                 </p>
               </div>
             </div>
@@ -1252,7 +1252,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     className="md:hidden"
                     size="icon"
                     variant="ghost"
-                    aria-label="Quay lại danh sách"
+                    aria-label={tChat('backToListAria')}
                     onClick={() => setSelectedConv(null)}
                   >
                     <ArrowLeft aria-hidden />
@@ -1272,12 +1272,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       className="truncate text-xs text-muted-foreground"
                       title={
                         selectedConv.nhanVien?.taiKhoan.hoTen ||
-                        'Chưa tiếp nhận'
+                        tChat('unassigned')
                       }
                     >
-                      Người xử lý:{' '}
+                      {tChat('handler')}{' '}
                       {selectedConv.nhanVien?.taiKhoan.hoTen ||
-                        'Chưa tiếp nhận'}
+                        tChat('unassigned')}
                     </p>
                     <p className="admin-data-mono hidden break-all text-xs text-muted-foreground sm:block">
                       {selectedConv.maCuocTroChuyen}
@@ -1293,19 +1293,19 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                           className="motion-safe:animate-spin"
                         />
                       )}
-                      Tiếp nhận hỗ trợ
+                      {tChat('takeConversation')}
                     </Button>
                   )}
                   {!isClosed && canManageChat && (
                     <Button
                       disabled={actionLoading}
                       variant="outline"
-                      aria-label="Kết thúc"
+                      aria-label={tChat('endConversation')}
                       className="w-11 px-0 sm:w-auto sm:px-4"
                       onClick={() => setCloseOpen(true)}
                     >
                       <XCircle aria-hidden />
-                      <span className="hidden sm:inline">Kết thúc</span>
+                      <span className="hidden sm:inline">{tChat('endConversation')}</span>
                     </Button>
                   )}
                 </div>
@@ -1314,12 +1314,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 ref={transcriptRef}
                 data-testid="admin-chat-transcript"
                 className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50/60 dark:bg-slate-950/40 p-4 sm:p-5"
-                aria-label="Lịch sử tin nhắn"
+                aria-label={tChat('messageHistoryAria')}
                 aria-busy={loadingMessages}
               >
                 {loadingMessages ? (
                   <ResourceState loading>
-                    Đang tải lịch sử tin nhắn…
+                    {tChat('loadingOlderMessages')}
                   </ResourceState>
                 ) : (
                   <>
@@ -1337,8 +1337,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             />
                           )}
                           {loadingOlderMessages
-                            ? 'Đang tải…'
-                            : 'Tải tin nhắn cũ hơn'}
+                            ? tChat('loadingOlderMessages')
+                            : tChat('loadOlderMessages')}
                         </Button>
                       </div>
                     )}
@@ -1375,8 +1375,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                           >
                             <p className="text-xs text-muted-foreground">
                               {staff
-                                ? msg.taiKhoanGui?.hoTen || 'Nhân viên'
-                                : 'Khách hàng'}{' '}
+                                ? msg.taiKhoanGui?.hoTen || tChat('senderStaff')
+                                : tChat('senderCustomer')}{' '}
                               ·{' '}
                               <time dateTime={msg.createdAt}>
                                 {new Date(msg.createdAt).toLocaleTimeString(
@@ -1414,12 +1414,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             {pending ? (
                               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Clock aria-hidden className="size-3" />
-                                Đang gửi
+                                {tChat('sendingStatus')}
                               </span>
                             ) : failed ? (
                               <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
                                 <AlertCircle aria-hidden className="size-3" />
-                                Gửi thất bại
+                                {tChat('failedToSend')}
                                 <Button
                                   size="sm"
                                   variant="link"
@@ -1427,14 +1427,14 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                                   onClick={() => handleRetryMessage(msg)}
                                 >
                                   <RotateCw aria-hidden />
-                                  Thử lại
+                                  {tChat('retryButton')}
                                 </Button>
                               </div>
                             ) : staff ? (
                               <span className="text-xs text-muted-foreground">
                                 {msg.trangThai === 'DA_DOC'
-                                  ? 'Đã đọc'
-                                  : 'Đã gửi'}
+                                  ? tChat('readStatus')
+                                  : tChat('sentStatus')}
                               </span>
                             ) : null}
                           </div>
@@ -1446,7 +1446,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         role="status"
                         className="text-xs italic text-muted-foreground"
                       >
-                        Khách hàng đang nhập…
+                        {tChat('customerTypingText')}
                       </p>
                     )}
                     <div ref={messagesEndRef} />
@@ -1456,15 +1456,15 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               <div className="shrink-0 border-t bg-card p-4">
                 {!canManageChat ? (
                   <ResourceNotice kind="info">
-                    Bạn đang xem hội thoại với quyền chỉ đọc.
+                    {tChat('readOnlyNotice')}
                   </ResourceNotice>
                 ) : isClosed ? (
                   <ResourceNotice kind="info">
-                    Cuộc trò chuyện đã kết thúc. Không thể gửi thêm tin nhắn.
+                    {tChat('closedNotice')}
                   </ResourceNotice>
                 ) : isPending ? (
                   <ResourceNotice kind="info">
-                    Tiếp nhận hỗ trợ để bắt đầu phản hồi khách hàng.
+                    {tChat('claimToReplyNotice')}
                   </ResourceNotice>
                 ) : (
                   <div className="space-y-2">
@@ -1472,7 +1472,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       htmlFor="support-chat-reply"
                       className="block text-[13px] font-semibold"
                     >
-                      Nội dung phản hồi
+                      {tChat('replyLabel')}
                     </label>
                     <div className="flex items-end gap-2">
                       <Input
@@ -1484,14 +1484,14 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                           !event.nativeEvent.isComposing &&
                           handleSendMessage()
                         }
-                        placeholder="Nhập tin nhắn…"
+                        placeholder={tChat('typeMessage')}
                         disabled={sending}
                         className="min-w-0 flex-1"
                       />
                       <Button
                         onClick={handleSendMessage}
                         disabled={!inputValue.trim() || sending}
-                        aria-label="Gửi tin nhắn"
+                        aria-label={tChat('sendMessage')}
                       >
                         {sending ? (
                           <Loader2
@@ -1501,7 +1501,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         ) : (
                           <Send aria-hidden />
                         )}
-                        <span className="hidden sm:inline">Gửi</span>
+                        <span className="hidden sm:inline">{tChat('sendMessage')}</span>
                       </Button>
                     </div>
                   </div>
@@ -1513,8 +1513,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       </div>
       {closeOpen && selectedConv && (
         <ResourceConfirmation
-          title="Kết thúc cuộc trò chuyện?"
-          description={`Kết thúc hỗ trợ ${selectedConv.khachHang.taiKhoan.hoTen}. Lịch sử tin nhắn vẫn được giữ lại.`}
+          title={tChat('confirmCloseTitle')}
+          description={tChat('confirmCloseDesc', { name: selectedConv.khachHang.taiKhoan.hoTen })}
           busy={actionLoading}
           onClose={() => setCloseOpen(false)}
         >
@@ -1526,7 +1526,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             {actionLoading && (
               <Loader2 aria-hidden className="motion-safe:animate-spin" />
             )}
-            Kết thúc hội thoại
+            {tChat('confirmCloseButton')}
           </Button>
         </ResourceConfirmation>
       )}

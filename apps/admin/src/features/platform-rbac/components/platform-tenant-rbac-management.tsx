@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -50,16 +52,20 @@ function hasSameKeys(left: readonly string[], right: readonly string[]): boolean
 function PermissionKeyList({
   emptyLabel,
   permissionKeys,
+  zeroPermissionsLabel,
+  listAriaLabel,
 }: {
   emptyLabel: string;
   permissionKeys: readonly string[] | null;
+  zeroPermissionsLabel?: string;
+  listAriaLabel?: string;
 }) {
   if (permissionKeys === null) return <p>{emptyLabel}</p>;
-  if (permissionKeys.length === 0) return <p>0 quyền</p>;
+  if (permissionKeys.length === 0) return <p>{zeroPermissionsLabel ?? '0 permissions'}</p>;
 
   return (
     <ul
-      aria-label="Danh sách mã quyền"
+      aria-label={listAriaLabel ?? 'Permission keys'}
       className="max-h-40 space-y-2 overflow-y-auto rounded-md text-xs focus-visible:outline-2 focus-visible:outline-ring"
       tabIndex={0}
     >
@@ -77,9 +83,11 @@ export function PlatformTenantRbacManagement({
 }: {
   nhaXeIdParam: string;
 }) {
+  const tRbac = useTranslations('rbac');
+  const tCommon = useTranslations('common');
   const nhaXeId = parseTenantId(nhaXeIdParam);
   const [tenantName, setTenantName] = useState(
-    nhaXeId ? 'Nhà xe' : 'Nhà xe không hợp lệ',
+    nhaXeId ? tCommon('busCompany') : tRbac('invalidCompanyId'),
   );
   const [tenantCode, setTenantCode] = useState(
     nhaXeId === null ? '' : String(nhaXeId),
@@ -90,7 +98,7 @@ export function PlatformTenantRbacManagement({
     useState<TenantRbacRoleName>('NHA_XE_ADMIN');
   const [loading, setLoading] = useState(nhaXeId !== null);
   const [loadError, setLoadError] = useState<string | null>(
-    nhaXeId === null ? 'Mã nhà xe không hợp lệ.' : null,
+    nhaXeId === null ? tRbac('invalidCompanyIdMessage') : null,
   );
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -123,7 +131,7 @@ export function PlatformTenantRbacManagement({
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setLoadError(getErrorMessage(error, 'Không thể tải cấu hình quyền.'));
+          setLoadError(getErrorMessage(error, tRbac('cannotLoadPermissions')));
         }
       })
       .finally(() => {
@@ -221,11 +229,11 @@ export function PlatformTenantRbacManagement({
       setConfirmation(null);
       toast.success(
         permissionKeys.length === 0
-          ? `Đã lưu override rỗng cho ${savedRole.roleName}.`
-          : `Đã lưu override cho ${savedRole.roleName}.`,
+          ? tRbac('overrideSavedEmpty', { role: savedRole.roleName })
+          : tRbac('overrideSaved', { role: savedRole.roleName }),
       );
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
+      toast.error(getErrorMessage(error, tRbac('cannotSavePermissions')));
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -245,11 +253,11 @@ export function PlatformTenantRbacManagement({
       updateConfigRole(restoredRole);
       setConfirmation(null);
       toast.success(
-        `Đã khôi phục quyền mặc định cho ${restoredRole.roleName}.`,
+        tRbac('restoreDefaultSuccess', { role: restoredRole.roleName }),
       );
     } catch (error) {
       toast.error(
-        getErrorMessage(error, 'Không thể khôi phục quyền mặc định.'),
+        getErrorMessage(error, tRbac('cannotRestoreDefault')),
       );
     } finally {
       savingRef.current = false;
@@ -272,9 +280,9 @@ export function PlatformTenantRbacManagement({
     <SuperAdminLayout
       activeSection="rbac"
       breadcrumbs={[
-        { label: 'Phân quyền nền tảng', href: '/rbac' },
-        { label: 'Nhà xe đối tác', href: '/rbac/tenants' },
-        { label: 'Cấu hình phân quyền' },
+        { label: tRbac('platformRbacBreadcrumb'), href: '/rbac' },
+        { label: tRbac('operatorBreadcrumb'), href: '/rbac/tenants' },
+        { label: tRbac('configBreadcrumb') },
       ]}
     >
       <div
@@ -282,8 +290,8 @@ export function PlatformTenantRbacManagement({
         className="admin-page-content admin-ui space-y-6"
       >
         <AdminPageHeader
-          eyebrow="QUẢN TRỊ NỀN TẢNG"
-          title="Phân quyền vai trò"
+          eyebrow={tRbac('eyebrowPlatform')}
+          title={tRbac('rbacTitle')}
           titleId="platform-tenant-rbac-title"
           actions={(
             <ResourceRefreshAction
@@ -305,23 +313,18 @@ export function PlatformTenantRbacManagement({
           href="/rbac/tenants"
         >
           <ArrowLeft aria-hidden="true" />
-          Chọn nhà xe khác
+          {tRbac('selectDifferentOperator')}
         </Link>
 
         <ResourceNotice kind="info">
-          Cấu hình chỉ áp dụng cho{' '}
-          <strong>
-            {tenantName}
-            {tenantCode && (
-              <> (<span className="admin-data-mono">{tenantCode}</span>)</>
-            )}
-          </strong>. Quyền mặc định toàn hệ thống và cấu hình nhà xe khác không
-          bị thay đổi.
+          {tRbac('operatorConfigScopeNotice', {
+            company: `${tenantName}${tenantCode ? ` (${tenantCode})` : ''}`,
+          })}
         </ResourceNotice>
 
         {loading && !config && (
           <Card>
-            <ResourceState loading>Đang tải cấu hình phân quyền…</ResourceState>
+            <ResourceState loading>{tRbac('loadingConfig')}</ResourceState>
           </Card>
         )}
 
@@ -330,13 +333,13 @@ export function PlatformTenantRbacManagement({
             <ResourceState error>
               <h2 className="text-base font-semibold">
                 {nhaXeId === null
-                  ? 'Mã nhà xe không hợp lệ'
-                  : 'Không thể tải cấu hình quyền'}
+                  ? tRbac('invalidCompanyId')
+                  : tRbac('cannotLoadPermissions')}
               </h2>
               <p>{loadError}</p>
               {nhaXeId !== null && (
                 <Button onClick={retryLoading} variant="outline">
-                  Thử tải lại
+                  {tCommon('retry')}
                 </Button>
               )}
             </ResourceState>
@@ -345,7 +348,7 @@ export function PlatformTenantRbacManagement({
 
         {config && loadError && (
           <ResourceNotice kind="error">
-            Không thể làm mới; đang giữ cấu hình đã tải trước đó. {loadError}
+            {tRbac('keepPreviousConfigNotice', { error: loadError })}
           </ResourceNotice>
         )}
 
@@ -359,18 +362,18 @@ export function PlatformTenantRbacManagement({
               radioName="platform-tenant-rbac-role"
               roles={config.roles}
               selectedRoleName={selectedRole.roleName}
-              title="Chọn vai trò cần cấu hình"
+              title={tRbac('selectRoleAriaTitle')}
               titleId="platform-tenant-rbac-roles-title"
             />
 
             <Card
               role="region"
-              aria-label="Trạng thái cấu hình quyền"
+              aria-label={tRbac('permissionConfigStatusAriaLabel')}
               className="min-w-0 gap-5 p-4 sm:p-5"
             >
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:break-all">
                 <div>
-                  <p className="eyebrow">PHẠM VI NHÀ XE</p>
+                  <p className="eyebrow">{tRbac('scopeOperator')}</p>
                   <h2 className="admin-data-mono">{selectedRole.roleName}</h2>
                 </div>
                 <Badge
@@ -379,40 +382,46 @@ export function PlatformTenantRbacManagement({
                   }
                 >
                   {selectedRole.source === 'global'
-                    ? 'Kế thừa mặc định'
-                    : 'Override riêng'}
+                    ? tRbac('inheritsDefault')
+                    : tRbac('operatorOverrides')}
                 </Badge>
               </div>
               <div className="grid min-w-0 gap-4 lg:grid-cols-3 [&>section]:min-w-0 [&>section]:space-y-3 [&>section]:rounded-lg [&>section]:border [&>section]:p-4 [&_h3]:text-[13px] [&_h3]:font-semibold [&_p]:text-xs [&_p]:text-muted-foreground">
                 <section aria-labelledby="platform-tenant-rbac-default-title">
                   <h3 id="platform-tenant-rbac-default-title">
-                    Quyền mặc định
+                    {tRbac('defaultPermissions')}
                   </h3>
                   <PermissionKeyList
-                    emptyLabel="Vai trò chưa có quyền mặc định."
+                    emptyLabel={tRbac('roleHasNoDefaultPermissions')}
                     permissionKeys={selectedRole.defaultPermissionKeys}
+                    zeroPermissionsLabel={tRbac('zeroPermissions')}
+                    listAriaLabel={tRbac('permissionListAriaLabel')}
                   />
                 </section>
                 <section aria-labelledby="platform-tenant-rbac-override-title">
                   <h3 id="platform-tenant-rbac-override-title">
-                    Override của nhà xe
+                    {tRbac('operatorOverrides')}
                   </h3>
                   {selectedRole.overridePermissionKeys === null ? (
-                    <p>Chưa cấu hình override</p>
+                    <p>{tRbac('noOverridesConfigured')}</p>
                   ) : (
                     <PermissionKeyList
                       emptyLabel=""
                       permissionKeys={selectedRole.overridePermissionKeys}
+                      zeroPermissionsLabel={tRbac('zeroPermissions')}
+                      listAriaLabel={tRbac('permissionListAriaLabel')}
                     />
                   )}
                 </section>
                 <section aria-labelledby="platform-tenant-rbac-effective-title">
                   <h3 id="platform-tenant-rbac-effective-title">
-                    Quyền đang áp dụng
+                    {tRbac('effectivePermissions')}
                   </h3>
                   <PermissionKeyList
-                    emptyLabel="Vai trò hiện không có quyền."
+                    emptyLabel={tRbac('roleHasNoEffectivePermissions')}
                     permissionKeys={selectedRole.effectivePermissionKeys}
+                    zeroPermissionsLabel={tRbac('zeroPermissions')}
+                    listAriaLabel={tRbac('permissionListAriaLabel')}
                   />
                 </section>
               </div>
@@ -427,8 +436,8 @@ export function PlatformTenantRbacManagement({
                     className="text-xs text-muted-foreground"
                   >
                     {isDirty
-                      ? `Có thay đổi chưa lưu cho ${selectedRole.roleName}.`
-                      : 'Cấu hình đã đồng bộ.'}
+                      ? tRbac('hasUnsavedChanges', { role: selectedRole.roleName })
+                      : tRbac('configSyncSaved')}
                   </p>
                   <div>
                     <Button
@@ -437,7 +446,7 @@ export function PlatformTenantRbacManagement({
                       variant="outline"
                     >
                       <RotateCcw aria-hidden="true" />
-                      Hoàn tác
+                      {tRbac('undo')}
                     </Button>
                     {selectedRole.source === 'override' && (
                       <Button
@@ -445,14 +454,14 @@ export function PlatformTenantRbacManagement({
                         onClick={() => setConfirmation('reset')}
                         variant="outline"
                       >
-                        Khôi phục mặc định
+                        {tRbac('resetToDefault')}
                       </Button>
                     )}
                     <Button
                       disabled={!isDirty || saving}
                       onClick={() => setConfirmation('save')}
                     >
-                      Lưu thay đổi
+                      {tRbac('saveChanges')}
                     </Button>
                   </div>
                 </div>
@@ -472,13 +481,19 @@ export function PlatformTenantRbacManagement({
           <ResourceConfirmation
             title={
               confirmation === 'save'
-                ? 'Xác nhận thay thế quyền tenant'
-                : 'Xác nhận khôi phục quyền mặc định'
+                ? tRbac('confirmReplaceTenantTitle')
+                : tRbac('confirmResetDefaultTitle')
             }
             description={
               confirmation === 'save'
-                ? `Bạn sắp thay thế toàn bộ quyền của vai trò ${selectedRole.roleName} trong ${tenantName}${tenantCode ? ` (${tenantCode})` : ''}. Thay đổi không ảnh hưởng nhà xe khác hoặc quyền mặc định toàn hệ thống.`
-                : `Cấu hình riêng của vai trò ${selectedRole.roleName} trong ${tenantName}${tenantCode ? ` (${tenantCode})` : ''} sẽ bị xóa để vai trò này kế thừa quyền mặc định toàn hệ thống.`
+                ? tRbac('confirmReplaceTenantDesc', {
+                    role: selectedRole.roleName,
+                    company: `${tenantName}${tenantCode ? ` (${tenantCode})` : ''}`,
+                  })
+                : tRbac('confirmResetDefaultDesc', {
+                    role: selectedRole.roleName,
+                    company: `${tenantName}${tenantCode ? ` (${tenantCode})` : ''}`,
+                  })
             }
             busy={saving}
             onClose={() => {
@@ -487,8 +502,7 @@ export function PlatformTenantRbacManagement({
           >
             {confirmation === 'save' && selectedDraft.length === 0 && (
               <ResourceNotice kind="info">
-                Vai trò sẽ có override rỗng, không nhận quyền nào trong nhà xe
-                này.
+                {tRbac('emptyOverrideWarning')}
               </ResourceNotice>
             )}
             <Button
@@ -501,10 +515,10 @@ export function PlatformTenantRbacManagement({
               }
             >
               {saving
-                ? 'Đang lưu…'
+                ? tRbac('saving')
                 : confirmation === 'save'
-                  ? 'Xác nhận lưu'
-                  : 'Xác nhận khôi phục'}
+                  ? tRbac('confirmSaveAction')
+                  : tRbac('confirmResetAction')}
             </Button>
           </ResourceConfirmation>
         )}

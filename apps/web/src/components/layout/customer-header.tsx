@@ -4,6 +4,7 @@
 import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   User,
   Bus,
@@ -23,10 +24,18 @@ import {
 import { useAuthSession } from '@/features/auth/auth-session';
 import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
 import { getLatestActivePaymentDraft } from '@/features/booking/services/payment-draft';
+import { CustomerLanguageSwitcher } from './customer-language-switcher';
 
 const emptySubscribe = () => () => {};
 const getClientSearch = () => (typeof window !== 'undefined' ? window.location.search : '');
 const getServerSearch = () => '';
+
+function stripLocale(pathname: string | null | undefined): string {
+  if (!pathname) return '/';
+  const match = pathname.match(/^\/(vi|en)(\/.*|$)/);
+  if (match) return match[2] || '/';
+  return pathname;
+}
 
 interface NavLinksNavProps {
   onItemClick?: () => void;
@@ -34,7 +43,9 @@ interface NavLinksNavProps {
 }
 
 const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => {
-  const pathname = usePathname();
+  const t = useTranslations('header');
+  const rawPathname = usePathname() || '/';
+  const pathname = stripLocale(rawPathname);
   const searchQuery = useSyncExternalStore(emptySubscribe, getClientSearch, getServerSearch);
   const [lookupOpen, setLookupOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -53,15 +64,15 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
   }, []);
 
   const navLinksBefore = [
-    { href: '/', label: 'Trang chủ' },
-    { href: '/shipments/new', label: 'Gửi hàng' },
-    { href: '/promotions', label: 'Khuyến mãi' },
-    { href: '/news', label: 'Tin tức' },
+    { href: '/', label: t('home') },
+    { href: '/shipments/new', label: t('shipment') },
+    { href: '/promotions', label: t('promotions') },
+    { href: '/news', label: t('news') },
   ];
 
   const navLinksAfter = [
-    { href: '/cancel-ticket', label: 'Hủy vé' },
-    { href: '/contact', label: 'Liên hệ' },
+    { href: '/cancel-ticket', label: t('cancelTicket') },
+    { href: '/contact', label: t('contact') },
   ];
 
   const checkIsActive = (href: string) => {
@@ -103,7 +114,7 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
         {/* Tra cứu section for mobile */}
         <div className="pt-2 pb-1 border-y border-white/10 my-2 space-y-1">
           <div className="px-3 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-white/50">
-            Tra cứu thông tin
+            {t('lookupInfo')}
           </div>
           <Link
             href="/tickets/lookup"
@@ -116,7 +127,7 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
             }`}
           >
             <Ticket className="w-4 h-4 text-sky-400" />
-            <span>Tra cứu vé xe</span>
+            <span>{t('lookupTicket')}</span>
           </Link>
           <Link
             href="/send-freight?tab=lookup"
@@ -129,7 +140,7 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
             }`}
           >
             <Package className="w-4 h-4 text-orange-400" />
-            <span>Tra cứu đơn gửi hàng</span>
+            <span>{t('lookupShipment')}</span>
           </Link>
         </div>
 
@@ -190,7 +201,7 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
           }`}
           aria-expanded={lookupOpen}
         >
-          <span>Tra cứu</span>
+          <span>{t('lookup')}</span>
           <ChevronDown
             className={`w-3.5 h-3.5 transition-transform duration-200 ${
               lookupOpen ? 'rotate-180' : ''
@@ -214,10 +225,10 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
                 </div>
                 <div className="flex flex-col text-left">
                   <span className="text-sm font-bold text-slate-900 group-hover:text-[#0060c4] transition-colors">
-                    Tra cứu vé xe
+                    {t('lookupTicket')}
                   </span>
                   <span className="text-[11px] text-slate-500 font-normal">
-                    Kiểm tra vé, giờ đón & số ghế
+                    {t('lookupTicketDesc')}
                   </span>
                 </div>
               </Link>
@@ -235,10 +246,10 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
                 </div>
                 <div className="flex flex-col text-left">
                   <span className="text-sm font-bold text-slate-900 group-hover:text-[#FF7D42] transition-colors">
-                    Tra cứu đơn gửi hàng
+                    {t('lookupShipment')}
                   </span>
                   <span className="text-[11px] text-slate-500 font-normal">
-                    Theo dõi hành trình bưu kiện
+                    {t('lookupShipmentDesc')}
                   </span>
                 </div>
               </Link>
@@ -268,8 +279,11 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
 };
 
 export const CustomerHeader: React.FC = () => {
+  const t = useTranslations('header');
+  const locale = useLocale();
   const router = useRouter();
-  const pathname = usePathname();
+  const rawPathname = usePathname() || '/';
+  const pathname = stripLocale(rawPathname);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [dismissedDraftId, setDismissedDraftId] = useState<string | null>(null);
@@ -371,10 +385,7 @@ export const CustomerHeader: React.FC = () => {
         {/* Nút bên phải */}
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           {/* Nút chuyển đổi ngôn ngữ */}
-          <button className="hidden sm:flex items-center gap-1.5 p-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 transition-all text-sm font-semibold text-slate-100 px-3 cursor-pointer">
-            <Globe className="w-4 h-4 text-slate-200" />
-            VI
-          </button>
+          <CustomerLanguageSwitcher className="hidden sm:inline-block" />
           {user ? (
             /* User Avatar Dropdown */
             <div ref={userDropdownRef} className="relative">
@@ -408,7 +419,7 @@ export const CustomerHeader: React.FC = () => {
                       <div className="w-9 h-9 rounded-full bg-amber-400 flex items-center justify-center shrink-0">
                         <Award className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-bold text-slate-700 group-hover:text-amber-600 transition-colors">Hạng thành viên</span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-amber-600 transition-colors">{t('membershipTier')}</span>
                     </Link>
 
                     <Link
@@ -418,7 +429,7 @@ export const CustomerHeader: React.FC = () => {
                       <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center shrink-0">
                         <User className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-bold text-slate-700 group-hover:text-amber-600 transition-colors">Thông tin tài khoản</span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-amber-600 transition-colors">{t('accountInfo')}</span>
                     </Link>
 
                     <Link
@@ -428,7 +439,7 @@ export const CustomerHeader: React.FC = () => {
                       <div className="w-9 h-9 rounded-full bg-sky-400 flex items-center justify-center shrink-0">
                         <FileText className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-bold text-slate-700 group-hover:text-sky-500 transition-colors">Vé của tôi</span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-sky-500 transition-colors">{t('myTickets')}</span>
                     </Link>
 
                     <Link
@@ -438,7 +449,7 @@ export const CustomerHeader: React.FC = () => {
                       <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
                         <Package className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-bold text-slate-700 group-hover:text-emerald-600 transition-colors">Đơn gửi hàng</span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-emerald-600 transition-colors">{t('myShipments')}</span>
                     </Link>
 
                     <Link
@@ -448,7 +459,7 @@ export const CustomerHeader: React.FC = () => {
                       <div className="w-9 h-9 rounded-full bg-orange-400 flex items-center justify-center shrink-0">
                         <Settings className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-bold text-slate-700 group-hover:text-orange-500 transition-colors">Đặt lại mật khẩu</span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-orange-500 transition-colors">{t('resetPassword')}</span>
                     </Link>
 
                     <button
@@ -464,7 +475,7 @@ export const CustomerHeader: React.FC = () => {
                       <div className="w-9 h-9 rounded-full bg-rose-600 flex items-center justify-center shrink-0">
                         <LogOut className="w-4 h-4 text-white ml-0.5" />
                       </div>
-                      <span className="text-sm font-bold text-slate-700 group-hover:text-rose-600 transition-colors">Đăng xuất</span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-rose-600 transition-colors">{t('logout')}</span>
                     </button>
                   </div>
                 </div>
@@ -476,7 +487,7 @@ export const CustomerHeader: React.FC = () => {
               className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-slate-200 hover:text-white transition-colors"
             >
               <User className="w-4 h-4" />
-              <span>Đăng nhập</span>
+              <span>{t('login')}</span>
             </Link>
           )}
 
@@ -485,7 +496,7 @@ export const CustomerHeader: React.FC = () => {
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 cursor-pointer"
-            aria-label={getMobileMenuLabel(mobileMenuOpen)}
+            aria-label={getMobileMenuLabel(mobileMenuOpen, locale)}
             aria-expanded={mobileMenuOpen}
             aria-controls="customer-mobile-menu"
           >
@@ -507,7 +518,7 @@ export const CustomerHeader: React.FC = () => {
                   className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-300 bg-white/10 rounded-lg"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Vé của tôi</span>
+                  <span>{t('myTickets')}</span>
                 </Link>
                 <Link
                   href="/account/shipments"
@@ -515,7 +526,7 @@ export const CustomerHeader: React.FC = () => {
                   className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-emerald-300 bg-white/10 rounded-lg"
                 >
                   <Package className="w-4 h-4" />
-                  <span>Đơn gửi hàng</span>
+                  <span>{t('myShipments')}</span>
                 </Link>
                 <button
                   type="button"
@@ -527,7 +538,7 @@ export const CustomerHeader: React.FC = () => {
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/90 hover:text-white"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Đăng xuất ({user.fullName})</span>
+                  <span>{t('logout')} ({user.fullName})</span>
                 </button>
               </>
             ) : (
@@ -537,9 +548,12 @@ export const CustomerHeader: React.FC = () => {
                 className="flex items-center gap-2 px-3 py-2 text-sm text-white/90 hover:text-white"
               >
                 <User className="w-4 h-4" />
-                <span>Đăng nhập</span>
+                <span>{t('login')}</span>
               </Link>
             )}
+          </div>
+          <div className="pt-2 border-t border-white/15">
+            <CustomerLanguageSwitcher isMobile />
           </div>
         </div>
       )}
@@ -567,16 +581,16 @@ export const CustomerHeader: React.FC = () => {
               <div className="flex items-center gap-2 min-w-0">
                 <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                 <span className="font-semibold text-amber-950 truncate">
-                  Bạn đang có đơn đặt vé
+                  {t('draftNotice')}
                   {friendlyCode ? (
                     <> <strong className="font-mono text-amber-900">{friendlyCode}</strong></>
                   ) : routeName ? (
-                    <> chuyến <strong className="text-amber-900">{routeName}</strong></>
+                    <> {t('draftTrip')} <strong className="text-amber-900">{routeName}</strong></>
                   ) : null}{' '}
-                  đang chờ thanh toán
+                  {t('draftPending')}
                 </span>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900 shrink-0">
-                  Còn {mm}:{ss}
+                  {t('draftRemaining', { time: `${mm}:${ss}` })}
                 </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -585,12 +599,12 @@ export const CustomerHeader: React.FC = () => {
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-extrabold transition-colors shadow-2xs"
                 >
                   <QrCode className="w-3.5 h-3.5" />
-                  <span>Tiếp tục thanh toán</span>
+                  <span>{t('continuePaymentAction')}</span>
                 </Link>
                 <button
                   type="button"
                   onClick={() => setDismissedDraftId(visibleDraftInfo.draft.id)}
-                  title="Ẩn thông báo này"
+                  title={t('draftDismiss')}
                   className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-amber-100 transition-colors cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />

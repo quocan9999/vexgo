@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { X, Ticket, CheckCircle2, Clock, ShieldAlert, Sparkles } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { AvailablePromotion } from '@/features/promotions/services/promotions.api';
 
 interface PromotionSelectorModalProps {
@@ -23,6 +24,7 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
   onRemovePromotion,
   isLoading,
 }) => {
+  const t = useTranslations('promotions');
   if (!isOpen) return null;
 
   return (
@@ -42,13 +44,13 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-black text-slate-900 flex items-center gap-1.5">
-                Mã ưu đãi chuyến xe
+                {t('modalTitle')}
                 <span className="text-xs font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full">
                   {promotions.length}
                 </span>
               </h3>
               <p className="text-xs text-slate-500 font-medium">
-                Chọn mã giảm giá tốt nhất cho đơn đặt vé của bạn
+                {t('modalDesc')}
               </p>
             </div>
           </div>
@@ -66,9 +68,9 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
           {promotions.length === 0 ? (
             <div className="py-12 text-center">
               <Ticket className="mx-auto h-12 w-12 text-slate-300 mb-2" />
-              <p className="text-sm font-bold text-slate-700">Chưa có mã ưu đãi nào khả dụng</p>
+              <p className="text-sm font-bold text-slate-700">{t('noPromosAvailable')}</p>
               <p className="text-xs text-slate-400 mt-1">
-                Các chương trình khuyến mãi sẽ được cập nhật sớm nhất
+                {t('noPromosDesc')}
               </p>
             </div>
           ) : (
@@ -100,7 +102,7 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
                         </span>
                         {isCurrentActive && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                            <CheckCircle2 className="w-3 h-3" /> Đang áp dụng
+                            <CheckCircle2 className="w-3 h-3" /> {t('applying')}
                           </span>
                         )}
                       </div>
@@ -112,7 +114,7 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
                       </p>
                       {promo.minimumTicketAmount && Number(promo.minimumTicketAmount) > 0 && (
                         <p className="text-[11px] text-slate-500">
-                          Đơn tối thiểu: {Number(promo.minimumTicketAmount).toLocaleString('vi-VN')}đ
+                          {t('minOrder', { amount: Number(promo.minimumTicketAmount).toLocaleString('vi-VN') + 'đ' })}
                         </p>
                       )}
                     </div>
@@ -134,17 +136,17 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
                           : 'bg-accent text-white hover:bg-accent-hover shadow-sm'
                       }`}
                     >
-                      {isCurrentActive ? 'Bỏ chọn' : 'Áp dụng'}
+                      {isCurrentActive ? t('remove') : t('apply')}
                     </button>
                   </div>
 
                   <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      Hạn dùng: {promo.endsOn}
+                      {t('expiresOn', { date: promo.endsOn })}
                     </span>
                     <span className="font-semibold text-slate-500">
-                      Còn {promo.remainingUses} lượt
+                      {t('remainingUses', { count: promo.remainingUses })}
                     </span>
                   </div>
                 </div>
@@ -157,9 +159,9 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
         <div className="border-t border-slate-100 px-5 py-3.5 bg-slate-50 flex items-center justify-between">
           <span className="text-xs text-slate-500">
             {activeCode ? (
-              <span>Đang chọn mã: <strong className="text-accent font-mono">{activeCode}</strong></span>
+              <span>{t('selectingCode', { code: activeCode })}</span>
             ) : (
-              <span>Chưa áp dụng mã nào</span>
+              <span>{t('noCodeApplied')}</span>
             )}
           </span>
           <button
@@ -167,7 +169,7 @@ export const PromotionSelectorModal: React.FC<PromotionSelectorModalProps> = ({
             onClick={onClose}
             className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white hover:bg-slate-800 transition-colors"
           >
-            Đóng
+            {t('close')}
           </button>
         </div>
       </div>

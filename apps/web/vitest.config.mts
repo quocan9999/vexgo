@@ -35,5 +35,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     testTimeout: 10_000,
+    setupFiles: [path.resolve(appRoot, 'test/setup-vitest.ts')],
   },
 });

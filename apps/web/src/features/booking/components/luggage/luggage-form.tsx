@@ -9,6 +9,7 @@ import type {
 } from "./luggage-item";
 import React from 'react';
 import { Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { LuggageItemComponent, resolveCargoCategoryId } from './luggage-item';
 import type { CargoCategory } from '@/features/shipments/services/shipments.api';
@@ -30,6 +31,7 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({
   surcharges,
   onChange,
 }) => {
+  const t = useTranslations('booking');
   const [showLimitModal, setShowLimitModal] = React.useState(false);
 
   const handleAddItem = () => {
@@ -97,7 +99,7 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({
         className="flex items-center gap-2 text-sm font-bold text-accent hover:text-accent-hover transition-colors"
       >
         <Plus className="w-4 h-4" />
-        Thêm kiện hành lý
+        {t('addCargoItemBtn')}
       </button>
 
       {showLimitModal && (
@@ -112,10 +114,10 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
-                  Giới hạn số lượng hành lý
+                  {t('cargoQuantityLimitTitle')}
                 </h3>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Quy định gửi kèm theo vé hành khách
+                  {t('cargoQuantityLimitSubtitle')}
                 </p>
               </div>
               <button
@@ -129,10 +131,10 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({
 
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-relaxed space-y-3">
               <p className="text-slate-900 font-medium">
-                Mỗi lượt đặt vé chỉ được mang theo tối đa <strong className="text-slate-950 font-black">5 kiện hành lý gửi hầm xe</strong> để đảm bảo đủ không gian cho hành khách khác trên cùng chuyến.
+                {t('cargoQuantityLimitDesc')}
               </p>
               <div className="pt-2.5 border-t border-slate-200/80 text-xs text-slate-600 leading-normal">
-                Nếu bạn cần chuyển số lượng hàng hóa lớn hơn, vui lòng sử dụng dịch vụ <strong className="text-slate-900 font-bold">Gửi hàng bưu kiện</strong> riêng hoặc liên hệ trực tiếp tổng đài nhà xe.
+                {t('cargoQuantityExceededNotice')}
               </div>
             </div>
 
@@ -142,7 +144,7 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({
                 onClick={() => setShowLimitModal(false)}
                 className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-colors shadow-sm"
               >
-                Đã hiểu
+                {t('btnUnderstood')}
               </button>
             </div>
           </div>

@@ -10,55 +10,58 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-
-const QUICK_ACTIONS = [
-  {
-    title: 'Bán vé tại quầy',
-    description: 'Tạo vé & chọn ghế',
-    href: '/booking-management',
-    icon: Ticket,
-    color: 'bg-teal-50 text-teal-600 border-teal-100',
-  },
-  {
-    title: 'Quản lý chuyến xe',
-    description: 'Thêm chuyến tăng cường',
-    href: '/trips',
-    icon: Bus,
-    color: 'bg-blue-50 text-blue-600 border-blue-100',
-  },
-  {
-    title: 'Tiếp nhận hàng hóa',
-    description: 'Gửi bưu kiện & tính cước',
-    href: '/shipments',
-    icon: Package,
-    color: 'bg-amber-50 text-amber-600 border-amber-100',
-  },
-  {
-    title: 'Bến bãi & Trạm đón',
-    description: 'Quản lý điểm dừng',
-    href: '/stations',
-    icon: MapPin,
-    color: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-  },
-  {
-    title: 'Báo cáo doanh thu',
-    description: 'Đối soát tài chính',
-    href: '/revenue-reports',
-    icon: BarChart3,
-    color: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-  },
-];
+import { useTranslations } from 'next-intl';
 
 export function TenantQuickActions() {
+  const t = useTranslations('dashboard');
+
+  const quickActions = [
+    {
+      title: t('quickActionPosTitle'),
+      description: t('quickActionPosDesc'),
+      href: '/booking-management',
+      icon: Ticket,
+      color: 'bg-teal-50 text-teal-600 border-teal-100',
+    },
+    {
+      title: t('quickActionTripsTitle'),
+      description: t('quickActionTripsDesc'),
+      href: '/trips',
+      icon: Bus,
+      color: 'bg-blue-50 text-blue-600 border-blue-100',
+    },
+    {
+      title: t('quickActionCargoTitle'),
+      description: t('quickActionCargoDesc'),
+      href: '/shipments',
+      icon: Package,
+      color: 'bg-amber-50 text-amber-600 border-amber-100',
+    },
+    {
+      title: t('quickActionStationsTitle'),
+      description: t('quickActionStationsDesc'),
+      href: '/stations',
+      icon: MapPin,
+      color: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    },
+    {
+      title: t('quickActionReportsTitle'),
+      description: t('quickActionReportsDesc'),
+      href: '/revenue-reports',
+      icon: BarChart3,
+      color: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    },
+  ];
+
   return (
     <Card className="shadow-xs border border-border">
       <CardHeader className="border-b border-border/80 pb-3">
         <CardTitle className="text-sm font-semibold text-foreground">
-          Lối tắt thao tác nhanh
+          {t('quickActionsTitle')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-2 space-y-1">
-        {QUICK_ACTIONS.map((action) => {
+        {quickActions.map((action) => {
           const Icon = action.icon;
           return (
             <Link

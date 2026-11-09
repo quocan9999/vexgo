@@ -22,20 +22,15 @@ import {
 } from '@/components/data-filters/resource-filters';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { getStations, deleteStation } from '../services/station-service';
 import type { Station } from '../types/station';
 import { StationFormDialog } from './station-form-dialog';
 import { StationListTable } from './station-list-table';
 
-const TYPE_FILTER_OPTIONS: FilterOption[] = [
-  { value: 'BEN_XE', label: 'Bến xe' },
-  { value: 'VAN_PHONG', label: 'Văn phòng' },
-  { value: 'DIEM_DON_TRA', label: 'Điểm đón trả' },
-  { value: 'TRUNG_CHUYEN', label: 'Điểm trung chuyển' },
-  { value: 'TRAM_NGHI', label: 'Trạm nghỉ' },
-];
-
 export function StationsManagement() {
+  const tStations = useTranslations('stations');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canCreate = can('route:create');
   const canUpdate = can('route:update');
@@ -55,6 +50,14 @@ export function StationsManagement() {
   const [deletingStation, setDeletingStation] = useState<Station | undefined>();
   const [deleting, setDeleting] = useState(false);
 
+  const typeFilterOptions: FilterOption[] = [
+    { value: 'BEN_XE', label: tStations('typeTerminal') },
+    { value: 'VAN_PHONG', label: tStations('typeOffice') },
+    { value: 'DIEM_DON_TRA', label: tStations('typeStop') },
+    { value: 'TRUNG_CHUYEN', label: tStations('typeTransit') },
+    { value: 'TRAM_NGHI', label: tStations('typeRest') },
+  ];
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -69,8 +72,8 @@ export function StationsManagement() {
       setTotalPages(res.meta.totalPages);
       setTotalItems(res.meta.totalItems);
     } catch {
-      setError('Không thể tải danh sách điểm đón trả. Vui lòng thử lại.');
-      toast.error('Không thể tải danh sách điểm đón trả.');
+      setError(tStations('errors.loadListFailed'));
+      toast.error(tStations('errors.loadListFailed'));
     } finally {
       setLoading(false);
     }
@@ -85,11 +88,11 @@ export function StationsManagement() {
     setDeleting(true);
     try {
       await deleteStation(deletingStation.diemDonTraId);
-      toast.success(`Đã xóa điểm đón trả "${deletingStation.tenDiem}".`);
+      toast.success(tStations('deleteSuccess', { name: deletingStation.tenDiem }));
       setDeletingStation(undefined);
       loadData();
     } catch {
-      toast.error('Không thể xóa điểm đón trả.');
+      toast.error(tStations('errors.deleteFailed'));
     } finally {
       setDeleting(false);
     }
@@ -101,21 +104,25 @@ export function StationsManagement() {
     <SuperAdminLayout activeSection="stations">
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
-          eyebrow="QUẢN LÝ VẬN HÀNH"
-          title="Bến bãi & Điểm đón trả"
+          eyebrow={tStations('eyebrow')}
+          title={tStations('stationsTitle')}
           titleId="stations-title"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm điểm đón trả"
+                  label={tStations('addStop')}
                   onClick={() => {
                     setEditingStation(undefined);
                     setFormOpen(true);
                   }}
                 />
               )}
-              <ResourceRefreshAction loading={loading} onClick={loadData} />
+              <ResourceRefreshAction
+                loading={loading}
+                onClick={loadData}
+                label={tCommon('refresh')}
+              />
             </div>
           }
         />
@@ -124,35 +131,36 @@ export function StationsManagement() {
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label="Tìm kiếm điểm đón trả"
+                label={tStations('stationsTitle')}
                 value={search}
                 onChange={(val) => {
                   setSearch(val);
                   setPage(1);
                 }}
-                placeholder="Tìm theo tên điểm, mã điểm, địa chỉ…"
+                placeholder={tStations('searchPlaceholder')}
+                clearLabel={tCommon('clearSearch')}
               />
               <SelectFilter
-                label="Loại điểm"
-                allLabel="Tất cả loại điểm"
+                label={tStations('stationType')}
+                allLabel={tStations('allTypes')}
                 value={typeFilter}
                 onChange={(val) => {
                   setTypeFilter(val);
                   setPage(1);
                 }}
-                options={TYPE_FILTER_OPTIONS}
+                options={typeFilterOptions}
               />
             </FilterToolbar>
 
             {loading && !stations.length && (
-              <ResourceTableSkeleton resourceLabel="điểm đón trả" />
+              <ResourceTableSkeleton resourceLabel={tStations('resourceLabel')} />
             )}
 
             {error && (
               <ResourceState error>
                 <p>{error}</p>
                 <Button onClick={loadData} variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
@@ -161,8 +169,8 @@ export function StationsManagement() {
               <ResourceState>
                 <p>
                   {hasActiveFilters
-                    ? 'Không tìm thấy điểm đón trả phù hợp với bộ lọc.'
-                    : 'Chưa có điểm đón trả nào trong hệ thống.'}
+                    ? tStations('noMatch')
+                    : tStations('emptyList')}
                 </p>
                 {hasActiveFilters && (
                   <Button
@@ -173,7 +181,7 @@ export function StationsManagement() {
                     }}
                     variant="outline"
                   >
-                    Xóa bộ lọc
+                    {tCommon('clearFilters')}
                   </Button>
                 )}
               </ResourceState>
@@ -189,8 +197,13 @@ export function StationsManagement() {
                   pageSize={15}
                   totalItems={totalItems}
                   totalPages={totalPages}
-                  summaryLabel="điểm đón trả"
+                  summaryLabel={tStations('resourceLabel')}
                   onPageChange={setPage}
+                  showingLabel={tCommon('showing')}
+                  ofLabel={tCommon('of')}
+                  pageLabel={tCommon('page')}
+                  prevPageLabel={tCommon('prevPage')}
+                  nextPageLabel={tCommon('nextPage')}
                 />
               </>
             )}
@@ -216,9 +229,13 @@ export function StationsManagement() {
         {/* Confirmation Delete Dialog */}
         {deletingStation && (
           <ResourceConfirmation
-            title={`Xóa điểm đón trả ${deletingStation.tenDiem}?`}
-            description={`Điểm đón trả "${deletingStation.tenDiem}" (${deletingStation.maDiem}) sẽ bị xóa vĩnh viễn khỏi hệ thống. Thao tác này không thể hoàn tác.`}
+            title={tStations('deleteTitle', { name: deletingStation.tenDiem })}
+            description={tStations('deleteDescription', {
+              name: deletingStation.tenDiem,
+              code: deletingStation.maDiem,
+            })}
             busy={deleting}
+            cancelLabel={tCommon('cancel')}
             onClose={() => setDeletingStation(undefined)}
           >
             <Button
@@ -232,7 +249,7 @@ export function StationsManagement() {
               ) : (
                 <Trash2 aria-hidden />
               )}
-              {deleting ? 'Đang xóa…' : 'Xóa điểm'}
+              {deleting ? tCommon('deleting') : tStations('deleteButton')}
             </Button>
           </ResourceConfirmation>
         )}

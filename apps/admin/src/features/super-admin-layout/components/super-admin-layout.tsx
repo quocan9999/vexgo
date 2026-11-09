@@ -37,6 +37,7 @@ import { AdminAccountPopover } from '@/components/admin/admin-account-popover';
 import { AdminLanguageSwitcher } from '@/components/admin/admin-language-switcher';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import '../admin-shell.css';
 import headerStyles from './admin-header.module.css';
@@ -88,35 +89,35 @@ type SuperAdminLayoutProps = {
 };
 
 const BREADCRUMB_SECTION_LABELS: Record<string, string> = {
-  overview: 'Tổng quan hệ thống',
-  'bus-companies': 'Quản lý nhà xe',
-  'admin-accounts': 'Quản lý tài khoản Admin',
-  rbac: 'Phân quyền nền tảng',
-  'tenant-rbac': 'Phân quyền nội bộ',
-  'vehicle-types': 'Quản lý loại xe',
-  vehicles: 'Danh sách xe',
-  routes: 'Quản lý tuyến xe',
-  stations: 'Bến bãi & Điểm đón trả',
-  'fare-prices': 'Bảng giá vé',
-  trips: 'Quản lý chuyến xe',
-  customers: 'Quản lý khách hàng',
-  'support-chat': 'Hỗ trợ khách hàng',
-  reviews: 'Đánh giá & Phản hồi',
-  'ai-knowledge': 'Quản lý Tri thức AI',
-  'booking-management': 'Quản lý đặt vé & vé',
-  promotions: 'Quản lý khuyến mãi',
-  shipments: 'Danh sách phiếu gửi hàng',
-  'revenue-reports': 'Báo cáo doanh thu',
+  overview: 'System Overview',
+  'bus-companies': 'Bus Operator Management',
+  'admin-accounts': 'Admin Accounts Management',
+  rbac: 'Platform RBAC',
+  'tenant-rbac': 'Internal RBAC',
+  'vehicle-types': 'Vehicle Types',
+  vehicles: 'Fleet Management',
+  routes: 'Route Management',
+  stations: 'Stations & Stops',
+  'fare-prices': 'Fare Prices',
+  trips: 'Trip Management',
+  customers: 'Customer Management',
+  'support-chat': 'Customer Support',
+  reviews: 'Reviews & Feedback',
+  'ai-knowledge': 'AI Knowledge Management',
+  'booking-management': 'Ticket & Booking Management',
+  promotions: 'Promotions Management',
+  shipments: 'Shipment Consignments',
+  'revenue-reports': 'Revenue Reports',
 };
 
 const ADMIN_ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'SUPER ADMIN',
-  NHA_XE_ADMIN: 'QUẢN TRỊ NHÀ XE',
-  NHAN_VIEN_BAN_VE: 'NHÂN VIÊN BÁN VÉ',
-  NHAN_VIEN_CSKH: 'NHÂN VIÊN CSKH',
-  NHAN_VIEN_PHU_XE: 'NHÂN VIÊN PHỤ XE',
-  NHAN_VIEN_KINH_DOANH: 'NHÂN VIÊN KINH DOANH',
-  NHAN_VIEN_DIEU_HANH: 'NHÂN VIÊN ĐIỀU HÀNH',
+  NHA_XE_ADMIN: 'BUS OPERATOR ADMIN',
+  NHAN_VIEN_BAN_VE: 'TICKET CLERK',
+  NHAN_VIEN_CSKH: 'CUSTOMER SUPPORT',
+  NHAN_VIEN_PHU_XE: 'BUS CONDUCTOR',
+  NHAN_VIEN_KINH_DOANH: 'SALES STAFF',
+  NHAN_VIEN_DIEU_HANH: 'OPERATIONS STAFF',
 };
 
 const ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY = 'vexgo-admin-sidebar-collapsed';
@@ -213,42 +214,42 @@ function setSidebarCollapsedPreference(collapsed: boolean) {
   window.dispatchEvent(new Event(ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT));
 }
 
-function formatAdminRoleLabels(roles: string[]) {
+function formatAdminRoleLabels(roles: string[], defaultLabel = 'ADMIN ACCOUNT') {
   const labels = roles.map(
     (role) => ADMIN_ROLE_LABELS[role] ?? role.replaceAll('_', ' '),
   );
   return labels.length > 0
-    ? labels.join(' · ').toLocaleUpperCase('vi-VN')
-    : 'TÀI KHOẢN ADMIN';
+    ? labels.join(' · ').toUpperCase()
+    : defaultLabel;
 }
 
 const OPERATION_NAVIGATION_DETAILS: Record<
   AdminOperationSection,
   { label: string; icon: () => ReactNode }
 > = {
-  'vehicle-types': { label: 'Loại xe', icon: () => <Bus size={18} /> },
-  vehicles: { label: 'Xe', icon: () => <Truck size={18} /> },
-  routes: { label: 'Tuyến xe', icon: () => <MapPinned size={18} /> },
-  stations: { label: 'Bến bãi & Điểm đón trả', icon: () => <Building2 size={18} /> },
-  'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
-  trips: { label: 'Chuyến xe', icon: () => <CalendarDays size={18} /> },
-  customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },
+  'vehicle-types': { label: 'Vehicle Types', icon: () => <Bus size={18} /> },
+  vehicles: { label: 'Vehicles', icon: () => <Truck size={18} /> },
+  routes: { label: 'Routes', icon: () => <MapPinned size={18} /> },
+  stations: { label: 'Stations & Stops', icon: () => <Building2 size={18} /> },
+  'fare-prices': { label: 'Fare Prices', icon: () => <Ticket size={18} /> },
+  trips: { label: 'Trips', icon: () => <CalendarDays size={18} /> },
+  customers: { label: 'Customers', icon: () => <UsersRound size={18} /> },
   'support-chat': {
-    label: 'Chăm sóc khách hàng',
+    label: 'Customer Support',
     icon: () => <Headphones size={18} />,
   },
   'booking-management': {
-    label: 'Quản lý phiếu đặt vé & vé',
+    label: 'Ticket & Booking Management',
     icon: () => <Ticket size={18} />,
   },
-  promotions: { label: 'Khuyến mãi', icon: () => <Tag size={18} /> },
-  shipments: { label: 'Gửi hàng', icon: () => <Package size={18} /> },
+  promotions: { label: 'Promotions', icon: () => <Tag size={18} /> },
+  shipments: { label: 'Shipments', icon: () => <Package size={18} /> },
   'revenue-reports': {
-    label: 'Báo cáo doanh thu',
+    label: 'Revenue Reports',
     icon: () => <ChartNoAxesCombined size={18} />,
   },
   reviews: {
-    label: 'Đánh giá & Phản hồi',
+    label: 'Reviews & Feedback',
     icon: () => <Star size={18} />,
   },
   'ai-knowledge': {
@@ -268,25 +269,54 @@ interface NavCluster {
 const OPERATION_CLUSTERS: NavCluster[] = [
   {
     key: 'operations',
-    label: 'Điều độ & Bán vé',
+    label: 'Operations & Ticketing',
     sections: ['trips', 'booking-management', 'shipments'],
   },
   {
     key: 'fleet',
-    label: 'Đội xe & Tuyến đường',
+    label: 'Fleet & Routes',
     sections: ['routes', 'stations', 'vehicles', 'vehicle-types'],
   },
   {
     key: 'commercial',
-    label: 'Kinh doanh & Bảng giá',
+    label: 'Business & Pricing',
     sections: ['fare-prices', 'promotions', 'revenue-reports'],
   },
   {
     key: 'customer',
-    label: 'Khách hàng & Dịch vụ',
+    label: 'Customers & Support',
     sections: ['customers', 'support-chat', 'reviews', 'ai-knowledge'],
   },
 ];
+
+const SECTION_TRANSLATION_KEYS: Record<string, string> = {
+  overview: 'overview',
+  'bus-companies': 'busCompanies',
+  'admin-accounts': 'adminAccounts',
+  rbac: 'platformRbac',
+  'tenant-rbac': 'tenantRbac',
+  'vehicle-types': 'vehicleTypes',
+  vehicles: 'vehicles',
+  routes: 'routes',
+  stations: 'stations',
+  'fare-prices': 'farePrices',
+  trips: 'trips',
+  customers: 'customers',
+  'support-chat': 'supportChat',
+  reviews: 'reviews',
+  'ai-knowledge': 'aiKnowledge',
+  'booking-management': 'bookingManagement',
+  promotions: 'promotions',
+  shipments: 'shipments',
+  'revenue-reports': 'revenueReports',
+};
+
+const CLUSTER_TRANSLATION_KEYS: Record<NavClusterKey, string> = {
+  operations: 'clusterOperations',
+  fleet: 'clusterFleet',
+  commercial: 'clusterCommercial',
+  customer: 'clusterCustomer',
+};
 
 export function SuperAdminLayout({
   activeSection,
@@ -295,6 +325,22 @@ export function SuperAdminLayout({
 }: SuperAdminLayoutProps) {
   const router = useRouter();
   const authState = useAdminSession();
+  const tNav = useTranslations('nav');
+  const tAuth = useTranslations('auth');
+  const tCommon = useTranslations('common');
+  const tRbac = useTranslations('rbac');
+
+  function getTranslatedSectionLabel(section: string): string {
+    const key = SECTION_TRANSLATION_KEYS[section];
+    if (key) {
+      try {
+        return tNav(key);
+      } catch {
+        return BREADCRUMB_SECTION_LABELS[section] ?? section;
+      }
+    }
+    return BREADCRUMB_SECTION_LABELS[section] ?? section;
+  }
   const sidebarCollapsed = useSyncExternalStore(
     subscribeToSidebarCollapsed,
     getSidebarCollapsedSnapshot,
@@ -350,12 +396,12 @@ export function SuperAdminLayout({
     },
   );
   const firstAccessibleTenantPath = getFirstAccessibleAdminPath(session);
-  const roleLabel = formatAdminRoleLabels(session.roles);
+  const roleLabel = formatAdminRoleLabels(session.roles, tCommon('adminAccount'));
   const tenantBusCompanyName =
-    session.employee?.busCompanyName?.trim() || 'NHÀ XE';
+    session.employee?.busCompanyName?.trim() || tCommon('busCompany');
   const brandContextLines = platformScope
-    ? ['Quản trị nền tảng']
-    : [tenantBusCompanyName.toLocaleUpperCase('vi-VN'), roleLabel];
+    ? [tCommon('platformAdmin')]
+    : [tenantBusCompanyName.toUpperCase(), roleLabel];
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
   }
@@ -381,17 +427,16 @@ export function SuperAdminLayout({
 
   const sectionLabel =
     activeSection in OPERATION_NAVIGATION_DETAILS
-      ? OPERATION_NAVIGATION_DETAILS[activeSection as AdminOperationSection]
-          .label
+      ? getTranslatedSectionLabel(activeSection)
       : (
           {
-            overview: 'Tổng quan',
-            'bus-companies': 'Nhà xe',
-            'admin-accounts': 'Tài khoản Admin',
-            rbac: 'Phân quyền',
-            'tenant-rbac': 'Phân quyền',
+            overview: tNav('overview'),
+            'bus-companies': tNav('busCompanies'),
+            'admin-accounts': tNav('adminAccounts'),
+            rbac: tNav('platformRbac'),
+            'tenant-rbac': tNav('tenantRbac'),
           } as Record<string, string>
-        )[activeSection];
+        )[activeSection] ?? activeSection;
   const sidebarContent = (
     <TooltipProvider>
       <div className="sidebar-header">
@@ -418,15 +463,15 @@ export function SuperAdminLayout({
           aria-expanded={!sidebarCollapsed}
           aria-label={
             sidebarCollapsed
-              ? 'Mở rộng thanh điều hướng'
-              : 'Thu gọn thanh điều hướng'
+              ? tCommon('expandSidebar')
+              : tCommon('collapseSidebar')
           }
           className="sidebar-collapse-button"
           onClick={toggleSidebar}
           title={
             sidebarCollapsed
-              ? 'Mở rộng thanh điều hướng'
-              : 'Thu gọn thanh điều hướng'
+              ? tCommon('expandSidebar')
+              : tCommon('collapseSidebar')
           }
           type="button"
         >
@@ -441,16 +486,16 @@ export function SuperAdminLayout({
       <div
         className="sidebar-scroll"
         role="region"
-        aria-label="Các mục điều hướng quản trị"
+        aria-label={tCommon('adminNavItems')}
         tabIndex={0}
       >
         {(platformScope ||
           (tenantScope && accessibleOperationSections.length > 0)) && (
           <div className="sidebar-nav-group">
             <p className="sidebar-label">
-              {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+              {tenantScope ? tNav('operationsHeader') : tNav('platformHeader')}
             </p>
-            <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
+            <nav aria-label={tenantScope ? tNav('operationsHeader') : tNav('platformHeader')}>
               {tenantScope ? (
                 <>
                   <div className="sidebar-cluster-links mb-2">
@@ -458,7 +503,7 @@ export function SuperAdminLayout({
                       active={activeSection === 'overview'}
                       href="/"
                       icon={<LayoutDashboard size={18} />}
-                      label="Tổng quan"
+                      label={tNav('overview')}
                       onClick={closeMobileNavigation}
                       tooltipEnabled={sidebarTooltipEnabled}
                     />
@@ -469,14 +514,16 @@ export function SuperAdminLayout({
                     );
                     if (clusterItems.length === 0) return null;
 
+                    const clusterLabel = tNav(CLUSTER_TRANSLATION_KEYS[cluster.key] ?? cluster.key);
+
                     return (
                       <div key={cluster.key} className="sidebar-nav-cluster">
                         <p className="sidebar-cluster-label">
-                          {cluster.label}
+                          {clusterLabel}
                         </p>
                         <div className="sidebar-cluster-links">
                           {clusterItems.map((item) => {
-                            const { icon, label } =
+                            const { icon } =
                               OPERATION_NAVIGATION_DETAILS[item.section];
                             return (
                               <AdminSidebarLink
@@ -484,7 +531,7 @@ export function SuperAdminLayout({
                                 href={item.href}
                                 icon={icon()}
                                 key={item.section}
-                                label={label}
+                                label={getTranslatedSectionLabel(item.section)}
                                 onClick={closeMobileNavigation}
                                 tooltipEnabled={sidebarTooltipEnabled}
                               />
@@ -501,7 +548,7 @@ export function SuperAdminLayout({
                         active={activeSection === 'overview'}
                         href="/"
                         icon={<Database size={18} />}
-                        label="Tổng quan"
+                        label={tNav('overview')}
                         onClick={closeMobileNavigation}
                         tooltipEnabled={sidebarTooltipEnabled}
                       />
@@ -510,7 +557,7 @@ export function SuperAdminLayout({
                           active={activeSection === 'bus-companies'}
                           href="/bus-companies"
                           icon={<Building2 size={18} />}
-                          label="Nhà xe"
+                          label={tNav('busCompanies')}
                           onClick={closeMobileNavigation}
                           tooltipEnabled={sidebarTooltipEnabled}
                         />
@@ -520,7 +567,7 @@ export function SuperAdminLayout({
                           active={activeSection === 'admin-accounts'}
                           href="/admin-accounts"
                           icon={<UsersRound size={18} />}
-                          label="Tài khoản Admin"
+                          label={tNav('adminAccounts')}
                           onClick={closeMobileNavigation}
                           tooltipEnabled={sidebarTooltipEnabled}
                         />
@@ -530,7 +577,7 @@ export function SuperAdminLayout({
                           active={activeSection === 'rbac'}
                           href="/rbac"
                           icon={<ShieldCheck size={18} />}
-                          label="Phân quyền"
+                          label={tNav('platformRbac')}
                           onClick={closeMobileNavigation}
                           tooltipEnabled={sidebarTooltipEnabled}
                         />
@@ -539,7 +586,7 @@ export function SuperAdminLayout({
                         active={activeSection === 'reviews'}
                         href="/reviews"
                         icon={<Star size={18} />}
-                        label="Đánh giá & Phản hồi"
+                        label={tNav('reviews')}
                         onClick={closeMobileNavigation}
                         tooltipEnabled={sidebarTooltipEnabled}
                       />
@@ -547,7 +594,7 @@ export function SuperAdminLayout({
                         active={activeSection === 'ai-knowledge'}
                         href="/ai-knowledge"
                         icon={<Sparkles size={18} />}
-                        label="Tri thức AI (RAG)"
+                        label={tNav('aiKnowledge')}
                         onClick={closeMobileNavigation}
                         tooltipEnabled={sidebarTooltipEnabled}
                       />
@@ -558,13 +605,13 @@ export function SuperAdminLayout({
         )}
         {tenantScope && canReadTenantRolePermissions && (
           <div className="sidebar-nav-group">
-            <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
-            <nav aria-label="Quản trị nhà xe">
+            <p className="sidebar-label">{tNav('tenantHeader')}</p>
+            <nav aria-label={tNav('tenantHeader')}>
               <AdminSidebarLink
                 active={activeSection === 'tenant-rbac'}
                 href="/tenant-rbac"
                 icon={<ShieldCheck size={18} />}
-                label="Phân quyền"
+                label={tNav('tenantRbac')}
                 onClick={closeMobileNavigation}
                 tooltipEnabled={sidebarTooltipEnabled}
               />
@@ -580,10 +627,10 @@ export function SuperAdminLayout({
       className={`admin-shell${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
     >
       <a className="admin-skip-link" href="#admin-content">
-        Bỏ qua điều hướng
+        {tCommon('skipToContent')}
       </a>
       <aside
-        aria-label="Điều hướng quản trị"
+        aria-label={tCommon('adminNavigation')}
         className="admin-sidebar admin-ui"
         id="admin-navigation"
       >
@@ -595,7 +642,7 @@ export function SuperAdminLayout({
           className="admin-mobile-navigation"
           finalFocus={menuTriggerRef}
         >
-          <SheetTitle className="sr-only">Điều hướng quản trị</SheetTitle>
+          <SheetTitle className="sr-only">{tCommon('adminNavigation')}</SheetTitle>
           {sidebarContent}
         </SheetContent>
       </Sheet>
@@ -606,7 +653,7 @@ export function SuperAdminLayout({
               <Button
                 ref={menuTriggerRef}
                 aria-expanded={mobileNavigationOpen}
-                aria-label="Mở menu"
+                aria-label={tCommon('openMenu')}
                 className={headerStyles.menu}
                 variant="ghost"
                 size="icon"
@@ -620,28 +667,28 @@ export function SuperAdminLayout({
                   href={tenantScope ? (firstAccessibleTenantPath ?? '/') : '/'}
                   aria-label={
                     tenantScope
-                      ? `Nhà xe ${tenantBusCompanyName}`
-                      : 'Khu vực quản trị nền tảng'
+                      ? tCommon('tenantBusCompanyAria', { name: tenantBusCompanyName })
+                      : tCommon('platformAdminArea')
                   }
                   title={
-                    tenantScope ? tenantBusCompanyName : 'Quản trị nền tảng'
+                    tenantScope ? tenantBusCompanyName : tCommon('platformAdmin')
                   }
                 >
                   <Building2 aria-hidden="true" size={15} />
                   <span>
-                    {tenantScope ? tenantBusCompanyName : 'Nền tảng VexGo'}
+                    {tenantScope ? tenantBusCompanyName : tCommon('vexgoPlatform')}
                   </span>
                 </Link>
                 <nav
                   className={headerStyles.breadcrumb}
-                  aria-label="Vị trí hiện tại"
+                  aria-label={tCommon('currentLocation')}
                 >
                   <span className={headerStyles.group}>
                     {tenantScope
                       ? activeSection === 'tenant-rbac'
-                        ? 'Quản trị'
-                        : 'Vận hành'
-                      : 'Quản trị'}
+                        ? tCommon('administration')
+                        : tCommon('operations')
+                      : tCommon('administration')}
                   </span>
                   <ChevronRight aria-hidden="true" size={14} className={headerStyles.separator} />
                   {breadcrumbs && breadcrumbs.length > 0 ? (
@@ -668,9 +715,9 @@ export function SuperAdminLayout({
                     <span className={headerStyles.current} aria-current="page">
                       {activeSection === 'overview'
                         ? tenantScope
-                          ? 'Tổng quan vận hành'
-                          : 'Tổng quan hệ thống'
-                        : (BREADCRUMB_SECTION_LABELS[activeSection] ?? sectionLabel)}
+                          ? tNav('tenantOverview')
+                          : tNav('systemOverview')
+                        : getTranslatedSectionLabel(activeSection)}
                     </span>
                   )}
                 </nav>
@@ -689,12 +736,12 @@ export function SuperAdminLayout({
               <button
                 type="button"
                 className="sr-only"
-                aria-label="Đăng xuất"
+                aria-label={tAuth('signOut')}
                 disabled={signingOut}
                 aria-busy={signingOut}
                 onClick={() => void logout()}
               >
-                Đăng xuất
+                {signingOut ? tAuth('signingOut') : tAuth('signOut')}
               </button>
             </div>
           </div>

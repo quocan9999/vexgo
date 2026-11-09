@@ -2,16 +2,16 @@ export const BOOKING_MANAGEMENT_TABS = ['bookings', 'tickets'] as const;
 export type BookingManagementTab = (typeof BOOKING_MANAGEMENT_TABS)[number];
 
 export const BOOKING_STATUS_OPTIONS = [
-  { value: 'CHO_THANH_TOAN', label: 'Chờ thanh toán' },
-  { value: 'DA_THANH_TOAN', label: 'Đã thanh toán' },
-  { value: 'HOAN_THANH', label: 'Hoàn thành' },
-  { value: 'DA_HUY', label: 'Đã hủy' },
+  { value: 'CHO_THANH_TOAN', label: 'Pending Payment' },
+  { value: 'DA_THANH_TOAN', label: 'Paid' },
+  { value: 'HOAN_THANH', label: 'Completed' },
+  { value: 'DA_HUY', label: 'Cancelled' },
 ] as const;
 
 export const TICKET_STATUS_OPTIONS = [
-  { value: 'DA_DAT', label: 'Đã đặt' },
-  { value: 'DA_THANH_TOAN', label: 'Đã thanh toán' },
-  { value: 'HUY', label: 'Đã hủy' },
+  { value: 'DA_DAT', label: 'Confirmed' },
+  { value: 'DA_THANH_TOAN', label: 'Paid' },
+  { value: 'HUY', label: 'Cancelled' },
 ] as const;
 
 export type BookingSortKey = 'bookedAt' | 'departureTime' | 'totalTicketAmount';

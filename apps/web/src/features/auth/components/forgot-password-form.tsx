@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   ShieldCheck,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuthSession } from '../auth-session';
@@ -24,13 +25,18 @@ import { sanitizeLoginRedirect } from '../services/login-redirect';
 export function ForgotPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('auth.forgotPassword');
+  const tLogin = useTranslations('auth.login');
+  const tRegister = useTranslations('auth.register');
+  const locale = useLocale();
   const { isAuthenticated, isHydrated } = useAuthSession();
 
   const nextParam = searchParams.get('next') || searchParams.get('redirect');
   const nextUrl = sanitizeLoginRedirect(nextParam);
+  const basePath = `/${locale}`;
   const loginHref = nextParam
-    ? `/login?next=${encodeURIComponent(nextParam)}`
-    : '/login';
+    ? `${basePath}/login?next=${encodeURIComponent(nextParam)}`
+    : `${basePath}/login`;
 
   // Step state: 1 = Phone, 2 = OTP, 3 = New Password, 4 = Success
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -80,11 +86,11 @@ export function ForgotPasswordForm() {
     const isVietnamesePhone = /^(0|84)(3|5|7|8|9)\d{8}$/.test(cleanedPhone);
 
     if (!phone.trim()) {
-      setPhoneError('Vui lòng nhập số điện thoại');
+      setPhoneError(tLogin('phoneRequired'));
       return;
     }
     if (!isVietnamesePhone) {
-      setPhoneError('Số điện thoại không hợp lệ');
+      setPhoneError(tLogin('phoneInvalid'));
       return;
     }
 
@@ -100,7 +106,7 @@ export function ForgotPasswordForm() {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Lỗi kết nối khi gửi yêu cầu khôi phục');
+        setErrorMsg(t('requestOtpError'));
       }
     } finally {
       setIsLoading(false);
@@ -123,7 +129,7 @@ export function ForgotPasswordForm() {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Lỗi kết nối khi gửi lại mã OTP');
+        setErrorMsg(tRegister('otpResendError'));
       }
     } finally {
       setIsLoading(false);
@@ -137,7 +143,7 @@ export function ForgotPasswordForm() {
     setOtpError('');
 
     if (!otp.trim() || otp.length !== 6) {
-      setOtpError('Mã OTP phải bao gồm 6 chữ số');
+      setOtpError(tRegister('otpMinLength'));
       return;
     }
 
@@ -150,7 +156,7 @@ export function ForgotPasswordForm() {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Lỗi kết nối khi xác thực OTP');
+        setErrorMsg(t('verifyOtpError'));
       }
     } finally {
       setIsLoading(false);
@@ -168,21 +174,21 @@ export function ForgotPasswordForm() {
     const passwordBytes = new TextEncoder().encode(newPassword).length;
 
     if (!newPassword.trim()) {
-      setPasswordError('Vui lòng nhập mật khẩu mới');
+      setPasswordError(tRegister('passwordRequired'));
       hasError = true;
     } else if (passwordBytes < 8) {
-      setPasswordError('Mật khẩu phải dài ít nhất 8 ký tự');
+      setPasswordError(tRegister('passwordMinLength'));
       hasError = true;
     } else if (passwordBytes > 72) {
-      setPasswordError('Mật khẩu không được vượt quá 72 ký tự');
+      setPasswordError(tRegister('passwordMaxLength'));
       hasError = true;
     }
 
     if (!confirmPassword.trim()) {
-      setConfirmPasswordError('Vui lòng xác nhận mật khẩu mới');
+      setConfirmPasswordError(tRegister('confirmPasswordRequired'));
       hasError = true;
     } else if (newPassword !== confirmPassword) {
-      setConfirmPasswordError('Mật khẩu xác nhận không khớp');
+      setConfirmPasswordError(tRegister('passwordsDoNotMatch'));
       hasError = true;
     }
 
@@ -200,7 +206,7 @@ export function ForgotPasswordForm() {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Lỗi kết nối khi đặt lại mật khẩu');
+        setErrorMsg(t('resetError'));
       }
     } finally {
       setIsLoading(false);
@@ -216,10 +222,10 @@ export function ForgotPasswordForm() {
         </div>
         <div className="space-y-2">
           <h2 className="text-xl font-bold text-slate-900">
-            Đặt lại mật khẩu thành công!
+            {t('successTitle')}
           </h2>
           <p className="text-sm text-slate-600 max-w-sm mx-auto">
-            Mật khẩu mới đã được cập nhật. Bạn có thể sử dụng mật khẩu mới để đăng nhập ngay bây giờ.
+            {t('successMessage')}
           </p>
         </div>
         <div className="pt-4">
@@ -230,7 +236,7 @@ export function ForgotPasswordForm() {
             className="w-full"
             onClick={() => router.push(loginHref)}
           >
-            Đăng nhập ngay
+            {t('loginNowButton')}
           </Button>
         </div>
       </div>
@@ -242,7 +248,7 @@ export function ForgotPasswordForm() {
     return (
       <form className="space-y-4" onSubmit={handleResetPassword}>
         <div className="text-sm text-slate-600 mb-4 text-center">
-          Vui lòng nhập mật khẩu mới cho tài khoản <b>{phone}</b>.
+          {t('newPasswordPrompt', { phone })}
         </div>
 
         {errorMsg && (
@@ -252,9 +258,9 @@ export function ForgotPasswordForm() {
         )}
 
         <Input
-          label="Mật khẩu mới"
+          label={t('newPasswordLabel')}
           type={showPassword ? 'text' : 'password'}
-          placeholder="Nhập mật khẩu mới (tối thiểu 8 ký tự)..."
+          placeholder={t('newPasswordPlaceholder')}
           value={newPassword}
           error={passwordError}
           onChange={(e) => {
@@ -279,9 +285,9 @@ export function ForgotPasswordForm() {
         />
 
         <Input
-          label="Xác nhận mật khẩu mới"
+          label={t('confirmPasswordLabel')}
           type={showConfirmPassword ? 'text' : 'password'}
-          placeholder="Nhập lại mật khẩu mới..."
+          placeholder={t('confirmPasswordPlaceholder')}
           value={confirmPassword}
           error={confirmPasswordError}
           onChange={(e) => {
@@ -314,7 +320,7 @@ export function ForgotPasswordForm() {
             isLoading={isLoading}
             rightIcon={<ArrowRight className="w-5 h-5" />}
           >
-            Đổi mật khẩu
+            {t('resetPasswordButton')}
           </Button>
         </div>
       </form>
@@ -326,7 +332,7 @@ export function ForgotPasswordForm() {
     return (
       <form className="space-y-4" onSubmit={handleVerifyOtp}>
         <div className="text-sm text-slate-600 mb-4 text-center">
-          Mã xác thực (OTP) đã được gửi đến số điện thoại <b>{phone}</b>.<br />
+          {t('otpSentTo', { phone })}<br />
         </div>
 
         {errorMsg && (
@@ -336,9 +342,9 @@ export function ForgotPasswordForm() {
         )}
 
         <Input
-          label="Mã OTP"
+          label={t('otpLabel')}
           type="text"
-          placeholder="Nhập mã 6 số..."
+          placeholder={t('otpPlaceholder')}
           value={otp}
           error={otpError}
           onChange={(e) => {
@@ -351,14 +357,14 @@ export function ForgotPasswordForm() {
         />
 
         <div className="flex items-center justify-between text-sm pt-1">
-          <span className="text-slate-500">Chưa nhận được mã?</span>
+          <span className="text-slate-500">{t('didNotReceiveOtp')}</span>
           <button
             type="button"
             onClick={handleResendOtp}
             disabled={countdown > 0 || isLoading}
             className="font-semibold text-emerald-600 hover:text-emerald-800 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
           >
-            {countdown > 0 ? `Gửi lại sau (${countdown}s)` : 'Gửi lại mã OTP'}
+            {countdown > 0 ? t('resendIn', { countdown }) : t('resendOtp')}
           </button>
         </div>
 
@@ -375,7 +381,7 @@ export function ForgotPasswordForm() {
             disabled={isLoading}
             leftIcon={<ArrowLeft className="w-5 h-5" />}
           >
-            Quay lại
+            {t('backButton')}
           </Button>
           <Button
             type="submit"
@@ -383,7 +389,7 @@ export function ForgotPasswordForm() {
             className="w-full"
             isLoading={isLoading}
           >
-            Xác nhận
+            {t('confirmButton')}
           </Button>
         </div>
       </form>
@@ -400,9 +406,9 @@ export function ForgotPasswordForm() {
       )}
 
       <Input
-        label="Số điện thoại"
+        label={t('phoneLabel')}
         type="tel"
-        placeholder="Nhập số điện thoại đã đăng ký..."
+        placeholder={t('phonePlaceholder')}
         value={phone}
         error={phoneError}
         onChange={(e) => {
@@ -421,7 +427,7 @@ export function ForgotPasswordForm() {
         isLoading={isLoading}
         rightIcon={<ArrowRight className="w-5 h-5" />}
       >
-        Tiếp tục
+        {t('continueButton')}
       </Button>
     </form>
   );

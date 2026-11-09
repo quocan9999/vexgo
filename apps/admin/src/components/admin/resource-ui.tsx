@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import {
   CheckCircle2,
   ChevronLeft,
@@ -68,6 +70,7 @@ export function ResourceModalDialog({
   preventDismiss?: boolean;
   onClose: () => void;
 }) {
+  const t = useTranslations('common');
   return (
     <Dialog
       open
@@ -83,6 +86,7 @@ export function ResourceModalDialog({
           'flex max-h-[90vh] flex-col gap-0 p-0 overflow-hidden',
         )}
         showCloseButton={!preventDismiss}
+        closeLabel={t('close')}
       >
         <DialogHeader className="border-b px-5 py-4 sm:px-6">
           <DialogTitle>{title}</DialogTitle>
@@ -140,6 +144,7 @@ export function ResourceConfirmation({
   children,
   footer,
   busy = false,
+  cancelLabel,
   onClose,
 }: {
   title: string;
@@ -147,8 +152,11 @@ export function ResourceConfirmation({
   children: ReactNode;
   footer?: ReactNode;
   busy?: boolean;
+  cancelLabel?: string;
   onClose: () => void;
 }) {
+  const tCommon = useTranslations('common');
+  const resolvedCancelLabel = cancelLabel ?? tCommon('cancel');
   const cancelRef = useRef<HTMLButtonElement>(null);
   return (
     <AlertDialog
@@ -171,7 +179,7 @@ export function ResourceConfirmation({
             ref={cancelRef}
             variant="outline"
           >
-            Hủy
+            {resolvedCancelLabel}
           </Button>
         )}
       </AlertDialogContent>
@@ -222,10 +230,14 @@ export function ResourceCreateAction({
 export function ResourceRefreshAction({
   loading,
   onClick,
+  label,
 }: {
   loading: boolean;
   onClick: () => void;
+  label?: string;
 }) {
+  const tCommon = useTranslations('common');
+  const displayLabel = label ?? tCommon('refresh');
   return (
     <Button
       aria-busy={loading}
@@ -237,7 +249,7 @@ export function ResourceRefreshAction({
         aria-hidden
         className={loading ? 'motion-safe:animate-spin' : undefined}
       />
-      Làm mới
+      {displayLabel}
     </Button>
   );
 }
@@ -246,15 +258,24 @@ export function ResourceDetailAction({
   resourceName,
   onClick,
   href,
+  label,
+  ariaLabel,
 }: {
-  resourceName: string;
+  resourceName?: string;
   onClick?: () => void;
   href?: string;
+  label?: string;
+  ariaLabel?: string;
 }) {
+  const tCommon = useTranslations('common');
+  const resolvedLabel = label ?? tCommon('viewDetails');
+  const fullAriaLabel =
+    ariaLabel ??
+    (resourceName ? `${resolvedLabel} ${resourceName}` : resolvedLabel);
   if (href) {
     return (
       <Button
-        aria-label={`Xem chi tiết ${resourceName}`}
+        aria-label={fullAriaLabel}
         nativeButton={false}
         onClick={onClick}
         render={<Link href={href} />}
@@ -262,20 +283,20 @@ export function ResourceDetailAction({
         variant="ghost"
       >
         <Eye aria-hidden />
-        Xem chi tiết
+        {resolvedLabel}
       </Button>
     );
   }
 
   return (
     <Button
-      aria-label={`Xem chi tiết ${resourceName}`}
+      aria-label={fullAriaLabel}
       onClick={onClick}
       size="sm"
       variant="ghost"
     >
       <Eye aria-hidden />
-      Xem chi tiết
+      {resolvedLabel}
     </Button>
   );
 }
@@ -348,13 +369,15 @@ export function ResourceTableSkeleton({
 }: {
   resourceLabel: string;
 }) {
+  const tCommon = useTranslations('common');
+  const loadingText = tCommon('loadingData', { resource: resourceLabel });
   return (
     <div
       className="space-y-5 p-5"
       role="status"
-      aria-label={`Đang tải danh sách ${resourceLabel}`}
+      aria-label={loadingText}
     >
-      <span className="sr-only">Đang tải dữ liệu {resourceLabel}…</span>
+      <span className="sr-only">{loadingText}</span>
       {Array.from({ length: 5 }, (_, row) => (
         <div
           aria-hidden
@@ -380,6 +403,12 @@ export function ResourcePagination({
   summaryLabel,
   totalItems,
   totalPages,
+  showingLabel,
+  ofLabel,
+  pageLabel,
+  prevPageLabel,
+  nextPageLabel,
+  locale = 'vi-VN',
 }: {
   currentPage: number;
   disabled?: boolean;
@@ -388,7 +417,19 @@ export function ResourcePagination({
   summaryLabel: string;
   totalItems: number;
   totalPages: number;
+  showingLabel?: string;
+  ofLabel?: string;
+  pageLabel?: string;
+  prevPageLabel?: string;
+  nextPageLabel?: string;
+  locale?: string;
 }) {
+  const tCommon = useTranslations('common');
+  const displayShowing = showingLabel ?? tCommon('showing');
+  const displayOf = ofLabel ?? tCommon('of');
+  const displayPage = pageLabel ?? tCommon('page');
+  const displayPrev = prevPageLabel ?? tCommon('prevPage');
+  const displayNext = nextPageLabel ?? tCommon('nextPage');
   const count = Math.max(0, totalItems);
   const pages = Math.max(0, totalPages);
   const page = count && pages ? Math.min(Math.max(1, currentPage), pages) : 0;
@@ -397,26 +438,26 @@ export function ResourcePagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border bg-slate-50/40 p-3.5 text-[13px] text-muted-foreground sm:px-5">
       <span aria-live="polite" className="text-slate-600">
-        Hiển thị{' '}
+        {displayShowing}{' '}
         <strong className="font-semibold text-foreground">
           {first}–{last}
         </strong>{' '}
-        trong{' '}
+        {displayOf}{' '}
         <strong className="font-semibold text-foreground">
-          {count.toLocaleString('vi-VN')}
+          {count.toLocaleString(locale)}
         </strong>{' '}
         {summaryLabel}
       </span>
       <nav
-        aria-label={`Phân trang ${summaryLabel}`}
+        aria-label={`${displayPage} ${summaryLabel}`}
         className="flex items-center gap-3"
       >
         <span className="text-slate-600">
-          Trang <strong className="font-semibold text-foreground">{page}</strong> / {pages}
+          {displayPage} <strong className="font-semibold text-foreground">{page}</strong> / {pages}
         </span>
         <div className="flex items-center gap-1.5">
           <Button
-            aria-label="Trang trước"
+            aria-label={displayPrev}
             className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
             disabled={disabled || page <= 1}
             onClick={() => onPageChange(Math.max(1, page - 1))}
@@ -426,7 +467,7 @@ export function ResourcePagination({
             <ChevronLeft aria-hidden className="size-4" />
           </Button>
           <Button
-            aria-label="Trang sau"
+            aria-label={displayNext}
             className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
             disabled={disabled || page >= pages}
             onClick={() => onPageChange(page + 1)}

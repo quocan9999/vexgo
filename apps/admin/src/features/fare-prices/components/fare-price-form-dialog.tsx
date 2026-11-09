@@ -5,6 +5,7 @@ import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Field, FieldLabel, FieldError } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -86,6 +87,7 @@ function validate(
   routeOptions: FarePriceOptionsState,
   vehicleTypeOptions: FarePriceOptionsState,
   editing: boolean,
+  tFare: (key: any) => string,
 ): FieldErrors {
   const errors: FieldErrors = {};
   const routeId = Number(values.routeId);
@@ -99,7 +101,7 @@ function validate(
       routeOptions.status !== 'success' ||
       routeOptions.options.length === 0)
   ) {
-    errors.routeId = 'Vui lòng chọn tuyến xe.';
+    errors.routeId = tFare('errors.routeRequired');
   }
   if (
     !editing &&
@@ -108,31 +110,31 @@ function validate(
       vehicleTypeOptions.status !== 'success' ||
       vehicleTypeOptions.options.length === 0)
   ) {
-    errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
+    errors.vehicleTypeId = tFare('errors.typeRequired');
   }
   if (!values.listedPrice.trim())
-    errors.listedPrice = 'Vui lòng nhập giá niêm yết.';
+    errors.listedPrice = tFare('errors.priceRequired');
   else if (!Number.isSafeInteger(listedPrice) || listedPrice <= 0) {
-    errors.listedPrice = 'Giá niêm yết phải là số nguyên VND lớn hơn 0.';
+    errors.listedPrice = tFare('errors.pricePositiveInteger');
   }
   if (!isDateOnly(values.validFrom)) {
-    errors.validFrom = 'Vui lòng chọn ngày bắt đầu hợp lệ.';
+    errors.validFrom = tFare('errors.validFromRequired');
   }
   if (values.validTo && !isDateOnly(values.validTo)) {
-    errors.validTo = 'Ngày kết thúc không hợp lệ.';
+    errors.validTo = tFare('errors.validToInvalid');
   } else if (
     values.validTo &&
     isDateOnly(values.validFrom) &&
     values.validTo < values.validFrom
   ) {
-    errors.validTo = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
+    errors.validTo = tFare('errors.validToAfterValidFrom');
   }
   if (
     !editing &&
     values.status !== 'HOAT_DONG' &&
     values.status !== 'TAM_NGUNG'
   ) {
-    errors.status = 'Vui lòng chọn trạng thái.';
+    errors.status = tFare('errors.statusRequired');
   }
 
   return errors;
@@ -152,6 +154,8 @@ export function FarePriceFormDialog({
   onSaved,
   onNotFound,
 }: FarePriceFormDialogProps) {
+  const tFare = useTranslations('farePrices');
+  const tCommon = useTranslations('common');
   const editing = farePrice !== undefined;
   const idPrefix = editing
     ? `edit-fare-price-${farePrice.farePriceId}`
@@ -197,7 +201,7 @@ export function FarePriceFormDialog({
     event.preventDefault();
     if (submittingRef.current) return;
 
-    const errors = validate(values, routeOptions, vehicleTypeOptions, editing);
+    const errors = validate(values, routeOptions, vehicleTypeOptions, editing, tFare);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       focusFirstInvalid();
@@ -231,23 +235,23 @@ export function FarePriceFormDialog({
       if (requestError instanceof FarePriceApiError) {
         if (requestError.code === 'FARE_PRICE_OVERLAP') {
           toast.error(
-            'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+            tFare('errors.overlapActive'),
           );
         } else if (requestError.code === 'ROUTE_NOT_FOUND') {
           setRelationError(
             'routeId',
-            'Tuyến xe không còn tồn tại. Vui lòng chọn lại.',
+            tFare('errors.routeNotFound'),
           );
           onRetryRouteOptions();
         } else if (requestError.code === 'VEHICLE_TYPE_NOT_FOUND') {
           setRelationError(
             'vehicleTypeId',
-            'Loại xe không còn tồn tại. Vui lòng chọn lại.',
+            tFare('errors.vehicleTypeNotFound'),
           );
           onRetryVehicleTypeOptions();
         } else if (requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION') {
           toast.error(
-            'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+            tFare('errors.concurrentModification'),
           );
         } else if (requestError.code === 'FARE_PRICE_NOT_FOUND' && editing) {
           onNotFound?.();
@@ -263,12 +267,12 @@ export function FarePriceFormDialog({
           }
         }
       } else if (requestError instanceof TypeError) {
-        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error(tFare('networkError'));
       } else {
         toast.error(
           editing
-            ? 'Không thể cập nhật bảng giá. Vui lòng thử lại.'
-            : 'Không thể tạo bảng giá. Vui lòng thử lại.',
+            ? tFare('errors.updateFailed')
+            : tFare('errors.createFailed'),
         );
       }
     } finally {
@@ -350,11 +354,11 @@ export function FarePriceFormDialog({
   }
   return (
     <ResourceModalDialog
-      title={editing ? 'Chỉnh sửa bảng giá' : 'Thêm bảng giá'}
+      title={editing ? tFare('formEditTitle') : tFare('formCreateTitle')}
       description={
         editing
-          ? 'Cập nhật giá niêm yết và thời gian hiệu lực của bảng giá.'
-          : 'Thiết lập giá vé theo tuyến, loại xe và thời gian hiệu lực.'
+          ? tFare('formEditDesc')
+          : tFare('formCreateDesc')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -368,7 +372,7 @@ export function FarePriceFormDialog({
         footer={
           <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button disabled={submitting} variant="outline" onClick={closeDialog}>
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button
               disabled={submitting || routeUnavailable || vehicleTypeUnavailable}
@@ -380,11 +384,11 @@ export function FarePriceFormDialog({
               )}
               {submitting
                 ? editing
-                  ? 'Đang lưu…'
-                  : 'Đang tạo…'
+                  ? tFare('formSubmittingEdit')
+                  : tFare('formSubmittingCreate')
                 : editing
-                  ? 'Lưu thay đổi'
-                  : 'Tạo bảng giá'}
+                  ? tFare('formSubmitEdit')
+                  : tFare('formSubmitCreate')}
             </Button>
           </div>
         }
@@ -397,7 +401,7 @@ export function FarePriceFormDialog({
             </p>
             <p className="text-xs text-muted-foreground">
               {farePrice.vehicleType.name} ·{' '}
-              {farePrice.status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng'}
+              {farePrice.status === 'HOAT_DONG' ? tFare('statusActive') : tFare('statusSuspended')}
             </p>
           </div>
         )}
@@ -405,8 +409,8 @@ export function FarePriceFormDialog({
           <>
             {selectField(
               'routeId',
-              'Tuyến xe',
-              'Chọn tuyến xe',
+              tFare('route'),
+              tFare('formRoutePlaceholder'),
               routeRows.map((row) => ({
                 value: String(row.id),
                 label: row.label,
@@ -415,12 +419,12 @@ export function FarePriceFormDialog({
             )}
             {routeOptions.status === 'loading' && (
               <p className="text-xs text-muted-foreground" role="status">
-                Đang tải danh sách tuyến xe…
+                {tFare('loadingFilters')}
               </p>
             )}
             {routeOptions.status === 'error' && (
               <ResourceNotice kind="error">
-                <p>Không thể tải danh sách tuyến xe.</p>
+                <p>{tFare('failedFilters')}</p>
                 <Button
                   disabled={submitting}
                   className="mt-2"
@@ -428,19 +432,19 @@ export function FarePriceFormDialog({
                   size="sm"
                   onClick={onRetryRouteOptions}
                 >
-                  Thử lại tuyến xe
+                  {tFare('retryRoute')}
                 </Button>
               </ResourceNotice>
             )}
             {routeOptions.status === 'success' && routeRows.length === 0 && (
               <ResourceNotice kind="error">
-                Chưa có tuyến xe để tạo bảng giá.
+                {tFare('failedFilters')}
               </ResourceNotice>
             )}
             {selectField(
               'vehicleTypeId',
-              'Loại xe',
-              'Chọn loại xe',
+              tFare('vehicleType'),
+              tFare('formVehicleTypePlaceholder'),
               vehicleTypeRows.map((row) => ({
                 value: String(row.id),
                 label: row.label,
@@ -449,12 +453,12 @@ export function FarePriceFormDialog({
             )}
             {vehicleTypeOptions.status === 'loading' && (
               <p className="text-xs text-muted-foreground" role="status">
-                Đang tải danh sách loại xe…
+                {tFare('loadingFilters')}
               </p>
             )}
             {vehicleTypeOptions.status === 'error' && (
               <ResourceNotice kind="error">
-                <p>Không thể tải danh sách loại xe.</p>
+                <p>{tFare('failedFilters')}</p>
                 <Button
                   disabled={submitting}
                   className="mt-2"
@@ -462,21 +466,21 @@ export function FarePriceFormDialog({
                   size="sm"
                   onClick={onRetryVehicleTypeOptions}
                 >
-                  Thử lại loại xe
+                  {tFare('retryVehicleType')}
                 </Button>
               </ResourceNotice>
             )}
             {vehicleTypeOptions.status === 'success' &&
               vehicleTypeRows.length === 0 && (
                 <ResourceNotice kind="error">
-                  Chưa có loại xe để tạo bảng giá.
+                  {tFare('failedFilters')}
                 </ResourceNotice>
               )}
           </>
         )}
         <Field data-invalid={Boolean(fieldErrors.listedPrice)}>
           <FieldLabel htmlFor={`${idPrefix}-listedPrice`}>
-            Giá niêm yết (VND) <span aria-hidden>*</span>
+            {tFare('formPriceLabel')} <span aria-hidden>*</span>
           </FieldLabel>
           <Input
             id={`${idPrefix}-listedPrice`}
@@ -503,7 +507,7 @@ export function FarePriceFormDialog({
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field data-invalid={Boolean(fieldErrors.validFrom)}>
             <FieldLabel htmlFor={`${idPrefix}-validFrom`}>
-              Hiệu lực từ <span aria-hidden>*</span>
+              {tFare('colValidFrom')} <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               id={`${idPrefix}-validFrom`}
@@ -525,7 +529,7 @@ export function FarePriceFormDialog({
           </Field>
           <Field data-invalid={Boolean(fieldErrors.validTo)}>
             <FieldLabel htmlFor={`${idPrefix}-validTo`}>
-              Hiệu lực đến
+              {tFare('colValidTo')}
             </FieldLabel>
             <Input
               id={`${idPrefix}-validTo`}
@@ -549,7 +553,7 @@ export function FarePriceFormDialog({
                 className="text-xs text-muted-foreground"
                 id={`${idPrefix}-validTo-hint`}
               >
-                Để trống nếu không giới hạn ngày kết thúc.
+                {tFare('unlimitedDate')}
               </p>
             )}
           </Field>
@@ -557,11 +561,11 @@ export function FarePriceFormDialog({
         {!editing &&
           selectField(
             'status',
-            'Trạng thái',
-            'Chọn trạng thái',
+            tFare('colStatus'),
+            tFare('filterStatus'),
             [
-              { value: 'HOAT_DONG', label: 'Hoạt động' },
-              { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
+              { value: 'HOAT_DONG', label: tFare('statusActive') },
+              { value: 'TAM_NGUNG', label: tFare('statusSuspended') },
             ],
             submitting,
           )}

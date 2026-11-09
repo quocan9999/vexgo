@@ -15,10 +15,13 @@ import { getFirstAccessibleAdminPath } from '../services/admin-access';
 import { Button } from '@/components/ui/action-button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { AdminLanguageSwitcher } from '@/components/admin/admin-language-switcher';
+import { useTranslations } from 'next-intl';
 
 export function AdminLoginForm() {
   const router = useRouter();
   const authState = useAdminSession();
+  const tAuth = useTranslations('auth');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -51,7 +54,7 @@ export function AdminLoginForm() {
 
     const normalizedIdentifier = identifier.trim();
     if (!normalizedIdentifier || !password) {
-      setError('Nhập email hoặc số điện thoại cùng mật khẩu.');
+      setError(tAuth('loginRequired'));
       return;
     }
 
@@ -73,7 +76,7 @@ export function AdminLoginForm() {
     return (
       <div className="auth-loading" role="status" aria-live="polite">
         <span className="auth-loading-mark" aria-hidden="true">V</span>
-        <span>Đang kiểm tra phiên quản trị…</span>
+        <span>{tAuth('checkingSession')}</span>
       </div>
     );
   }
@@ -93,8 +96,8 @@ export function AdminLoginForm() {
           <span className="login-kicker">
             <ShieldCheck size={15} aria-hidden="true" /> QUẢN TRỊ VEXGO
           </span>
-          <h1>Một cổng đăng nhập cho nền tảng và nhà xe.</h1>
-          <p>Tài khoản sẽ mở đúng khu vực theo vai trò được cấp.</p>
+          <h1>{tAuth('loginShowcaseTitle')}</h1>
+          <p>{tAuth('loginShowcaseSubtitle')}</p>
         </div>
 
         <div className="login-route-visual" aria-hidden="true">
@@ -109,18 +112,22 @@ export function AdminLoginForm() {
         </div>
 
         <div className="login-showcase-footer">
-          <span>Đăng nhập bảo mật</span>
+          <span>{tAuth('secureLogin')}</span>
           <span className="showcase-footer-dot" />
-          <span>Phạm vi theo tài khoản</span>
+          <span>{tAuth('scopeByRole')}</span>
         </div>
       </section>
 
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-panel-inner">
+          <div className="flex justify-end mb-2">
+            <AdminLanguageSwitcher />
+          </div>
+
           <div className="login-heading">
-            <p className="login-eyebrow">CHÀO MỪNG BẠN</p>
-            <h2 id="login-title">Đăng nhập Admin</h2>
-            <p>Dùng email hoặc số điện thoại và mật khẩu được cấp.</p>
+            <p className="login-eyebrow">{tAuth('welcomeBack')}</p>
+            <h2 id="login-title">{tAuth('loginTitle')}</h2>
+            <p>{tAuth('loginSubtitle')}</p>
           </div>
 
           <form
@@ -130,11 +137,11 @@ export function AdminLoginForm() {
           >
             {authState.status === 'error' && (
               <p className="login-error" role="status">
-                Chưa kiểm tra được phiên trước đó. Bạn có thể thử đăng nhập lại.
+                {tAuth('sessionCheckError')}
               </p>
             )}
             <Field>
-              <FieldLabel htmlFor="admin-identifier">Email hoặc số điện thoại</FieldLabel>
+              <FieldLabel htmlFor="admin-identifier">{tAuth('emailOrPhone')}</FieldLabel>
               <Input
                 autoComplete="username"
                 autoCapitalize="none"
@@ -149,7 +156,7 @@ export function AdminLoginForm() {
                   setError(null);
                   setValidationDetails([]);
                 }}
-                placeholder="admin@vexgo.vn hoặc +84901234567"
+                placeholder={tAuth('emailOrPhonePlaceholder')}
                 required
                 type="text"
                 value={identifier}
@@ -157,7 +164,7 @@ export function AdminLoginForm() {
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="admin-password">Mật khẩu</FieldLabel>
+              <FieldLabel htmlFor="admin-password">{tAuth('password')}</FieldLabel>
               <div className="relative">
                 <Input
                   className="pr-12"
@@ -172,12 +179,13 @@ export function AdminLoginForm() {
                     setError(null);
                     setValidationDetails([]);
                   }}
+                  placeholder={tAuth('passwordPlaceholder')}
                   required
                   type={passwordVisible ? 'text' : 'password'}
                   value={password}
                 />
                 <Button
-                  aria-label={passwordVisible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  aria-label={passwordVisible ? tAuth('hidePassword') : tAuth('showPassword')}
                   aria-pressed={passwordVisible}
                   className="absolute right-0 top-0 text-muted-foreground"
                   variant="ghost"
@@ -220,7 +228,7 @@ export function AdminLoginForm() {
               disabled={submitting}
               type="submit"
             >
-              <span>{submitting ? 'Đang xác thực…' : 'Đăng nhập'}</span>
+              <span>{submitting ? tAuth('loggingIn') : tAuth('signIn')}</span>
               <ArrowRight aria-hidden="true" size={17} />
             </Button>
           </form>

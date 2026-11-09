@@ -4,6 +4,7 @@ import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Button } from '@/components/ui/action-button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -51,6 +52,8 @@ export function EditBusCompanyDialog({
   onClose,
   onUpdated,
 }: EditBusCompanyDialogProps) {
+  const tCompanies = useTranslations('busCompanies');
+  const tCommon = useTranslations('common');
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>(() => ({
     code: company.code,
@@ -76,14 +79,14 @@ export function EditBusCompanyDialog({
     const code = values.code.trim();
     const name = values.name.trim();
 
-    if (!code) errors.code = 'Vui lòng nhập mã nhà xe.';
+    if (!code) errors.code = tCompanies('validationCodeRequired');
     else if (code.length > 50) {
-      errors.code = 'Mã nhà xe không được vượt quá 50 ký tự.';
+      errors.code = tCompanies('validationCodeMaxLength');
     }
 
-    if (!name) errors.name = 'Vui lòng nhập tên nhà xe.';
+    if (!name) errors.name = tCompanies('validationNameRequired');
     else if (name.length > 150) {
-      errors.name = 'Tên nhà xe không được vượt quá 150 ký tự.';
+      errors.name = tCompanies('validationNameMaxLength');
     }
 
     return errors;
@@ -124,7 +127,7 @@ export function EditBusCompanyDialog({
         setFormError(
           requestError instanceof Error
             ? requestError.message
-            : 'Không thể cập nhật nhà xe. Vui lòng thử lại.',
+            : tCompanies('cannotUpdate'),
         );
       }
     } finally {
@@ -135,8 +138,8 @@ export function EditBusCompanyDialog({
 
   return (
     <ResourceModalDialog
-      title="Chỉnh sửa nhà xe"
-      description="Cập nhật mã, tên và thông tin liên hệ của nhà xe."
+      title={tCompanies('editBusCompany')}
+      description={tCompanies('editCompanyDesc')}
       busy={submitting}
       preventDismiss={submitting}
       onClose={onClose}
@@ -153,7 +156,7 @@ export function EditBusCompanyDialog({
               type="button"
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button disabled={submitting} type="submit">
               {submitting && (
@@ -162,7 +165,7 @@ export function EditBusCompanyDialog({
                   className="size-4 motion-safe:animate-spin"
                 />
               )}
-              {submitting ? 'Đang lưu…' : 'Lưu thay đổi'}
+              {submitting ? tCommon('loading') : tCommon('save')}
             </Button>
           </div>
         }
@@ -172,7 +175,7 @@ export function EditBusCompanyDialog({
         )}
         
         <Field data-invalid={Boolean(fieldErrors.code)}>
-          <FieldLabel htmlFor="edit-company-code">Mã nhà xe</FieldLabel>
+          <FieldLabel htmlFor="edit-company-code">{tCompanies('colCode')}</FieldLabel>
           <Input
             autoComplete="off"
             className="admin-data-mono"
@@ -193,7 +196,7 @@ export function EditBusCompanyDialog({
         </Field>
         
         <Field data-invalid={Boolean(fieldErrors.name)}>
-          <FieldLabel htmlFor="edit-company-name">Tên nhà xe</FieldLabel>
+          <FieldLabel htmlFor="edit-company-name">{tCompanies('colName')}</FieldLabel>
           <Input
             autoComplete="organization"
             id="edit-company-name"
@@ -214,9 +217,9 @@ export function EditBusCompanyDialog({
         
         <Field data-invalid={Boolean(fieldErrors.contactInfo)}>
           <FieldLabel htmlFor="edit-company-contact">
-              Thông tin liên hệ{' '}
+              {tCompanies('contactInfo')}{' '}
               <span className="text-xs font-normal text-muted-foreground">
-                (Tùy chọn)
+                {tCompanies('optional')}
               </span>
           </FieldLabel>
           <Input

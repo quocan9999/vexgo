@@ -30,6 +30,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasAllPlatformAdminPermissions } from '@/features/admin-auth/services/admin-access';
 import { getDashboardOverview } from '../services/dashboard-service';
@@ -118,13 +119,14 @@ function Metric({
 }
 
 function CompanyStatus({ status }: { status: string }) {
+  const t = useTranslations('dashboard');
   return (
     <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
       {status === 'HOAT_DONG'
-        ? 'Đang hoạt động'
+        ? t('statusActive')
         : status === 'TAM_NGUNG'
-          ? 'Tạm ngưng'
-          : 'Trạng thái khác: ' + status}
+          ? t('statusSuspended')
+          : `${t('statusOther')}: ${status}`}
     </ResourceStatusBadge>
   );
 }
@@ -136,17 +138,18 @@ function RecentCompanies({
   companies: PlatformCompanySummary[];
   timeZone: string;
 }) {
+  const t = useTranslations('dashboard');
   if (!companies.length)
-    return <ResourceState>Chưa có nhà xe trên nền tảng.</ResourceState>;
+    return <ResourceState>{t('noCompanies')}</ResourceState>;
   return (
     <>
       <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nhà xe</TableHead>
-              <TableHead>Trạng thái</TableHead>
-              <TableHead>Quản trị viên</TableHead>
+              <TableHead>{t('colCompany')}</TableHead>
+              <TableHead>{t('colStatus')}</TableHead>
+              <TableHead>{t('colAdministrators')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -174,10 +177,9 @@ function RecentCompanies({
                 <TableCell>
                   <span
                     className="inline-flex items-center gap-1.5 tabular-nums text-slate-700 font-medium"
-                    title="Tài khoản hoạt động, nhân viên đang làm việc"
                   >
                     <span className="size-1.5 rounded-full bg-emerald-500" />
-                    {number(company.activeAdministratorCount)} hoạt động
+                    {number(company.activeAdministratorCount)} {t('activeAdminsCount', { count: company.activeAdministratorCount })}
                   </span>
                 </TableCell>
               </TableRow>
@@ -207,8 +209,7 @@ function RecentCompanies({
             </div>
             <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground pt-1">
               <p className="font-medium text-slate-700">
-                {number(company.activeAdministratorCount)} quản trị viên hoạt
-                động
+                {number(company.activeAdministratorCount)} {t('activeAdminsMobile', { count: company.activeAdministratorCount })}
               </p>
               <time dateTime={company.createdAt} className="text-slate-500">
                 {displayTimestamp(company.createdAt, timeZone).split(' · ')[1]}
@@ -222,6 +223,7 @@ function RecentCompanies({
 }
 
 function OnboardingChart({ overview }: { overview: DashboardOverview }) {
+  const t = useTranslations('dashboard');
   const maximum = Math.max(1, ...overview.onboarding.map((item) => item.count));
   const first = overview.onboarding[0];
   const last = overview.onboarding[overview.onboarding.length - 1];
@@ -229,17 +231,17 @@ function OnboardingChart({ overview }: { overview: DashboardOverview }) {
     <Card className="min-w-0 gap-6 p-5 sm:p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-base font-semibold tracking-tight">Nhà xe mới theo tháng</h2>
+          <h2 className="text-base font-semibold tracking-tight">{t('chartTitle')}</h2>
           <p className="text-xs text-muted-foreground">
             {first?.label} — {last?.label}
           </p>
         </div>
         <span className="rounded-full bg-blue-50 border border-blue-100 px-2.5 py-1 text-xs font-semibold text-primary shadow-2xs">
-          6 tháng gần nhất
+          {t('chart6Months')}
         </span>
       </div>
       <ul
-        aria-label="Số nhà xe mới theo tháng, tháng hiện tại tính đến thời điểm cập nhật"
+        aria-label={t('chartAriaLabel')}
         className="grid grid-cols-6 gap-3"
       >
         {overview.onboarding.map((item) => (
@@ -249,8 +251,9 @@ function OnboardingChart({ overview }: { overview: DashboardOverview }) {
               item.label +
               ': ' +
               number(item.count) +
-              ' nhà xe mới' +
-              (item.currentMonth ? ', tháng hiện tại chưa kết thúc' : '')
+              ' ' +
+              t('chartNewCompanies') +
+              (item.currentMonth ? ', ' + t('chartMonthNotEnded') : '')
             }
             className="group/bar min-w-0 text-center"
           >
@@ -292,13 +295,15 @@ function OnboardingChart({ overview }: { overview: DashboardOverview }) {
       </ul>
       <p className="text-xs text-muted-foreground border-t border-border/60 pt-3">
         {overview.onboarding.every((item) => item.count === 0)
-          ? 'Chưa có nhà xe mới trong giai đoạn này.'
-          : 'Tháng hiện tại chưa kết thúc.'}
+          ? t('chartNoNewCompanies')
+          : t('chartCurrentMonthNotice')}
       </p>
     </Card>
   );
 }
 export function SuperAdminDashboard() {
+  const t = useTranslations('dashboard');
+  const tCommon = useTranslations('common');
   const auth = useAdminSession();
   const session = auth.status === 'authenticated' ? auth.session : null;
   const canRead = hasAllPlatformAdminPermissions(session, [
@@ -342,14 +347,14 @@ export function SuperAdminDashboard() {
             identity,
             refresh,
             error:
-              cause instanceof Error ? cause.message : 'Không thể tải tổng quan.',
+              cause instanceof Error ? cause.message : t('cannotLoadOverview'),
           });
       });
     return () => {
       current = false;
       controller.abort();
     };
-  }, [canRead, identity, refresh]);
+  }, [canRead, identity, refresh, t]);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -370,22 +375,22 @@ export function SuperAdminDashboard() {
       <div className="admin-ui admin-page-content space-y-6">
         {/* Context Command Bar */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-1">
-          <h1 className="sr-only">Tổng quan nền tảng VexGo</h1>
+          <h1 className="sr-only">{t('platformOverviewTitle')}</h1>
 
           {/* Left Context */}
           <div className="flex items-center gap-2.5 flex-wrap">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200/80 shadow-2xs">
               <Building2 className="size-3.5 text-slate-500" />
               <span>
-                Phạm vi:{' '}
+                {t('scopeLabel')}:{' '}
                 <strong className="font-semibold text-slate-900">
-                  Toàn hệ thống VexGo
+                  {t('fullSystem')}
                 </strong>
               </span>
             </div>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
               <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-              Trực tiếp
+              {t('liveBadge')}
             </span>
           </div>
 
@@ -394,17 +399,17 @@ export function SuperAdminDashboard() {
             <div className="flex items-center gap-3 flex-wrap">
               <div
                 role="radiogroup"
-                aria-label="Tần suất tự động làm mới"
+                aria-label={t('autoRefreshFrequency')}
                 className="inline-flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-lg border border-border text-xs"
               >
                 <span className="text-muted-foreground px-2 py-1 font-medium flex items-center gap-1">
                   <Radio className="size-3 text-primary" />
-                  <span>Làm mới:</span>
+                  <span>{t('refreshLabel')}:</span>
                 </span>
                 {[
                   { value: 30, label: '30s' },
                   { value: 60, label: '60s' },
-                  { value: 0, label: 'Tắt' },
+                  { value: 0, label: t('refreshOff') },
                 ].map((option) => (
                   <button
                     key={option.value}
@@ -428,11 +433,12 @@ export function SuperAdminDashboard() {
                   className="text-xs text-muted-foreground hidden lg:inline-block tabular-nums"
                   dateTime={overview.generatedAt}
                   aria-label={
-                    'Cập nhật ' +
+                    t('updatedAt') +
+                    ': ' +
                     displayTimestamp(overview.generatedAt, overview.timeZone)
                   }
                 >
-                  Cập nhật:{' '}
+                  {t('updatedAt')}:{' '}
                   {
                     displayTimestamp(
                       overview.generatedAt,
@@ -453,8 +459,7 @@ export function SuperAdminDashboard() {
         {!canRead ? (
           <Card className="p-0">
             <ResourceState>
-              Bạn cần quyền xem nhà xe và tài khoản quản trị để xem tổng quan
-              nền tảng.
+              {t('needPermissions')}
             </ResourceState>
           </Card>
         ) : (
@@ -464,14 +469,14 @@ export function SuperAdminDashboard() {
                 <div className="space-y-3">
                   <p>{error}</p>
                   {overview && (
-                    <p>Đang hiển thị bản dữ liệu trước lần làm mới thất bại.</p>
+                    <p>{t('showingStaleData')}</p>
                   )}
                   <Button
                     variant="outline"
                     disabled={loading}
                     onClick={() => setRefresh((value) => value + 1)}
                   >
-                    Thử lại
+                    {tCommon('retry')}
                   </Button>
                 </div>
               </ResourceNotice>
@@ -480,7 +485,7 @@ export function SuperAdminDashboard() {
             {loading && !overview && (
               <div
                 role="status"
-                aria-label="Đang tải tổng quan nền tảng"
+                aria-label={t('loadingOverview')}
                 className="grid gap-4 md:grid-cols-3"
               >
                 {[0, 1, 2].map((item) => (
@@ -498,15 +503,15 @@ export function SuperAdminDashboard() {
 
             {overview && (
               <>
-                {/* 1. 3 Thẻ KPI Chỉ số Nền tảng */}
+                {/* 1. 3 KPI metric cards */}
                 <div
                   role="region"
-                  aria-label="Chỉ số nền tảng hiện tại"
+                  aria-label={t('currentPlatformMetrics')}
                   aria-busy={loading}
                   className="grid gap-4 md:grid-cols-3"
                 >
                   <Metric
-                    label="Nhà xe trên nền tảng"
+                    label={t('metricCompanies')}
                     value={overview.companies.total}
                     icon={<Building2 className="size-4.5" />}
                     tone="primary"
@@ -516,21 +521,21 @@ export function SuperAdminDashboard() {
                         aria-hidden
                         className="size-1.5 rounded-full bg-emerald-600 animate-pulse"
                       />
-                      {number(overview.companies.active)} hoạt động
+                      {t('activeCompanies', { count: overview.companies.active })}
                     </span>
                     {overview.companies.suspended > 0 && (
                       <span className="text-slate-500 font-medium text-[11px]">
-                        · {number(overview.companies.suspended)} tạm ngưng
+                        · {t('suspendedCompanies', { count: overview.companies.suspended })}
                       </span>
                     )}
                     {overview.companies.other > 0 && (
                       <span className="text-slate-500 font-medium text-[11px]">
-                        · {number(overview.companies.other)} khác
+                        · {t('otherCompanies', { count: overview.companies.other })}
                       </span>
                     )}
                   </Metric>
                   <Metric
-                    label="Quản trị viên nhà xe"
+                    label={t('metricAdmins')}
                     value={overview.administrators.total}
                     icon={<UsersRound className="size-4.5" />}
                     tone="neutral"
@@ -539,11 +544,11 @@ export function SuperAdminDashboard() {
                       <strong className="text-foreground">
                         {number(overview.administrators.active)}
                       </strong>{' '}
-                      đang làm việc
+                      {t('workingAdmins', { count: overview.administrators.active })}
                     </span>
                   </Metric>
                   <Metric
-                    label="Cần bổ sung quản trị viên"
+                    label={t('metricNeedingAdmin')}
                     value={needing}
                     icon={
                       needing ? (
@@ -559,31 +564,30 @@ export function SuperAdminDashboard() {
                         className="font-semibold text-[var(--admin-status-warning)] underline underline-offset-4 hover:text-amber-800 transition-colors text-[11px]"
                         href="#companies-needing-admin"
                       >
-                        Xem nhà xe cần xử lý →
+                        {t('viewNeedingCompanies')}
                       </a>
                     ) : overview.companies.active ? (
                       <span className="inline-flex items-center gap-1 text-emerald-700 font-medium text-[11px]">
-                        <CircleCheck className="size-3.5 text-emerald-600" /> Đầy
-                        đủ quản trị viên
+                        <CircleCheck className="size-3.5 text-emerald-600" /> {t('allAdminsAssigned')}
                       </span>
                     ) : (
-                      'Chưa có nhà xe cần rà soát'
+                      t('noCompaniesToReview')
                     )}
                   </Metric>
                 </div>
 
-                {/* 2. Cụm Bento Grid 8:4 Cân đối */}
+                {/* 2. Balanced 8:4 Bento Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  {/* Cột chính (8/12 cột): Nhà xe mới nhất & Biểu đồ Onboarding */}
+                  {/* Main column (8/12 cols): Recent Companies & Onboarding Chart */}
                   <div className="lg:col-span-8 space-y-6">
                     <Card className="min-w-0 gap-0 py-0 border-border shadow-xs">
                       <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6 border-b border-border/80">
                         <div>
                           <h2 className="text-base font-semibold text-foreground">
-                            Nhà xe mới nhất
+                            {t('recentCompaniesTitle')}
                           </h2>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            Các đối tác nhà xe vừa hoàn tất đăng ký hoặc gia nhập sàn VexGo
+                            {t('recentCompaniesSubtitle')}
                           </p>
                         </div>
                         <Link
@@ -595,7 +599,7 @@ export function SuperAdminDashboard() {
                           }
                           href="/bus-companies"
                         >
-                          <span>Tất cả nhà xe</span>
+                          <span>{t('allCompanies')}</span>
                           <ArrowUpRight className="size-3.5" aria-hidden />
                         </Link>
                       </div>
@@ -608,9 +612,9 @@ export function SuperAdminDashboard() {
                     <OnboardingChart overview={overview} />
                   </div>
 
-                  {/* Cột phụ (4/12 cột): Cảnh báo việc khẩn & Lối tắt thao tác nhanh */}
+                  {/* Secondary column (4/12 cols): Urgent Alerts & Shortcuts */}
                   <div className="lg:col-span-4 space-y-6">
-                    {/* Cảnh báo bổ sung admin */}
+                    {/* Administrator provisioning warning */}
                     {needing > 0 ? (
                       <Card
                         id="companies-needing-admin"
@@ -623,10 +627,10 @@ export function SuperAdminDashboard() {
                             </span>
                             <div>
                               <h2 className="text-xs font-semibold text-foreground">
-                                {number(needing)} nhà xe cần bổ sung admin
+                                {t('needingAdminCount', { count: number(needing) })}
                               </h2>
                               <p className="text-[11px] text-amber-800/80">
-                                Chưa có quản trị viên hoạt động
+                                {t('noActiveAdmins')}
                               </p>
                             </div>
                           </div>
@@ -640,7 +644,7 @@ export function SuperAdminDashboard() {
                             }
                             href="/admin-accounts"
                           >
-                            Cấp tài khoản
+                            {t('provisionAccount')}
                           </Link>
                         </div>
                         <ul className="divide-y divide-amber-200/50">
@@ -659,7 +663,7 @@ export function SuperAdminDashboard() {
                           ))}
                         </ul>
                         <p className="px-4 py-2 text-[11px] text-muted-foreground border-t border-amber-200/60">
-                          Tối đa 5 hồ sơ cũ nhất cần rà soát.
+                          {t('max5RecordsNotice')}
                         </p>
                       </Card>
                     ) : (
@@ -670,17 +674,17 @@ export function SuperAdminDashboard() {
                           </div>
                           <div>
                             <p className="text-xs font-semibold">
-                              Quản trị viên đầy đủ
+                              {t('fullyAdministeredTitle')}
                             </p>
                             <p className="text-[11px] text-emerald-700/90 mt-0.5 leading-snug">
-                              100% nhà xe hoạt động đã có quản trị viên tiếp quản.
+                              {t('fullyAdministeredDesc')}
                             </p>
                           </div>
                         </div>
                       </Card>
                     )}
 
-                    {/* Lối tắt thao tác nhanh */}
+                    {/* Quick actions shortcuts */}
                     <PlatformQuickActions />
                   </div>
                 </div>

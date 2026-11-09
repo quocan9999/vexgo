@@ -3,6 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import {
   MapPin,
   Phone,
@@ -11,6 +12,8 @@ import {
 } from 'lucide-react';
 
 export const CustomerFooter: React.FC = () => {
+  const t = useTranslations('footer');
+
   return (
     <footer className="bg-[#E60012] text-white/80 pt-14 pb-8 border-t border-[#CC0010] font-sans">
       <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -27,7 +30,7 @@ export const CustomerFooter: React.FC = () => {
               </div>
             </Link>
             <p className="text-xs text-white/80 leading-relaxed">
-              Hệ thống đặt vé xe khách trực tuyến, chọn ghế, thanh toán điện tử, tra cứu vé và gửi hàng theo tuyến xe.
+              {t('aboutDesc')}
             </p>
             <div className="flex items-center gap-3 pt-1">
               {/* Facebook */}
@@ -61,37 +64,37 @@ export const CustomerFooter: React.FC = () => {
           {/* Cột 2: Dịch vụ */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-              Dịch vụ
+              {t('services')}
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <Link href="/trips" className="hover:text-white transition-colors">
-                  Lịch trình & Đặt vé
+                  {t('scheduleBooking')}
                 </Link>
               </li>
               <li>
                 <Link href="/shipments/new" className="hover:text-white transition-colors">
-                  Gửi hàng liên tỉnh
+                  {t('sendFreight')}
                 </Link>
               </li>
               <li>
                 <Link href="/promotions" className="hover:text-white transition-colors">
-                  Khuyến mãi nổi bật
+                  {t('promotions')}
                 </Link>
               </li>
               <li>
                 <Link href="/news" className="hover:text-white transition-colors">
-                  Tin tức & Cẩm nang
+                  {t('news')}
                 </Link>
               </li>
               <li>
                 <Link href="/account/tickets" className="hover:text-white transition-colors">
-                  Vé của tôi
+                  {t('myTickets')}
                 </Link>
               </li>
               <li>
                 <Link href="/trips?type=Limousine" className="hover:text-white transition-colors">
-                  Xe Limousine cao cấp
+                  {t('limousine')}
                 </Link>
               </li>
             </ul>
@@ -100,32 +103,27 @@ export const CustomerFooter: React.FC = () => {
           {/* Cột 3: Liên kết nhanh */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-              Liên kết hữu ích
+              {t('usefulLinks')}
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <Link href="/about" className="hover:text-white transition-colors">
-                  Về VexGo
+                  {t('aboutVexgo')}
                 </Link>
               </li>
               <li>
                 <Link href="/tickets/lookup" className="hover:text-white transition-colors">
-                  Tra cứu thông tin vé
+                  {t('ticketLookup')}
                 </Link>
               </li>
               <li>
                 <Link href="/cancel-ticket" className="hover:text-white transition-colors">
-                  Hủy vé & Hoàn tiền
+                  {t('cancelTicket')}
                 </Link>
               </li>
               <li>
                 <Link href="/contact" className="hover:text-white transition-colors">
-                  Liên hệ hỗ trợ
-                </Link>
-              </li>
-              <li>
-                <Link href="/donate" className="hover:text-white transition-colors">
-                  Quỹ đóng góp phát triển hội
+                  {t('contact')}
                 </Link>
               </li>
             </ul>
@@ -134,16 +132,16 @@ export const CustomerFooter: React.FC = () => {
           {/* Cột 4: Thông tin liên hệ */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-              Trụ sở hoạt động
+              {t('headquarters')}
             </h4>
             <div className="space-y-2.5 text-xs text-white/80">
               <p className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-amber-300 flex-shrink-0 mt-0.5" />
-                <span>TP. Hồ Chí Minh & các tuyến liên tỉnh</span>
+                <span>{t('locationDesc')}</span>
               </p>
               <p className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-amber-300 flex-shrink-0" />
-                <span>Hotline: 1900 6789</span>
+                <span>{t('hotline')}</span>
               </p>
               <p className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-amber-300 flex-shrink-0" />
@@ -155,11 +153,11 @@ export const CustomerFooter: React.FC = () => {
 
         {/* Bản quyền */}
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/60">
-          <p>© {new Date().getFullYear()} VexGo. Tất cả quyền được bảo lưu.</p>
+          <p>© {new Date().getFullYear()} VexGo. {t('copyright')}</p>
           <div className="flex items-center gap-4 text-white/60">
-            <span>Bảo mật dữ liệu</span>
+            <span>{t('privacy')}</span>
             <span>·</span>
-            <span>Quy chế hoạt động</span>
+            <span>{t('terms')}</span>
           </div>
         </div>
       </div>

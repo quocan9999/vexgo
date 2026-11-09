@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { Info, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 export interface FeaturePlaceholderModalProps {
   isOpen: boolean;
@@ -13,9 +14,14 @@ export interface FeaturePlaceholderModalProps {
 export const FeaturePlaceholderModal: React.FC<FeaturePlaceholderModalProps> = ({
   isOpen,
   onClose,
-  title = 'Tính năng sắp có',
-  message = 'Thông tin xe/Chi tiết sẽ được bổ sung ở phiên bản sau.',
+  title,
+  message,
 }) => {
+  const t = useTranslations('booking');
+
+  const resolvedTitle = title || t('vehicleInfoModalTitle');
+  const resolvedMessage = message || t('vehicleInfoModalDesc');
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -45,7 +51,7 @@ export const FeaturePlaceholderModal: React.FC<FeaturePlaceholderModalProps> = (
           type="button"
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          aria-label="Đóng thông báo"
+          aria-label={t('guideCloseAria')}
         >
           <X className="w-5 h-5" />
         </button>
@@ -59,11 +65,11 @@ export const FeaturePlaceholderModal: React.FC<FeaturePlaceholderModalProps> = (
             id="placeholder-modal-title"
             className="text-lg font-bold text-slate-950 mb-2"
           >
-            {title}
+            {resolvedTitle}
           </h3>
 
           <p className="text-sm text-slate-600 leading-relaxed mb-6">
-            {message}
+            {resolvedMessage}
           </p>
 
           <button
@@ -71,7 +77,7 @@ export const FeaturePlaceholderModal: React.FC<FeaturePlaceholderModalProps> = (
             onClick={onClose}
             className="w-full h-10 px-5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-hover transition-colors shadow-sm"
           >
-            Đã hiểu
+            {t('btnUnderstood')}
           </button>
         </div>
       </div>

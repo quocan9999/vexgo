@@ -38,12 +38,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getErrorMessage(
   body: unknown,
   status: number,
-  resource = 'danh sách nhà xe',
+  resource = 'bus operator list',
 ) {
   if (isRecord(body) && typeof body.message === 'string') {
     return body.message;
   }
-  return `Không thể tải ${resource} (HTTP ${status}).`;
+  return `Unable to load ${resource} (HTTP ${status}).`;
 }
 
 function getApiErrorDetails(body: unknown): BusCompanyApiErrorDetail[] {
@@ -73,7 +73,7 @@ export async function createBusCompany(
     const message =
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tạo nhà xe (HTTP ${response.status}).`;
+        : `Unable to create bus operator (HTTP ${response.status}).`;
     const code =
       isRecord(body) && typeof body.error === 'string'
         ? body.error
@@ -82,7 +82,7 @@ export async function createBusCompany(
     throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
   }
   if (!isRecord(body) || !isRecord(body.data)) {
-    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+    throw new Error('API returned invalid bus operator data.');
   }
 
   return body.data as unknown as BusCompany;
@@ -107,7 +107,7 @@ export async function updateBusCompany(
     const message =
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể cập nhật nhà xe (HTTP ${response.status}).`;
+        : `Unable to update bus operator (HTTP ${response.status}).`;
     const code =
       isRecord(body) && typeof body.error === 'string'
         ? body.error
@@ -116,7 +116,7 @@ export async function updateBusCompany(
     throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
   }
   if (!isRecord(body) || !isRecord(body.data)) {
-    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+    throw new Error('API returned invalid bus operator data.');
   }
 
   return body.data as unknown as BusCompany;
@@ -141,7 +141,7 @@ export async function updateBusCompanyStatus(
     const message =
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể cập nhật trạng thái nhà xe (HTTP ${response.status}).`;
+        : `Unable to update bus operator status (HTTP ${response.status}).`;
     const code =
       isRecord(body) && typeof body.error === 'string'
         ? body.error
@@ -150,7 +150,7 @@ export async function updateBusCompanyStatus(
     throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
   }
   if (!isRecord(body) || !isRecord(body.data)) {
-    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+    throw new Error('API returned invalid bus operator data.');
   }
 
   return body.data as unknown as BusCompany;
@@ -185,7 +185,7 @@ export async function getBusCompanies(
     throw new Error(getErrorMessage(body, response.status));
   }
   if (!isRecord(body) || !Array.isArray(body.data) || !isRecord(body.meta)) {
-    throw new Error('API trả về dữ liệu nhà xe không hợp lệ.');
+    throw new Error('API returned invalid bus operator data.');
   }
 
   return body as unknown as PaginatedBusCompanies;
@@ -205,7 +205,7 @@ export async function getBusCompanyFilterOptions(
   const firstPage = await getBusCompanies(query, signal);
   const { totalPages } = firstPage.meta;
   if (!Number.isSafeInteger(totalPages) || totalPages < 0) {
-    throw new Error('API trả về thông tin phân trang bộ lọc nhà xe không hợp lệ.');
+    throw new Error('API returned invalid operator filter pagination.');
   }
   const remainingPages = await Promise.all(
     Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
@@ -229,10 +229,10 @@ export async function getBusCompanyById(
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(body, response.status, 'thông tin nhà xe'));
+    throw new Error(getErrorMessage(body, response.status, 'bus operator details'));
   }
   if (!isRecord(body) || !isRecord(body.data)) {
-    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+    throw new Error('API returned invalid bus operator details.');
   }
 
   return body.data as unknown as BusCompany;

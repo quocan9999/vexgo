@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   VEHICLE_STATUSES,
   type VehicleFilterOption,
@@ -64,28 +65,9 @@ function timestampFormat(value: string) {
     .replaceAll('/', '-');
 }
 
-function statusLabel(status: VehicleStatus) {
-  switch (status) {
-    case 'HOAT_DONG':
-      return 'Đang hoạt động';
-    case 'BAO_TRI':
-      return 'Bảo trì';
-  }
-}
-
 function statusTone(status: VehicleStatus) {
   return status === 'HOAT_DONG' ? 'active' : 'warning';
 }
-
-const VEHICLE_STATUS_OPTIONS: FilterOption[] = VEHICLE_STATUSES.map(
-  (status) => ({ value: status, label: statusLabel(status) }),
-);
-
-const VEHICLE_MOBILE_SORT_OPTIONS: FilterOption[] = [
-  { value: 'status', label: 'Trạng thái' },
-  { value: 'createdAt', label: 'Ngày tạo' },
-  { value: 'updatedAt', label: 'Cập nhật' },
-];
 
 function filterOptions(options: VehicleFilterOption[]): FilterOption[] {
   return options.map((option) => ({
@@ -108,15 +90,9 @@ function sortIcon(
   );
 }
 
-function vehicleStatusBadge(vehicle: VehicleListItem) {
-  return (
-    <ResourceStatusBadge tone={statusTone(vehicle.status)}>
-      {statusLabel(vehicle.status)}
-    </ResourceStatusBadge>
-  );
-}
-
 export function VehiclesManagement() {
+  const tVehicles = useTranslations('vehicles');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { can } = useAdminPermissions();
   const canCreate = can('vehicle:create');
@@ -139,21 +115,49 @@ export function VehiclesManagement() {
   const options = useVehicleFilterOptions();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
+  function getStatusLabel(status: VehicleStatus) {
+    return status === 'HOAT_DONG'
+      ? tVehicles('statusActive')
+      : tVehicles('statusMaintenance');
+  }
+
+  function vehicleStatusBadge(vehicle: VehicleListItem) {
+    return (
+      <ResourceStatusBadge tone={statusTone(vehicle.status)}>
+        {getStatusLabel(vehicle.status)}
+      </ResourceStatusBadge>
+    );
+  }
+
+  const vehicleStatusOptions: FilterOption[] = VEHICLE_STATUSES.map(
+    (status) => ({ value: status, label: getStatusLabel(status) }),
+  );
+
+  const vehicleMobileSortOptions: FilterOption[] = [
+    { value: 'status', label: tVehicles('colStatus') },
+    { value: 'createdAt', label: tVehicles('colCreatedAt') },
+    { value: 'updatedAt', label: tVehicles('colUpdatedAt') },
+  ];
+
   const items = vehiclePage?.data ?? [];
   const hasActiveFilters = Boolean(filters.vehicleTypeId || filters.status);
   const optionErrors = [
     options.busCompanies.status === 'error'
-      ? `Nhà xe: ${options.busCompanies.message}`
+      ? tVehicles('optionsErrorPrefixBusCompany', {
+          error: options.busCompanies.message,
+        })
       : null,
     options.vehicleTypes.status === 'error'
-      ? `Loại xe: ${options.vehicleTypes.message}`
+      ? tVehicles('optionsErrorPrefixVehicleType', {
+          error: options.vehicleTypes.message,
+        })
       : null,
   ].filter((message): message is string => message !== null);
 
   function sortButton(label: string, field: VehicleSortKey) {
     return (
       <Button
-        aria-label={`Sắp xếp theo ${label}`}
+        aria-label={`${tCommon('sortBy')} ${label}`}
         className="-ml-3"
         size="sm"
         variant="ghost"
@@ -170,18 +174,22 @@ export function VehiclesManagement() {
     <SuperAdminLayout activeSection="vehicles">
       <div className={`admin-ui admin-page-content ${styles.page}`}>
         <AdminPageHeader
-          eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
-          title="Danh sách xe"
+          eyebrow={tVehicles('eyebrow')}
+          title={tVehicles('vehiclesTitle')}
           titleId="vehicles-title"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm xe"
+                  label={tVehicles('createVehicle')}
                   onClick={() => router.push('/vehicles/create')}
                 />
               )}
-              <ResourceRefreshAction loading={loading} onClick={refresh} />
+              <ResourceRefreshAction
+                loading={loading}
+                onClick={refresh}
+                label={tCommon('refresh')}
+              />
             </div>
           }
         />
@@ -189,42 +197,45 @@ export function VehiclesManagement() {
           <Card className="gap-0 py-0 shadow-sm overflow-hidden">
             <FilterToolbar>
               <SearchInput
-                label="Tìm kiếm xe"
+                label={tVehicles('searchLabel')}
                 onChange={updateSearch}
-                placeholder="Tìm biển số hoặc loại xe…"
+                placeholder={tVehicles('searchPlaceholder')}
                 value={searchInput}
+                clearLabel={tCommon('clearSearch')}
               />
               {options.vehicleTypes.status === 'success' && (
                 <SelectFilter
-                  allLabel="Tất cả loại xe"
-                  label="Loại xe"
+                  allLabel={tVehicles('allTypes')}
+                  label={tVehicles('colType')}
                   onChange={(value) => updateFilters({ vehicleTypeId: value })}
                   options={filterOptions(options.vehicleTypes.options)}
                   value={filters.vehicleTypeId}
                 />
               )}
               <SelectFilter
-                allLabel="Tất cả trạng thái xe"
-                label="Trạng thái xe"
+                allLabel={tVehicles('allStatuses')}
+                label={tVehicles('colStatus')}
                 onChange={(value) =>
                   updateFilters({ status: value as VehicleStatus | '' })
                 }
-                options={VEHICLE_STATUS_OPTIONS}
+                options={vehicleStatusOptions}
                 value={filters.status}
               />
             </FilterToolbar>
             <div className="flex flex-wrap items-end gap-3 border-b p-4 md:hidden">
               <SelectFilter
-                allLabel="Biển số xe"
-                label="Sắp xếp theo"
+                allLabel={tVehicles('colPlate')}
+                label={tCommon('sortBy')}
                 onChange={(value) =>
                   sortVehicles((value || 'licensePlate') as VehicleSortKey)
                 }
-                options={VEHICLE_MOBILE_SORT_OPTIONS}
+                options={vehicleMobileSortOptions}
                 value={sortBy === 'licensePlate' ? '' : sortBy}
               />
               <Button
-                aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                aria-label={tCommon('toggleSortOrder', {
+                  order: sortDirection === 'asc' ? tCommon('ascending') : tCommon('descending'),
+                })}
                 onClick={() => sortVehicles(sortBy)}
                 variant="outline"
               >
@@ -233,7 +244,9 @@ export function VehiclesManagement() {
                 ) : (
                   <ArrowDown aria-hidden />
                 )}
-                {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                {sortDirection === 'asc'
+                  ? tCommon('sortAscending')
+                  : tCommon('sortDescending')}
               </Button>
             </div>
             {(options.busCompanies.status === 'loading' ||
@@ -242,7 +255,7 @@ export function VehiclesManagement() {
                 className="px-5 py-3 text-xs text-muted-foreground"
                 role="status"
               >
-                Đang tải tùy chọn bộ lọc…
+                {tVehicles('loadingFilterOptions')}
               </p>
             )}
             {optionErrors.length > 0 && (
@@ -255,19 +268,19 @@ export function VehiclesManagement() {
                     size="sm"
                     variant="outline"
                   >
-                    Thử tải lại bộ lọc
+                    {tVehicles('retryFilterOptions')}
                   </Button>
                 </ResourceNotice>
               </div>
             )}
             {loading && !vehiclePage && (
-              <ResourceTableSkeleton resourceLabel="xe" />
+              <ResourceTableSkeleton resourceLabel={tVehicles('resourceLabel')} />
             )}
             {error && (
               <ResourceState error>
                 <p>{error}</p>
                 <Button onClick={retry} variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
@@ -275,8 +288,8 @@ export function VehiclesManagement() {
               <ResourceState>
                 <p>
                   {searchInput.trim() || hasActiveFilters
-                    ? 'Không tìm thấy xe phù hợp với tìm kiếm hoặc bộ lọc.'
-                    : 'Chưa có xe trong hệ thống.'}
+                    ? tVehicles('noMatch')
+                    : tVehicles('emptyList')}
                 </p>
                 {(searchInput.trim() || hasActiveFilters) && (
                   <Button
@@ -286,7 +299,7 @@ export function VehiclesManagement() {
                     }}
                     variant="outline"
                   >
-                    Xóa bộ lọc
+                    {tCommon('clearFilters')}
                   </Button>
                 )}
               </ResourceState>
@@ -298,18 +311,18 @@ export function VehiclesManagement() {
                     <div className="hidden md:block">
                       <Table className="min-w-[960px]">
                         <TableCaption className="sr-only">
-                          Danh sách xe
+                          {tVehicles('tableCaption')}
                         </TableCaption>
                         <TableHeader>
                           <TableRow>
                             {(
                               [
-                                { key: 'licensePlate', label: 'Biển số xe' },
-                                { key: null, label: 'Nhà xe' },
-                                { key: null, label: 'Loại xe' },
-                                { key: 'status', label: 'Trạng thái' },
-                                { key: 'createdAt', label: 'Ngày tạo' },
-                                { key: 'updatedAt', label: 'Cập nhật' },
+                                { key: 'licensePlate', label: tVehicles('colPlate') },
+                                { key: null, label: tVehicles('colOperator') },
+                                { key: null, label: tVehicles('colType') },
+                                { key: 'status', label: tVehicles('colStatus') },
+                                { key: 'createdAt', label: tVehicles('colCreatedAt') },
+                                { key: 'updatedAt', label: tVehicles('colUpdatedAt') },
                               ] as const
                             ).map((column) => (
                               <TableHead
@@ -331,7 +344,7 @@ export function VehiclesManagement() {
                               </TableHead>
                             ))}
                             <TableHead scope="col">
-                              <span className="sr-only">Thao tác</span>
+                              <span className="sr-only">{tCommon('actions')}</span>
                             </TableHead>
                           </TableRow>
                         </TableHeader>
@@ -368,7 +381,8 @@ export function VehiclesManagement() {
                                   onClick={() =>
                                     router.push(`/vehicles/${vehicle.vehicleId}`)
                                   }
-                                  resourceName={`xe ${vehicle.licensePlate}`}
+                                  label={tCommon('viewDetails')}
+                                  resourceName={vehicle.licensePlate}
                                 />
                               </TableCell>
                             </TableRow>
@@ -388,29 +402,28 @@ export function VehiclesManagement() {
                                 {vehicle.licensePlate}
                               </h2>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                Xe #
-                                <span className="admin-data-mono">
-                                  {vehicle.vehicleId}
-                                </span>
+                                {tVehicles('vehicleNumberBadge', {
+                                  id: vehicle.vehicleId,
+                                })}
                               </p>
                             </div>
                             {vehicleStatusBadge(vehicle)}
                           </div>
                           <dl className={styles.detailFields}>
                             <div>
-                              <dt>Nhà xe</dt>
+                              <dt>{tVehicles('colOperator')}</dt>
                               <dd>{vehicle.busCompany.name}</dd>
                             </div>
                             <div>
-                              <dt>Loại xe</dt>
+                              <dt>{tVehicles('colType')}</dt>
                               <dd>{vehicle.vehicleType.name}</dd>
                             </div>
                             <div>
-                              <dt>Ngày tạo</dt>
+                              <dt>{tVehicles('colCreatedAt')}</dt>
                               <dd>{timestampFormat(vehicle.createdAt)}</dd>
                             </div>
                             <div>
-                              <dt>Cập nhật</dt>
+                              <dt>{tVehicles('colUpdatedAt')}</dt>
                               <dd>{timestampFormat(vehicle.updatedAt)}</dd>
                             </div>
                           </dl>
@@ -420,7 +433,8 @@ export function VehiclesManagement() {
                               onClick={() =>
                                 router.push(`/vehicles/${vehicle.vehicleId}`)
                               }
-                              resourceName={`xe ${vehicle.licensePlate}`}
+                              label={tCommon('viewDetails')}
+                              resourceName={vehicle.licensePlate}
                             />
                           </div>
                         </Card>
@@ -433,9 +447,14 @@ export function VehiclesManagement() {
                   disabled={loading}
                   onPageChange={changePage}
                   pageSize={vehiclePage.meta.pageSize}
-                  summaryLabel="xe"
+                  summaryLabel={tVehicles('resourceLabel')}
                   totalItems={vehiclePage.meta.totalItems}
                   totalPages={vehiclePage.meta.totalPages}
+                  showingLabel={tCommon('showing')}
+                  ofLabel={tCommon('of')}
+                  pageLabel={tCommon('page')}
+                  prevPageLabel={tCommon('prevPage')}
+                  nextPageLabel={tCommon('nextPage')}
                 />
               </>
             )}
@@ -449,7 +468,7 @@ export function VehiclesManagement() {
           onRetryOptions={options.retry}
           onSaved={(vehicle) => {
             setCreateDialogOpen(false);
-            toast.success(`Đã thêm xe ${vehicle.licensePlate}.`);
+            toast.success(tVehicles('createdSuccess', { plate: vehicle.licensePlate }));
             refresh();
           }}
           vehicleTypes={options.vehicleTypes}

@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useShipmentRates } from '../hooks/use-shipment-rates';
 import {
   getShipmentRateCargoTypeOptions,
@@ -61,14 +62,14 @@ import { ShipmentRateFormDialog } from './shipment-rate-form-dialog';
 import { LuggagePackagesManagement } from './luggage-packages-management';
 
 const STATUS_LABELS: Record<ShipmentRateStatus, string> = {
-  HOAT_DONG: 'Đang hoạt động',
-  TAM_NGUNG: 'Tạm ngưng',
+  HOAT_DONG: 'Active',
+  TAM_NGUNG: 'Paused',
 };
 
 const EFFECTIVE_LABELS: Record<ShipmentRateEffectiveState, string> = {
-  CHUA_DEN_NGAY: 'Chưa đến ngày',
-  DANG_HIEU_LUC: 'Đang hiệu lực',
-  HET_HIEU_LUC: 'Hết hiệu lực',
+  CHUA_DEN_NGAY: 'Upcoming',
+  DANG_HIEU_LUC: 'Active',
+  HET_HIEU_LUC: 'Expired',
 };
 
 const STATUS_OPTIONS: FilterOption[] = [
@@ -90,6 +91,9 @@ const INITIAL_OPTIONS: ShipmentRateOptionsState = {
 };
 
 export function ShipmentRatesManagement() {
+  const tShipments = useTranslations('shipments');
+  const tFare = useTranslations('farePrices');
+  const tCommon = useTranslations('common');
   const {
     ratePage,
     error,
@@ -124,6 +128,36 @@ export function ShipmentRatesManagement() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ShipmentRate | null>(null);
   const [rateTab, setRateTab] = useState<'freight' | 'luggage'>('freight');
+
+  const statusOptions: FilterOption[] = [
+    { value: 'HOAT_DONG', label: tShipments('ratesStatusActive') },
+    { value: 'TAM_NGUNG', label: tShipments('ratesStatusPaused') },
+  ];
+
+  const effectiveOptions: FilterOption[] = [
+    { value: 'DANG_HIEU_LUC', label: tShipments('validityActive') },
+    { value: 'CHUA_DEN_NGAY', label: tShipments('validityUpcoming') },
+    { value: 'HET_HIEU_LUC', label: tShipments('validityExpired') },
+  ];
+
+  function getLocalizedRateStatus(st: ShipmentRateStatus): string {
+    return st === 'HOAT_DONG'
+      ? tShipments('ratesStatusActive')
+      : tShipments('ratesStatusPaused');
+  }
+
+  function getLocalizedEffectiveState(eff: ShipmentRateEffectiveState): string {
+    switch (eff) {
+      case 'CHUA_DEN_NGAY':
+        return tShipments('validityUpcoming');
+      case 'DANG_HIEU_LUC':
+        return tShipments('validityActive');
+      case 'HET_HIEU_LUC':
+        return tShipments('validityExpired');
+      default:
+        return eff;
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -167,7 +201,7 @@ export function ShipmentRatesManagement() {
         const message =
           optionsError instanceof Error
             ? optionsError.message
-            : 'Không thể tải danh mục tuyến xe và loại hàng hóa.';
+            : tShipments('cannotLoadRoutesOrCargo');
         setFilterOptions((current) => ({
           ...current,
           loading: false,
@@ -258,13 +292,13 @@ export function ShipmentRatesManagement() {
     <SuperAdminLayout
       activeSection="shipments"
       breadcrumbs={[
-        { label: 'Danh sách phiếu gửi hàng', href: '/shipments' },
-        { label: 'Bảng giá cước' },
+        { label: tShipments('shipmentsTitle'), href: '/shipments' },
+        { label: tShipments('ratesTitle') },
       ]}
     >
       <div className="admin-page-content admin-ui space-y-6">
         <nav
-          aria-label="Chuyển đổi loại bảng giá"
+          aria-label={tFare('navPriceSwitchAria')}
           className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-3"
         >
           <div className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/70 p-1.5 shadow-xs">
@@ -273,7 +307,7 @@ export function ShipmentRatesManagement() {
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-background/80 hover:text-foreground"
             >
               <Ticket className="size-4" />
-              Bảng giá vé hành khách
+              {tFare('tabPassengerFares')}
             </Link>
             <Link
               href="/shipments/rates"
@@ -281,7 +315,7 @@ export function ShipmentRatesManagement() {
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all"
             >
               <Package className="size-4" />
-              Bảng giá cước gửi hàng
+              {tFare('tabCargoRates')}
             </Link>
           </div>
 
@@ -290,7 +324,7 @@ export function ShipmentRatesManagement() {
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Về danh sách vận đơn
+            {tShipments('backToShipments')}
           </Link>
         </nav>
 
@@ -307,7 +341,7 @@ export function ShipmentRatesManagement() {
             )}
           >
             <Package className="size-4" />
-            Cước gửi hàng theo tuyến
+            {tShipments('tabRouteFreight')}
           </button>
           <button
             type="button"
@@ -320,7 +354,7 @@ export function ShipmentRatesManagement() {
             )}
           >
             <Luggage className="size-4" />
-            Gói quy chuẩn &amp; Phụ phí dịch vụ (Dễ vỡ, Giá trị cao)
+            {tShipments('tabLuggage')}
           </button>
         </div>
 
@@ -328,12 +362,12 @@ export function ShipmentRatesManagement() {
           <div className="space-y-4">
             <div>
               <AdminPageHeader
-                eyebrow="QUY CHUẨN GÓI &amp; PHỤ PHÍ DỊCH VỤ"
-                title="Cấu hình gói kích thước &amp; Phụ phí bảo quản"
+                eyebrow={tShipments('luggageTabEyebrow')}
+                title={tShipments('luggageTabTitle')}
                 titleId="luggage-rates-title"
               />
               <p className="mt-2 text-[13px] text-muted-foreground">
-                Thiết lập mức cước 4 gói kích thước quy chuẩn (Size S, M, L, XL), phương tiện và phụ phí dịch vụ bảo quản (Dễ vỡ, Giá trị cao) áp dụng cho cả gửi hàng bưu kiện và hành lý ký gửi. Mặc định áp dụng toàn nhà xe hoặc tùy chỉnh riêng theo từng tuyến.
+                {tShipments('luggageTabDesc')}
               </p>
             </div>
             <LuggagePackagesManagement canUpdate={canUpdate} />
@@ -342,15 +376,15 @@ export function ShipmentRatesManagement() {
           <>
             <div>
               <AdminPageHeader
-                eyebrow="CẤU HÌNH CƯỚC VẬN CHUYỂN"
-                title="Quản lý bảng giá cước gửi hàng"
+                eyebrow={tShipments('ratesEyebrow')}
+                title={tShipments('ratesTitle')}
                 titleId="shipment-rates-title"
                 actions={
                   <div className="flex flex-wrap items-center gap-2">
                     <ResourceRefreshAction loading={loading} onClick={refresh} />
                     {canCreate && (
                       <ResourceCreateAction
-                        label="Thêm mức cước"
+                        label={tShipments('addRate')}
                         onClick={handleOpenCreate}
                       />
                     )}
@@ -358,21 +392,21 @@ export function ShipmentRatesManagement() {
                 }
               />
               <p className="mt-2 text-[13px] text-muted-foreground">
-                Thiết lập đơn giá gửi hàng theo tuyến xe, loại hàng hóa, nấc khối
-                lượng và thời gian hiệu lực.
+                {tShipments('ratesSubtitle')}
               </p>
             </div>
 
             <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/40 px-3.5 py-2.5 text-xs text-muted-foreground">
               <span>
-                💡 <strong>Mẹo:</strong> Phụ phí dịch vụ bảo quản đặc biệt (Hàng dễ vỡ, Giá trị cao) được cấu hình tập trung tại tab <strong>Gói quy chuẩn &amp; Phụ phí dịch vụ</strong>.
+                💡 <strong>{tShipments('ratesTipTitle')}</strong> {tShipments('ratesTipText')}{' '}
+                <strong>{tShipments('ratesTipTabName')}</strong>.
               </span>
               <button
                 type="button"
                 onClick={() => setRateTab('luggage')}
                 className="shrink-0 font-bold text-primary hover:underline cursor-pointer"
               >
-                Chuyển đến cấu hình phụ phí →
+                {tShipments('ratesTipLink')}
               </button>
             </div>
 
@@ -381,48 +415,48 @@ export function ShipmentRatesManagement() {
               aria-labelledby="shipment-rates-table-heading"
             >
           <h2 id="shipment-rates-table-heading" className="sr-only">
-            Danh sách mức cước gửi hàng
+            {tShipments('ratesListTitle')}
           </h2>
 
           <FilterToolbar>
             <SearchInput
-              label="Tìm mức cước gửi hàng"
+              label={tShipments('ratesSearchLabel')}
               value={searchInput}
               onChange={updateSearch}
-              placeholder="Mã tuyến, điểm đi, điểm đến, loại hàng..."
+              placeholder={tShipments('ratesSearchPlaceholder')}
             />
 
             <SelectFilter
-              label="Lọc theo tuyến xe"
+              label={tShipments('filterRouteLabel')}
               value={routeId}
-              allLabel="Tất cả tuyến"
+              allLabel={tShipments('filterAllRoutes')}
               options={toFilterOptions(filterOptions.routes)}
               onChange={updateRoute}
             />
 
             <SelectFilter
-              label="Lọc theo loại hàng"
+              label={tShipments('filterCargoLabel')}
               value={cargoTypeId}
-              allLabel="Tất cả loại hàng"
+              allLabel={tShipments('filterAllCargo')}
               options={toFilterOptions(filterOptions.cargoTypes)}
               onChange={updateCargoType}
             />
 
             <SelectFilter
-              label="Lọc theo trạng thái"
+              label={tShipments('filterStatusLabel')}
               value={status}
-              allLabel="Tất cả trạng thái"
-              options={STATUS_OPTIONS}
+              allLabel={tShipments('filterAllStatus')}
+              options={statusOptions}
               onChange={(value) =>
                 updateStatus(value as ShipmentRateStatus | '')
               }
             />
 
             <SelectFilter
-              label="Lọc theo tình trạng hiệu lực"
+              label={tShipments('filterValidityLabel')}
               value={effectiveState}
-              allLabel="Tất cả hiệu lực"
-              options={EFFECTIVE_OPTIONS}
+              allLabel={tShipments('filterAllValidity')}
+              options={effectiveOptions}
               onChange={(value) =>
                 updateEffectiveState(value as ShipmentRateEffectiveState | '')
               }
@@ -433,20 +467,20 @@ export function ShipmentRatesManagement() {
             <ResourceState error>
               <p>{error}</p>
               <Button type="button" variant="outline" onClick={refresh}>
-                Thử lại
+                {tCommon('retry')}
               </Button>
             </ResourceState>
           )}
 
           {loading && !ratePage ? (
-            <ResourceTableSkeleton resourceLabel="bảng giá cước gửi hàng" />
+            <ResourceTableSkeleton resourceLabel={tShipments('ratesResourceLabel')} />
           ) : rates.length === 0 ? (
             error ? null : (
               <ResourceState>
                 <p>
                   {isFiltered
-                    ? 'Không tìm thấy mức cước gửi hàng phù hợp.'
-                    : 'Chưa có mức cước gửi hàng nào được cấu hình.'}
+                    ? tShipments('ratesEmptyFiltered')
+                    : tShipments('ratesEmptyNoData')}
                 </p>
                 {isFiltered ? (
                   <Button
@@ -454,12 +488,12 @@ export function ShipmentRatesManagement() {
                     variant="outline"
                     onClick={resetFilters}
                   >
-                    Đặt lại bộ lọc
+                    {tShipments('resetFiltersBtn')}
                   </Button>
                 ) : (
                   canCreate && (
                     <ResourceCreateAction
-                      label="Thêm mức cước đầu tiên"
+                      label={tShipments('addFirstRate')}
                       onClick={handleOpenCreate}
                     />
                   )
@@ -471,13 +505,13 @@ export function ShipmentRatesManagement() {
               <div className="hidden md:block" aria-busy={loading}>
                 <Table>
                   <caption className="sr-only">
-                    Danh sách mức cước gửi hàng theo tuyến và loại hàng
+                    {tShipments('tableCaption')}
                   </caption>
                   <TableHeader>
                     <TableRow>
-                      <TableHead scope="col">Mã tuyến</TableHead>
-                      <TableHead scope="col">Hành trình</TableHead>
-                      <TableHead scope="col">Loại hàng</TableHead>
+                      <TableHead scope="col">{tShipments('colRouteCode')}</TableHead>
+                      <TableHead scope="col">{tShipments('colJourney')}</TableHead>
+                      <TableHead scope="col">{tShipments('colCargoType')}</TableHead>
                       <TableHead
                         scope="col"
                         aria-sort={getAriaSort(
@@ -486,13 +520,13 @@ export function ShipmentRatesManagement() {
                           'weightFrom',
                         )}
                       >
-                        {renderSortButton('weightFrom', 'Nấc khối lượng')}
+                        {renderSortButton('weightFrom', tShipments('colWeightBracket'))}
                       </TableHead>
                       <TableHead
                         scope="col"
                         aria-sort={getAriaSort(sortBy, sortDirection, 'fee')}
                       >
-                        {renderSortButton('fee', 'Mức cước')}
+                        {renderSortButton('fee', tShipments('colRateFee'))}
                       </TableHead>
                       <TableHead
                         scope="col"
@@ -502,7 +536,7 @@ export function ShipmentRatesManagement() {
                           'validFrom',
                         )}
                       >
-                        {renderSortButton('validFrom', 'Từ ngày')}
+                        {renderSortButton('validFrom', tShipments('colValidFrom'))}
                       </TableHead>
                       <TableHead
                         scope="col"
@@ -512,17 +546,17 @@ export function ShipmentRatesManagement() {
                           'validTo',
                         )}
                       >
-                        {renderSortButton('validTo', 'Đến ngày')}
+                        {renderSortButton('validTo', tShipments('colValidTo'))}
                       </TableHead>
                       <TableHead
                         scope="col"
                         aria-sort={getAriaSort(sortBy, sortDirection, 'status')}
                       >
-                        {renderSortButton('status', 'Trạng thái')}
+                        {renderSortButton('status', tShipments('colStatus'))}
                       </TableHead>
-                      <TableHead scope="col">Hiệu lực</TableHead>
+                      <TableHead scope="col">{tShipments('colValidity')}</TableHead>
                       <TableHead scope="col">
-                        <span className="sr-only">Thao tác</span>
+                        <span className="sr-only">{tCommon('actions')}</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -548,7 +582,7 @@ export function ShipmentRatesManagement() {
                         <TableCell>
                           {item.validTo
                             ? formatDateOnly(item.validTo)
-                            : 'Không giới hạn'}
+                            : tShipments('unlimited')}
                         </TableCell>
                         <TableCell>
                           <ResourceStatusBadge
@@ -556,7 +590,7 @@ export function ShipmentRatesManagement() {
                               item.status === 'HOAT_DONG' ? 'active' : 'muted'
                             }
                           >
-                            {STATUS_LABELS[item.status]}
+                            {getLocalizedRateStatus(item.status)}
                           </ResourceStatusBadge>
                         </TableCell>
                         <TableCell>
@@ -567,7 +601,7 @@ export function ShipmentRatesManagement() {
                                 : 'muted'
                             }
                           >
-                            {EFFECTIVE_LABELS[item.effectiveState]}
+                            {getLocalizedEffectiveState(item.effectiveState)}
                           </ResourceStatusBadge>
                         </TableCell>
                         <TableCell>
@@ -584,7 +618,7 @@ export function ShipmentRatesManagement() {
 
               <div
                 className="grid gap-3 p-3 md:hidden"
-                aria-label="Danh sách mức cước gửi hàng dạng thẻ"
+                aria-label={tShipments('cardListAriaRates')}
               >
                 {rates.map((item) => (
                   <Card
@@ -610,24 +644,24 @@ export function ShipmentRatesManagement() {
                     </p>
                     <dl className="grid grid-cols-2 gap-2 text-xs">
                       <div>
-                        <dt className="text-muted-foreground">Loại hàng</dt>
+                        <dt className="text-muted-foreground">{tShipments('colCargoType')}</dt>
                         <dd className="font-medium">{item.cargoType.name}</dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground">
-                          Nấc khối lượng
+                          {tShipments('colWeightBracket')}
                         </dt>
                         <dd className="font-medium">
                           {formatWeightBand(item.weightFrom, item.weightTo)}
                         </dd>
                       </div>
                       <div className="col-span-2">
-                        <dt className="text-muted-foreground">Hiệu lực</dt>
+                        <dt className="text-muted-foreground">{tShipments('colValidity')}</dt>
                         <dd>
                           {formatDateOnly(item.validFrom)} →{' '}
                           {item.validTo
                             ? formatDateOnly(item.validTo)
-                            : 'Không giới hạn'}
+                            : tShipments('unlimited')}
                         </dd>
                       </div>
                     </dl>
@@ -635,7 +669,7 @@ export function ShipmentRatesManagement() {
                       <ResourceStatusBadge
                         tone={item.status === 'HOAT_DONG' ? 'active' : 'muted'}
                       >
-                        {STATUS_LABELS[item.status]}
+                        {getLocalizedRateStatus(item.status)}
                       </ResourceStatusBadge>
                       <ResourceStatusBadge
                         tone={
@@ -644,7 +678,7 @@ export function ShipmentRatesManagement() {
                             : 'muted'
                         }
                       >
-                        {EFFECTIVE_LABELS[item.effectiveState]}
+                        {getLocalizedEffectiveState(item.effectiveState)}
                       </ResourceStatusBadge>
                     </div>
                   </Card>
@@ -659,7 +693,7 @@ export function ShipmentRatesManagement() {
             totalPages={meta.totalPages}
             totalItems={meta.totalItems}
             disabled={loading}
-            summaryLabel="mức cước"
+            summaryLabel={tShipments('rateSummaryLabel')}
             onPageChange={changePage}
           />
         </section>

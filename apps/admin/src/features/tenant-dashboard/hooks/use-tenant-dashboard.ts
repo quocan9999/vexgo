@@ -39,7 +39,7 @@ export function useTenantDashboard() {
       setError(
         err instanceof Error
           ? err.message
-          : 'Không thể tải dữ liệu bảng điều khiển nhà xe. Vui lòng thử lại.',
+          : 'Failed to load bus company dashboard data. Please try again.',
       );
     } finally {
       setLoading(false);

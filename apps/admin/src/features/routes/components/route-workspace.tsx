@@ -9,7 +9,6 @@ import {
   Clock,
   Compass,
   LoaderCircle,
-  MapPin,
   MapPinned,
   Pencil,
   Route as RouteIcon,
@@ -27,6 +26,7 @@ import { Badge } from '@/components/ui/status-badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
+import { useTranslations } from 'next-intl';
 import { StopListEditor } from '@/features/stops/components/stop-list-editor';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
@@ -65,6 +65,8 @@ export function RouteWorkspace({
   routeId,
   onUpdated,
 }: RouteWorkspaceProps) {
+  const tRoutes = useTranslations('routes');
+  const tCommon = useTranslations('common');
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const canUpdate = hasAdminPermission(session, 'route:update');
@@ -99,16 +101,16 @@ export function RouteWorkspace({
       onUpdated?.(saved);
       toast.success(
         nextStatus === 'TAM_NGUNG'
-          ? 'Đã tạm ngưng khai thác tuyến xe.'
-          : 'Đã kích hoạt tuyến xe hoạt động trở lại.',
+          ? tRoutes('statusSuspendedSuccess')
+          : tRoutes('statusActivatedSuccess'),
       );
     } catch (error: unknown) {
       toast.error(
         error instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          ? tCommon('networkError')
           : error instanceof Error
             ? error.message
-            : 'Không thể cập nhật trạng thái tuyến xe.',
+            : tRoutes('statusUpdateError'),
       );
     } finally {
       statusSubmittingRef.current = false;
@@ -129,7 +131,7 @@ export function RouteWorkspace({
             message:
               error instanceof Error
                 ? error.message
-                : 'Không thể tải thông tin tuyến xe.',
+                : tRoutes('loadDetailsError'),
           });
         }
       });
@@ -145,7 +147,7 @@ export function RouteWorkspace({
       });
 
     return () => controller.abort();
-  }, [routeId, retryCount]);
+  }, [routeId, retryCount, tRoutes]);
 
   function retry() {
     setDetail({ status: 'loading' });
@@ -158,8 +160,8 @@ export function RouteWorkspace({
     <SuperAdminLayout
       activeSection="routes"
       breadcrumbs={[
-        { label: 'Quản lý tuyến xe', href: '/routes' },
-        { label: route ? `${route.code} (${route.origin} - ${route.destination})` : 'Chi tiết tuyến xe' },
+        { label: tRoutes('routesTitle'), href: '/routes' },
+        { label: route ? `${route.code} (${route.origin} - ${route.destination})` : tRoutes('routeDetails') },
       ]}
     >
       <div className="admin-page-content space-y-6">
@@ -172,19 +174,19 @@ export function RouteWorkspace({
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Quay lại danh sách
+                {tCommon('backToList')}
               </Button>
               {canUpdate && route && nextStatus && (
                 <Button variant="outline" onClick={() => setStatusOpen(true)}>
                   {route.status === 'HOAT_DONG'
-                    ? 'Tạm ngưng tuyến'
-                    : 'Kích hoạt tuyến'}
+                    ? tRoutes('suspendRoute')
+                    : tRoutes('activateRoute')}
                 </Button>
               )}
               {canUpdate && route && (
                 <Button onClick={() => setEditOpen(true)}>
                   <Pencil aria-hidden="true" />
-                  Chỉnh sửa
+                  {tCommon('edit')}
                 </Button>
               )}
               <ResourceRefreshAction
@@ -193,13 +195,13 @@ export function RouteWorkspace({
               />
             </div>
           }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
-          title={route ? `Chi tiết tuyến ${route.code}` : 'Chi tiết tuyến xe'}
+          eyebrow={tRoutes('eyebrow')}
+          title={route ? tRoutes('routeDetailsTitle', { code: route.code }) : tRoutes('routeDetails')}
           titleId="route-workspace-title"
         />
 
         {detail.status === 'loading' && (
-          <ResourceState loading>Đang tải thông tin tuyến xe…</ResourceState>
+          <ResourceState loading>{tRoutes('loadingDetails')}</ResourceState>
         )}
 
         {detail.status === 'error' && (
@@ -207,10 +209,10 @@ export function RouteWorkspace({
             <p>{detail.message}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={retry} variant="outline">
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button nativeButton={false} render={<Link href="/routes" />}>
-                Về danh sách tuyến
+                {tRoutes('backToRoutes')}
               </Button>
             </div>
           </ResourceState>
@@ -242,43 +244,47 @@ export function RouteWorkspace({
                 <ResourceStatusBadge
                   tone={route.status === 'HOAT_DONG' ? 'active' : 'muted'}
                 >
-                  {route.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}
+                  {route.status === 'HOAT_DONG' ? tRoutes('active') : tRoutes('inactive')}
                 </ResourceStatusBadge>
               </div>
             </Card>
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Thông tin hành trình */}
+              {/* Card 1: Journey Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Compass className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Thông tin hành trình
+                      {tRoutes('journeyInfo')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Điểm khởi hành</dt>
+                      <dt>{tRoutes('departurePoint')}</dt>
                       <dd className="font-medium text-foreground">{route.origin}</dd>
                     </div>
                     <div>
-                      <dt>Điểm kết thúc</dt>
+                      <dt>{tRoutes('arrivalPoint')}</dt>
                       <dd className="font-medium text-foreground">{route.destination}</dd>
                     </div>
                     <div>
-                      <dt>Thời gian chạy dự kiến</dt>
+                      <dt>{tRoutes('estimatedDuration')}</dt>
                       <dd className="font-medium text-foreground">
                         {route.durationMinutes === null
-                          ? 'Chưa thiết lập'
-                          : `${route.durationMinutes} phút (${Math.floor(route.durationMinutes / 60)}h${route.durationMinutes % 60}p)`}
+                          ? tRoutes('notSet')
+                          : tRoutes('durationMinutesDetail', {
+                              minutes: route.durationMinutes,
+                              hours: Math.floor(route.durationMinutes / 60),
+                              mins: route.durationMinutes % 60,
+                            })}
                       </dd>
                     </div>
                     <div>
-                      <dt>Nhà xe vận hành</dt>
+                      <dt>{tRoutes('colOperator')}</dt>
                       <dd className="flex items-center gap-1.5 font-medium">
                         <Building2 className="size-3.5 text-muted-foreground" />
                         {route.busCompany.name} (
@@ -290,14 +296,14 @@ export function RouteWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 2: Lộ trình mẫu */}
+              {/* Card 2: Sample Route */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <RouteIcon className="size-4 text-muted-foreground" />
                       <CardTitle className="text-base font-semibold">
-                        Lộ trình mẫu
+                        {tRoutes('sampleRouteTitle')}
                       </CardTitle>
                     </div>
                     {canUpdate && (
@@ -307,33 +313,33 @@ export function RouteWorkspace({
                         type="button"
                         onClick={() => setStopsEditorOpen(true)}
                       >
-                        Cấu hình ({routeStops.length})
+                        {tRoutes('configureStops', { count: routeStops.length })}
                       </Button>
                     )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4 p-0">
                   <CardDescription className="text-xs">
-                    Khuôn điểm đón, điểm trả và trạm dừng chân mặc định được tự động áp dụng khi khởi tạo chuyến xe mới.
+                    {tRoutes('sampleRouteDesc')}
                   </CardDescription>
 
                   {loadingStops ? (
-                    <p className="text-xs text-muted-foreground">Đang tải điểm dừng…</p>
+                    <p className="text-xs text-muted-foreground">{tRoutes('loadingStops')}</p>
                   ) : routeStops.length === 0 ? (
                     <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                      Chưa thiết lập khuôn lộ trình. Nhấn &quot;Cấu hình&quot; để thêm điểm đón/trả.
+                      {tRoutes('noStopsPattern')}
                     </p>
                   ) : (
                     <div className="flex flex-wrap gap-2 text-xs">
                       <Badge variant="secondary">
-                        {routeStops.filter((s) => s.loaiDiem === 'DON').length} điểm đón
+                        {tRoutes('pickupCount', { count: routeStops.filter((s) => s.loaiDiem === 'DON').length })}
                       </Badge>
                       <Badge variant="outline">
-                        {routeStops.filter((s) => s.loaiDiem === 'TRA').length} điểm trả
+                        {tRoutes('dropoffCount', { count: routeStops.filter((s) => s.loaiDiem === 'TRA').length })}
                       </Badge>
                       {routeStops.some((s) => s.loaiDiem === 'NGHI') && (
                         <Badge variant="warning">
-                          {routeStops.filter((s) => s.loaiDiem === 'NGHI').length} trạm nghỉ
+                          {tRoutes('restCount', { count: routeStops.filter((s) => s.loaiDiem === 'NGHI').length })}
                         </Badge>
                       )}
                     </div>
@@ -341,13 +347,13 @@ export function RouteWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 3: Hồ sơ & Thời gian */}
+              {/* Card 3: Record & Timeline */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Hồ sơ & Thời gian
+                      {tRoutes('recordAndTimeline')}
                     </CardTitle>
                   </div>
                 </CardHeader>
@@ -356,7 +362,7 @@ export function RouteWorkspace({
                     <div>
                       <dt className="flex items-center gap-1.5">
                         <Clock className="size-3.5" />
-                        Ngày tạo tuyến
+                        {tRoutes('createdAtLabel')}
                       </dt>
                       <dd className="text-muted-foreground tabular-nums">
                         {timestampFormat(route.createdAt)}
@@ -365,7 +371,7 @@ export function RouteWorkspace({
                     <div>
                       <dt className="flex items-center gap-1.5">
                         <Clock className="size-3.5" />
-                        Cập nhật lần cuối
+                        {tRoutes('updatedAtLabel')}
                       </dt>
                       <dd className="text-muted-foreground tabular-nums">
                         {timestampFormat(route.updatedAt)}
@@ -387,7 +393,7 @@ export function RouteWorkspace({
               setEditOpen(false);
               setDetail({ status: 'success', route: saved });
               onUpdated?.(saved);
-              toast.success('Cập nhật tuyến xe thành công.');
+              toast.success(tRoutes('updateSuccess'));
             }}
           />
         )}
@@ -396,7 +402,7 @@ export function RouteWorkspace({
           <StopListEditor
             mode="route"
             targetId={routeId}
-            title={`Khuôn lộ trình: ${route.code} (${route.origin} - ${route.destination})`}
+            title={tRoutes('patternTitle', { code: route.code, origin: route.origin, destination: route.destination })}
             onClose={() => setStopsEditorOpen(false)}
             onSaved={() => {
               getRouteStops(routeId).then(setRouteStops).catch(() => {});
@@ -410,13 +416,13 @@ export function RouteWorkspace({
             onClose={() => setStatusOpen(false)}
             title={
               nextStatus === 'TAM_NGUNG'
-                ? 'Tạm ngưng tuyến xe?'
-                : 'Kích hoạt tuyến xe?'
+                ? tRoutes('suspendTitle')
+                : tRoutes('activateTitle')
             }
             description={
               nextStatus === 'TAM_NGUNG'
-                ? 'Tuyến sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu tuyến và có thể kích hoạt lại sau.'
-                : 'Tuyến sẽ được chuyển sang trạng thái Đang hoạt động.'
+                ? tRoutes('suspendDescription')
+                : tRoutes('activateDescription')
             }
           >
             <Button
@@ -428,10 +434,10 @@ export function RouteWorkspace({
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
               {statusSubmitting
-                ? 'Đang cập nhật…'
+                ? tRoutes('updatingStatus')
                 : nextStatus === 'TAM_NGUNG'
-                  ? 'Tạm ngưng tuyến'
-                  : 'Kích hoạt tuyến'}
+                  ? tRoutes('suspendRoute')
+                  : tRoutes('activateRoute')}
             </Button>
           </ResourceConfirmation>
         )}

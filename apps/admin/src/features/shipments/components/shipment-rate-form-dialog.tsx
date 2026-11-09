@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
 import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 import { Button } from '@/components/ui/action-button';
@@ -68,12 +69,12 @@ const WEIGHT_BAND_PRESETS: Array<{
   { label: '5 → 10 kg', weightFrom: '5', weightTo: '10' },
   { label: '10 → 20 kg', weightFrom: '10', weightTo: '20' },
   { label: '20 → 50 kg', weightFrom: '20', weightTo: '50' },
-  { label: 'Trên 50 kg', weightFrom: '50', weightTo: '' },
+  { label: '50+ kg', weightFrom: '50', weightTo: '' },
 ];
 
 const STATUS_LABELS: Record<ShipmentRateStatus, string> = {
-  HOAT_DONG: 'Đang hoạt động',
-  TAM_NGUNG: 'Tạm ngưng',
+  HOAT_DONG: 'Active',
+  TAM_NGUNG: 'Paused',
 };
 
 export function ShipmentRateFormDialog({
@@ -93,6 +94,8 @@ export function ShipmentRateFormDialog({
   onClose: () => void;
   onSaved: (rate: ShipmentRate, message: string) => void;
 }) {
+  const tShipments = useTranslations('shipments');
+  const tCommon = useTranslations('common');
   const [values, setValues] = useState<ShipmentRateFormValues>(EMPTY_VALUES);
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<FieldName, string>>
@@ -175,17 +178,17 @@ export function ShipmentRateFormDialog({
     const feeNum = Number(values.fee.trim());
 
     if (mode === 'create' && !values.routeId) {
-      errors.routeId = 'Vui lòng chọn tuyến xe.';
+      errors.routeId = tShipments('errSelectRoute');
     }
     if (mode === 'create' && !values.cargoTypeId) {
-      errors.cargoTypeId = 'Vui lòng chọn loại hàng hóa.';
+      errors.cargoTypeId = tShipments('errSelectCargoType');
     }
     if (
       values.weightFrom.trim() === '' ||
       !Number.isFinite(weightFromNum) ||
       weightFromNum < 0
     ) {
-      errors.weightFrom = 'Khối lượng từ phải lớn hơn hoặc bằng 0.';
+      errors.weightFrom = tShipments('errWeightFromGte0');
     }
     if (
       hasWeightTo &&
@@ -193,29 +196,28 @@ export function ShipmentRateFormDialog({
         !Number.isFinite(weightToNum) ||
         weightToNum <= 0)
     ) {
-      errors.weightTo = 'Khối lượng đến phải là số lớn hơn 0.';
+      errors.weightTo = tShipments('errWeightToGt0');
     } else if (
       weightToNum !== null &&
       Number.isFinite(weightFromNum) &&
       weightToNum <= weightFromNum
     ) {
-      errors.weightTo = 'Khối lượng đến phải lớn hơn khối lượng từ.';
+      errors.weightTo = tShipments('errWeightToGtFrom');
     }
     if (!values.fee.trim()) {
-      errors.fee = 'Vui lòng nhập mức cước.';
+      errors.fee = tShipments('errFeeRequired');
     } else if (!Number.isFinite(feeNum) || feeNum <= 0) {
-      errors.fee = 'Mức cước phải lớn hơn 0.';
+      errors.fee = tShipments('errFeeGt0');
     }
     if (!values.validFrom) {
-      errors.validFrom = 'Vui lòng chọn ngày bắt đầu hiệu lực.';
+      errors.validFrom = tShipments('errValidFromRequired');
     }
     if (
       values.validFrom &&
       values.validTo &&
       values.validTo < values.validFrom
     ) {
-      errors.validTo =
-        'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu hiệu lực.';
+      errors.validTo = tShipments('errValidToGteFrom');
     }
 
     return errors;
@@ -266,8 +268,8 @@ export function ShipmentRateFormDialog({
       onSaved(
         saved,
         mode === 'edit'
-          ? 'Đã cập nhật mức cước gửi hàng.'
-          : 'Đã tạo mức cước gửi hàng mới.',
+          ? tShipments('rateUpdateSuccess')
+          : tShipments('rateCreatedSuccess'),
       );
     } catch (error) {
       if (error instanceof ShipmentRateApiError && error.details.length > 0) {
@@ -282,7 +284,7 @@ export function ShipmentRateFormDialog({
       const msg =
         error instanceof Error
           ? error.message
-          : 'Không thể lưu mức cước gửi hàng. Vui lòng thử lại.';
+          : tShipments('rateSaveError');
       setFormError(msg);
       toast.error(msg);
       setSubmitting(false);
@@ -295,10 +297,10 @@ export function ShipmentRateFormDialog({
     <ResourceModalDialog
       title={
         mode === 'edit'
-          ? 'Chỉnh sửa mức cước gửi hàng'
-          : 'Thêm mức cước gửi hàng'
+          ? tShipments('dialogEditRateTitle')
+          : tShipments('dialogAddRateTitle')
       }
-      description="Thiết lập nấc khối lượng, đơn giá vận chuyển hàng hóa và thời gian hiệu lực."
+      description={tShipments('dialogRateDesc')}
       busy={submitting}
       preventDismiss={submitting}
       onClose={onClose}
@@ -315,17 +317,17 @@ export function ShipmentRateFormDialog({
               onClick={onClose}
               disabled={submitting}
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button type="submit" disabled={submitting} aria-busy={submitting}>
               {submitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
               {submitting
-                ? 'Đang lưu...'
+                ? tShipments('btnSaving')
                 : mode === 'edit'
-                  ? 'Lưu thay đổi'
-                  : 'Tạo mức cước'}
+                  ? tShipments('btnSaveRate')
+                  : tShipments('btnCreateRate')}
             </Button>
           </div>
         }
@@ -346,7 +348,7 @@ export function ShipmentRateFormDialog({
               className="mt-2"
               onClick={onRetryOptions}
             >
-              Tải lại danh mục
+              {tShipments('btnReloadCategories')}
             </Button>
           </ResourceNotice>
         )}
@@ -365,7 +367,7 @@ export function ShipmentRateFormDialog({
           <>
             <Field data-invalid={Boolean(fieldErrors.routeId)}>
               <FieldLabel htmlFor="shipment-rate-route">
-                Tuyến xe <span aria-hidden>*</span>
+                {tShipments('formRouteLabel')} <span aria-hidden>*</span>
               </FieldLabel>
               <SearchableCombobox
                 id="shipment-rate-route"
@@ -375,7 +377,7 @@ export function ShipmentRateFormDialog({
                 disabled={submitting || options.loading}
                 loading={options.loading}
                 allowCustom={false}
-                placeholder="Tìm và chọn tuyến xe..."
+                placeholder={tShipments('formRoutePlaceholder')}
                 aria-invalid={Boolean(fieldErrors.routeId)}
               />
               <FieldError>{fieldErrors.routeId}</FieldError>
@@ -383,7 +385,7 @@ export function ShipmentRateFormDialog({
 
             <Field data-invalid={Boolean(fieldErrors.cargoTypeId)}>
               <FieldLabel htmlFor="shipment-rate-cargo-type">
-                Loại hàng hóa <span aria-hidden>*</span>
+                {tShipments('formCargoTypeLabel')} <span aria-hidden>*</span>
               </FieldLabel>
               <Select
                 value={values.cargoTypeId}
@@ -397,7 +399,7 @@ export function ShipmentRateFormDialog({
                   className="w-full"
                   aria-invalid={Boolean(fieldErrors.cargoTypeId)}
                 >
-                  <SelectValue placeholder="Chọn loại hàng hóa">
+                  <SelectValue placeholder={tShipments('formCargoTypePlaceholder')}>
                     {selectedCargoTypeLabel}
                   </SelectValue>
                 </SelectTrigger>
@@ -421,7 +423,7 @@ export function ShipmentRateFormDialog({
 
         <div className="space-y-2">
           <p className="text-sm font-medium">
-            Chọn nhanh nấc khối lượng phổ biến
+            {tShipments('quickWeightPreset')}
           </p>
           <div className="flex flex-wrap gap-2">
             {WEIGHT_BAND_PRESETS.map((preset) => {
@@ -449,7 +451,7 @@ export function ShipmentRateFormDialog({
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field data-invalid={Boolean(fieldErrors.weightFrom)}>
             <FieldLabel htmlFor="shipment-rate-weight-from">
-              Khối lượng từ (kg) <span aria-hidden>*</span>
+              {tShipments('formWeightFromLabel')} <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               ref={weightFromRef}
@@ -469,7 +471,7 @@ export function ShipmentRateFormDialog({
 
           <Field data-invalid={Boolean(fieldErrors.weightTo)}>
             <FieldLabel htmlFor="shipment-rate-weight-to">
-              Khối lượng đến (kg)
+              {tShipments('formWeightToLabel')}
             </FieldLabel>
             <Input
               id="shipment-rate-weight-to"
@@ -478,7 +480,7 @@ export function ShipmentRateFormDialog({
               step="0.5"
               value={values.weightTo}
               onChange={(event) => updateField('weightTo', event.target.value)}
-              placeholder="Để trống nếu không giới hạn"
+              placeholder={tShipments('formWeightToPlaceholder')}
               aria-invalid={Boolean(fieldErrors.weightTo)}
             />
             <FieldError>{fieldErrors.weightTo}</FieldError>
@@ -488,7 +490,7 @@ export function ShipmentRateFormDialog({
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field data-invalid={Boolean(fieldErrors.fee)}>
             <FieldLabel htmlFor="shipment-rate-fee">
-              Mức cước cơ bản (VND) <span aria-hidden>*</span>
+              {tShipments('formBaseFeeLabel')} <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               ref={feeRef}
@@ -506,7 +508,7 @@ export function ShipmentRateFormDialog({
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="shipment-rate-status">Trạng thái</FieldLabel>
+            <FieldLabel htmlFor="shipment-rate-status">{tShipments('formStatusLabel')}</FieldLabel>
             <Select
               value={values.status}
               onValueChange={(value) =>
@@ -517,12 +519,12 @@ export function ShipmentRateFormDialog({
               }
             >
               <SelectTrigger id="shipment-rate-status" className="w-full">
-                <SelectValue>{STATUS_LABELS[values.status]}</SelectValue>
+                <SelectValue>{values.status === 'HOAT_DONG' ? tShipments('ratesStatusActive') : tShipments('ratesStatusPaused')}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="HOAT_DONG">Đang hoạt động</SelectItem>
-                  <SelectItem value="TAM_NGUNG">Tạm ngưng</SelectItem>
+                  <SelectItem value="HOAT_DONG">{tShipments('ratesStatusActive')}</SelectItem>
+                  <SelectItem value="TAM_NGUNG">{tShipments('ratesStatusPaused')}</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -532,7 +534,7 @@ export function ShipmentRateFormDialog({
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field data-invalid={Boolean(fieldErrors.validFrom)}>
             <FieldLabel htmlFor="shipment-rate-valid-from">
-              Hiệu lực từ ngày <span aria-hidden>*</span>
+              {tShipments('formValidFromLabel')} <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               id="shipment-rate-valid-from"
@@ -547,7 +549,7 @@ export function ShipmentRateFormDialog({
 
           <Field data-invalid={Boolean(fieldErrors.validTo)}>
             <FieldLabel htmlFor="shipment-rate-valid-to">
-              Hiệu lực đến ngày (tùy chọn)
+              {tShipments('formValidToLabel')}
             </FieldLabel>
             <Input
               id="shipment-rate-valid-to"

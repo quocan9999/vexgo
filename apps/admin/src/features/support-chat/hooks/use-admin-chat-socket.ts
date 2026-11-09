@@ -174,7 +174,7 @@ export function useAdminChatSocket({
     };
   }, [token]);
 
-  // Join room conversation khi activeConversationId thay đổi
+  // Join conversation room when activeConversationId changes
   useEffect(() => {
     if (!socketRef.current || !isConnected || !activeConversationId) return;
 
@@ -251,7 +251,7 @@ export function useAdminChatSocket({
                   error:
                     response?.error ||
                     response?.message ||
-                    'Gửi tin nhắn thất bại.',
+                    'Failed to send message.',
                 });
               }
             }
@@ -314,7 +314,7 @@ export function useAdminChatSocket({
                 error:
                   response?.error ||
                   response?.message ||
-                  'Tiếp nhận cuộc trò chuyện thất bại.',
+                  'Failed to claim conversation.',
               });
             }
           }
@@ -376,7 +376,7 @@ export function useAdminChatSocket({
                   error:
                     response?.error ||
                     response?.message ||
-                    'Kết thúc cuộc trò chuyện thất bại.',
+                    'Failed to end conversation.',
                 });
               }
             }

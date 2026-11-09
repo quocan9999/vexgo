@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Popover } from '@base-ui/react/popover';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { useId, useState } from 'react';
@@ -32,14 +34,19 @@ type DateRangeFilterProps = {
 };
 
 export function DateRangeFilter({
-  emptyValueLabel = 'Tất cả ngày',
-  fromLabel = 'Từ ngày',
+  emptyValueLabel,
+  fromLabel,
   label,
-  title = 'Khoảng ngày tạo',
+  title,
   onApply,
-  toLabel = 'Đến ngày',
+  toLabel,
   value,
 }: DateRangeFilterProps) {
+  const tCommon = useTranslations('common');
+  const displayEmptyLabel = emptyValueLabel ?? tCommon('allDates');
+  const displayFromLabel = fromLabel ?? tCommon('from');
+  const displayToLabel = toLabel ?? tCommon('to');
+  const displayTitle = title ?? tCommon('dateRange');
   const id = useId();
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState('');
@@ -80,10 +87,10 @@ export function DateRangeFilter({
         ? showDate(value.from)
         : `${showDate(value.from)} – ${showDate(value.to)}`
       : value?.from
-        ? `${fromLabel}: ${showDate(value.from)}`
+        ? `${displayFromLabel}: ${showDate(value.from)}`
         : value?.to
-          ? `${toLabel}: ${showDate(value.to)}`
-          : emptyValueLabel;
+          ? `${displayToLabel}: ${showDate(value.to)}`
+          : displayEmptyLabel;
   return (
     <div className="min-w-0 flex-[1_1_200px]">
       <label
@@ -117,13 +124,13 @@ export function DateRangeFilter({
           >
             <Popover.Popup className="admin-ui w-80 max-w-[calc(100vw-2rem)] space-y-4 rounded-xl border bg-popover p-4 text-popover-foreground shadow-md outline-none">
               <Popover.Title className="text-base font-semibold">
-                {title}
+                {displayTitle}
               </Popover.Title>
               <Popover.Description className="text-xs text-muted-foreground">
-                Chọn ngày bắt đầu và kết thúc để lọc danh sách.
+                {tCommon('dateRangeDesc')}
               </Popover.Description>
               <Field>
-                <FieldLabel htmlFor={`${id}-from`}>{fromLabel}</FieldLabel>
+                <FieldLabel htmlFor={`${id}-from`}>{displayFromLabel}</FieldLabel>
                 <Input
                   id={`${id}-from`}
                   type="date"
@@ -133,7 +140,7 @@ export function DateRangeFilter({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${id}-to`}>{toLabel}</FieldLabel>
+                <FieldLabel htmlFor={`${id}-to`}>{displayToLabel}</FieldLabel>
                 <Input
                   id={`${id}-to`}
                   type="date"
@@ -148,10 +155,10 @@ export function DateRangeFilter({
                   disabled={!value && !draftFrom && !draftTo}
                   onClick={clearRange}
                 >
-                  Xóa lọc
+                  {tCommon('clear')}
                 </Button>
                 <Button disabled={!rangeIsValid} onClick={applyRange}>
-                  Áp dụng
+                  {tCommon('apply')}
                 </Button>
               </div>
             </Popover.Popup>

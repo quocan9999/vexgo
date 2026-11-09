@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import {
   CalendarDays,
   Clock,
@@ -26,6 +27,8 @@ export function TripScheduleModal({
   onClose,
   trip,
 }: TripScheduleModalProps) {
+  const t = useTranslations('trips');
+  const locale = useLocale();
   const [activeTab, setActiveTab] = useState<'timeline' | 'transfer'>(
     'timeline',
   );
@@ -49,8 +52,8 @@ export function TripScheduleModal({
   const transferDropoffs = transferPoints.filter((s) => s.role === 'TRA');
 
   const formatCurrency = (amount?: number) => {
-    if (!amount || amount <= 0) return 'Miễn phí';
-    return `+${new Intl.NumberFormat('vi-VN').format(amount)} đ`;
+    if (!amount || amount <= 0) return t('free');
+    return `+${amount.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')} ${locale === 'vi' ? 'đ' : 'VND'}`;
   };
 
   return (
@@ -66,7 +69,7 @@ export function TripScheduleModal({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Lịch trình chuyến xe
+                {t('scheduleTitle')}
               </span>
               <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-100 text-blue-700">
                 {trip.operator}
@@ -81,14 +84,14 @@ export function TripScheduleModal({
             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
               <span>{trip.vehicleType}</span>
               <span>•</span>
-              <span>Thời gian dự kiến: {trip.duration}</span>
+              <span>{t('estimatedDuration', { duration: trip.duration })}</span>
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer"
-            aria-label="Đóng"
+            aria-label={t('close')}
           >
             <X size={20} />
           </button>
@@ -106,7 +109,7 @@ export function TripScheduleModal({
             }`}
           >
             <Clock size={16} />
-            Lộ trình chi tiết ({allStops.length > 0 ? allStops.length : 2})
+            {t('detailedStops', { count: allStops.length > 0 ? allStops.length : 2 })}
           </button>
           <button
             type="button"
@@ -118,7 +121,7 @@ export function TripScheduleModal({
             }`}
           >
             <Truck size={16} />
-            Điểm trung chuyển ({transferPoints.length})
+            {t('transferStops', { count: transferPoints.length })}
           </button>
         </div>
 
@@ -159,23 +162,23 @@ export function TripScheduleModal({
                               {/* Role Badge */}
                               {isDon && (
                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-green-100 text-green-800 border border-green-200">
-                                  Đón khách
+                                  {t('pickupStop')}
                                 </span>
                               )}
                               {isNghi && (
                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
-                                  <Coffee size={12} /> Trạm nghỉ
+                                  <Coffee size={12} /> {t('restStop')}
                                 </span>
                               )}
                               {isTra && (
                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-800 border border-red-200">
-                                  Trả khách
+                                  {t('dropoffStop')}
                                 </span>
                               )}
 
                               {isTransfer && (
                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
-                                  <Truck size={12} /> Trung chuyển
+                                  <Truck size={12} /> {t('transferStop')}
                                 </span>
                               )}
                             </div>
@@ -184,7 +187,7 @@ export function TripScheduleModal({
                             {typeof stop.phuPhi === 'number' &&
                               stop.phuPhi > 0 && (
                                 <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                  Phụ phí {formatCurrency(stop.phuPhi)}
+                                  {t('surcharge', { amount: formatCurrency(stop.phuPhi) })}
                                 </span>
                               )}
                           </div>
@@ -205,7 +208,7 @@ export function TripScheduleModal({
                             <div className="mt-2 text-xs text-blue-700 bg-blue-50/80 p-2 rounded-lg border border-blue-100 flex items-center gap-1.5">
                               <Navigation size={13} className="shrink-0" />
                               <span>
-                                {isDon ? 'Trung chuyển đưa đến: ' : 'Xe trung chuyển đón từ: '}
+                                {isDon ? t('transferTakeTo') : t('transferPickFrom')}
                                 <strong className="font-bold">
                                   {stop.benTrungChuyen.name}
                                 </strong>
@@ -217,12 +220,12 @@ export function TripScheduleModal({
                           <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-slate-500 font-medium">
                             {stop.phutCoMatTruoc && isDon && (
                               <span className="text-orange-700 font-semibold">
-                                • Vui lòng có mặt trước {stop.phutCoMatTruoc} phút
+                                • {t('arriveBefore', { minutes: stop.phutCoMatTruoc })}
                               </span>
                             )}
                             {stop.ghiChu && (
                               <span className="italic">
-                                Ghi chú: {stop.ghiChu}
+                                {locale === 'vi' ? 'Ghi chú: ' : 'Note: '}{stop.ghiChu}
                               </span>
                             )}
                           </div>
@@ -240,14 +243,14 @@ export function TripScheduleModal({
                         {trip.departureTime}
                       </span>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-green-100 text-green-800">
-                        Đón khách
+                        {t('pickup')}
                       </span>
                     </div>
                     <p className="font-bold text-slate-800 mt-1">
                       {trip.pickupPoint || trip.origin}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {trip.pickupAddress || 'Bến xe / Văn phòng xuất phát'}
+                      {trip.pickupAddress || t('departureOfficeFallback')}
                     </p>
                   </div>
                   <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
@@ -256,14 +259,14 @@ export function TripScheduleModal({
                         {trip.arrivalTime}
                       </span>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-800">
-                        Trả khách
+                        {t('dropoff')}
                       </span>
                     </div>
                     <p className="font-bold text-slate-800 mt-1">
                       {trip.dropoffPoint || trip.destination}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {trip.dropoffAddress || 'Bến xe / Văn phòng đến nơi'}
+                      {trip.dropoffAddress || t('arrivalOfficeFallback')}
                     </p>
                   </div>
                 </div>
@@ -278,12 +281,9 @@ export function TripScheduleModal({
                   <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
                     <Info size={16} className="text-blue-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold">Chính sách xe trung chuyển</p>
+                      <p className="font-bold">{t('transferPolicyTitle')}</p>
                       <p className="mt-0.5 text-blue-800 leading-relaxed">
-                        Hành khách chọn điểm hẹn trung chuyển sẽ được xe đón đưa
-                        đến bến xuất phát hoặc đón từ bến kết nối về điểm hẹn. Vui
-                        lòng giữ điện thoại để tài xế trung chuyển liên hệ trước
-                        khi đón.
+                        {t('transferPolicyDesc')}
                       </p>
                     </div>
                   </div>
@@ -293,7 +293,7 @@ export function TripScheduleModal({
                     <div className="space-y-2.5">
                       <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                         <span className="size-2 rounded-full bg-green-500" />
-                        Điểm đón trung chuyển ({transferPickups.length})
+                        {t('transferPickupHeading', { count: transferPickups.length })}
                       </h3>
                       <div className="grid gap-2.5">
                         {transferPickups.map((point) => (
@@ -341,7 +341,7 @@ export function TripScheduleModal({
                     <div className="space-y-2.5">
                       <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                         <span className="size-2 rounded-full bg-red-500" />
-                        Điểm trả trung chuyển ({transferDropoffs.length})
+                        {t('transferDropoffHeading', { count: transferDropoffs.length })}
                       </h3>
                       <div className="grid gap-2.5">
                         {transferDropoffs.map((point) => (
@@ -407,7 +407,7 @@ export function TripScheduleModal({
             onClick={onClose}
             className="px-5 py-2 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition-colors cursor-pointer"
           >
-            Đóng
+            {t('close')}
           </button>
         </div>
       </div>

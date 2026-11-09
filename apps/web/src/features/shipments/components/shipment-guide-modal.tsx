@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import {
   X,
   MapPin,
@@ -17,50 +18,51 @@ export interface ShipmentGuideModalProps {
   onClose: () => void;
 }
 
-const STEPS = [
-  {
-    step: '1',
-    icon: MapPin,
-    title: 'Chọn nơi gửi & Nhà xe',
-    desc: 'Chọn tỉnh/thành nơi gửi và nơi nhận, ngày gửi dự kiến. Hệ thống sẽ gợi ý danh sách các nhà xe uy tín cùng bến bãi, văn phòng thuận tiện nhất.',
-    tag: 'Tra cứu bến bãi',
-    color: 'from-blue-500 to-indigo-600',
-    bg: 'bg-blue-50 text-blue-600 border-blue-200',
-  },
-  {
-    step: '2',
-    icon: Box,
-    title: 'Khai báo hàng & Tính cước',
-    desc: 'Nhập thông tin kiện hàng (hàng nhẹ, cồng kềnh, xe máy...), khối lượng và kích thước. Hệ thống sẽ tự động tính toán cước phí niêm yết minh bạch.',
-    tag: 'Báo cước tức thì',
-    color: 'from-emerald-500 to-teal-600',
-    bg: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-  },
-  {
-    step: '3',
-    icon: Users,
-    title: 'Thông tin người gửi & nhận',
-    desc: 'Điền chính xác họ tên và số điện thoại người gửi và người nhận hàng. Chọn hình thức thanh toán cước (Người gửi trả trước hoặc Người nhận trả khi lấy).',
-    tag: 'Giao nhận chính xác',
-    color: 'from-amber-500 to-orange-600',
-    bg: 'bg-amber-50 text-amber-700 border-amber-200',
-  },
-  {
-    step: '4',
-    icon: PackageCheck,
-    title: 'Nhận mã vận đơn & Gửi hàng',
-    desc: 'Hệ thống cấp ngay mã vận đơn điện tử. Mang hàng ra bưu cục/bến xe trong vòng 72 giờ, đối soát cân đo thực tế và thanh toán cước tại quầy.',
-    tag: 'Thanh toán tại bến',
-    color: 'from-orange-500 to-amber-600',
-    bg: 'bg-orange-50 text-orange-600 border-orange-200',
-  },
-];
-
 export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const t = useTranslations('shipments');
   if (!isOpen) return null;
+
+  const STEPS = [
+    {
+      step: '1',
+      icon: MapPin,
+      title: t('step1Title'),
+      desc: t('step1Desc'),
+      tag: t('step1Tag'),
+      color: 'from-blue-500 to-indigo-600',
+      bg: 'bg-blue-50 text-blue-600 border-blue-200',
+    },
+    {
+      step: '2',
+      icon: Box,
+      title: t('step2Title'),
+      desc: t('step2Desc'),
+      tag: t('step2Tag'),
+      color: 'from-emerald-500 to-teal-600',
+      bg: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+    },
+    {
+      step: '3',
+      icon: Users,
+      title: t('step3Title'),
+      desc: t('step3Desc'),
+      tag: t('step3Tag'),
+      color: 'from-amber-500 to-orange-600',
+      bg: 'bg-amber-50 text-amber-700 border-amber-200',
+    },
+    {
+      step: '4',
+      icon: PackageCheck,
+      title: t('step4Title'),
+      desc: t('step4Desc'),
+      tag: t('step4Tag'),
+      color: 'from-orange-500 to-amber-600',
+      bg: 'bg-orange-50 text-orange-600 border-orange-200',
+    },
+  ];
 
   return (
     <div
@@ -85,10 +87,10 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
                 id="shipment-guide-title"
                 className="text-base sm:text-lg font-black text-slate-900 tracking-tight"
               >
-                Hướng dẫn gửi hàng trực tuyến
+                {t('guideTitle')}
               </h2>
               <p className="text-xs text-slate-500 font-medium">
-                4 bước đơn giản để tạo vận đơn và gửi hàng liên tỉnh nhanh chóng trên VexGo
+                {t('guideSubtitle')}
               </p>
             </div>
           </div>
@@ -96,7 +98,7 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
             type="button"
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer"
-            aria-label="Đóng"
+            aria-label={t('close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -136,7 +138,7 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
                       {item.tag}
                     </span>
                     <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                      ✓ Trực tuyến
+                      {t('onlineBadge')}
                     </span>
                   </div>
                 </div>
@@ -148,32 +150,24 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
           <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-4">
             <h4 className="text-xs font-black text-[#0060c4] uppercase tracking-wide flex items-center gap-1.5 mb-2">
               <ShieldCheck className="w-4 h-4 text-[#0060c4]" />
-              Lưu ý quan trọng khi gửi hàng
+              {t('importantNotes')}
             </h4>
             <ul className="text-xs text-slate-700 space-y-1.5 font-medium">
               <li className="flex items-start gap-1.5">
                 <span className="text-[#2563EB] font-bold">•</span>
-                <span>
-                  Mang hàng ra văn phòng nhà xe hoặc bến xe trước giờ xe xuất bến ít nhất <strong>30 - 45 phút</strong> để đối soát và cân đo thực tế.
-                </span>
+                <span>{t('note1')}</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-[#2563EB] font-bold">•</span>
-                <span>
-                  Xuất trình <strong>mã vận đơn điện tử hoặc mã QR</strong> trên website/Email cho nhân viên kiểm tra khi bàn giao hàng.
-                </span>
+                <span>{t('note2')}</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-[#2563EB] font-bold">•</span>
-                <span>
-                  Đảm bảo đóng gói hàng cẩn thận (đặc biệt hàng dễ vỡ, chất lỏng). Không nhận vận chuyển hàng cấm, chất cháy nổ theo quy định pháp luật.
-                </span>
+                <span>{t('note3')}</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-[#f05123] font-bold">•</span>
-                <span>
-                  Khách hàng và người nhận có thể theo dõi hành trình giao nhận 24/7 trực tiếp trên VexGo qua tính năng <strong>Tra cứu gửi hàng</strong>.
-                </span>
+                <span>{t('note4')}</span>
               </li>
             </ul>
           </div>
@@ -183,14 +177,14 @@ export const ShipmentGuideModal: React.FC<ShipmentGuideModalProps> = ({
         <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
             <Headphones className="w-4 h-4 text-[#f05123]" />
-            <span>Tổng đài CSKH 24/7: <strong className="text-slate-900">1900 6067</strong></span>
+            <span>{t('hotlineLabel')}</span>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="px-5 py-2 rounded-xl bg-[#f05123] hover:bg-[#d8441a] text-white font-extrabold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
           >
-            Đã hiểu
+            {t('gotIt')}
           </button>
         </div>
       </div>

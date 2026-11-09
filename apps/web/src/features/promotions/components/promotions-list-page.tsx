@@ -5,18 +5,21 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Tag, Calendar, Copy, Check, ArrowRight, Bus, ChevronLeft, ChevronRight, Gift } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { PROMOTIONS, type Promotion } from '../data/promotions.data';
 
 export function PromotionsListPage() {
   const router = useRouter();
+  const t = useTranslations('promotions');
+  const locale = useLocale();
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const categories = [
-    { id: 'ALL', label: 'Tất cả ưu đãi' },
-    { id: 'NEW', label: 'Khách hàng mới' },
-    { id: 'LIMOUSINE', label: 'Vé Limousine & Khứ hồi' },
-    { id: 'TOURISM', label: 'Tuyến du lịch' },
+    { id: 'ALL', label: t('categoryAll') },
+    { id: 'NEW', label: t('categoryNew') },
+    { id: 'LIMOUSINE', label: t('categoryLimousine') },
+    { id: 'TOURISM', label: t('categoryTourism') },
   ];
 
   const filteredPromos =
@@ -45,7 +48,7 @@ export function PromotionsListPage() {
             className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#FF5722] transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span>Quay lại</span>
+            <span>{t('back')}</span>
           </button>
         </div>
       </div>
@@ -56,13 +59,13 @@ export function PromotionsListPage() {
           <div className="max-w-2xl">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#FF5722] text-white uppercase tracking-wider mb-4">
               <Gift className="w-3.5 h-3.5" />
-              Ưu đãi VexGo
+              {t('badge')}
             </span>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight uppercase leading-tight mb-3">
-              Chương trình khuyến mãi nổi bật
+              {t('title')}
             </h1>
             <p className="text-slate-300 text-sm md:text-base leading-relaxed">
-              Tổng hợp mã giảm giá vé xe khách, voucher tiết kiệm khi đặt vé Limousine và ưu đãi các tuyến du lịch hot nhất hôm nay.
+              {t('subtitle')}
             </p>
           </div>
         </div>
@@ -93,7 +96,7 @@ export function PromotionsListPage() {
           {filteredPromos.map((promo) => (
             <Link
               key={promo.id}
-              href={`/promotions/${promo.id}`}
+              href={`/${locale}/promotions/${promo.id}`}
               className="group bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col hover:-translate-y-1"
             >
               {/* Image banner */}
@@ -127,7 +130,7 @@ export function PromotionsListPage() {
                 <div className="mt-5 pt-4 border-t border-slate-100">
                   <div className="bg-amber-50/70 border border-dashed border-amber-300 rounded-xl p-3 flex items-center justify-between gap-2 mb-3">
                     <div className="min-w-0">
-                      <span className="block text-[10px] uppercase font-bold text-amber-800">Mã giảm giá:</span>
+                      <span className="block text-[10px] uppercase font-bold text-amber-800">{t('discountCodeLabel')}</span>
                       <span className="block font-mono font-black text-sm text-slate-900 truncate">
                         {promo.code}
                       </span>
@@ -144,12 +147,12 @@ export function PromotionsListPage() {
                       {copiedCode === promo.code ? (
                         <>
                           <Check className="w-3.5 h-3.5" />
-                          <span>Đã chép</span>
+                          <span>{t('copied')}</span>
                         </>
                       ) : (
                         <>
                           <Copy className="w-3.5 h-3.5" />
-                          <span>Sao chép</span>
+                          <span>{t('copy')}</span>
                         </>
                       )}
                     </button>
@@ -158,10 +161,10 @@ export function PromotionsListPage() {
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span className="flex items-center gap-1 font-medium">
                       <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      HSD: {promo.endDate}
+                      {t('expiresOn', { date: promo.endDate })}
                     </span>
                     <span className="text-xs font-bold text-[#FF5722] group-hover:underline flex items-center gap-0.5">
-                      Xem chi tiết <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                      {t('viewDetail')} <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                     </span>
                   </div>
                 </div>
@@ -178,18 +181,18 @@ export function PromotionsListPage() {
             </div>
             <div>
               <h4 className="text-base font-extrabold text-slate-900">
-                Sẵn sàng cho chuyến đi tiếp theo của bạn?
+                {t('readyToTravel')}
               </h4>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                Tìm kiếm hàng trăm chuyến xe liên tỉnh giá tốt nhất và áp dụng mã ưu đãi ngay hôm nay.
+                {t('readyDesc')}
               </p>
             </div>
           </div>
           <Link
-            href="/trips"
+            href={`/${locale}/trips`}
             className="w-full md:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white text-sm font-bold shadow-md hover:shadow-lg hover:brightness-105 transition-all text-center flex items-center justify-center gap-2 shrink-0"
           >
-            <span>Tìm chuyến xe ngay</span>
+            <span>{t('findTripsNow')}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>

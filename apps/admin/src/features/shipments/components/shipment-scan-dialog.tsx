@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Camera,
   Keyboard,
@@ -39,15 +40,17 @@ export function ShipmentScanDialog({
   onOpenChange,
   onSelectShipment,
 }: ShipmentScanDialogProps) {
+  const t = useTranslations('shipments');
+  const tCommon = useTranslations('common');
   const [tab, setTab] = useState<'scanner' | 'camera'>('scanner');
 
-  // State cho Tab 1: Máy quét / Nhập mã
+  // State for Tab 1: Scanner / Manual input
   const [manualCode, setManualCode] = useState('');
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
   const manualInputRef = useRef<HTMLInputElement>(null);
 
-  // State cho Tab 2: Camera quét QR
+  // State for Tab 2: Camera QR scanner
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [cameraLoading, setCameraLoading] = useState(false);
@@ -57,7 +60,7 @@ export function ShipmentScanDialog({
   const scanLockRef = useRef<boolean>(false);
   const handleLookupCodeRef = useRef<(rawCode: string, source: 'manual' | 'camera') => Promise<void>>(() => Promise.resolve());
 
-  // Tự động focus input khi mở dialog hoặc chuyển về tab máy quét
+  // Auto focus input when dialog opens or switching to scanner tab
   useEffect(() => {
     if (open && tab === 'scanner') {
       const timer = setTimeout(() => {
@@ -67,7 +70,7 @@ export function ShipmentScanDialog({
     }
   }, [open, tab]);
 
-  // Reset state khi dialog đóng
+  // Reset state on close
   useEffect(() => {
     if (!open) {
       setManualCode('');
@@ -79,13 +82,13 @@ export function ShipmentScanDialog({
     }
   }, [open]);
 
-  // Dừng camera và dọn dẹp stream
+  // Stop camera and cleanup stream
   function stopCamera() {
     if (controlsRef.current) {
       try {
         controlsRef.current.stop();
       } catch {
-        // Bỏ qua lỗi khi dừng reader
+        // Ignore errors on stopping reader
       }
       controlsRef.current = null;
     }
@@ -96,7 +99,7 @@ export function ShipmentScanDialog({
     }
   }
 
-  // Khởi động camera khi chuyển sang tab camera
+  // Initialize camera when tab is switched to camera
   useEffect(() => {
     if (!open || tab !== 'camera') {
       stopCamera();
@@ -113,7 +116,7 @@ export function ShipmentScanDialog({
           '@zxing/browser'
         );
 
-        // Liệt kê các camera khả dụng
+        // Enumerate video devices
         const videoInputDevices =
           await BrowserCodeReader.listVideoInputDevices();
         if (!isMounted) return;
@@ -122,7 +125,7 @@ export function ShipmentScanDialog({
 
         if (videoInputDevices.length === 0) {
           setCameraError(
-            'Không tìm thấy thiết bị camera trên máy tính / thiết bị này.',
+            t('noCameraFound'),
           );
           setCameraLoading(false);
           return;
@@ -162,7 +165,7 @@ export function ShipmentScanDialog({
         if (!isMounted) return;
         setCameraError(
           (err instanceof Error ? err.message : '') ||
-            'Không thể truy cập camera. Vui lòng cấp quyền máy ảnh trên trình duyệt.',
+            t('cameraAccessDenied'),
         );
         setCameraLoading(false);
       }
@@ -174,19 +177,19 @@ export function ShipmentScanDialog({
       isMounted = false;
       stopCamera();
     };
-  }, [open, tab, selectedDeviceId]);
+  }, [open, tab, selectedDeviceId, t]);
 
   handleLookupCodeRef.current = handleLookupCode;
 
-  // Thực hiện tra cứu mã vận đơn
+  // Perform waybill lookup
   async function handleLookupCode(rawCode: string, source: 'manual' | 'camera') {
     const normalized = normalizeScannedWaybill(rawCode);
 
     if (!normalized || !WAYBILL_PATTERN.test(normalized)) {
       if (source === 'manual') {
-        setManualError('Mã vận đơn không đúng định dạng chuẩn.');
+        setManualError(t('invalidWaybillFormat'));
       } else {
-        setCameraError(`Mã quét "${rawCode}" không đúng định dạng vận đơn.`);
+        setCameraError(t('invalidScannedFormat', { rawCode }));
         setTimeout(() => {
           scanLockRef.current = false;
           setCameraError(null);
@@ -203,13 +206,12 @@ export function ShipmentScanDialog({
     try {
       const match = await findShipmentByWaybill(normalized);
       if (!match) {
-        const notFoundMsg =
-          'Không tìm thấy phiếu gửi hàng trong nhà xe của bạn.';
+        const notFoundMsg = t('shipmentNotInCarrier');
         if (source === 'manual') {
           setManualError(notFoundMsg);
         } else {
           setCameraError(
-            `Vận đơn "${normalized}" không thuộc nhà xe hoặc không tồn tại.`,
+            t('waybillNotFoundOrForeign', { code: normalized }),
           );
           setTimeout(() => {
             scanLockRef.current = false;
@@ -219,15 +221,15 @@ export function ShipmentScanDialog({
         return;
       }
 
-      // Tìm thấy thành công!
+      // Success
       stopCamera();
       onOpenChange(false);
-      toast.success(`Đã tìm thấy vận đơn: ${match.waybillCode}`);
+      toast.success(t('waybillFoundSuccess', { code: match.waybillCode }));
       onSelectShipment(match.shipmentId);
     } catch (err: unknown) {
       const errMsg =
         (err instanceof Error ? err.message : '') ||
-        'Lỗi khi tra cứu phiếu gửi hàng.';
+        t('errorLookingUpShipment');
       if (source === 'manual') {
         setManualError(errMsg);
       } else {
@@ -256,11 +258,10 @@ export function ShipmentScanDialog({
         <DialogHeader>
           <div className="flex items-center gap-2">
             <ScanLine className="size-5 text-primary" />
-            <DialogTitle>Quét mã & Tìm phiếu gửi hàng</DialogTitle>
+            <DialogTitle>{t('scanDialogTitle')}</DialogTitle>
           </div>
           <DialogDescription>
-            Sử dụng súng quét mã vạch USB, camera máy tính hoặc nhập trực tiếp mã
-            vận đơn để mở nhanh chi tiết.
+            {t('scanDialogDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -272,20 +273,20 @@ export function ShipmentScanDialog({
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="scanner" className="gap-2">
               <Keyboard className="size-4" />
-              Máy quét / Nhập mã
+              {t('tabScanner')}
             </TabsTrigger>
             <TabsTrigger value="camera" className="gap-2">
               <Camera className="size-4" />
-              Camera quét QR
+              {t('tabCamera')}
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB 1: MÁY QUÉT / BÀN PHÍM */}
+          {/* TAB 1: SCANNER / KEYBOARD */}
           <TabsContent value="scanner" className="pt-4">
             <form onSubmit={handleManualSubmit} className="space-y-4">
               <Field>
                 <FieldLabel htmlFor="waybill-scan-input">
-                  Mã vận đơn / Quét mã barcode
+                  {t('waybillScanInputLabel')}
                 </FieldLabel>
                 <div className="relative flex items-center">
                   <Input
@@ -296,7 +297,7 @@ export function ShipmentScanDialog({
                       setManualCode(e.target.value);
                       if (manualError) setManualError(null);
                     }}
-                    placeholder="VD: GH-HN-SG-001 hoặc quét barcode"
+                    placeholder={t('waybillScanInputPlaceholder')}
                     autoComplete="off"
                     autoFocus
                     className="admin-data-mono pr-10 uppercase font-medium"
@@ -311,7 +312,7 @@ export function ShipmentScanDialog({
                   </div>
                 </div>
                 <p className="text-[12px] text-muted-foreground mt-1.5">
-                  Mẹo: Máy quét mã vạch USB sẽ tự động nhập mã và nhấn Enter.
+                  {t('scannerTip')}
                 </p>
               </Field>
 
@@ -329,7 +330,7 @@ export function ShipmentScanDialog({
                   onClick={() => onOpenChange(false)}
                   disabled={manualLoading}
                 >
-                  Đóng
+                  {tCommon('close')}
                 </Button>
                 <Button
                   type="submit"
@@ -339,12 +340,12 @@ export function ShipmentScanDialog({
                   {manualLoading ? (
                     <>
                       <LoaderCircle className="size-4 animate-spin" />
-                      Đang tìm...
+                      {t('searching')}
                     </>
                   ) : (
                     <>
                       <Search className="size-4" />
-                      Tìm vận đơn
+                      {t('findWaybill')}
                     </>
                   )}
                 </Button>
@@ -352,12 +353,12 @@ export function ShipmentScanDialog({
             </form>
           </TabsContent>
 
-          {/* TAB 2: CAMERA QUÉT QR */}
+          {/* TAB 2: CAMERA QR SCANNER */}
           <TabsContent value="camera" className="space-y-4 pt-4">
             {devices.length > 1 && (
               <Field>
                 <FieldLabel htmlFor="camera-device-select">
-                  Chọn thiết bị camera
+                  {t('selectCameraDevice')}
                 </FieldLabel>
                 <select
                   id="camera-device-select"
@@ -367,7 +368,7 @@ export function ShipmentScanDialog({
                 >
                   {devices.map((device, index) => (
                     <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Camera ${index + 1}`}
+                      {device.label || t('cameraDefaultLabel', { index: index + 1 })}
                     </option>
                   ))}
                 </select>
@@ -382,10 +383,10 @@ export function ShipmentScanDialog({
                 playsInline
               />
 
-              {/* Khung ngắm quét mã QR */}
+              {/* QR scanner target viewfinder */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="relative size-44 rounded-xl border-2 border-emerald-400/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-                  {/* Đường kẻ quét chuyển động */}
+                  {/* Animated scanning bar */}
                   <div className="absolute inset-x-0 top-1/2 h-0.5 bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400" />
                 </div>
               </div>
@@ -393,13 +394,13 @@ export function ShipmentScanDialog({
               {cameraLoading && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 text-white">
                   <LoaderCircle className="size-6 animate-spin text-emerald-400" />
-                  <span className="text-xs">Đang mở máy ảnh...</span>
+                  <span className="text-xs">{t('openingCamera')}</span>
                 </div>
               )}
             </div>
 
             <p className="text-center text-xs text-muted-foreground">
-              Hướng camera về phía mã QR trên tem kiện hoặc phiếu gửi hàng.
+              {t('cameraAimGuide')}
             </p>
 
             {cameraError && (
@@ -415,7 +416,7 @@ export function ShipmentScanDialog({
                 variant="outline"
                 onClick={() => onOpenChange(false)}
               >
-                Đóng
+                {tCommon('close')}
               </Button>
             </div>
           </TabsContent>

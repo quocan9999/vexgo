@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   ResourcePagination,
   ResourceStatusBadge,
@@ -49,24 +50,30 @@ function shipmentStatusTone(status: string): 'active' | 'muted' {
   return 'muted';
 }
 
-function formatShipmentStatus(status: string): string {
+function formatShipmentStatus(
+  status: string,
+  tShipments: (key: string) => string,
+): string {
   switch (status) {
     case 'MOI_TAO':
-      return 'Mới tạo';
+      return tShipments('statusCreated');
     case 'DA_TIEP_NHAN':
-      return 'Đã tiếp nhận';
+      return tShipments('statusReceived');
     case 'DANG_VAN_CHUYEN':
-      return 'Đang vận chuyển';
+      return tShipments('statusInTransit');
     case 'DA_GIAO':
-      return 'Đã giao hàng';
+      return tShipments('statusDelivered');
     case 'DA_HUY':
-      return 'Đã hủy';
+      return tShipments('statusCancelled');
     default:
       return status;
   }
 }
 
 export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
+  const tShipments = useTranslations('shipments');
+  const tCustomers = useTranslations('customers');
+  const tCommon = useTranslations('common');
   const {
     shipments,
     meta,
@@ -89,16 +96,16 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
     >
       <FilterToolbar>
         <SearchInput
-          label="Tìm kiếm đơn gửi hàng"
+          label={tShipments('shipmentsTitle')}
           onChange={setSearchInput}
-          placeholder="Tìm theo mã vận đơn, tên, số điện thoại người nhận..."
+          placeholder={tShipments('searchPlaceholder')}
           value={searchInput}
         />
       </FilterToolbar>
       <ResourceSortControls
-        label="Sắp xếp đơn gửi hàng"
+        label={tCustomers('sortByLabel')}
         value="sentAt"
-        options={[{ value: 'sentAt', label: 'Ngày gửi' }]}
+        options={[{ value: 'sentAt', label: tShipments('colDate') }]}
         direction={sortDirection}
         onDirectionChange={() =>
           setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -109,24 +116,24 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
         <ResourceState error>
           <p>{error}</p>
           <Button onClick={refresh} type="button" variant="outline">
-            Thử lại
+            {tCommon('retry')}
           </Button>
         </ResourceState>
       )}
 
       {!error &&
         (loading && shipments.length === 0 ? (
-          <ResourceTableSkeleton resourceLabel="đơn gửi hàng" />
+          <ResourceTableSkeleton resourceLabel={tShipments('shipmentsTitle').toLowerCase()} />
         ) : shipments.length === 0 ? (
           <ResourceState>
             <p>
               {searchInput.trim()
-                ? 'Không tìm thấy đơn gửi hàng phù hợp.'
-                : 'Khách hàng chưa có đơn gửi hàng tại nhà xe này.'}
+                ? tCustomers('shipmentsTabFilteredEmpty')
+                : tCustomers('shipmentsTabNoData')}
             </p>
             {searchInput && (
               <Button variant="outline" onClick={() => setSearchInput('')}>
-                Xóa tìm kiếm
+                {tCustomers('clearSearch')}
               </Button>
             )}
           </ResourceState>
@@ -138,11 +145,11 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
             >
               <Table className="text-[13px]">
                 <TableCaption className="sr-only">
-                  Lịch sử gửi hàng của khách hàng
+                  {tShipments('shipmentsTitle')}
                 </TableCaption>
                 <TableHeader>
                   <TableRow>
-                    <TableHead scope="col">Mã vận đơn</TableHead>
+                    <TableHead scope="col">{tShipments('colWaybill')}</TableHead>
                     <TableHead
                       aria-sort={
                         sortDirection === 'asc' ? 'ascending' : 'descending'
@@ -160,7 +167,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                         }
                         type="button"
                       >
-                        <span>Ngày gửi</span>
+                        <span>{tShipments('colDate')}</span>
                         <span aria-hidden="true">
                           {sortDirection === 'asc' ? (
                             <ArrowUp size={14} />
@@ -170,11 +177,11 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                         </span>
                       </Button>
                     </TableHead>
-                    <TableHead scope="col">Người nhận</TableHead>
-                    <TableHead scope="col">Điểm gửi</TableHead>
-                    <TableHead scope="col">Điểm nhận</TableHead>
-                    <TableHead scope="col">Tổng phí</TableHead>
-                    <TableHead scope="col">Trạng thái</TableHead>
+                    <TableHead scope="col">{tShipments('colRecipient')}</TableHead>
+                    <TableHead scope="col">{tShipments('colOrigin')}</TableHead>
+                    <TableHead scope="col">{tShipments('colDestination')}</TableHead>
+                    <TableHead scope="col">{tShipments('colFee')}</TableHead>
+                    <TableHead scope="col">{tShipments('colStatus')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -205,13 +212,13 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <strong>{s.totalFee.toLocaleString('vi-VN')} đ</strong>
+                        <strong>{s.totalFee.toLocaleString('vi-VN')} ₫</strong>
                       </TableCell>
                       <TableCell>
                         <ResourceStatusBadge
                           tone={shipmentStatusTone(s.status)}
                         >
-                          {formatShipmentStatus(s.status)}
+                          {formatShipmentStatus(s.status, tShipments)}
                         </ResourceStatusBadge>
                       </TableCell>
                     </TableRow>
@@ -222,7 +229,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
 
             <div
               className="grid gap-4 p-4 min-[901px]:hidden"
-              aria-label="Danh sách đơn gửi hàng dạng thẻ"
+              aria-label={tShipments('shipmentsTitle')}
               aria-busy={loading || refreshing}
             >
               {shipments.map((s) => (
@@ -233,26 +240,26 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                         {s.waybillCode}
                       </span>
                       <h3 className="mt-1 text-base font-semibold">
-                        {s.totalFee.toLocaleString('vi-VN')} đ
+                        {s.totalFee.toLocaleString('vi-VN')} ₫
                       </h3>
                     </div>
                     <ResourceStatusBadge tone={shipmentStatusTone(s.status)}>
-                      {formatShipmentStatus(s.status)}
+                      {formatShipmentStatus(s.status, tShipments)}
                     </ResourceStatusBadge>
                   </div>
                   <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Người nhận</dt>
+                      <dt>{tShipments('colRecipient')}</dt>
                       <dd>
                         {s.receiver.fullName} ({s.receiver.phoneNumber})
                       </dd>
                     </div>
                     <div>
-                      <dt>Ngày gửi</dt>
+                      <dt>{tShipments('colDate')}</dt>
                       <dd>{formatDateTime(s.sentAt)}</dd>
                     </div>
                     <div>
-                      <dt>Điểm gửi</dt>
+                      <dt>{tShipments('colOrigin')}</dt>
                       <dd>
                         <strong>{s.originPoint.name}</strong>
                         <div className="mt-1 text-xs text-muted-foreground">
@@ -261,20 +268,12 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                       </dd>
                     </div>
                     <div>
-                      <dt>Điểm nhận</dt>
+                      <dt>{tShipments('colDestination')}</dt>
                       <dd>
                         <strong>{s.destinationPoint.name}</strong>
                         <div className="mt-1 text-xs text-muted-foreground">
                           {s.destinationPoint.address}
                         </div>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Người thanh toán</dt>
-                      <dd>
-                        {s.freightPayer === 'NGUOI_GUI'
-                          ? 'Người gửi thanh toán'
-                          : 'Người nhận thanh toán'}
                       </dd>
                     </div>
                   </dl>
@@ -288,7 +287,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                 disabled={loading}
                 onPageChange={setPage}
                 pageSize={meta.pageSize}
-                summaryLabel="đơn gửi hàng"
+                summaryLabel={tShipments('shipmentsTitle').toLowerCase()}
                 totalItems={meta.totalItems}
                 totalPages={meta.totalPages}
               />

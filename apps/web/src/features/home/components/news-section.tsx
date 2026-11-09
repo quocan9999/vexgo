@@ -4,27 +4,30 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { ChevronRight, ArrowRight } from 'lucide-react';
 import { NEWS_ARTICLES } from '@/features/news/data/news.data';
 
 export const NewsSection: React.FC = () => {
+  const t = useTranslations('home');
+
   return (
     <section className="py-12 md:py-16 bg-[#F8FAFC]">
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
           <div className="text-center md:text-left flex-1">
             <h2 className="text-xl md:text-2xl font-black text-brand uppercase tracking-wide">
-              TIN TỨC MỚI
+              {t('newsTitle')}
             </h2>
             <p className="text-sm text-slate-500 font-medium mt-1">
-              Cập nhật những thông tin mới từ VexGo
+              {t('newsSubtitle')}
             </p>
           </div>
           <Link
             href="/news"
             className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline flex items-center justify-center md:justify-end gap-1 transition-colors"
           >
-            <span>Xem tất cả tin tức</span>
+            <span>{t('viewAllNews')}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -64,7 +67,7 @@ export const NewsSection: React.FC = () => {
                 <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                   <span className="text-slate-400 font-medium">{news.date}</span>
                   <span className="font-extrabold text-[#FF5722] group-hover:text-[#E64A19] flex items-center gap-0.5 transition-colors">
-                    Chi tiết <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                    {t('readDetails')} <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                   </span>
                 </div>
               </div>

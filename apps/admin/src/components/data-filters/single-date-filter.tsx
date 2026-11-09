@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Popover } from '@base-ui/react/popover';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { useId, useState } from 'react';
@@ -14,10 +16,13 @@ type SingleDateFilterProps = {
 };
 
 export function SingleDateFilter({
+  // component
+
   label,
   onChange,
   value,
 }: SingleDateFilterProps) {
+  const tCommon = useTranslations('common');
   const [open, setOpen] = useState(false);
   const id = useId();
   const formattedDate = value.split('-').reverse().join('-');
@@ -41,13 +46,13 @@ export function SingleDateFilter({
           aria-label={
             value
               ? `${label}: ${formattedDate}`
-              : `Lọc theo ${label.toLocaleLowerCase()}`
+              : `${tCommon('filter')}: ${label}`
           }
         >
           <span className="flex min-w-0 items-center gap-2">
             <CalendarDays aria-hidden className="size-4" />
             <span className="truncate">
-              {value ? formattedDate : 'Tất cả ngày'}
+              {value ? formattedDate : tCommon('allDates')}
             </span>
           </span>
           <ChevronDown aria-hidden className="size-4 text-muted-foreground" />
@@ -63,7 +68,7 @@ export function SingleDateFilter({
                 {label}
               </Popover.Title>
               <Popover.Description className="sr-only">
-                Chọn một ngày để lọc danh sách.
+                {tCommon('dateRangeDesc')}
               </Popover.Description>
               <Field>
                 <FieldLabel htmlFor={`${id}-date`}>{label}</FieldLabel>
@@ -87,7 +92,7 @@ export function SingleDateFilter({
                   setOpen(false);
                 }}
               >
-                Xóa lọc
+                {tCommon('clear')}
               </Button>
             </Popover.Popup>
           </Popover.Positioner>

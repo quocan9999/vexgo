@@ -155,6 +155,18 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 - MUST NOT `cd` vào các thư mục con `apps/api`, `apps/web`, `apps/admin` để chạy `npm install` đơn lẻ. Hành động này sẽ tạo ra `package-lock.json` và `node_modules` cục bộ lồng nhau, dẫn đến hiện tượng split-brain dependencies và xung đột phiên bản/kiểu TypeScript (`TS2345`).
 - Tệp `package-lock.json` và thư mục `node_modules` CHỈ ĐƯỢC PHÉP tồn tại duy nhất ở thư mục gốc của repository.
 
+## 14. Quy ước Commit Message (Git Commit Convention)
+
+- **Chuẩn Conventional Commits:** Mọi commit MUST tuân thủ định dạng `<type>(<scope>): <tiêu đề>`.
+  - Types hợp lệ: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `chore`, `style`.
+  - Scopes: Tên workspace (`admin`, `web`, `api`) hoặc tên module/feature cụ thể.
+- **Tiếng Việt có dấu:** Tiêu đề (header) và nội dung chi tiết (body) MUST viết bằng tiếng Việt CÓ DẤU chuẩn xác UTF-8, đúng ngữ pháp. MUST NOT viết tiếng Việt không dấu.
+- **Cấu trúc và giãn dòng:**
+  - Header viết ngắn gọn, tóm tắt hành động chính, không chấm câu cuối.
+  - MUST có đúng một dòng trống duy nhất giữa phần Header và phần Body.
+  - Body gồm các bullet liên tiếp mô tả chi tiết các thay đổi. Mỗi bullet bắt đầu bằng 4 dấu cách rồi đến `- ` (`    - <nội dung>`).
+  - MUST NOT có dòng trống/khoảng trắng giữa các bullet trong phần Body (các bullet phải đứng liền kề nhau liên tục).
+
 ## Nguyên tắc cốt lõi
 
 **ONE DATABASE · ONE BACKEND · ONE BUSINESS RULE · ONE API CONVENTION**

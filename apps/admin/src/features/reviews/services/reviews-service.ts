@@ -32,7 +32,7 @@ async function readResponse(
     throw new ReviewApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải ${resource} (HTTP ${response.status}).`,
+        : `Unable to load ${resource} (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -88,7 +88,7 @@ export async function getAdminReviews(
 
   return (await readResponse(
     response,
-    'danh sách đánh giá',
+    'review list',
   )) as AdminReviewPageResponse;
 }
 
@@ -112,7 +112,7 @@ export async function getAdminReviewStats(
 
   return (await readResponse(
     response,
-    'thống kê đánh giá',
+    'review statistics',
   )) as AdminReviewStatsResponse;
 }
 
@@ -133,7 +133,7 @@ export async function updateAdminReviewStatus(
 
   return (await readResponse(
     response,
-    'trạng thái đánh giá',
+    'review status',
   )) as UpdateReviewStatusResponse;
 }
 
@@ -154,6 +154,6 @@ export async function replyAdminReview(
 
   return (await readResponse(
     response,
-    'phản hồi đánh giá',
+    'review reply',
   )) as { data: { id: number; reply: ReviewReply | null }; message: string };
 }

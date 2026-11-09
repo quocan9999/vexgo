@@ -19,9 +19,9 @@ type VehicleFilters = {
 
 function requestErrorMessage(error: unknown) {
   if (error instanceof TypeError) {
-    return 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.';
+    return 'Cannot connect to API server. Please try again.';
   }
-  return error instanceof Error ? error.message : 'Không thể tải danh sách xe.';
+  return error instanceof Error ? error.message : 'Failed to load vehicle list.';
 }
 
 export function useVehicles() {

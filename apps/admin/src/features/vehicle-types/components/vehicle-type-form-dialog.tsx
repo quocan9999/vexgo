@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/action-button';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import { useTranslations } from 'next-intl';
 import {
   createVehicleType,
   updateVehicleType,
@@ -59,6 +60,8 @@ export function VehicleTypeFormDialog({
   onClose,
   onSaved,
 }: VehicleTypeFormDialogProps) {
+  const tVehicleTypes = useTranslations('vehicleTypes');
+  const tCommon = useTranslations('common');
   const editing = vehicleType !== undefined;
   const idPrefix = editing
     ? `edit-vehicle-type-${vehicleType.vehicleTypeId}`
@@ -102,13 +105,13 @@ export function VehicleTypeFormDialog({
     const name = values.name.trim();
     const description = values.description.trim();
 
-    if (!name) errors.name = 'Vui lòng nhập tên loại xe.';
+    if (!name) errors.name = tVehicleTypes('errors.nameRequired');
     else if (name.length > 100) {
-      errors.name = 'Tên loại xe không được vượt quá 100 ký tự.';
+      errors.name = tVehicleTypes('errors.nameMaxLength');
     }
 
     if (description.length > 500) {
-      errors.description = 'Mô tả không được vượt quá 500 ký tự.';
+      errors.description = tVehicleTypes('errors.descriptionMaxLength');
     }
 
     for (const field of [
@@ -123,7 +126,7 @@ export function VehicleTypeFormDialog({
         !Number.isSafeInteger(capacity) ||
         capacity > 2_147_483_647
       ) {
-        errors[field] = 'Nhập số nguyên từ 0 đến 2147483647.';
+        errors[field] = tVehicleTypes('errors.integerRange');
       }
     }
 
@@ -136,9 +139,7 @@ export function VehicleTypeFormDialog({
 
     setFormError(null);
     if (!editing && !tenantId) {
-      setFormError(
-        'Không xác định được nhà xe của tài khoản. Vui lòng đăng nhập lại.',
-      );
+      setFormError(tVehicleTypes('errors.busCompanyMissing'));
       return;
     }
     const errors = validate();
@@ -189,14 +190,14 @@ export function VehicleTypeFormDialog({
           focusFirstInvalid();
         }
       } else if (requestError instanceof TypeError) {
-        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error(tVehicleTypes('errors.networkError'));
       } else {
         toast.error(
           requestError instanceof Error
             ? requestError.message
             : editing
-              ? 'Không thể cập nhật loại xe. Vui lòng thử lại.'
-              : 'Không thể tạo loại xe. Vui lòng thử lại.',
+              ? tVehicleTypes('errors.updateFailed')
+              : tVehicleTypes('errors.createFailed'),
         );
       }
     } finally {
@@ -215,11 +216,15 @@ export function VehicleTypeFormDialog({
 
   return (
     <ResourceModalDialog
-      title={editing ? 'Chỉnh sửa loại xe' : 'Thêm loại xe'}
+      title={
+        editing
+          ? tVehicleTypes('dialogEditTitle')
+          : tVehicleTypes('dialogCreateTitle')
+      }
       description={
         editing
-          ? 'Cập nhật thông tin và sức chứa hàng mặc định.'
-          : 'Nhập thông tin và sức chứa hàng mặc định cho loại xe mới.'
+          ? tVehicleTypes('dialogEditDesc')
+          : tVehicleTypes('dialogCreateDesc')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -233,17 +238,17 @@ export function VehicleTypeFormDialog({
         footer={
           <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button disabled={submitting} onClick={closeDialog} variant="outline">
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button aria-busy={submitting} disabled={submitting} type="submit">
               {submitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
               {submitting
-                ? 'Đang lưu…'
+                ? tCommon('saving')
                 : editing
-                  ? 'Lưu thay đổi'
-                  : 'Tạo loại xe'}
+                  ? tCommon('saveChanges')
+                  : tVehicleTypes('createVehicleType')}
             </Button>
           </div>
         }
@@ -251,7 +256,7 @@ export function VehicleTypeFormDialog({
         {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
         <Field data-invalid={Boolean(fieldErrors.name)}>
           <FieldLabel htmlFor={`${idPrefix}-name`}>
-            Tên loại xe <span aria-hidden>*</span>
+            {tVehicleTypes('colName')} <span aria-hidden>*</span>
           </FieldLabel>
           <Input
             autoComplete="off"
@@ -272,7 +277,9 @@ export function VehicleTypeFormDialog({
           </FieldError>
         </Field>
         <Field data-invalid={Boolean(fieldErrors.description)}>
-          <FieldLabel htmlFor={`${idPrefix}-description`}>Mô tả</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-description`}>
+            {tVehicleTypes('colDescription')}
+          </FieldLabel>
           <Textarea
             aria-describedby={
               fieldErrors.description
@@ -293,21 +300,20 @@ export function VehicleTypeFormDialog({
         </Field>
         <fieldset className="min-w-0 space-y-4 rounded-[var(--admin-radius-panel)] border border-border p-4">
           <legend className="px-1 text-[13px] font-semibold">
-            Sức chứa hàng mặc định
+            {tVehicleTypes('defaultCargoCapacity')}
           </legend>
           <p
             className="text-xs leading-relaxed text-muted-foreground"
             id={`${idPrefix}-capacity-help`}
           >
-            Các giá trị này được dùng làm sức chứa mặc định khi tạo chuyến mới.
-            Thay đổi tại đây không cập nhật sức chứa của các chuyến đã tồn tại.
+            {tVehicleTypes('defaultCargoHelp')}
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {(
               [
-                { field: 'motorbikeCapacityDefault', label: 'Xe máy' },
-                { field: 'bulkyCargoCapacityDefault', label: 'Hàng cồng kềnh' },
-                { field: 'lightCargoCapacityDefault', label: 'Hàng nhẹ' },
+                { field: 'motorbikeCapacityDefault', label: tVehicleTypes('motorbike') },
+                { field: 'bulkyCargoCapacityDefault', label: tVehicleTypes('bulkyCargo') },
+                { field: 'lightCargoCapacityDefault', label: tVehicleTypes('lightCargo') },
               ] as const
             ).map(({ field, label }) => (
               <Field key={field} data-invalid={Boolean(fieldErrors[field])}>

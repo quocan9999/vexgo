@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Download,
   ArrowLeft,
@@ -108,23 +109,26 @@ function formatInvoiceDateTime(timeStr?: string | null): string {
   return `${hours}:${minutes} • ${day}/${month}/${year}`;
 }
 
-function mapPaymentMethod(method?: string | null): string {
-  if (!method || method === '—') return 'Chuyển khoản VietQR';
+function mapPaymentMethod(
+  method?: string | null,
+  t?: (key: any) => string,
+): string {
+  if (!method || method === '—') return t ? t('methodVietQR') : 'Chuyển khoản VietQR';
   const upper = method.toUpperCase();
   switch (upper) {
     case 'SEPAY':
     case 'CHUYEN_KHOAN':
     case 'VIETQR':
-      return 'Chuyển khoản VietQR';
+      return t ? t('methodVietQR') : 'Chuyển khoản VietQR';
     case 'TAI_BEN':
     case 'TIEN_MAT':
-      return 'Tiền mặt tại bến';
+      return t ? t('methodCash') : 'Tiền mặt tại bến';
     case 'MOMO':
-      return 'Ví MoMo';
+      return t ? t('methodMoMo') : 'Ví MoMo';
     case 'VNPAY':
-      return 'Cổng VNPay';
+      return t ? t('methodVNPay') : 'Cổng VNPay';
     case 'ZALOPAY':
-      return 'Ví ZaloPay';
+      return t ? t('methodZaloPay') : 'Ví ZaloPay';
     default:
       return method;
   }
@@ -563,6 +567,8 @@ function BoardingPassCard({
 }
 
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
+  const t = useTranslations('invoice');
+  const locale = useLocale();
   const resolvedParams = use(params);
   const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
   const rawId = resolvedParams?.id || '';
@@ -1049,7 +1055,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm font-semibold text-slate-600">Đang xuất vé điện tử...</p>
+          <p className="text-sm font-semibold text-slate-600">{t('loadingInvoice')}</p>
         </div>
       </div>
     );
@@ -1062,9 +1068,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-700">
             <Clock aria-hidden="true" className="h-7 w-7" />
           </div>
-          <h1 className="mb-2 text-lg font-bold text-slate-900">Chưa thể xuất vé điện tử</h1>
+          <h1 className="mb-2 text-lg font-bold text-slate-900">{t('invoiceNotFound')}</h1>
           <p role="alert" className="text-sm leading-relaxed text-slate-600">
-            {error || 'Chưa thể xác minh trạng thái thanh toán của đơn đặt vé.'}
+            {error || t('invoiceNotFoundDesc')}
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
             {pendingBookingForPayment && (
@@ -1076,21 +1082,21 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   );
                   if (draft && typeof window !== 'undefined') {
                     window.location.assign(
-                      `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                      `/${locale}/payment?draftId=${encodeURIComponent(draft.id)}`,
                     );
                   }
                 }}
                 className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-bold text-white hover:bg-accent-hover cursor-pointer shadow-xs"
               >
                 <CreditCard className="h-4 w-4" />
-                <span>Thanh toán ngay</span>
+                <span>{t('continuePayment')}</span>
               </button>
             )}
             <Link
-              href="/"
+              href={`/${locale}`}
               className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800"
             >
-              Về trang chủ
+              {t('back')}
             </Link>
           </div>
         </div>
@@ -1419,9 +1425,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   : 'Vé xe điện tử (E-Ticket)'}
               </span>
             </div>
-            <h1>Vé điện tử của bạn</h1>
+            <h1>{t('title')}</h1>
             <div className="order-num">
-              <span className="sub">Mã đặt vé:</span>
+              <span className="sub">{t('bookingCode')}</span>
               <span className="mono" id="orderCode">
                 {invoice.bookingCode}
               </span>
@@ -1430,12 +1436,12 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 className="tiny-btn"
                 onClick={() => handleCopyCode(invoice.bookingCode)}
               >
-                {copiedCode === invoice.bookingCode ? '✓ Đã sao chép' : '▢ Sao chép'}
+                {copiedCode === invoice.bookingCode ? `✓ ${t('copied')}` : `▢ ${t('copy')}`}
               </button>
               {invoice.orderCode && invoice.orderCode !== invoice.bookingCode && (
                 <>
                   <span className="sub" style={{ marginLeft: 4 }}>
-                    · Mã GD:
+                    · {t('orderCode')}
                   </span>
                   <span className="mono">{invoice.orderCode}</span>
                 </>
@@ -1444,10 +1450,10 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           </div>
 
           <div className="hero-actions">
-            <span className="chip green">✓ Đã thanh toán</span>
+            <span className="chip green">✓ {t('statusPaid')}</span>
             <div className="action-row">
               <button type="button" className="btn primary" onClick={handlePrint}>
-                ↓ Tải vé PDF
+                ↓ {t('download')}
               </button>
             </div>
           </div>
@@ -1458,7 +1464,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           <aside className="left panel" id="orderPanel">
             <div className="panel-heading">
               <h2 className="section-title">
-                <span className="round-icon">▤</span> Chi tiết đơn hàng
+                <span className="round-icon">▤</span> {t('title')}
               </h2>
               <span className="chip gray">
                 {invoice.legs.length > 1 ? `${invoice.legs.length} chặng` : '1 đơn'}
@@ -1466,7 +1472,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             </div>
 
             <hr className="line" />
-            <p className="label">Thông tin hành trình</p>
+            <p className="label">{t('tripInfo')}</p>
 
             {invoice.legs.map((leg, idx) => {
               const isReturn = idx === 1;
@@ -1536,26 +1542,26 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             })}
 
             <hr className="line" />
-            <p className="label">Người đặt vé</p>
+            <p className="label">{t('passengerInfo')}</p>
             <div className="info-line">
-              <span>Họ và tên</span>
+              <span>{t('fullName')}</span>
               <strong>{invoice.passengerName}</strong>
             </div>
             <div className="info-line">
-              <span>Số điện thoại</span>
+              <span>{t('phone')}</span>
               <strong>{invoice.passengerPhone}</strong>
             </div>
             {invoice.passengerEmail && (
               <div className="info-line">
-                <span>Email</span>
+                <span>{t('email')}</span>
                 <strong style={{ overflowWrap: 'anywhere' }}>{invoice.passengerEmail}</strong>
               </div>
             )}
 
             <hr className="line" />
-            <p className="label">Chi tiết thanh toán</p>
+            <p className="label">{t('priceBreakdown')}</p>
             <div className="info-line">
-              <span>Vé xe ({allTickets.length} ghế)</span>
+              <span>{t('ticketSubtotal')} ({allTickets.length} {t('seats')})</span>
               <strong style={{ color: '#dc2626' }}>
                 {invoice.ticketSubtotal.toLocaleString('vi-VN')}đ
               </strong>
@@ -1563,7 +1569,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             {(invoice.cargoItems.length > 0 || invoice.cargoFee > 0) && (
               <div className="info-line">
                 <span>
-                  Hành lý ký gửi
+                  {t('cargoFee')}
                   {totalCargoQty > 0
                     ? ` (${totalCargoQty} kiện · ${totalCargoWeight} kg)`
                     : ''}
@@ -1581,7 +1587,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             {invoice.promotionCode && (
               <>
                 <div className="info-line">
-                  <span>Mã khuyến mãi</span>
+                  <span>{t('promoCode')}</span>
                   <strong>{invoice.promotionCode}</strong>
                 </div>
                 <div className="info-line">
@@ -1602,7 +1608,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
 
             <div className="price-card">
               <div className="sum" style={{ marginTop: 0, border: 0, padding: 0 }}>
-                <span>Tổng đã thanh toán</span>
+                <span>{t('totalAmount')}</span>
                 <b>{invoice.totalAmount.toLocaleString('vi-VN')}đ</b>
               </div>
               <div className="sub" style={{ marginTop: 5 }}>
@@ -1611,11 +1617,11 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             </div>
 
             <div className="info-line" style={{ marginTop: 10 }}>
-              <span>Phương thức</span>
-              <strong>{mapPaymentMethod(invoice.paymentMethod)}</strong>
+              <span>{t('paymentMethod')}</span>
+              <strong>{mapPaymentMethod(invoice.paymentMethod, (k: string) => t(k as any))}</strong>
             </div>
             <div className="info-line">
-              <span>Thanh toán lúc</span>
+              <span>{t('createdTime')}</span>
               <strong>{formatInvoiceDateTime(invoice.createdAt)}</strong>
             </div>
 
@@ -1642,9 +1648,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             <div className="ticket-summary">
               <div>
                 <h2>
-                  Thẻ lên xe{' '}
+                  {t('ticketList')}{' '}
                   <span className="chip gray" id="countLabel">
-                    {allTickets.length} vé
+                    {allTickets.length} {t('seats')}
                   </span>
                 </h2>
                 <p>Xuất trình mã QR riêng của từng vé cho nhân viên khi lên xe.</p>

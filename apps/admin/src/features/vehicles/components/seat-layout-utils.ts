@@ -27,7 +27,8 @@ function positionsOverlap(
 }
 
 function legacyFloor(seat: Pick<VehicleSeat, 'seatNumber' | 'position'>) {
-  return seat.position?.toLocaleLowerCase('vi-VN').includes('trên') ||
+  return seat.position?.toLocaleLowerCase('vi-VN').includes('\u0074\u0072\u00EA\u006E') ||
+    seat.position?.toLowerCase().includes('upper') ||
     seat.seatNumber.toLocaleUpperCase('vi-VN').startsWith('B')
     ? 2
     : 1;

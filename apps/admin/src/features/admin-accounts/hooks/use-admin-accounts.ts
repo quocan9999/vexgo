@@ -77,7 +77,7 @@ export function useAdminAccounts() {
           setError(
             requestError instanceof Error
               ? requestError.message
-              : 'Không thể tải danh sách tài khoản quản trị.',
+              : 'Unable to load admin accounts.',
           );
         }
       })
