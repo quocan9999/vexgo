@@ -219,5 +219,22 @@ describe('AiChatbotOrchestratorService', () => {
         'Thời gian hoàn tiền sẽ từ 24-48 giờ làm việc. Quy định hành lý áp dụng tối đa 20kg.',
       );
     });
+
+    it('should convert markdown tables to readable bullet points and strip raw UUIDs/links', () => {
+      const tableReply = `Dưới đây là các chuyến xe TP.HCM → Đà Lạt ngày 15/11/2026 hiện có:
+| Mã chuyến | Nhà xe | Giờ khởi hành | Loại xe | Giá (VNĐ) | Ghế còn | Link đặt vé |
+|-----------|--------|---------------|--------|-----------|---------|------------|
+| a7d1daf5f2474223a1bf1baf4e87a508 | Thành Bưởi | 06:00 | GIƯỜNG NẰM | 270 000 | 22 | /trips/9202 |
+| 1f3938b1c6834851ad8960eead857aad | Phương Trang | 06:00 | GHẾ NGỒI | 180 000 | 28 | /trips/9184 |
+Chúc bạn có chuyến đi vui vẻ!`;
+
+      const cleaned = orchestrator.cleanReplyText(tableReply);
+
+      expect(cleaned).not.toContain('|---|');
+      expect(cleaned).not.toContain('a7d1daf5f2474223a1bf1baf4e87a508');
+      expect(cleaned).not.toContain('/trips/9202');
+      expect(cleaned).toContain('- **Thành Bưởi**: Giờ khởi hành: 06:00, Loại xe: GIƯỜNG NẰM, Giá (VNĐ): 270 000, Ghế còn: 22');
+      expect(cleaned).toContain('- **Phương Trang**: Giờ khởi hành: 06:00, Loại xe: GHẾ NGỒI, Giá (VNĐ): 180 000, Ghế còn: 28');
+    });
   });
 });

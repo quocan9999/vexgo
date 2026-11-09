@@ -163,4 +163,40 @@ describe('SupportWidget Customer Web Clean Output (Phase 03)', () => {
     // Vẫn hiển thị nút gặp CSKH
     expect(screen.getByText('Gặp CSKH')).toBeTruthy();
   });
+
+  it('converts markdown tables to clean bullet text without pipe characters or raw uuid', async () => {
+    vi.mocked(aiChatbotService.sendMessage).mockResolvedValueOnce({
+      reply: `Dưới đây là các chuyến xe hiện có:
+| Mã chuyến | Nhà xe | Giờ khởi hành | Loại xe | Giá (VNĐ) | Ghế còn | Link đặt vé |
+|-----------|--------|---------------|--------|-----------|---------|------------|
+| a7d1daf5f2474223a1bf1baf4e87a508 | Thành Bưởi | 06:00 | GIƯỜNG NẰM | 270 000 | 22 | /trips/9202 |
+| 1f3938b1c6834851ad8960eead857aad | Phương Trang | 06:00 | GHẾ NGỒI | 180 000 | 28 | /trips/9184 |
+Chúc bạn có chuyến đi suôn sẻ!`,
+      sessionToken: 'test-session',
+      intent: 'TRIP_SEARCH',
+      requiresHumanHandoff: false,
+      latencyMs: 150,
+      citations: [],
+    });
+
+    render(<SupportWidget />);
+
+    fireEvent.click(screen.getByTestId('ai-bot-floating-button'));
+
+    const input = screen.getByPlaceholderText('Nhập câu hỏi hoặc yêu cầu hỗ trợ...');
+    fireEvent.change(input, { target: { value: 'Tìm xe ngày 15/11' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
+    });
+
+    // 1. Không còn dấu hiệu bảng markdown raw (|---|) hay mã UUID
+    expect(screen.queryByText(/\|-----------/)).toBeNull();
+    expect(screen.queryByText(/a7d1daf5f2474223a1bf1baf4e87a508/)).toBeNull();
+
+    // 2. Chuyển thành text/bullet có tên nhà xe in đậm
+    const thanhBuoi = screen.getAllByText('Thành Bưởi').find((el) => el.tagName === 'STRONG');
+    expect(thanhBuoi).toBeDefined();
+    expect(screen.getAllByText(/Giờ khởi hành: 06:00/).length).toBe(2);
+    expect(screen.getByText(/Giá \(VNĐ\): 270 000/)).toBeTruthy();
+  });
 });

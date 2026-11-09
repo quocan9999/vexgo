@@ -28,13 +28,120 @@ import type {
   AiSuggestionItem,
 } from '@/features/ai-chatbot/types/ai-chatbot.types';
 
+function convertMarkdownTablesToText(text: string): string {
+  if (!text || !text.includes('|')) return text;
+
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let inTable = false;
+  let headers: string[] = [];
+  const tableRows: string[][] = [];
+
+  const flushTable = () => {
+    if (tableRows.length > 0) {
+      for (const row of tableRows) {
+        const parts: string[] = [];
+        let title = '';
+
+        for (let i = 0; i < row.length; i++) {
+          const val = row[i];
+          const header = headers[i] || '';
+
+          if (!val) continue;
+
+          // Bỏ qua UUIDs (32 hex chars hoặc UUID format)
+          if (
+            /^[0-9a-f]{32}$/i.test(val) ||
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+          ) {
+            continue;
+          }
+
+          // Bỏ qua link đặt vé thô /trips/...
+          if (val.startsWith('/trips/') || val.startsWith('http')) {
+            continue;
+          }
+
+          // Bỏ qua cột mã chuyến hoặc link
+          if (/mã\s*chuyến/i.test(header) || /link/i.test(header)) {
+            continue;
+          }
+
+          // Chọn title chính (ưu tiên cột Nhà xe)
+          if (!title && (/nhà\s*xe/i.test(header) || i === 0 || i === 1)) {
+            title = val;
+            continue;
+          }
+
+          if (header && !/cột/i.test(header)) {
+            parts.push(`${header}: ${val}`);
+          } else {
+            parts.push(val);
+          }
+        }
+
+        if (title && parts.length > 0) {
+          result.push(`- **${title}**: ${parts.join(', ')}`);
+        } else if (title) {
+          result.push(`- **${title}**`);
+        } else if (parts.length > 0) {
+          result.push(`- ${parts.join(', ')}`);
+        }
+      }
+    }
+    inTable = false;
+    headers = [];
+    tableRows.length = 0;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const isTableRow = line.startsWith('|') && line.endsWith('|');
+    const isSeparator = isTableRow && /^\|(\s*:?-+:?\s*\|)+$/.test(line);
+
+    if (isSeparator) {
+      inTable = true;
+      continue;
+    }
+
+    if (isTableRow) {
+      const cells = line
+        .slice(1, -1)
+        .split('|')
+        .map((c) => c.trim());
+
+      if (!inTable) {
+        headers = cells;
+        inTable = true;
+      } else {
+        tableRows.push(cells);
+      }
+      continue;
+    }
+
+    if (inTable) {
+      flushTable();
+    }
+    result.push(lines[i]);
+  }
+
+  if (inTable) {
+    flushTable();
+  }
+
+  return result.join('\n');
+}
+
 function FormattedMessageText({ content, isUser }: { content: string; isUser: boolean }) {
   if (isUser) {
     return <span className="whitespace-pre-wrap">{content}</span>;
   }
 
+  // Chuyển đổi bảng Markdown sang văn bản gạch đầu dòng rõ ràng
+  const textWithoutTables = convertMarkdownTablesToText(content);
+
   // Loại bỏ triệt để mọi mã tài liệu kỹ thuật, thẻ [DOC-...], 【DOC-...】 hoặc (Nguồn: ...)
-  const cleaned = content
+  const cleaned = textWithoutTables
     .replace(/[【\[]\s*DOC-[A-Z0-9_-]+\s*[】\]]/gi, '')
     .replace(/【[^】]*】/g, '')
     .replace(/\(\s*Nguồn:[^)]*\)/gi, '')
