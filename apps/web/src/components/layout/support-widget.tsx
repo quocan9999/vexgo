@@ -19,7 +19,7 @@ import {
   Sparkles,
   Loader2,
   ArrowRightLeft,
-  Plus,
+  PlusCircle,
 } from 'lucide-react';
 import { CustomerSupportChat } from '@/features/support-chat/components/customer-support-chat';
 import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
@@ -495,7 +495,7 @@ export const SupportWidget: React.FC = () => {
                 title="Đoạn chat mới"
                 aria-label="Đoạn chat mới"
               >
-                <Plus className="w-4 h-4" />
+                <PlusCircle className="w-4 h-4" />
               </button>
               <button
                 type="button"
