@@ -63,10 +63,47 @@ describe('AI Chatbot Trip Search - Flexible Date & Location Normalization', () =
       expect(parsed.destination).toBe('đà lạt');
       expect(parsed.date).toBe('2026-11-15');
     });
+
+    it('7. should extract time filter "có chuyến xe nào đi muộn không?" without mistaking "muộn không" for destination', () => {
+      const parsed = orchestrator.parseTripSearchQuery(
+        'có chuyến xe nào đi muộn không?',
+      );
+      expect(parsed.origin).toBe('');
+      expect(parsed.destination).toBe('');
+      expect(parsed.preferLate).toBe(true);
+      expect(parsed.timeOfDay).toBe('TOI');
+    });
+
+    it('8. should extract time filter "có chuyến xe nào đi tầm 18:00 trở đi không" without mistaking time phrase for destination', () => {
+      const parsed = orchestrator.parseTripSearchQuery(
+        'có chuyến xe nào đi tầm 18:00 trở đi không',
+      );
+      expect(parsed.origin).toBe('');
+      expect(parsed.destination).toBe('');
+      expect(parsed.minHour).toBe(18);
+      expect(parsed.preferLate).toBe(true);
+    });
+
+    it('9. should extract "sau 18h" and "trước 10h sáng"', () => {
+      const parsedAfter = orchestrator.parseTripSearchQuery(
+        'có chuyến xe sau 18h không',
+      );
+      expect(parsedAfter.minHour).toBe(18);
+      expect(parsedAfter.preferLate).toBe(true);
+      expect(parsedAfter.destination).toBe('');
+
+      const parsedBefore = orchestrator.parseTripSearchQuery(
+        'chuyến trước 10h sáng đi Vũng Tàu',
+      );
+      expect(parsedBefore.maxHour).toBe(10);
+      expect(parsedBefore.timeOfDay).toBe('SANG');
+      expect(parsedBefore.preferEarly).toBe(true);
+      expect(parsedBefore.destination).toBe('vũng tàu');
+    });
   });
 
   describe('AiBusinessToolsService.searchAvailableTrips', () => {
-    it('7. should expand location synonyms (Sài Gòn / Hồ Chí Minh -> TP.HCM, Lâm Đồng -> Đà Lạt)', async () => {
+    it('10. should expand location synonyms (Sài Gòn / Hồ Chí Minh -> TP.HCM, Lâm Đồng -> Đà Lạt)', async () => {
       const mockPrisma = {
         chuyenXe: {
           findMany: vi.fn().mockResolvedValue([
@@ -166,6 +203,116 @@ describe('AI Chatbot Trip Search - Flexible Date & Location Normalization', () =
       expect(result.totalFound).toBe(1);
       expect(result.trips[0].operator).toBe('Phương Trang');
       expect(result.trips[0].price).toBe(250000);
+    });
+
+    it('11. should filter trips by minHour / timeOfDay and calculate allDayTotal & timeSpan correctly', async () => {
+      const mockTrips = [
+        {
+          chuyenXeId: 1,
+          maChuyenXe: 'CX-0600',
+          tuyenXe: {
+            tenTuyen: 'TP.HCM - Đà Lạt',
+            nhaXe: { tenNhaXe: 'Thành Bưởi' },
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+          },
+          xe: { loaiXe: { tenLoai: 'Giường nằm' }, loaiXeId: 1 },
+          gioKhoiHanh: new Date('1970-01-01T06:00:00.000Z'),
+          gioDen: new Date('1970-01-01T13:00:00.000Z'),
+          ngayKhoiHanh: new Date('2026-11-15T00:00:00.000Z'),
+          nhaXeId: 1,
+          tuyenXeId: 1,
+          gheChuyenXes: [{ trangThai: 'TRONG' }, { trangThai: 'TRONG' }],
+        },
+        {
+          chuyenXeId: 2,
+          maChuyenXe: 'CX-0800',
+          tuyenXe: {
+            tenTuyen: 'TP.HCM - Đà Lạt',
+            nhaXe: { tenNhaXe: 'Phương Trang' },
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+          },
+          xe: { loaiXe: { tenLoai: 'Ghế ngồi' }, loaiXeId: 2 },
+          gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          gioDen: new Date('1970-01-01T15:00:00.000Z'),
+          ngayKhoiHanh: new Date('2026-11-15T00:00:00.000Z'),
+          nhaXeId: 2,
+          tuyenXeId: 1,
+          gheChuyenXes: [{ trangThai: 'TRONG' }],
+        },
+        {
+          chuyenXeId: 3,
+          maChuyenXe: 'CX-1800',
+          tuyenXe: {
+            tenTuyen: 'TP.HCM - Đà Lạt',
+            nhaXe: { tenNhaXe: 'Thành Bưởi' },
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+          },
+          xe: { loaiXe: { tenLoai: 'Giường nằm' }, loaiXeId: 1 },
+          gioKhoiHanh: new Date('1970-01-01T18:00:00.000Z'),
+          gioDen: new Date('1970-01-01T01:00:00.000Z'),
+          ngayKhoiHanh: new Date('2026-11-15T00:00:00.000Z'),
+          nhaXeId: 1,
+          tuyenXeId: 1,
+          gheChuyenXes: [{ trangThai: 'TRONG' }, { trangThai: 'TRONG' }],
+        },
+        {
+          chuyenXeId: 4,
+          maChuyenXe: 'CX-2000',
+          tuyenXe: {
+            tenTuyen: 'TP.HCM - Đà Lạt',
+            nhaXe: { tenNhaXe: 'Hoa Mai' },
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+          },
+          xe: { loaiXe: { tenLoai: 'Limousine' }, loaiXeId: 3 },
+          gioKhoiHanh: new Date('1970-01-01T20:00:00.000Z'),
+          gioDen: new Date('1970-01-01T03:00:00.000Z'),
+          ngayKhoiHanh: new Date('2026-11-15T00:00:00.000Z'),
+          nhaXeId: 3,
+          tuyenXeId: 1,
+          gheChuyenXes: [{ trangThai: 'TRONG' }],
+        },
+      ];
+
+      const mockPrisma = {
+        chuyenXe: { findMany: vi.fn().mockResolvedValue(mockTrips) },
+        bangGia: { findMany: vi.fn().mockResolvedValue([]) },
+      } as unknown as PrismaService;
+
+      const toolsService = new AiBusinessToolsService(
+        mockPrisma,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
+
+      // 11.1 Tìm kiếm thông thường không có bộ lọc giờ
+      const allRes = await toolsService.searchAvailableTrips({
+        originQuery: 'TP.HCM',
+        destinationQuery: 'Đà Lạt',
+        departureDate: '15/11/2026',
+      });
+      expect(allRes.allDayTotal).toBe(4);
+      expect(allRes.timeSpan).toBe('06:00 - 20:00');
+      expect(allRes.totalFound).toBe(4);
+
+      // 11.2 Tìm chuyến đi muộn từ 18:00 trở đi
+      const lateRes = await toolsService.searchAvailableTrips({
+        originQuery: 'TP.HCM',
+        destinationQuery: 'Đà Lạt',
+        departureDate: '15/11/2026',
+        minHour: 18,
+        preferLate: true,
+      });
+      expect(lateRes.allDayTotal).toBe(4);
+      expect(lateRes.totalFound).toBe(2);
+      expect(lateRes.trips.map((t) => t.departureTime)).toEqual(['18:00', '20:00']);
+      expect(lateRes.summary).toContain('Tìm thấy 2 chuyến xe phù hợp với khung giờ yêu cầu');
     });
   });
 });

@@ -19,6 +19,104 @@ import {
   type TripSearchResultItem,
 } from '../tools/ai-business-tools.service.js';
 import { AiChatbotSettingsService } from '../admin/ai-chatbot-settings.service.js';
+import { normalizeLocation } from '../../locations/location-catalog.js';
+
+const NON_LOCATION_TERMS = new Set([
+  'muon',
+  'tre',
+  'som',
+  'toi',
+  'sang',
+  'chieu',
+  'dem',
+  'khuya',
+  'ngay',
+  'gio',
+  'tieng',
+  'phut',
+  'mai',
+  'hom',
+  'qua',
+  'nay',
+  'mot',
+  'khong',
+  'chua',
+  'duoc',
+  'co',
+  'con',
+  'het',
+  'may',
+  'bao',
+  'nhieu',
+  'nao',
+  'sao',
+  'the',
+  'gi',
+  'tam',
+  'khoang',
+  'hon',
+  'nua',
+  'tro',
+  'di',
+  'do',
+  'len',
+  've',
+  'lai',
+  'xuong',
+  'sau',
+  'truoc',
+  'tu',
+  'den',
+  'chuyen',
+  'xe',
+  'gia',
+  'ghe',
+  'cho',
+  'tuyen',
+  'khach',
+  'tai',
+  'hang',
+  'nha',
+  'nhan',
+  'vien',
+  'cskh',
+  'ho',
+  'tro',
+  'tim',
+  'kiem',
+  'xem',
+  'hoi',
+  'dat',
+  'giu',
+  'huy',
+  'doi',
+]);
+
+function cleanLocationCandidate(val?: string): string {
+  if (!val) return '';
+  let cleaned = val.replace(/[?.,;!]+/g, ' ').trim();
+  cleaned = cleaned
+    .replace(
+      /^(?:tìm xe|tim xe|vé xe|ve xe|chuyến xe|chuyen xe|chuyến|chuyen|vé|ve|tại|ở|về|đến|đi)\s+/iu,
+      '',
+    )
+    .replace(/\s+(?:nào|nhé|nhe|ạ|ơi|với|giúp|hộ|không|khong)$/iu, '')
+    .trim();
+
+  const normalized = normalizeLocation(cleaned);
+  const words = normalized
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return '';
+
+  const isAllInvalid = words.every(
+    (w) => NON_LOCATION_TERMS.has(w) || /^\d+h?$/i.test(w),
+  );
+  if (isAllInvalid) return '';
+
+  return cleaned;
+}
 
 export interface ChatbotRequest {
   message: string;
@@ -298,25 +396,32 @@ ${userQuery}
         cleanNormalized.includes('tim xe') ||
         cleanNormalized.includes('ve xe di') ||
         cleanNormalized.includes('ve xe tu') ||
+        cleanNormalized.includes('ve xe') ||
         cleanNormalized.includes('co chuyen') ||
         cleanNormalized.includes('con chuyen') ||
+        cleanNormalized.includes('co xe') ||
+        cleanNormalized.includes('con xe') ||
         cleanNormalized.includes('chuyen toi') ||
         cleanNormalized.includes('chuyen sang') ||
         cleanNormalized.includes('chuyen chieu') ||
         cleanNormalized.includes('chuyen dem') ||
+        cleanNormalized.includes('chuyen muon') ||
+        cleanNormalized.includes('di muon') ||
         cleanNormalized.includes('muon hon') ||
+        cleanNormalized.includes('di som') ||
         cleanNormalized.includes('som hon') ||
         cleanNormalized.includes('gio chay') ||
         cleanNormalized.includes('may gio') ||
         cleanNormalized.includes('gia ve') ||
+        /\b\d{1,2}(?::\d{2}|h)\s*(?:tro di|do di)\b/.test(cleanNormalized) ||
         (cleanNormalized.includes('di') && cleanNormalized.includes('den'));
 
       let tripParsed = this.parseTripSearchQuery(rawMessage);
 
-      // Kế thừa ngữ cảnh điểm đi / điểm đến từ lịch sử các câu hỏi trước trong phiên
+      // Kế thừa ngữ cảnh điểm đi / điểm đến / ngày đi từ lịch sử các câu hỏi trước trong phiên
       if (
         isTripQuery &&
-        (!tripParsed.origin || !tripParsed.destination) &&
+        (!tripParsed.origin || !tripParsed.destination || !tripParsed.date) &&
         sessionId &&
         this.prisma.aiChatMessage
       ) {
@@ -329,12 +434,16 @@ ${userQuery}
           for (const prev of pastUserMessages) {
             if (prev.content.trim() === rawMessage.trim()) continue;
             const prevParsed = this.parseTripSearchQuery(prev.content);
-            if (prevParsed.origin && prevParsed.destination) {
-              if (!tripParsed.origin) tripParsed.origin = prevParsed.origin;
-              if (!tripParsed.destination)
-                tripParsed.destination = prevParsed.destination;
-              if (!tripParsed.date && prevParsed.date)
-                tripParsed.date = prevParsed.date;
+            if (!tripParsed.origin && prevParsed.origin) {
+              tripParsed.origin = prevParsed.origin;
+            }
+            if (!tripParsed.destination && prevParsed.destination) {
+              tripParsed.destination = prevParsed.destination;
+            }
+            if (!tripParsed.date && prevParsed.date) {
+              tripParsed.date = prevParsed.date;
+            }
+            if (tripParsed.origin && tripParsed.destination && tripParsed.date) {
               break;
             }
           }
@@ -349,6 +458,11 @@ ${userQuery}
           originQuery: tripParsed.origin,
           destinationQuery: tripParsed.destination,
           departureDate: tripParsed.date,
+          timeOfDay: tripParsed.timeOfDay,
+          minHour: tripParsed.minHour,
+          maxHour: tripParsed.maxHour,
+          preferLate: tripParsed.preferLate,
+          preferEarly: tripParsed.preferEarly,
           nhaXeId: request.nhaXeId,
         });
         realtimeData = searchResult;
@@ -761,7 +875,11 @@ VexGo không hoàn tiền trực tuyến: sau khi hủy vé khách phải liên 
 Không khẳng định đã kết nối nhân viên hoặc gửi khiếu nại: chỉ hướng dẫn khách mở kênh Chat với nhân viên.
 TUYỆT ĐỐI KHÔNG chèn mã tài liệu kỹ thuật, mã văn bản hay các ký hiệu như 【DOC-...】, [DOC-...] vào câu trả lời.
 TUYỆT ĐỐI KHÔNG dùng bảng Markdown (|...|...|) trong câu trả lời vì giao diện khung chat hẹp sẽ bị vỡ bảng. Luôn trình bày dạng văn bản tự nhiên hoặc danh sách gạch đầu dòng (- ) ngắn gọn, rõ ràng.
-Khi trả lời kết quả tìm chuyến xe, KHÔNG in mã chuyến UUID dài hay link đặt vé trong văn bản vì hệ thống đã tự động hiển thị các thẻ chuyến xe trực quan ngay bên dưới tin nhắn. Hãy tóm tắt ngắn gọn số lượng chuyến, giờ khởi hành, giá vé và hướng dẫn khách xem các thẻ chuyến xe bên dưới để chọn ghế.
+Khi trả lời kết quả tìm chuyến xe:
+- Sử dụng thông tin từ trường "summary", "allDayTotal" và "timeSpan" trong thẻ <realtime_data> để cung cấp cái nhìn tổng quan cho khách (ví dụ: "Trong ngày có tổng cộng X chuyến xe chạy từ HH:mm đến HH:mm...").
+- Nếu khách tìm kiếm chung cả ngày, hãy nêu rõ khung giờ hoạt động trong ngày và gợi ý khách có thể hỏi thêm theo khung giờ (buổi sáng, buổi chiều, buổi tối hoặc sau một giờ cụ thể).
+- Nếu khách yêu cầu tìm theo khung giờ cụ thể (ví dụ: "đi muộn", "sau 18h", "buổi sáng"), hãy trả lời chính xác số chuyến trong khung giờ đó và tóm tắt các chuyến xe phù hợp.
+- KHÔNG in mã chuyến UUID dài hay link đặt vé trong văn bản vì hệ thống đã tự động hiển thị các thẻ chuyến xe trực quan ngay bên dưới tin nhắn. Hãy tóm tắt danh sách chuyến bằng gạch đầu dòng (- Nhà xe – Giờ đi, Loại xe, Giá vé, Số ghế còn) và hướng dẫn khách xem các thẻ chuyến xe bên dưới để chọn ghế.
 Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
             },
             ...historyMessages,
@@ -801,16 +919,25 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     }
 
     if (intent === 'TRIP_SEARCH') {
+      const searchRes = realtimeData as {
+        summary?: string;
+        allDayTotal?: number;
+        timeSpan?: string;
+      } | null;
       if (trips && trips.length > 0) {
         const tripDescriptions = trips
           .map(
             (t) =>
-              `- Chuyến ${t.code} (${t.operator}): Giờ chạy ${t.departureTime} ngày ${t.departureDate}. Giá: ${t.price ? t.price.toLocaleString('vi-VN') + 'đ' : 'Liên hệ'}. Còn ${t.availableSeats} ghế trống.`,
+              `- **${t.operator}**: Khởi hành ${t.departureTime} (${t.vehicleType}), giá ${t.price ? t.price.toLocaleString('vi-VN') + 'đ' : 'Liên hệ'}, còn ${t.availableSeats} ghế trống.`,
           )
           .join('\n');
-        return `Tôi tìm thấy các chuyến xe phù hợp với lộ trình của bạn:\n\n${tripDescriptions}\n\nBạn có thể bấm vào thẻ chuyến xe bên dưới để chọn chỗ ngồi và đặt vé nhé!`;
+        const summaryText = searchRes?.summary ? `${searchRes.summary}\n\n` : '';
+        return `${summaryText}Dưới đây là các chuyến xe phù hợp:\n\n${tripDescriptions}\n\nVui lòng xem các thẻ chuyến xe hiển thị bên dưới để chọn ghế và đặt vé nhé!`;
       }
-      return 'Hiện tại chưa tìm thấy chuyến xe phù hợp với thời gian và lộ trình yêu cầu của bạn. Bạn vui lòng thử lại với ngày khác hoặc liên hệ hotline nhà xe nhé.';
+      if (searchRes?.summary) {
+        return searchRes.summary;
+      }
+      return 'Hiện tại chưa tìm thấy chuyến xe phù hợp với thời gian và lộ trình yêu cầu của bạn. Bạn vui lòng thử lại với ngày khác hoặc mở “Chat với nhân viên” để được hỗ trợ.';
     }
 
     if (intent === 'TICKET_LOOKUP' && realtimeData) {
@@ -936,21 +1063,101 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     return {};
   }
 
+  /**
+   * Bóc tách các tiêu chí lọc thời gian (buổi trong ngày, sau/trước một mốc giờ cụ thể, chuyến muộn/sớm)
+   */
+  extractTimeFilterFromMessage(msg: string): {
+    timeOfDay?: 'SANG' | 'CHIEU' | 'TOI' | 'DEM';
+    minHour?: number;
+    maxHour?: number;
+    preferLate?: boolean;
+    preferEarly?: boolean;
+    textToStrip?: string;
+  } {
+    let timeOfDay: 'SANG' | 'CHIEU' | 'TOI' | 'DEM' | undefined;
+    let minHour: number | undefined;
+    let maxHour: number | undefined;
+    let preferLate: boolean | undefined;
+    let preferEarly: boolean | undefined;
+    let textToStrip: string | undefined;
+
+    const afterMatch =
+      msg.match(
+        /(?:sau|từ|khoảng|tầm)?\s*(\d{1,2})(?::(\d{2})|h| giờ)?\s*(?:trở đi|đổ đi|trở lên)/iu,
+      ) || msg.match(/(?:sau|từ)\s*(\d{1,2})(?::(\d{2})|h| giờ)\b/iu);
+
+    if (afterMatch) {
+      const h = parseInt(afterMatch[1], 10);
+      if (!isNaN(h) && h >= 0 && h <= 23) {
+        minHour = h;
+        preferLate = true;
+        textToStrip = afterMatch[0];
+      }
+    }
+
+    const beforeMatch =
+      msg.match(/(?:trước|trở lại|đổ lại)\s*(\d{1,2})(?::(\d{2})|h| giờ)\b/iu) ||
+      msg.match(/(?:khoảng|tầm)?\s*(\d{1,2})(?::(\d{2})|h| giờ)?\s*(?:trở xuống|đổ lại)/iu);
+
+    if (beforeMatch) {
+      const h = parseInt(beforeMatch[1], 10);
+      if (!isNaN(h) && h >= 0 && h <= 23) {
+        maxHour = h;
+        preferEarly = true;
+        textToStrip = textToStrip ? `${textToStrip} ${beforeMatch[0]}` : beforeMatch[0];
+      }
+    }
+
+    if (
+      /\b(?:muộn hơn|trễ hơn|chuyến muộn|chuyến trễ|đi muộn|đi trễ|muộn|trễ|khuya)\b/iu.test(
+        msg,
+      )
+    ) {
+      preferLate = true;
+      timeOfDay = timeOfDay || 'TOI';
+    } else if (/\b(?:sớm hơn|chuyến sớm|đi sớm|sớm)\b/iu.test(msg)) {
+      preferEarly = true;
+      timeOfDay = timeOfDay || 'SANG';
+    } else if (/\b(?:buổi tối|ban tối|tối)\b/iu.test(msg)) {
+      preferLate = true;
+      timeOfDay = 'TOI';
+    } else if (/\b(?:buổi đêm|ban đêm|đêm)\b/iu.test(msg)) {
+      preferLate = true;
+      timeOfDay = 'DEM';
+    } else if (/\b(?:buổi chiều|chiều|trưa chiều)\b/iu.test(msg)) {
+      timeOfDay = 'CHIEU';
+    } else if (/\b(?:buổi sáng|ban sáng|sáng)\b/iu.test(msg)) {
+      preferEarly = true;
+      timeOfDay = 'SANG';
+    }
+
+    return { timeOfDay, minHour, maxHour, preferLate, preferEarly, textToStrip };
+  }
+
   parseTripSearchQuery(msg: string): {
     origin: string;
     destination: string;
     date?: string;
+    timeOfDay?: 'SANG' | 'CHIEU' | 'TOI' | 'DEM';
+    minHour?: number;
+    maxHour?: number;
+    preferLate?: boolean;
+    preferEarly?: boolean;
   } {
     let origin = '';
     let destination = '';
 
     const parsedDate = this.extractDateFromMessage(msg);
     const date = parsedDate.date;
+    const timeFilter = this.extractTimeFilterFromMessage(msg);
 
     // Loại bỏ chuỗi ngày tháng trước khi bóc tách điểm đi / điểm đến để tránh ký tự '-', '/' trong ngày gây nhầm lẫn
     let cleanMsg = msg;
     if (parsedDate.textToStrip) {
       cleanMsg = cleanMsg.replace(parsedDate.textToStrip, ' ').trim();
+    }
+    if (timeFilter.textToStrip) {
+      cleanMsg = cleanMsg.replace(timeFilter.textToStrip, ' ').trim();
     }
     cleanMsg = cleanMsg
       .replace(/\b202\d[-\/\.]\d{1,2}[-\/\.]\d{1,2}\b/g, '')
@@ -964,37 +1171,56 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
       /(?:từ|tu|tại|tai|ở|o)\s+([^\s–\-]+(?:\s+[^\s–\-]+)*?)\s+(?:đến|den|về|ve|đi|di)\s+([^?.,;]+)/iu,
     );
     if (match) {
-      origin = match[1]
-        .replace(/^(?:tìm xe|tim xe|vé xe|ve xe|chuyến|chuyen)\s*/iu, '')
-        .trim();
-      destination = match[2]
-        .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
-        .trim();
+      origin = cleanLocationCandidate(
+        match[1]
+          .replace(/^(?:tìm xe|tim xe|vé xe|ve xe|chuyến|chuyen)\s*/iu, '')
+          .trim(),
+      );
+      destination = cleanLocationCandidate(
+        match[2]
+          .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
+          .trim(),
+      );
     } else {
       const match2 = lower.match(
         /([^\s–\-]+(?:\s+[^\s–\-]+)*?)\s*(?:-|–|\bto\b|\bđến\b|\bden\b)\s*([^?.,;]+)/iu,
       );
       if (match2) {
-        origin = match2[1]
-          .replace(/^(?:tìm xe|tim xe|vé xe|ve xe|chuyến|chuyen)\s*/iu, '')
-          .trim();
-        destination = match2[2]
-          .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
-          .trim();
+        origin = cleanLocationCandidate(
+          match2[1]
+            .replace(/^(?:tìm xe|tim xe|vé xe|ve xe|chuyến|chuyen)\s*/iu, '')
+            .trim(),
+        );
+        destination = cleanLocationCandidate(
+          match2[2]
+            .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
+            .trim(),
+        );
       }
     }
 
     if (!destination) {
       const destMatch = lower.match(/(?:đến|den|về|ve|đi|di)\s+([^?.,;]+)/iu);
       if (destMatch) {
-        destination = destMatch[1]
-          .replace(/^(?:xe|chuyến|chuyen)\s*/iu, '')
-          .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
-          .trim();
+        destination = cleanLocationCandidate(
+          destMatch[1]
+            .replace(/^(?:xe|chuyến|chuyen)\s*/iu, '')
+            .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
+            .trim(),
+        );
       }
     }
 
-    return { origin, destination, date };
+    return {
+      origin,
+      destination,
+      date,
+      timeOfDay: timeFilter.timeOfDay,
+      minHour: timeFilter.minHour,
+      maxHour: timeFilter.maxHour,
+      preferLate: timeFilter.preferLate,
+      preferEarly: timeFilter.preferEarly,
+    };
   }
 
   private async finalizeResponse(params: {

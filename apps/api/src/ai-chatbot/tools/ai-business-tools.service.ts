@@ -135,17 +135,33 @@ export class AiBusinessToolsService {
     originQuery: string;
     destinationQuery: string;
     departureDate?: string;
-    timeOfDay?: 'SANG' | 'CHIEU' | 'TOI';
+    timeOfDay?: 'SANG' | 'CHIEU' | 'TOI' | 'DEM';
+    minHour?: number;
+    maxHour?: number;
+    preferLate?: boolean;
+    preferEarly?: boolean;
     maxPrice?: number;
     nhaXeId?: number;
-  }): Promise<{ trips: TripSearchResultItem[]; totalFound: number }> {
+    limit?: number;
+  }): Promise<{
+    trips: TripSearchResultItem[];
+    totalFound: number;
+    allDayTotal?: number;
+    timeSpan?: string;
+    summary?: string;
+  }> {
     const {
       originQuery,
       destinationQuery,
       departureDate,
       timeOfDay,
+      minHour,
+      maxHour,
+      preferLate,
+      preferEarly,
       maxPrice,
       nhaXeId,
+      limit,
     } = params;
 
     // Chuẩn hóa ngày tìm kiếm (hỗ trợ YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY)
@@ -249,13 +265,23 @@ export class AiBusinessToolsService {
         xe: { include: { loaiXe: true } },
         gheChuyenXes: { select: { trangThai: true } },
       },
-      take: 20,
+      take: 50,
       orderBy: [{ ngayKhoiHanh: 'asc' }, { gioKhoiHanh: 'asc' }],
     });
 
     if (!trips || trips.length === 0) {
-      return { trips: [], totalFound: 0 };
+      return { trips: [], totalFound: 0, allDayTotal: 0 };
     }
+
+    // Tính tổng số chuyến có ghế trống trong ngày để cung cấp thông tin toàn cảnh
+    const allAvailableInDay = trips.filter((t) =>
+      t.gheChuyenXes.some((g) => g.trangThai === 'TRONG'),
+    );
+    const allDayTotal = allAvailableInDay.length;
+    const timeSpan =
+      allAvailableInDay.length > 0
+        ? `${allAvailableInDay[0].gioKhoiHanh.toISOString().slice(11, 16)} - ${allAvailableInDay[allAvailableInDay.length - 1].gioKhoiHanh.toISOString().slice(11, 16)}`
+        : undefined;
 
     // Lấy bảng giá niêm yết cho các chuyến
     const latestDate = new Date(
@@ -296,12 +322,24 @@ export class AiBusinessToolsService {
         continue;
       }
 
+      const hours = trip.gioKhoiHanh.getUTCHours();
+
+      // Lọc theo khoảng giờ khởi hành cụ thể nếu có
+      if (minHour !== undefined && hours < minHour) continue;
+      if (maxHour !== undefined && hours > maxHour) continue;
+
       // Lọc theo khung giờ khởi hành trong ngày nếu có
       if (timeOfDay) {
-        const hours = trip.gioKhoiHanh.getUTCHours();
         if (timeOfDay === 'SANG' && (hours < 4 || hours >= 12)) continue;
         if (timeOfDay === 'CHIEU' && (hours < 12 || hours >= 18)) continue;
-        if (timeOfDay === 'TOI' && (hours < 18 || hours > 23)) continue;
+        if ((timeOfDay === 'TOI' || timeOfDay === 'DEM') && (hours < 18 || hours > 23)) continue;
+      }
+
+      if (preferLate && minHour === undefined && timeOfDay === undefined && hours < 17) {
+        continue;
+      }
+      if (preferEarly && maxHour === undefined && timeOfDay === undefined && hours >= 12) {
+        continue;
       }
 
       const depTimeStr = trip.gioKhoiHanh.toISOString().slice(11, 16);
@@ -323,11 +361,38 @@ export class AiBusinessToolsService {
         availableSeats,
         bookingUrl: `/trips/${trip.chuyenXeId}`,
       });
-
-      if (mappedTrips.length >= 5) break;
     }
 
-    return { trips: mappedTrips, totalFound: mappedTrips.length };
+    const hasTimeFilter =
+      minHour !== undefined ||
+      maxHour !== undefined ||
+      timeOfDay !== undefined ||
+      preferLate ||
+      preferEarly;
+
+    const defaultLimit = hasTimeFilter ? 8 : 6;
+    const effectiveLimit = limit ?? defaultLimit;
+
+    let summary: string | undefined;
+    if (allDayTotal > 0) {
+      if (hasTimeFilter) {
+        if (mappedTrips.length > 0) {
+          summary = `Tìm thấy ${mappedTrips.length} chuyến xe phù hợp với khung giờ yêu cầu (tổng cộng trong ngày có ${allDayTotal} chuyến chạy từ ${timeSpan}).`;
+        } else {
+          summary = `Không có chuyến xe nào trong khung giờ yêu cầu. Tuy nhiên trong ngày có tổng cộng ${allDayTotal} chuyến xe chạy từ ${timeSpan}.`;
+        }
+      } else {
+        summary = `Tìm thấy tổng cộng ${allDayTotal} chuyến xe trong ngày, trải dài từ ${timeSpan} (sáng, trưa, chiều, tối).`;
+      }
+    }
+
+    return {
+      trips: mappedTrips.slice(0, effectiveLimit),
+      totalFound: mappedTrips.length,
+      allDayTotal,
+      timeSpan,
+      summary,
+    };
   }
 
   /**
