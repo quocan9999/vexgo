@@ -19,7 +19,7 @@ import {
   Sparkles,
   Loader2,
   ArrowRightLeft,
-  RotateCcw,
+  Plus,
 } from 'lucide-react';
 import { CustomerSupportChat } from '@/features/support-chat/components/customer-support-chat';
 import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
@@ -492,10 +492,10 @@ export const SupportWidget: React.FC = () => {
                 type="button"
                 onClick={handleResetChat}
                 className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
-                title="Bắt đầu đoạn chat mới"
+                title="Đoạn chat mới"
                 aria-label="Đoạn chat mới"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
               </button>
               <button
                 type="button"
