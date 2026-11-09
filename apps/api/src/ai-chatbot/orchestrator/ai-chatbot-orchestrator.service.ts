@@ -439,12 +439,20 @@ ${userQuery}
 
       let tripParsed = this.parseTripSearchQuery(rawMessage);
 
-      // Kế thừa ngữ cảnh điểm đi / điểm đến / ngày đi / ngày về từ lịch sử các câu hỏi trước trong phiên
-      if (
+      // Kế thừa ngữ cảnh điểm đi / điểm đến / ngày đi từ lịch sử các câu hỏi trước trong phiên
+      // CHỈ kế thừa khi:
+      // 1. Người dùng hỏi tiếp nối về chuyến về (isReturnTripOnly) -> cần lấy lộ trình và ngày đi của chuyến trước
+      // 2. Hoặc câu hỏi hiện tại bị thiếu thông tin (thiếu origin, destination hoặc date)
+      const needsContextInheritance =
         isTripQuery &&
+        (tripParsed.isReturnTripOnly ||
+          !tripParsed.origin ||
+          !tripParsed.destination ||
+          !tripParsed.date) &&
         sessionId &&
-        this.prisma.aiChatMessage
-      ) {
+        this.prisma.aiChatMessage;
+
+      if (needsContextInheritance) {
         try {
           const pastUserMessages = await this.prisma.aiChatMessage.findMany({
             where: { sessionId, role: 'USER' },
@@ -474,10 +482,7 @@ ${userQuery}
               if (!tripParsed.date && prevParsed.date) {
                 tripParsed.date = prevParsed.date;
               }
-              if (!tripParsed.returnDate && prevParsed.returnDate) {
-                tripParsed.returnDate = prevParsed.returnDate;
-                tripParsed.isRoundTrip = true;
-              }
+              // TUYỆT ĐỐI KHÔNG tự động kế thừa returnDate nếu câu hỏi hiện tại không yêu cầu khứ hồi
             }
 
             if (tripParsed.origin && tripParsed.destination && tripParsed.date) {

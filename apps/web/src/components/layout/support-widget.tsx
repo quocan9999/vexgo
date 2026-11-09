@@ -19,6 +19,7 @@ import {
   Sparkles,
   Loader2,
   ArrowRightLeft,
+  RotateCcw,
 } from 'lucide-react';
 import { CustomerSupportChat } from '@/features/support-chat/components/customer-support-chat';
 import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
@@ -279,6 +280,26 @@ export const SupportWidget: React.FC = () => {
     });
   };
 
+  const handleResetChat = () => {
+    const newSession = generateUuidV4();
+    setSessionToken(newSession);
+    try {
+      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+        window.sessionStorage.setItem('vexgo_ai_session_token', newSession);
+      }
+    } catch {
+      // Ignore
+    }
+    setMessages([
+      {
+        id: 'welcome',
+        text: 'Xin chào! Tôi là Trợ lý ảo VexGo AI. Tôi có thể hỗ trợ bạn tìm kiếm chuyến xe, tra cứu vé xe điện tử, thông tin bưu kiện và giải đáp các chính sách của VexGo.',
+        sender: 'bot',
+        time: 'Vừa xong',
+      },
+    ]);
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputValue).trim();
     if (!text || isLoading) return;
@@ -467,6 +488,15 @@ export const SupportWidget: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleResetChat}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
+                title="Bắt đầu đoạn chat mới"
+                aria-label="Đoạn chat mới"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => setIsBotOpen(false)}

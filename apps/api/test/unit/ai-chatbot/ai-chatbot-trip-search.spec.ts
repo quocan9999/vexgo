@@ -462,5 +462,71 @@ describe('AI Chatbot Trip Search - Flexible Date & Location Normalization', () =
       expect(res.reply).toContain('Chiều về:');
       expect(res.reply).toContain('Đặt vé khứ hồi');
     });
+
+    it('17. should NOT inherit return trip when user sends a standalone one-way query in a session that previously had round-trip queries', async () => {
+      const mockPrisma = {
+        aiChatSession: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+          update: vi.fn(),
+        },
+        aiChatMessage: {
+          create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+          // Giả lập lịch sử trước đó từng có câu hỏi khứ hồi
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: 99,
+              content: 'Tìm vé khứ hồi từ Hồ Chí Minh đi Đà Lạt đi ngày 15/11/2026 về ngày 18/11/2026',
+              role: 'USER',
+            },
+          ]),
+        },
+      } as unknown as PrismaService;
+
+      const mockBusinessTools = {
+        searchAvailableTrips: vi.fn().mockResolvedValue({
+          summary: 'Tìm thấy 1 chuyến',
+          allDayTotal: 1,
+          trips: [
+            {
+              tripId: 101,
+              operator: 'Phương Trang',
+              origin: 'TP.HCM',
+              destination: 'Đà Lạt',
+              departureDate: '2026-11-15',
+              departureTime: '06:00',
+              vehicleType: 'GHẾ NGỒI',
+              price: 180000,
+              availableSeats: 28,
+              bookingUrl: '/trips/101',
+            },
+          ],
+        }),
+      } as unknown as AiBusinessToolsService;
+
+      const mockRetrieval = {
+        retrieve: vi.fn().mockResolvedValue([]),
+      } as any;
+
+      const testOrchestrator = new AiChatbotOrchestratorService(
+        new ConfigService({}),
+        mockRetrieval,
+        mockBusinessTools,
+        mockPrisma,
+      );
+
+      // Người dùng gửi câu hỏi 1 chiều bình thường (không nhắc gì khứ hồi hay 2 chiều)
+      const res = await testOrchestrator.processUserMessage({
+        message: 'Tìm xe từ HCM đi Đà Lạt ngày 15/11/2026',
+        sessionToken: '11111111-1111-4111-8111-111111111111',
+      });
+
+      // Mặc định CHỈ hiển thị 1 chiều, KHÔNG kế thừa lượt về
+      expect(res.isRoundTrip).toBeFalsy();
+      expect(res.suggestedReturnTrips).toBeUndefined();
+      expect(res.roundTripBookingUrl).toBeUndefined();
+      expect(res.suggestedTrips?.length).toBe(1);
+      expect(mockBusinessTools.searchAvailableTrips).toHaveBeenCalledTimes(1);
+    });
   });
 });
