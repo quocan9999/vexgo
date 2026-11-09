@@ -404,7 +404,12 @@ ${userQuery}
     try {
       // 3.1. Tìm kiếm chuyến xe
       const isTripQuery =
-        cleanNormalized.includes('chuyen xe') ||
+        !cleanNormalized.includes('huy ve') &&
+        !cleanNormalized.includes('tra ve') &&
+        !cleanNormalized.includes('yeu cau huy') &&
+        !cleanNormalized.includes('tra cuu ve') &&
+        !cleanNormalized.includes('kiem tra ve') &&
+        (cleanNormalized.includes('chuyen xe') ||
         cleanNormalized.includes('tim xe') ||
         cleanNormalized.includes('ve xe di') ||
         cleanNormalized.includes('ve xe tu') ||
@@ -435,7 +440,7 @@ ${userQuery}
         cleanNormalized.includes('ve lai') ||
         cleanNormalized.includes('quay lai') ||
         /\b\d{1,2}(?::\d{2}|h)\s*(?:tro di|do di)\b/.test(cleanNormalized) ||
-        (cleanNormalized.includes('di') && cleanNormalized.includes('den'));
+        (cleanNormalized.includes('di') && cleanNormalized.includes('den')));
 
       let tripParsed = this.parseTripSearchQuery(rawMessage);
 
@@ -586,104 +591,79 @@ ${userQuery}
           suggestedTrips = searchResult.trips;
         }
       }
-      // 3.2. Tra cứu vé xe
+      // 3.2. Hủy vé xe
+      else if (
+        cleanNormalized.includes('huy ve') ||
+        cleanNormalized.includes('tra ve') ||
+        cleanNormalized.includes('yeu cau huy') ||
+        cleanNormalized.includes('chinh sach huy') ||
+        cleanNormalized.includes('phi huy')
+      ) {
+        detectedIntent = 'TICKET_CANCEL';
+        realtimeData = {
+          featureName: 'Hủy vé xe trực tuyến',
+          navigation:
+            'Nhấp vào mục "Hủy vé" trên thanh điều hướng đầu trang website (hoặc tại trang "Tra cứu vé xe" / "Vé của tôi", chọn vé và bấm "Yêu cầu hủy vé")',
+          steps: [
+            'Bước 1: Nhập "Mã vé" và "Số điện thoại đặt vé" -> Bấm nút "Tra cứu vé"',
+            'Bước 2: Hệ thống kiểm tra điều kiện hủy (trước 24 tiếng phí 10%, từ 2.5 tiếng - 24 tiếng phí 20%, dưới 2.5 tiếng không hỗ trợ trực tuyến cần liên hệ nhà xe). Hành khách tick chọn ghế cần hủy, xem số tiền hoàn dự kiến và tick đồng ý điều khoản chính sách',
+            'Bước 3: Bấm nút "Xác nhận hủy vé" để hoàn tất yêu cầu và nhận mã giao dịch hủy vé',
+          ],
+          policySummary:
+            'Hủy trước 24h phí 10% (hoàn 90%); Hủy từ 2.5h - 24h phí 20% (hoàn 80%); Dưới 2.5h hoặc xe đã xuất bến không hủy trực tuyến, liên hệ nhà xe.',
+          securityNotice:
+            'Tuyệt đối không hủy vé trực tiếp trong chat. Không yêu cầu khách gửi mã vé hay số điện thoại vào chat.',
+        };
+      }
+      // 3.3. Tra cứu vé xe
       else if (
         cleanNormalized.includes('tra cuu ve') ||
         cleanNormalized.includes('kiem tra ve') ||
+        cleanNormalized.includes('tim ve') ||
+        cleanNormalized.includes('xem ve') ||
         cleanNormalized.includes('ma ve') ||
         /\b[a-z]{2,4}-[0-9a-z-]+\b/i.test(rawMessage) ||
         /\btk[0-9a-z]+\b/i.test(rawMessage) ||
-        /\bbk[0-9a-z]+\b/i.test(rawMessage) ||
-        (sessionId &&
-          this.prisma.aiChatMessage &&
-          (/(?<!\d)(\+84\d{9}|0\d{9})(?!\d)/.test(rawMessage) ||
-            cleanNormalized.includes('so dien thoai') ||
-            cleanNormalized.includes('sdt')))
+        /\bbk[0-9a-z]+\b/i.test(rawMessage)
       ) {
-        let codeMatch =
-          rawMessage.match(/\b([A-Z]{2,4}-[0-9A-Z-]+)\b/i)?.[1] ||
-          rawMessage.match(/\b(TK[0-9A-Z]+)\b/i)?.[1] ||
-          rawMessage.match(/\b(BK[0-9A-Z]+)\b/i)?.[1] ||
-          '';
-        let phoneMatch = rawMessage.match(
-          /(?<!\d)(\+84\d{9}|0\d{9})(?!\d)/,
-        )?.[1];
-
-        // Kế thừa mã vé hoặc số điện thoại từ lịch sử nếu câu hiện tại cung cấp phần còn lại
-        if ((!codeMatch || !phoneMatch) && sessionId && this.prisma.aiChatMessage) {
-          try {
-            const pastUserMessages = await this.prisma.aiChatMessage.findMany({
-              where: { sessionId, role: 'USER' },
-              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-              take: 4,
-            });
-            for (const prev of pastUserMessages) {
-              if (prev.content.trim() === rawMessage.trim()) continue;
-              if (!codeMatch) {
-                const matchedCode =
-                  prev.content.match(/\b([A-Z]{2,4}-[0-9A-Z-]+)\b/i)?.[1] ||
-                  prev.content.match(/\b(TK[0-9A-Z]+)\b/i)?.[1] ||
-                  prev.content.match(/\b(BK[0-9A-Z]+)\b/i)?.[1];
-                if (matchedCode) {
-                  codeMatch = matchedCode;
-                }
-              }
-              if (!phoneMatch) {
-                phoneMatch = prev.content.match(
-                  /(?<!\d)(\+84\d{9}|0\d{9})(?!\d)/,
-                )?.[1];
-              }
-              if (codeMatch && phoneMatch) break;
-            }
-          } catch {
-            // Lỗi đọc lịch sử không chặn luồng chính
-          }
-        }
-
-        if (
-          codeMatch ||
-          phoneMatch ||
-          cleanNormalized.includes('ve')
-        ) {
-          detectedIntent = 'TICKET_LOOKUP';
-          if (codeMatch && phoneMatch) {
-            const ticketData = await this.businessTools.lookupTicketStatus({
-              ticketCode: codeMatch,
-              phoneNumber: phoneMatch,
-            });
-            realtimeData = ticketData;
-          } else {
-            realtimeData = {
-              note: 'Vui lòng cung cấp mã vé (VD: TK-202610-001) và số điện thoại đặt vé để tra cứu.',
-            };
-          }
-        }
+        detectedIntent = 'TICKET_LOOKUP';
+        realtimeData = {
+          featureName: 'Tra cứu vé xe',
+          navigation:
+            'Nhấp vào mục "Tra cứu" trên thanh điều hướng đầu trang website -> Chọn "Tra cứu vé xe" (hoặc vào mục "Vé của tôi" nếu đã đăng nhập tài khoản)',
+          requiredFields: [
+            'Mã vé: Nhận qua SMS hoặc email sau khi đặt vé thành công (ví dụ: TK-...)',
+            'Số điện thoại: Số điện thoại người đặt vé',
+          ],
+          actionButton:
+            'Bấm nút "Tra cứu vé" để xem chi tiết lộ trình, vị trí ghế ngồi, giờ khởi hành, trạng thái thanh toán và mã QR soát vé lên xe.',
+          securityNotice:
+            'Khách hàng không cần gửi mã vé hoặc số điện thoại vào khung chat này để bảo mật thông tin. Hướng dẫn khách tự thao tác trên website.',
+        };
       }
-      // 3.3. Tra cứu bưu kiện / vận đơn
+      // 3.4. Tra cứu bưu kiện / vận đơn
       else if (
         cleanNormalized.includes('van don') ||
         cleanNormalized.includes('gui hang') ||
         cleanNormalized.includes('buu kien') ||
         cleanNormalized.includes('tra cuu hang') ||
+        cleanNormalized.includes('tra cuu don') ||
         /\bwb[0-9a-z]+\b/i.test(rawMessage)
       ) {
         detectedIntent = 'SHIPMENT_LOOKUP';
-        const wbMatch = rawMessage.match(/\b(WB[0-9A-Z]+)\b/i)?.[1] || '';
-        const phoneMatch = rawMessage.match(
-          /(?<!\d)(\+84\d{9}|0\d{9})(?!\d)/,
-        )?.[1];
-
-        if (wbMatch && phoneMatch) {
-          const shipmentData = await this.businessTools.lookupShipmentStatus({
-            shipmentCode: wbMatch,
-            phoneNumber: phoneMatch,
-          });
-          realtimeData = shipmentData;
-        } else {
-          realtimeData = {
-            note: 'Vui lòng cung cấp mã vận đơn (VD: WB12345678) và số điện thoại người gửi hoặc người nhận để xác minh.',
-          };
-        }
+        realtimeData = {
+          featureName: 'Tra cứu đơn gửi hàng',
+          navigation:
+            'Nhấp vào mục "Tra cứu" trên thanh điều hướng đầu trang website -> Chọn "Tra cứu đơn gửi hàng"',
+          requiredFields: [
+            'Mã vận đơn: In trên phiếu gửi hàng hoặc tin nhắn xác nhận (ví dụ: WB-...)',
+            'Số điện thoại: Số điện thoại người gửi hoặc người nhận hàng',
+          ],
+          actionButton:
+            'Bấm nút "Tra cứu đơn hàng" để theo dõi lộ trình di chuyển, tình trạng kiện hàng và cước phí.',
+          securityNotice:
+            'Khách hàng không cần gửi mã vận đơn hay số điện thoại vào khung chat. Hướng dẫn khách tự thao tác trên website.',
+        };
       }
       // 3.4. Khuyến mãi
       else if (
@@ -727,12 +707,12 @@ ${userQuery}
       cleanNormalized.includes('huy ve') ||
       cleanNormalized.includes('doi tra')
     ) {
-      retrievedChunks = await this.retrievalService.retrieve(
-        rawMessage,
-        request.nhaXeId,
-      );
+      retrievedChunks =
+        (await this.retrievalService.retrieve(rawMessage, request.nhaXeId)) || [];
       if (retrievedChunks.length > 0) {
-        detectedIntent = 'POLICY_RAG';
+        if (detectedIntent === 'GENERAL') {
+          detectedIntent = 'POLICY_RAG';
+        }
       }
     }
 
@@ -1008,7 +988,21 @@ Khi trả lời kết quả tìm chuyến xe:
   + Nếu khách yêu cầu tìm theo khung giờ cụ thể (ví dụ: "đi muộn", "sau 18h", "buổi sáng"), hãy trả lời chính xác số chuyến trong khung giờ đó và tóm tắt các chuyến xe phù hợp.
   + Hướng dẫn khách xem các thẻ chuyến xe bên dưới để chọn ghế.
 - KHÔNG in mã chuyến UUID dài hay link đặt vé thô trong văn bản vì hệ thống đã tự động hiển thị các thẻ chuyến xe trực quan ngay bên dưới tin nhắn.
-Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
+QUY TẮC BẢO MẬT & HƯỚNG DẪN TRA CỨU / HỦY VÉ / GỬI HÀNG:
+- TUYỆT ĐỐI KHÔNG yêu cầu người dùng cung cấp mã vé, số điện thoại, mã vận đơn vào khung chat.
+- TUYỆT ĐỐI KHÔNG in đường dẫn URL thô (như /tickets/lookup, /cancel-ticket, /shipments/tracking...).
+- Khi người dùng hỏi về Tra cứu vé xe (kể cả khi gửi kèm mã vé hay số điện thoại vào chat):
+  + KHÔNG tự ý tra cứu hay in thông tin chi tiết vé/hành khách nội bộ ra khung chat.
+  + Hướng dẫn người dùng tự thao tác: Nhấp vào mục "Tra cứu" trên thanh điều hướng đầu trang website -> chọn "Tra cứu vé xe" (hoặc mục "Vé của tôi" nếu đã đăng nhập), điền 2 thông tin: "Mã vé" (nhận qua SMS/email sau khi đặt vé) và "Số điện thoại đặt vé", sau đó bấm nút "Tra cứu vé".
+- Khi người dùng hỏi về Hủy vé xe hoặc cách hủy vé (kể cả khi gửi kèm mã vé hay số điện thoại vào chat):
+  + KHÔNG thực hiện hủy vé trong khung chat.
+  + Hướng dẫn người dùng các bước tự hủy vé trên website: Nhấp vào mục "Hủy vé" trên thanh điều hướng đầu trang (hoặc từ trang Tra cứu vé / Vé của tôi bấm "Yêu cầu hủy vé"), thực hiện 3 bước:
+    * Bước 1: Nhập "Mã vé" và "Số điện thoại đặt vé" -> Bấm nút "Tra cứu vé".
+    * Bước 2: Hệ thống đối chiếu thời gian khởi hành theo chính sách hoàn hủy (trước 24 tiếng phí 10%, 2.5 tiếng - 24 tiếng phí 20%, dưới 2.5 tiếng không hủy online mà liên hệ nhà xe). Hành khách chọn ghế muốn hủy, xem số tiền hoàn và tick đồng ý điều khoản.
+    * Bước 3: Bấm nút "Xác nhận hủy vé" để hoàn tất yêu cầu và nhận mã hủy vé.
+- Khi người dùng hỏi về Tra cứu đơn gửi hàng / bưu kiện (kể cả khi gửi kèm mã vận đơn hay số điện thoại):
+  + Hướng dẫn người dùng tự thao tác: Nhấp vào mục "Tra cứu" trên thanh điều hướng đầu trang website -> chọn "Tra cứu đơn gửi hàng", điền "Mã vận đơn" và "Số điện thoại" (người gửi hoặc nhận), sau đó bấm nút "Tra cứu đơn hàng".
+TrẢ LỜI NGẮN GỌN, LỊCH SỰ, RÕ RÀNG BẰNG TIẾNG VIỆT.`,
             },
             ...historyMessages,
             {
@@ -1123,20 +1117,40 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
       return 'Hiện tại chưa tìm thấy chuyến xe phù hợp với thời gian và lộ trình yêu cầu của bạn. Bạn vui lòng thử lại với ngày khác hoặc mở “Chat với nhân viên” để được hỗ trợ.';
     }
 
-    if (intent === 'TICKET_LOOKUP' && realtimeData) {
-      const t = realtimeData as Record<string, unknown>;
-      if (t.ticketCode) {
-        return `Thông tin vé ${t.ticketCode}:\n- Tuyến: ${t.route}\n- Giờ khởi hành: ${t.departureTime}\n- Ghế: ${t.seatName}\n- Trạng thái: ${t.status}\n- Thanh toán: ${t.paymentStatus}`;
-      }
-      if (t.note) return String(t.note);
+    if (intent === 'TICKET_CANCEL') {
+      return (
+        'Để hủy vé xe, bạn vui lòng thực hiện trực tiếp trên website VexGo theo các bước sau:\n\n' +
+        '- **Vị trí chức năng:** Nhấp vào mục **Hủy vé** trên thanh điều hướng đầu trang website (hoặc tại trang **Tra cứu vé xe** / **Vé của tôi**, bấm nút **Yêu cầu hủy vé**).\n' +
+        '- **Các bước thực hiện:**\n' +
+        '  1. **Bước 1**: Nhập **Mã vé** và **Số điện thoại đặt vé** → Bấm nút **Tra cứu vé**.\n' +
+        '  2. **Bước 2**: Xem biểu phí hủy (trước 24 tiếng: phí 10%; từ 2.5 tiếng – 24 tiếng: phí 20%; dưới 2.5 tiếng: không hỗ trợ trực tuyến, cần liên hệ nhà xe). Tích chọn ghế cần hủy, xem số tiền hoàn dự kiến và tick đồng ý điều khoản chính sách.\n' +
+        '  3. **Bước 3**: Bấm nút **Xác nhận hủy vé** để hoàn tất yêu cầu và nhận mã giao dịch hủy vé.\n\n' +
+        '*Lưu ý: Để đảm bảo an toàn giao dịch, hệ thống không hỗ trợ hủy vé trực tiếp trong khung chat.*'
+      );
     }
 
-    if (intent === 'SHIPMENT_LOOKUP' && realtimeData) {
-      const s = realtimeData as Record<string, unknown>;
-      if (s.waybillCode) {
-        return `Thông tin bưu kiện ${s.waybillCode}:\n- Tuyến: ${s.route}\n- Điểm gửi: ${s.originPoint}\n- Điểm nhận: ${s.destinationPoint}\n- Trạng thái: ${s.statusText}\n- Tổng cước: ${Number(s.totalFee || 0).toLocaleString('vi-VN')}đ (${s.paymentStatus})`;
-      }
-      if (s.note) return String(s.note);
+    if (intent === 'TICKET_LOOKUP') {
+      return (
+        'Để tra cứu vé xe, bạn vui lòng tự thao tác trên website VexGo theo hướng dẫn sau:\n\n' +
+        '- **Vị trí chức năng:** Nhấp vào mục **Tra cứu** trên thanh điều hướng đầu trang website → chọn **Tra cứu vé xe** (hoặc vào mục **Vé của tôi** nếu bạn đã đăng nhập tài khoản).\n' +
+        '- **Thông tin cần điền:**\n' +
+        '  1. **Mã vé**: Mã nhận qua tin nhắn SMS hoặc email sau khi đặt vé thành công (ví dụ: TK-...)\n' +
+        '  2. **Số điện thoại**: Số điện thoại đã dùng để đặt vé.\n' +
+        '- **Thao tác:** Bấm nút **Tra cứu vé** để xem chi tiết thông tin chuyến đi, vị trí ghế ngồi, giờ khởi hành, trạng thái thanh toán và mã QR soát vé lên xe.\n\n' +
+        '*Lưu ý: Để bảo mật thông tin cá nhân, bạn không cần gửi mã vé hoặc số điện thoại vào khung chat này.*'
+      );
+    }
+
+    if (intent === 'SHIPMENT_LOOKUP') {
+      return (
+        'Để tra cứu đơn gửi hàng (bưu kiện), bạn vui lòng tự thao tác trên website VexGo theo hướng dẫn sau:\n\n' +
+        '- **Vị trí chức năng:** Nhấp vào mục **Tra cứu** trên thanh điều hướng đầu trang website → chọn **Tra cứu đơn gửi hàng**.\n' +
+        '- **Thông tin cần điền:**\n' +
+        '  1. **Mã vận đơn**: Mã in trên biên nhận gửi hàng hoặc tin nhắn SMS xác nhận (ví dụ: WB-...)\n' +
+        '  2. **Số điện thoại**: Số điện thoại của người gửi hoặc người nhận hàng.\n' +
+        '- **Thao tác:** Bấm nút **Tra cứu đơn hàng** để theo dõi lộ trình di chuyển, tình trạng kiện hàng và cước phí.\n\n' +
+        '*Lưu ý: Bạn không cần cung cấp mã vận đơn hay số điện thoại vào khung chat này.*'
+      );
     }
 
     if (intent === 'PROMOTION_INQUIRY' && realtimeData) {

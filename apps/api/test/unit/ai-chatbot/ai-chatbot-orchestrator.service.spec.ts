@@ -12,7 +12,7 @@ describe('AiChatbotOrchestratorService', () => {
   });
 
   const mockRetrievalService = {
-    retrieve: vi.fn(),
+    retrieve: vi.fn().mockResolvedValue([]),
   } as unknown as HybridRetrievalService;
 
   const mockBusinessTools = {
@@ -82,16 +82,55 @@ describe('AiChatbotOrchestratorService', () => {
     });
 
     it('5. should trigger handoff on TOOL_EXECUTION_CONFLICT when tool throws an error', async () => {
-      vi.mocked(mockBusinessTools.lookupTicketStatus).mockRejectedValueOnce(
+      vi.mocked(mockBusinessTools.searchAvailableTrips).mockRejectedValueOnce(
         new Error('Database lock conflict / connection refused'),
       );
 
       const response = await orchestrator.processUserMessage({
-        message: 'Tra cứu vé TK-99999 cho số điện thoại 0912345678',
+        message: 'Tìm chuyến xe từ TP.HCM đi Đà Lạt ngày 15/11/2026',
       });
 
       expect(response.requiresHumanHandoff).toBe(true);
       expect(response.handoffReason).toBe('TOOL_EXECUTION_CONFLICT');
+    });
+
+    it('6. should provide step-by-step guidance for ticket lookup without querying internal database', async () => {
+      vi.mocked(mockBusinessTools.lookupTicketStatus).mockClear();
+
+      const response = await orchestrator.processUserMessage({
+        message: 'Làm thế nào để tra cứu vé xe đã đặt?',
+      });
+
+      expect(response.reply).toContain('Tra cứu vé xe');
+      expect(response.reply).toContain('Mã vé');
+      expect(response.reply).toContain('Số điện thoại');
+      expect(mockBusinessTools.lookupTicketStatus).not.toHaveBeenCalled();
+    });
+
+    it('7. should provide step-by-step guidance for ticket cancellation without querying internal database', async () => {
+      vi.mocked(mockBusinessTools.lookupTicketStatus).mockClear();
+
+      const response = await orchestrator.processUserMessage({
+        message: 'Tôi muốn hủy vé xe TK-99999 cho số điện thoại 0912345678',
+      });
+
+      expect(response.reply).toContain('Hủy vé');
+      expect(response.reply).toContain('Mã vé');
+      expect(response.reply).toContain('Số điện thoại');
+      expect(mockBusinessTools.lookupTicketStatus).not.toHaveBeenCalled();
+    });
+
+    it('8. should provide step-by-step guidance for shipment tracking without querying internal database', async () => {
+      vi.mocked(mockBusinessTools.lookupShipmentStatus).mockClear();
+
+      const response = await orchestrator.processUserMessage({
+        message: 'Tra cứu đơn gửi hàng WB12345678 cho số điện thoại 0912345678',
+      });
+
+      expect(response.reply).toContain('Tra cứu đơn gửi hàng');
+      expect(response.reply).toContain('Mã vận đơn');
+      expect(response.reply).toContain('Số điện thoại');
+      expect(mockBusinessTools.lookupShipmentStatus).not.toHaveBeenCalled();
     });
   });
 
