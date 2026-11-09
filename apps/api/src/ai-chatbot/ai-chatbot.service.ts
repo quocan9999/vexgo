@@ -530,17 +530,23 @@ export class AiChatbotService {
         take: 4,
       });
 
-      const transcriptLines = recentMessages
+      const transcriptBlocks = recentMessages
         .reverse()
-        .map((m) => `[${m.role === 'USER' ? 'Khách' : 'AI'}]: ${m.content}`)
-        .join('\n');
+        .map((m) => {
+          const roleLabel = m.role === 'USER' ? 'Khách hàng' : 'Trợ lý AI';
+          const text =
+            m.role === 'ASSISTANT' && this.orchestrator?.cleanReplyText
+              ? this.orchestrator.cleanReplyText(m.content)
+              : m.content.trim();
+          return `[${roleLabel}]:\n${text}`;
+        });
 
       const handoffNote = dto.clientNote
         ? `\nGhi chú của khách: ${dto.clientNote}`
         : '';
       let messageContent = `[Yêu cầu hỗ trợ từ Trợ lý AI VexGo]\nKhách hàng yêu cầu hỗ trợ trực tiếp từ nhân viên nhà xe.${handoffNote}`;
-      if (transcriptLines.length > 0) {
-        messageContent += `\n\nLịch sử trao đổi gần nhất với AI:\n${transcriptLines}`;
+      if (transcriptBlocks.length > 0) {
+        messageContent += `\n\n--- Lịch sử trao đổi gần nhất với AI ---\n\n${transcriptBlocks.join('\n\n')}`;
       }
       if (messageContent.length > 1900) {
         messageContent = messageContent.substring(0, 1900) + '...';

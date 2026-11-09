@@ -107,6 +107,44 @@ export function reconcileMessages(
   });
 }
 
+export function SupportChatMessageText({
+  content,
+  isMe,
+}: {
+  content: string;
+  isMe?: boolean;
+}) {
+  if (!content) return null;
+
+  if (!content.includes('**')) {
+    return content;
+  }
+
+  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+          const inner = part.slice(2, -2);
+          return (
+            <strong
+              key={index}
+              className={
+                isMe
+                  ? 'font-bold text-white'
+                  : 'font-semibold text-slate-900'
+              }
+            >
+              {inner}
+            </strong>
+          );
+        }
+        return <React.Fragment key={index}>{part}</React.Fragment>;
+      })}
+    </>
+  );
+}
+
 export interface CustomerSupportChatProps {
   handoffSessionToken?: string;
   onHandoffCompleted?: () => void;
@@ -1493,8 +1531,8 @@ function CustomerSupportChatSession({
               if (isSystem) {
                 return (
                   <div key={msg.tinNhanId} className="text-center my-2">
-                    <span className="inline-block text-[10px] text-slate-500 bg-slate-200/60 px-2.5 py-0.5 rounded-full font-medium">
-                      {msg.noiDung}
+                    <span className="inline-block text-[10px] text-slate-500 bg-slate-200/60 px-2.5 py-0.5 rounded-full font-medium whitespace-pre-wrap">
+                      <SupportChatMessageText content={msg.noiDung} />
                     </span>
                   </div>
                 );
@@ -1565,7 +1603,7 @@ function CustomerSupportChatSession({
                           );
                         else messageElementsRef.current.delete(msg.tinNhanId);
                       }}
-                      className={`p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words transition-opacity ${
+                      className={`p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words whitespace-pre-wrap transition-opacity ${
                         isMe
                           ? isFailed
                             ? 'bg-rose-50 border border-rose-300 text-rose-800 rounded-tr-none'
@@ -1575,7 +1613,7 @@ function CustomerSupportChatSession({
                           : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
                       }`}
                     >
-                      {msg.noiDung}
+                      <SupportChatMessageText content={msg.noiDung} isMe={isMe} />
                     </div>
                     {isFailed && (
                       <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-rose-600">

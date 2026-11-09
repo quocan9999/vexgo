@@ -39,6 +39,7 @@ describe('AiChatbotService - Handoff to Support Chat (Mục 1 & 2)', () => {
   beforeEach(() => {
     mockOrchestrator = {
       processUserMessage: vi.fn(),
+      cleanReplyText: vi.fn((text: string) => text),
     };
 
     mockPrisma = {
@@ -149,6 +150,11 @@ describe('AiChatbotService - Handoff to Support Chat (Mục 1 & 2)', () => {
           tinNhanDauTien: expect.stringContaining('Cần hỗ trợ đổi vé gấp'),
         }),
       );
+
+      const firstCallArgs = mockSupportChatService.createConversation.mock.calls[0][1];
+      expect(firstCallArgs.tinNhanDauTien).toContain('[Khách hàng]:\nTôi muốn tìm xe Sài Gòn đi Đà Lạt ngày mai');
+      expect(firstCallArgs.tinNhanDauTien).toContain('[Trợ lý AI]:\nDạ chuyến sớm nhất lúc 6h sáng giá 300.000đ ạ.');
+      expect(firstCallArgs.tinNhanDauTien).toContain('--- Lịch sử trao đổi gần nhất với AI ---');
 
       expect(mockPrisma.aiChatRequest.update).toHaveBeenCalledWith(
         expect.objectContaining({
