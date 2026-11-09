@@ -90,17 +90,23 @@ const NON_LOCATION_TERMS = new Set([
   'giu',
   'huy',
   'doi',
+  'khu',
+  'hai',
 ]);
 
 function cleanLocationCandidate(val?: string): string {
   if (!val) return '';
   let cleaned = val.replace(/[?.,;!]+/g, ' ').trim();
-  cleaned = cleaned
-    .replace(
-      /^(?:tìm xe|tim xe|vé xe|ve xe|chuyến xe|chuyen xe|chuyến|chuyen|vé|ve|tại|ở|về|đến|đi)\s+/iu,
+  let prev = '';
+  while (cleaned !== prev) {
+    prev = cleaned;
+    cleaned = cleaned.replace(
+      /^(?:tìm vé khứ hồi|vé khứ hồi|khứ hồi|tìm xe|tim xe|vé xe|ve xe|chuyến xe|chuyen xe|chuyến|chuyen|vé|ve|tại|ở|về|đến|đi)\s+/iu,
       '',
-    )
-    .replace(/\s+(?:nào|nhé|nhe|ạ|ơi|với|giúp|hộ|không|khong)$/iu, '')
+    );
+  }
+  cleaned = cleaned
+    .replace(/\s+(?:đi|di|về|ve|ngày|ngay|nào|nhé|nhe|ạ|ơi|với|giúp|hộ|không|khong)$/iu, '')
     .trim();
 
   const normalized = normalizeLocation(cleaned);
@@ -140,6 +146,9 @@ export interface ChatbotResponse {
   intent: string;
   citations: CitationItem[];
   suggestedTrips?: TripSearchResultItem[];
+  suggestedReturnTrips?: TripSearchResultItem[];
+  isRoundTrip?: boolean;
+  roundTripBookingUrl?: string;
   suggestedQuestions?: string[];
   requiresHumanHandoff: boolean;
   handoffReason?: string;
@@ -387,6 +396,9 @@ ${userQuery}
     let detectedIntent = 'GENERAL';
     let realtimeData: unknown = null;
     let suggestedTrips: TripSearchResultItem[] | undefined;
+    let suggestedReturnTrips: TripSearchResultItem[] | undefined;
+    let isRoundTrip: boolean | undefined;
+    let roundTripBookingUrl: string | undefined;
     let toolExecutionConflict = false;
 
     try {
@@ -413,15 +425,23 @@ ${userQuery}
         cleanNormalized.includes('gio chay') ||
         cleanNormalized.includes('may gio') ||
         cleanNormalized.includes('gia ve') ||
+        cleanNormalized.includes('khu hoi') ||
+        cleanNormalized.includes('2 chieu') ||
+        cleanNormalized.includes('hai chieu') ||
+        cleanNormalized.includes('chuyen ve') ||
+        cleanNormalized.includes('chieu ve') ||
+        cleanNormalized.includes('ve ve') ||
+        cleanNormalized.includes('ngay ve') ||
+        cleanNormalized.includes('ve lai') ||
+        cleanNormalized.includes('quay lai') ||
         /\b\d{1,2}(?::\d{2}|h)\s*(?:tro di|do di)\b/.test(cleanNormalized) ||
         (cleanNormalized.includes('di') && cleanNormalized.includes('den'));
 
       let tripParsed = this.parseTripSearchQuery(rawMessage);
 
-      // Kế thừa ngữ cảnh điểm đi / điểm đến / ngày đi từ lịch sử các câu hỏi trước trong phiên
+      // Kế thừa ngữ cảnh điểm đi / điểm đến / ngày đi / ngày về từ lịch sử các câu hỏi trước trong phiên
       if (
         isTripQuery &&
-        (!tripParsed.origin || !tripParsed.destination || !tripParsed.date) &&
         sessionId &&
         this.prisma.aiChatMessage
       ) {
@@ -434,15 +454,32 @@ ${userQuery}
           for (const prev of pastUserMessages) {
             if (prev.content.trim() === rawMessage.trim()) continue;
             const prevParsed = this.parseTripSearchQuery(prev.content);
-            if (!tripParsed.origin && prevParsed.origin) {
-              tripParsed.origin = prevParsed.origin;
+
+            if (tripParsed.isReturnTripOnly) {
+              if (prevParsed.origin && prevParsed.destination) {
+                if (!tripParsed.origin) tripParsed.origin = prevParsed.origin;
+                if (!tripParsed.destination) tripParsed.destination = prevParsed.destination;
+              }
+              if (!tripParsed.date && prevParsed.date) {
+                tripParsed.date = prevParsed.date;
+              }
+              tripParsed.isRoundTrip = true;
+            } else {
+              if (!tripParsed.origin && prevParsed.origin) {
+                tripParsed.origin = prevParsed.origin;
+              }
+              if (!tripParsed.destination && prevParsed.destination) {
+                tripParsed.destination = prevParsed.destination;
+              }
+              if (!tripParsed.date && prevParsed.date) {
+                tripParsed.date = prevParsed.date;
+              }
+              if (!tripParsed.returnDate && prevParsed.returnDate) {
+                tripParsed.returnDate = prevParsed.returnDate;
+                tripParsed.isRoundTrip = true;
+              }
             }
-            if (!tripParsed.destination && prevParsed.destination) {
-              tripParsed.destination = prevParsed.destination;
-            }
-            if (!tripParsed.date && prevParsed.date) {
-              tripParsed.date = prevParsed.date;
-            }
+
             if (tripParsed.origin && tripParsed.destination && tripParsed.date) {
               break;
             }
@@ -452,21 +489,97 @@ ${userQuery}
         }
       }
 
+      // Xử lý ràng buộc ngày về không được trước ngày đi (Edge Case)
+      if (
+        tripParsed.isRoundTrip &&
+        tripParsed.date &&
+        tripParsed.returnDate &&
+        tripParsed.returnDate < tripParsed.date
+      ) {
+        const [depY, depM, depD] = tripParsed.date.split('-');
+        const [retY, retM, retD] = tripParsed.returnDate.split('-');
+        const depFormatted = `${depD}/${depM}/${depY}`;
+        const retFormatted = `${retD}/${retM}/${retY}`;
+        return this.finalizeResponse({
+          sessionId,
+          sessionToken,
+          reply: `Ngày về (${retFormatted}) không thể trước ngày khởi hành (${depFormatted}). Bạn vui lòng chọn ngày về bằng hoặc sau ngày khởi hành để hệ thống tra cứu chuyến xe nhé!`,
+          intent: 'TRIP_SEARCH',
+          citations: [],
+          requiresHumanHandoff: false,
+          startTime,
+          requestId: request.requestId,
+        });
+      }
+
       if (isTripQuery && tripParsed.origin && tripParsed.destination) {
         detectedIntent = 'TRIP_SEARCH';
-        const searchResult = await this.businessTools.searchAvailableTrips({
-          originQuery: tripParsed.origin,
-          destinationQuery: tripParsed.destination,
-          departureDate: tripParsed.date,
-          timeOfDay: tripParsed.timeOfDay,
-          minHour: tripParsed.minHour,
-          maxHour: tripParsed.maxHour,
-          preferLate: tripParsed.preferLate,
-          preferEarly: tripParsed.preferEarly,
-          nhaXeId: request.nhaXeId,
-        });
-        realtimeData = searchResult;
-        suggestedTrips = searchResult.trips;
+
+        if (tripParsed.isRoundTrip && tripParsed.returnDate) {
+          isRoundTrip = true;
+          roundTripBookingUrl = `/trips?tripType=round-trip&from=${encodeURIComponent(
+            tripParsed.origin,
+          )}&to=${encodeURIComponent(tripParsed.destination)}&origin=${encodeURIComponent(
+            tripParsed.origin,
+          )}&destination=${encodeURIComponent(tripParsed.destination)}&date=${
+            tripParsed.date || ''
+          }&returnDate=${tripParsed.returnDate}`;
+
+          const [outboundRes, returnRes] = await Promise.all([
+            this.businessTools.searchAvailableTrips({
+              originQuery: tripParsed.origin,
+              destinationQuery: tripParsed.destination,
+              departureDate: tripParsed.date,
+              timeOfDay: tripParsed.timeOfDay,
+              minHour: tripParsed.minHour,
+              maxHour: tripParsed.maxHour,
+              preferLate: tripParsed.preferLate,
+              preferEarly: tripParsed.preferEarly,
+              nhaXeId: request.nhaXeId,
+            }),
+            this.businessTools.searchAvailableTrips({
+              originQuery: tripParsed.destination,
+              destinationQuery: tripParsed.origin,
+              departureDate: tripParsed.returnDate,
+              nhaXeId: request.nhaXeId,
+            }),
+          ]);
+
+          suggestedTrips = outboundRes.trips;
+          suggestedReturnTrips = returnRes.trips;
+          realtimeData = {
+            tripType: 'ROUND_TRIP',
+            route: `${tripParsed.origin} ⇄ ${tripParsed.destination}`,
+            outbound: {
+              departureDate: tripParsed.date,
+              summary: outboundRes.summary,
+              allDayTotal: outboundRes.allDayTotal,
+              timeSpan: outboundRes.timeSpan,
+              trips: outboundRes.trips,
+            },
+            returnLeg: {
+              returnDate: tripParsed.returnDate,
+              summary: returnRes.summary,
+              allDayTotal: returnRes.allDayTotal,
+              timeSpan: returnRes.timeSpan,
+              trips: returnRes.trips,
+            },
+          };
+        } else {
+          const searchResult = await this.businessTools.searchAvailableTrips({
+            originQuery: tripParsed.origin,
+            destinationQuery: tripParsed.destination,
+            departureDate: tripParsed.date,
+            timeOfDay: tripParsed.timeOfDay,
+            minHour: tripParsed.minHour,
+            maxHour: tripParsed.maxHour,
+            preferLate: tripParsed.preferLate,
+            preferEarly: tripParsed.preferEarly,
+            nhaXeId: request.nhaXeId,
+          });
+          realtimeData = searchResult;
+          suggestedTrips = searchResult.trips;
+        }
       }
       // 3.2. Tra cứu vé xe
       else if (
@@ -714,6 +827,9 @@ ${userQuery}
       intent: detectedIntent,
       citations,
       suggestedTrips,
+      suggestedReturnTrips,
+      isRoundTrip,
+      roundTripBookingUrl,
       requiresHumanHandoff: false,
       startTime,
       requestId: request.requestId,
@@ -876,10 +992,17 @@ Không khẳng định đã kết nối nhân viên hoặc gửi khiếu nại: 
 TUYỆT ĐỐI KHÔNG chèn mã tài liệu kỹ thuật, mã văn bản hay các ký hiệu như 【DOC-...】, [DOC-...] vào câu trả lời.
 TUYỆT ĐỐI KHÔNG dùng bảng Markdown (|...|...|) trong câu trả lời vì giao diện khung chat hẹp sẽ bị vỡ bảng. Luôn trình bày dạng văn bản tự nhiên hoặc danh sách gạch đầu dòng (- ) ngắn gọn, rõ ràng.
 Khi trả lời kết quả tìm chuyến xe:
-- Sử dụng thông tin từ trường "summary", "allDayTotal" và "timeSpan" trong thẻ <realtime_data> để cung cấp cái nhìn tổng quan cho khách (ví dụ: "Trong ngày có tổng cộng X chuyến xe chạy từ HH:mm đến HH:mm...").
-- Nếu khách tìm kiếm chung cả ngày, hãy nêu rõ khung giờ hoạt động trong ngày và gợi ý khách có thể hỏi thêm theo khung giờ (buổi sáng, buổi chiều, buổi tối hoặc sau một giờ cụ thể).
-- Nếu khách yêu cầu tìm theo khung giờ cụ thể (ví dụ: "đi muộn", "sau 18h", "buổi sáng"), hãy trả lời chính xác số chuyến trong khung giờ đó và tóm tắt các chuyến xe phù hợp.
-- KHÔNG in mã chuyến UUID dài hay link đặt vé trong văn bản vì hệ thống đã tự động hiển thị các thẻ chuyến xe trực quan ngay bên dưới tin nhắn. Hãy tóm tắt danh sách chuyến bằng gạch đầu dòng (- Nhà xe – Giờ đi, Loại xe, Giá vé, Số ghế còn) và hướng dẫn khách xem các thẻ chuyến xe bên dưới để chọn ghế.
+- Nếu là chuyến xe khứ hồi (2 chiều, trong <realtime_data> có "tripType": "ROUND_TRIP"):
+  + Trình bày rõ ràng 2 phần: Chiều đi (Điểm đi → Điểm đến) và Chiều về (Điểm đến → Điểm đi).
+  + Tóm tắt các chuyến xe tiêu biểu theo gạch đầu dòng (- Nhà xe – Giờ đi, Loại xe, Giá vé, Số ghế còn).
+  + Nếu một trong hai chiều chưa có chuyến hoặc hết vé, hãy nêu rõ chiều nào còn vé, chiều nào chưa tìm thấy vé và gợi ý khách đổi ngày hoặc mở "Chat với nhân viên".
+  + Hướng dẫn khách xem danh sách thẻ chuyến xe bên dưới và bấm nút "Đặt vé khứ hồi" để chọn chuyến cho cả 2 chiều cùng lúc.
+- Nếu là chuyến xe một chiều:
+  + Sử dụng thông tin từ trường "summary", "allDayTotal" và "timeSpan" trong thẻ <realtime_data> để cung cấp cái nhìn tổng quan cho khách (ví dụ: "Trong ngày có tổng cộng X chuyến xe chạy từ HH:mm đến HH:mm...").
+  + Nếu khách tìm kiếm chung cả ngày, hãy nêu rõ khung giờ hoạt động trong ngày và gợi ý khách có thể hỏi thêm theo khung giờ (buổi sáng, buổi chiều, buổi tối hoặc sau một giờ cụ thể).
+  + Nếu khách yêu cầu tìm theo khung giờ cụ thể (ví dụ: "đi muộn", "sau 18h", "buổi sáng"), hãy trả lời chính xác số chuyến trong khung giờ đó và tóm tắt các chuyến xe phù hợp.
+  + Hướng dẫn khách xem các thẻ chuyến xe bên dưới để chọn ghế.
+- KHÔNG in mã chuyến UUID dài hay link đặt vé thô trong văn bản vì hệ thống đã tự động hiển thị các thẻ chuyến xe trực quan ngay bên dưới tin nhắn.
 Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
             },
             ...historyMessages,
@@ -920,10 +1043,65 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
 
     if (intent === 'TRIP_SEARCH') {
       const searchRes = realtimeData as {
+        tripType?: string;
         summary?: string;
         allDayTotal?: number;
         timeSpan?: string;
+        outbound?: {
+          departureDate?: string;
+          summary?: string;
+          trips?: TripSearchResultItem[];
+        };
+        returnLeg?: {
+          returnDate?: string;
+          summary?: string;
+          trips?: TripSearchResultItem[];
+        };
       } | null;
+
+      if (searchRes?.tripType === 'ROUND_TRIP') {
+        const outbound = searchRes.outbound;
+        const returnLeg = searchRes.returnLeg;
+        const parts: string[] = ['Dưới đây là các chuyến xe khứ hồi cho lộ trình của bạn:\n'];
+
+        parts.push('🛫 **Chiều đi:**');
+        if (outbound?.trips && outbound.trips.length > 0) {
+          parts.push(
+            outbound.trips
+              .map(
+                (t) =>
+                  `- **${t.operator}**: Khởi hành ${t.departureTime} (${t.vehicleType}), giá ${
+                    t.price ? t.price.toLocaleString('vi-VN') + 'đ' : 'Liên hệ'
+                  }, còn ${t.availableSeats} ghế trống.`,
+              )
+              .join('\n'),
+          );
+        } else {
+          parts.push('Hiện tại chiều đi chưa tìm thấy chuyến xe phù hợp.');
+        }
+
+        parts.push('\n🛬 **Chiều về:**');
+        if (returnLeg?.trips && returnLeg.trips.length > 0) {
+          parts.push(
+            returnLeg.trips
+              .map(
+                (t) =>
+                  `- **${t.operator}**: Khởi hành ${t.departureTime} (${t.vehicleType}), giá ${
+                    t.price ? t.price.toLocaleString('vi-VN') + 'đ' : 'Liên hệ'
+                  }, còn ${t.availableSeats} ghế trống.`,
+              )
+              .join('\n'),
+          );
+        } else {
+          parts.push('Hiện tại chiều về chưa tìm thấy chuyến xe phù hợp.');
+        }
+
+        parts.push(
+          '\nVui lòng tham khảo danh sách thẻ chuyến bên dưới và bấm nút **Đặt vé khứ hồi** để tiến hành đặt chỗ cùng lúc nhé!',
+        );
+        return parts.join('\n');
+      }
+
       if (trips && trips.length > 0) {
         const tripDescriptions = trips
           .map(
@@ -1022,8 +1200,8 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
       return { date: `${year}-${month}-${day}`, textToStrip: textMonthMatch[0] };
     }
 
-    // 4. "ngày DD/MM" hoặc "vào DD/MM" (không kèm năm)
-    const dmMatch = msg.match(/(?:ngày\s+|vào\s+)\b(\d{1,2})[-\/\.](\d{1,2})\b/iu);
+    // 4. "ngày DD/MM" hoặc "vào DD/MM" hoặc "DD/MM" (không kèm năm)
+    const dmMatch = msg.match(/(?:(?:ngày|vào|đi|về)\s+)?\b(\d{1,2})[-\/\.](\d{1,2})\b/iu);
     if (dmMatch) {
       const day = dmMatch[1].padStart(2, '0');
       const month = dmMatch[2].padStart(2, '0');
@@ -1061,6 +1239,80 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     }
 
     return {};
+  }
+
+  /**
+   * Bóc tách ngày đi và ngày về (lộ trình khứ hồi) từ tin nhắn người dùng:
+   * - Hỗ trợ câu hỏi khứ hồi đơn lượt (ví dụ: "đi ngày 15/11 về 18/11", "khứ hồi Sài Gòn - Đà Lạt 15/11 - 18/11")
+   * - Hỗ trợ câu hỏi nối tiếp ở lượt sau (ví dụ: "có chuyến về ngày 18/11 không?", "tìm thêm vé về ngày mai")
+   */
+  extractDatesFromMessage(
+    msg: string,
+    referenceDate = new Date(),
+  ): {
+    departureDate?: string;
+    returnDate?: string;
+    isRoundTrip: boolean;
+    isReturnTripOnly: boolean;
+    textsToStrip: string[];
+  } {
+    const cleanNormalized = removeVietnameseDiacritics(msg.toLowerCase());
+    const isExplicitRoundTrip =
+      cleanNormalized.includes('khu hoi') ||
+      cleanNormalized.includes('2 chieu') ||
+      cleanNormalized.includes('hai chieu');
+
+    const isReturnTripOnly =
+      cleanNormalized.includes('chuyen ve') ||
+      cleanNormalized.includes('chieu ve') ||
+      cleanNormalized.includes('ve ve') ||
+      cleanNormalized.includes('ngay ve') ||
+      cleanNormalized.includes('ve lai') ||
+      cleanNormalized.includes('quay lai') ||
+      cleanNormalized.includes('tim them ve ve') ||
+      cleanNormalized.includes('con chuyen ve') ||
+      cleanNormalized.includes('co chuyen ve');
+
+    let departureDate: string | undefined;
+    let returnDate: string | undefined;
+    const textsToStrip: string[] = [];
+
+    // Nhận diện mẫu ngày về: "chiều về...", "ngày về...", "về ngày...", "về DD/MM", "về ngày mai"...
+    const returnPhraseMatch = msg.match(
+      /(?:chiều về|lượt về|ngày về|về lại|và về|về)\s*(?:ngày\s+|vào\s+)?(\d{1,2}[-\/\.]\d{1,2}(?:[-\/\.]202\d)?|\d{1,2}\s*(?:tháng|thg)\s*\d{1,2}(?:\s*(?:năm)?\s*202\d)?|hôm nay|hom nay|ngày mai|ngay mai|\bmai\b|ngày mốt|ngay mot|\bmốt\b|\bmot\b|hôm sau|hom sau)/iu,
+    );
+
+    if (returnPhraseMatch) {
+      const parsedReturn = this.extractDateFromMessage(returnPhraseMatch[1], referenceDate);
+      if (parsedReturn.date) {
+        returnDate = parsedReturn.date;
+        textsToStrip.push(returnPhraseMatch[0]);
+      }
+    }
+
+    // Loại bỏ cụm ngày về trước khi bóc tách ngày đi
+    let outboundMsg = msg;
+    if (returnPhraseMatch) {
+      outboundMsg = outboundMsg.replace(returnPhraseMatch[0], ' ');
+    }
+
+    if (!isReturnTripOnly) {
+      const parsedDep = this.extractDateFromMessage(outboundMsg, referenceDate);
+      if (parsedDep.date) {
+        departureDate = parsedDep.date;
+        if (parsedDep.textToStrip) {
+          textsToStrip.push(parsedDep.textToStrip);
+        }
+      }
+    }
+
+    return {
+      departureDate,
+      returnDate,
+      isRoundTrip: isExplicitRoundTrip || (Boolean(departureDate) && Boolean(returnDate)),
+      isReturnTripOnly,
+      textsToStrip,
+    };
   }
 
   /**
@@ -1138,6 +1390,9 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     origin: string;
     destination: string;
     date?: string;
+    returnDate?: string;
+    isRoundTrip?: boolean;
+    isReturnTripOnly?: boolean;
     timeOfDay?: 'SANG' | 'CHIEU' | 'TOI' | 'DEM';
     minHour?: number;
     maxHour?: number;
@@ -1147,14 +1402,20 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     let origin = '';
     let destination = '';
 
-    const parsedDate = this.extractDateFromMessage(msg);
-    const date = parsedDate.date;
+    const dates = this.extractDatesFromMessage(msg);
+    const date = dates.departureDate;
+    const returnDate = dates.returnDate;
+    const isRoundTrip = dates.isRoundTrip;
+    const isReturnTripOnly = dates.isReturnTripOnly;
     const timeFilter = this.extractTimeFilterFromMessage(msg);
 
     // Loại bỏ chuỗi ngày tháng trước khi bóc tách điểm đi / điểm đến để tránh ký tự '-', '/' trong ngày gây nhầm lẫn
     let cleanMsg = msg;
-    if (parsedDate.textToStrip) {
-      cleanMsg = cleanMsg.replace(parsedDate.textToStrip, ' ').trim();
+    if (dates.textsToStrip.length > 0) {
+      for (const t of dates.textsToStrip) {
+        cleanMsg = cleanMsg.replace(t, ' ');
+      }
+      cleanMsg = cleanMsg.trim();
     }
     if (timeFilter.textToStrip) {
       cleanMsg = cleanMsg.replace(timeFilter.textToStrip, ' ').trim();
@@ -1178,12 +1439,12 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
       );
       destination = cleanLocationCandidate(
         match[2]
-          .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
+          .replace(/(?:\s+(?:ngày|ngay|đi|di|về|ve|lúc|luc).*)$/iu, '')
           .trim(),
       );
     } else {
       const match2 = lower.match(
-        /([^\s–\-]+(?:\s+[^\s–\-]+)*?)\s*(?:-|–|\bto\b|\bđến\b|\bden\b)\s*([^?.,;]+)/iu,
+        /([^\s–\-]+(?:\s+[^\s–\-]+)*?)\s*(?:-|–|\bto\b|\bden\b|\s+đến\s+|\s+den\s+|\s+đi\s+|\s+di\s+)\s*([^?.,;]+)/iu,
       );
       if (match2) {
         origin = cleanLocationCandidate(
@@ -1193,7 +1454,7 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
         );
         destination = cleanLocationCandidate(
           match2[2]
-            .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
+            .replace(/(?:\s+(?:ngày|ngay|đi|di|về|ve|lúc|luc).*)$/iu, '')
             .trim(),
         );
       }
@@ -1205,7 +1466,7 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
         destination = cleanLocationCandidate(
           destMatch[1]
             .replace(/^(?:xe|chuyến|chuyen)\s*/iu, '')
-            .replace(/(?:\s+(?:ngày|ngay|lúc|luc).*)$/iu, '')
+            .replace(/(?:\s+(?:ngày|ngay|đi|di|về|ve|lúc|luc).*)$/iu, '')
             .trim(),
         );
       }
@@ -1215,6 +1476,9 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
       origin,
       destination,
       date,
+      returnDate,
+      isRoundTrip,
+      isReturnTripOnly,
       timeOfDay: timeFilter.timeOfDay,
       minHour: timeFilter.minHour,
       maxHour: timeFilter.maxHour,
@@ -1230,6 +1494,9 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
     intent: string;
     citations: CitationItem[];
     suggestedTrips?: TripSearchResultItem[];
+    suggestedReturnTrips?: TripSearchResultItem[];
+    isRoundTrip?: boolean;
+    roundTripBookingUrl?: string;
     requiresHumanHandoff: boolean;
     handoffReason?: string;
     startTime: number;
@@ -1282,6 +1549,9 @@ Trả lời ngắn gọn, lịch sự, rõ ràng bằng tiếng Việt.`,
       intent: params.intent,
       citations: params.citations,
       suggestedTrips: params.suggestedTrips,
+      suggestedReturnTrips: params.suggestedReturnTrips,
+      isRoundTrip: params.isRoundTrip,
+      roundTripBookingUrl: params.roundTripBookingUrl,
       suggestedQuestions: [
         'Chính sách hoàn hủy vé thế nào?',
         'Quy định hành lý mang theo ra sao?',

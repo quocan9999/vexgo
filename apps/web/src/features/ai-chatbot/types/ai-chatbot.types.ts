@@ -26,6 +26,9 @@ export interface ChatbotMessageResponse {
   intent: string;
   citations: CitationItem[];
   suggestedTrips?: TripSearchResultItem[];
+  suggestedReturnTrips?: TripSearchResultItem[];
+  isRoundTrip?: boolean;
+  roundTripBookingUrl?: string;
   suggestedQuestions?: string[];
   requiresHumanHandoff: boolean;
   handoffReason?: string;
@@ -39,6 +42,9 @@ export interface AiChatMessageItem {
   time: string;
   citations?: CitationItem[];
   suggestedTrips?: TripSearchResultItem[];
+  suggestedReturnTrips?: TripSearchResultItem[];
+  isRoundTrip?: boolean;
+  roundTripBookingUrl?: string;
   requiresHumanHandoff?: boolean;
   handoffReason?: string;
 }

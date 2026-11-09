@@ -315,4 +315,152 @@ describe('AI Chatbot Trip Search - Flexible Date & Location Normalization', () =
       expect(lateRes.summary).toContain('Tìm thấy 2 chuyến xe phù hợp với khung giờ yêu cầu');
     });
   });
+
+  describe('Round-Trip Search & Recommendation Flow', () => {
+    it('12. should parse single-turn round-trip query with departure and return date', () => {
+      const parsed = orchestrator.parseTripSearchQuery(
+        'Tìm vé khứ hồi từ Hồ Chí Minh đi Đà Lạt đi ngày 15/11/2026 về ngày 18/11/2026',
+      );
+      expect(parsed.origin).toBe('hồ chí minh');
+      expect(parsed.destination).toBe('đà lạt');
+      expect(parsed.date).toBe('2026-11-15');
+      expect(parsed.returnDate).toBe('2026-11-18');
+      expect(parsed.isRoundTrip).toBe(true);
+    });
+
+    it('13. should parse compact round-trip query "Tìm xe khứ hồi Sài Gòn - Đà Lạt đi 15/11 về 18/11"', () => {
+      const parsed = orchestrator.parseTripSearchQuery(
+        'Tìm xe khứ hồi Sài Gòn - Đà Lạt đi 15/11 về 18/11',
+      );
+      expect(parsed.origin).toBe('sài gòn');
+      expect(parsed.destination).toBe('đà lạt');
+      expect(parsed.date).toBe('2026-11-15');
+      expect(parsed.returnDate).toBe('2026-11-18');
+      expect(parsed.isRoundTrip).toBe(true);
+    });
+
+    it('14. should detect return-only query "Có chuyến về ngày 18/11 không?"', () => {
+      const parsed = orchestrator.parseTripSearchQuery(
+        'Có chuyến về ngày 18/11 không?',
+      );
+      expect(parsed.isReturnTripOnly).toBe(true);
+      expect(parsed.returnDate).toBe('2026-11-18');
+    });
+
+    it('15. should validate invalid date sequence (returnDate < departureDate)', async () => {
+      const mockPrisma = {
+        aiChatSession: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+          update: vi.fn(),
+        },
+        aiChatMessage: {
+          create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      } as unknown as PrismaService;
+
+      const testOrchestrator = new AiChatbotOrchestratorService(
+        new ConfigService({}),
+        {} as any,
+        {} as any,
+        mockPrisma,
+      );
+
+      const res = await testOrchestrator.processUserMessage({
+        message: 'Tìm vé khứ hồi HCM đi Đà Lạt đi 18/11/2026 về 15/11/2026',
+        sessionToken: '11111111-1111-4111-8111-111111111111',
+      });
+
+      expect(res.reply).toContain('Ngày về (15/11/2026) không thể trước ngày khởi hành (18/11/2026)');
+      expect(res.intent).toBe('TRIP_SEARCH');
+      expect(res.suggestedTrips).toBeUndefined();
+    });
+
+    it('16. should execute parallel search for round-trip and populate return trips and booking URL', async () => {
+      const mockPrisma = {
+        aiChatSession: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+          update: vi.fn(),
+        },
+        aiChatMessage: {
+          create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      } as unknown as PrismaService;
+
+      const mockBusinessTools = {
+        searchAvailableTrips: vi.fn().mockImplementation(async (params) => {
+          if (params.departureDate === '2026-11-15') {
+            return {
+              summary: 'Chiều đi có 1 chuyến',
+              allDayTotal: 1,
+              trips: [
+                {
+                  tripId: 101,
+                  operator: 'Thành Bưởi',
+                  origin: 'TP.HCM',
+                  destination: 'Đà Lạt',
+                  departureDate: '2026-11-15',
+                  departureTime: '06:00',
+                  vehicleType: 'GIƯỜNG NẰM',
+                  price: 270000,
+                  availableSeats: 20,
+                  bookingUrl: '/trips/101',
+                },
+              ],
+            };
+          } else {
+            return {
+              summary: 'Chiều về có 1 chuyến',
+              allDayTotal: 1,
+              trips: [
+                {
+                  tripId: 202,
+                  operator: 'Phương Trang',
+                  origin: 'Đà Lạt',
+                  destination: 'TP.HCM',
+                  departureDate: '2026-11-18',
+                  departureTime: '13:00',
+                  vehicleType: 'LIMOUSINE',
+                  price: 330000,
+                  availableSeats: 15,
+                  bookingUrl: '/trips/202',
+                },
+              ],
+            };
+          }
+        }),
+      } as unknown as AiBusinessToolsService;
+
+      const mockRetrieval = {
+        retrieve: vi.fn().mockResolvedValue([]),
+      } as any;
+
+      const testOrchestrator = new AiChatbotOrchestratorService(
+        new ConfigService({}),
+        mockRetrieval,
+        mockBusinessTools,
+        mockPrisma,
+      );
+
+      const res = await testOrchestrator.processUserMessage({
+        message: 'Tìm vé khứ hồi HCM đi Đà Lạt đi 15/11/2026 về 18/11/2026',
+        sessionToken: '11111111-1111-4111-8111-111111111111',
+      });
+
+      expect(res.isRoundTrip).toBe(true);
+      expect(res.suggestedTrips?.length).toBe(1);
+      expect(res.suggestedTrips?.[0].operator).toBe('Thành Bưởi');
+      expect(res.suggestedReturnTrips?.length).toBe(1);
+      expect(res.suggestedReturnTrips?.[0].operator).toBe('Phương Trang');
+      expect(res.roundTripBookingUrl).toContain('tripType=round-trip');
+      expect(res.roundTripBookingUrl).toContain('date=2026-11-15');
+      expect(res.roundTripBookingUrl).toContain('returnDate=2026-11-18');
+      expect(res.reply).toContain('Chiều đi:');
+      expect(res.reply).toContain('Chiều về:');
+      expect(res.reply).toContain('Đặt vé khứ hồi');
+    });
+  });
 });
