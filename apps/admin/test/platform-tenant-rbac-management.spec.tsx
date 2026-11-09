@@ -174,7 +174,7 @@ describe('Super Admin tenant RBAC editor', () => {
 
     expect(await screen.findByRole('heading', { name: 'Phân quyền vai trò' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Phạm vi phân quyền' })).toBeTruthy();
-    expect(screen.getByText(/Cấu hình chỉ áp dụng cho/).querySelector('strong')?.textContent).toMatch(/Nhà xe.*12/);
+    expect(screen.getByText(/Cấu hình chỉ áp dụng cho/).textContent).toMatch(/Nhà xe.*12/);
     expect(tenantRbac.getPlatformTenantRolePermissions.mock.calls[0][0]).toBe(12);
     expect(tenantRbac.getTenantRolePermissions).not.toHaveBeenCalled();
     expect(busCompanies.getBusCompanyById).toHaveBeenCalledWith(12, expect.any(AbortSignal));

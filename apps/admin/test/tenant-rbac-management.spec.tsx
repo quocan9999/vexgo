@@ -195,7 +195,7 @@ describe('tenant RBAC management', () => {
   it('shows inherited configuration and the effective permission list', async () => {
     renderManagement();
 
-    expect(await screen.findByRole('heading', { name: 'Phân quyền vai trò' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i })).toBeTruthy();
     expect(screen.getByText('Kế thừa mặc định')).toBeTruthy();
     expect(screen.getByText('Chưa cấu hình override')).toBeTruthy();
     expect(screen.getByText(/Quyền đang áp dụng/)).toBeTruthy();
@@ -208,7 +208,7 @@ describe('tenant RBAC management', () => {
 
   it('keeps the applied summary on persisted permissions while the matrix has an unsaved draft', async () => {
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
 
     const appliedPermissions = await screen.findByRole('region', {
       name: 'Quyền đang áp dụng',
@@ -264,7 +264,7 @@ describe('tenant RBAC management', () => {
 
   it('saves an intentional empty override and refreshes the trusted session', async () => {
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
 
     fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền role:read cho NHA_XE_ADMIN/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền permission:assign cho NHA_XE_ADMIN/ }));
@@ -289,7 +289,7 @@ describe('tenant RBAC management', () => {
       }),
     );
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
 
     const appliedPermissions = screen.getByRole('region', {
       name: 'Quyền đang áp dụng',
@@ -328,7 +328,7 @@ describe('tenant RBAC management', () => {
       ),
     });
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
     selectRole('NHAN_VIEN_CSKH');
 
     fireEvent.click(screen.getByRole('button', { name: 'Khôi phục mặc định' }));
@@ -351,7 +351,7 @@ describe('tenant RBAC management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
     await expectOperationToast('error', 'Máy chủ từ chối.');
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+    fireEvent.click(screen.getByRole('button', { name: /Hủy/ }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(
       (
@@ -375,7 +375,7 @@ describe('tenant RBAC management', () => {
 
   it('warns before saving a change that removes the current account role:read permission', async () => {
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
     fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền role:read cho NHA_XE_ADMIN/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
@@ -386,7 +386,7 @@ describe('tenant RBAC management', () => {
   it('reports a saved mutation when trusted session refresh fails', async () => {
     reloadAdminSession.mockRejectedValueOnce(new Error('Phiên chưa đồng bộ.'));
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
     fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền route:read cho NHA_XE_ADMIN/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
@@ -412,7 +412,7 @@ describe('tenant RBAC management', () => {
       return refreshedSession;
     });
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
 
     fireEvent.click(screen.getByRole('checkbox', {
       name: /^Gán quyền role:read cho NHA_XE_ADMIN/,
@@ -423,7 +423,7 @@ describe('tenant RBAC management', () => {
     expect(await screen.findByRole('heading', {
       name: 'Tài khoản chưa có chức năng quản trị khả dụng',
     })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Phân quyền vai trò' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i })).toBeNull();
     expect(screen.queryByRole('complementary', {
       name: 'Điều hướng quản trị',
     })).toBeNull();
@@ -436,7 +436,7 @@ describe('tenant RBAC management', () => {
       return refreshedSession;
     });
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
+    await screen.findByRole('heading', { name: /(Phân quyền vai trò|Phân quyền nhà xe)/i });
 
     fireEvent.click(screen.getByRole('checkbox', {
       name: /^Gán quyền permission:assign cho NHA_XE_ADMIN/,

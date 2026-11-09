@@ -51,6 +51,12 @@ export function getLocalizedPath(pathname: string, newLocale: SupportedLocale): 
   return `/${newLocale}${normalized === '/' ? '' : normalized}`;
 }
 
+function setLocaleCookie(code: SupportedLocale) {
+  if (typeof document !== 'undefined') {
+    document.cookie = `NEXT_LOCALE=${code}; path=/; max-age=31536000; SameSite=Lax`;
+  }
+}
+
 export function AdminLanguageSwitcher({
   className,
   value,
@@ -77,15 +83,13 @@ export function AdminLanguageSwitcher({
     if (value === undefined) {
       setInternalLocale(code);
     }
-    if (typeof document !== 'undefined') {
-      document.cookie = `NEXT_LOCALE=${code}; path=/; max-age=31536000; SameSite=Lax`;
-    }
+    setLocaleCookie(code);
     const localizedPath = getLocalizedPath(rawPathname, code);
     const search = typeof window !== 'undefined' && window.location.search ? window.location.search : '';
     const targetPath = `${localizedPath}${search}`;
 
     router.replace(targetPath);
-    (router as any).refresh?.();
+    router.refresh();
     onChange?.(code);
     setOpen(false);
   }

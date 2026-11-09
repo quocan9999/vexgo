@@ -29,6 +29,10 @@ import enMessages from '../src/messages/en.json';
 
 let currentTestLocale = 'vi';
 
+if (!process.env.NEXT_PUBLIC_API_URL) {
+  process.env.NEXT_PUBLIC_API_URL = 'http://localhost:4002';
+}
+
 export function setTestLocale(locale: 'vi' | 'en') {
   currentTestLocale = locale;
 }
@@ -39,12 +43,12 @@ export function getTestLocale() {
 
 vi.mock('next-intl', () => ({
   useTranslations: (namespace?: string) => {
-    const t = (key: string, values?: Record<string, any>) => {
+    const t = (key: string, values?: Record<string, unknown>) => {
       const keys = namespace ? `${namespace}.${key}`.split('.') : key.split('.');
       const messages = currentTestLocale === 'en' ? enMessages : viMessages;
-      let val: any = messages;
+      let val: unknown = messages;
       for (const k of keys) {
-        val = val?.[k];
+        val = (val as Record<string, unknown>)?.[k];
       }
       if (typeof val === 'string') {
         if (values) {
@@ -57,8 +61,8 @@ vi.mock('next-intl', () => ({
       }
       return key;
     };
-    t.rich = (key: string, values?: Record<string, any>) => t(key, values);
-    t.markup = (key: string, values?: Record<string, any>) => t(key, values);
+    t.rich = (key: string, values?: Record<string, unknown>) => t(key, values);
+    t.markup = (key: string, values?: Record<string, unknown>) => t(key, values);
     return t;
   },
   useLocale: () => currentTestLocale,

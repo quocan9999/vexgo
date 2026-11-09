@@ -247,7 +247,7 @@ describe('platform role permission management', () => {
     expect(await screen.findByRole('alertdialog')).toBeTruthy();
     expect(screen.getByText(/thay thế toàn bộ quyền mặc định/)).toBeTruthy();
     expect(service.replaceDefaultRolePermissions).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+    fireEvent.click(screen.getByRole('button', { name: /Hủy/i }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 

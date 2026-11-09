@@ -560,12 +560,12 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         data: {
           soDienThoai: customerPhone,
           matKhau: '$2b$10$hashedpasswordforexampletest',
-          hoTen: `Booking Customer ${suffix}`,
           trangThai: 'HOAT_DONG',
           daXacThucSoDienThoai: true,
           khachHang: {
             create: {
               maKhachHang: `KH-BK-${suffix}`,
+              hoTen: `Booking Customer ${suffix}`,
             },
           },
         },

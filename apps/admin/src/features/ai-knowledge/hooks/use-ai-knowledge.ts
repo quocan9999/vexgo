@@ -39,13 +39,6 @@ export function useAiKnowledge(options?: UseAiKnowledgeOptions) {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Đồng bộ scope khi vai trò phiên thay đổi
-  useEffect(() => {
-    if (!isTenant) {
-      setScope('GLOBAL');
-    }
-  }, [isTenant]);
-
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {

@@ -214,10 +214,22 @@ function setSidebarCollapsedPreference(collapsed: boolean) {
   window.dispatchEvent(new Event(ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT));
 }
 
-function formatAdminRoleLabels(roles: string[], defaultLabel = 'ADMIN ACCOUNT') {
-  const labels = roles.map(
-    (role) => ADMIN_ROLE_LABELS[role] ?? role.replaceAll('_', ' '),
-  );
+function formatAdminRoleLabels(
+  roles: string[],
+  defaultLabel = 'ADMIN ACCOUNT',
+  tRbac?: (key: string) => string,
+) {
+  const labels = roles.map((role) => {
+    if (tRbac) {
+      try {
+        const key = `roleName_${role}`;
+        return tRbac(key);
+      } catch {
+        // fallback
+      }
+    }
+    return ADMIN_ROLE_LABELS[role] ?? role.replaceAll('_', ' ');
+  });
   return labels.length > 0
     ? labels.join(' · ').toUpperCase()
     : defaultLabel;
@@ -396,7 +408,7 @@ export function SuperAdminLayout({
     },
   );
   const firstAccessibleTenantPath = getFirstAccessibleAdminPath(session);
-  const roleLabel = formatAdminRoleLabels(session.roles, tCommon('adminAccount'));
+  const roleLabel = formatAdminRoleLabels(session.roles, tCommon('adminAccount'), tRbac);
   const tenantBusCompanyName =
     session.employee?.busCompanyName?.trim() || tCommon('busCompany');
   const brandContextLines = platformScope

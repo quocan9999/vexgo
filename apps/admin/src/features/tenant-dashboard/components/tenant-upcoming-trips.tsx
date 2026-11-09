@@ -20,7 +20,7 @@ interface TenantUpcomingTripsProps {
   trips: UpcomingTripItem[];
 }
 
-function getTripStatusBadge(status: string, t: (key: any) => string) {
+function getTripStatusBadge(status: string, t: (key: string) => string) {
   switch (status) {
     case 'CHUA_KHOI_HANH':
       return (

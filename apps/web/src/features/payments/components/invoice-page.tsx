@@ -111,7 +111,7 @@ function formatInvoiceDateTime(timeStr?: string | null): string {
 
 function mapPaymentMethod(
   method?: string | null,
-  t?: (key: any) => string,
+  t?: (key: string) => string,
 ): string {
   if (!method || method === '—') return t ? t('methodVietQR') : 'Chuyển khoản VietQR';
   const upper = method.toUpperCase();
@@ -1618,7 +1618,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
 
             <div className="info-line" style={{ marginTop: 10 }}>
               <span>{t('paymentMethod')}</span>
-              <strong>{mapPaymentMethod(invoice.paymentMethod, (k: string) => t(k as any))}</strong>
+              <strong>{mapPaymentMethod(invoice.paymentMethod, (k: string) => t(k as Parameters<typeof t>[0]))}</strong>
             </div>
             <div className="info-line">
               <span>{t('createdTime')}</span>

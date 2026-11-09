@@ -87,7 +87,7 @@ function validate(
   routeOptions: FarePriceOptionsState,
   vehicleTypeOptions: FarePriceOptionsState,
   editing: boolean,
-  tFare: (key: any) => string,
+  tFare: (key: string) => string,
 ): FieldErrors {
   const errors: FieldErrors = {};
   const routeId = Number(values.routeId);

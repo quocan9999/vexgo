@@ -75,13 +75,12 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
 
   useEffect(() => {
     let current = true;
-    setLoading(true);
-    setError(null);
 
     getStationById(stationId)
       .then((data) => {
         if (current) {
           setStation(data);
+          setError(null);
           setLoading(false);
         }
       })
@@ -102,6 +101,8 @@ export function StationWorkspace({ stationId }: StationWorkspaceProps) {
   }, [stationId, retryCount, tStations]);
 
   function retry() {
+    setLoading(true);
+    setError(null);
     setRetryCount((c) => c + 1);
   }
 

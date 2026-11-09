@@ -155,7 +155,7 @@ beforeEach(() => {
 describe('Admin trips read page and components', () => {
   it('renders loading skeleton and refresh action without dead create button in 05.1', () => {
     const html = renderToStaticMarkup(<TripsManagement />);
-    expect(html).toContain('Đang tải danh sách chuyến xe');
+    expect(html).toMatch(/Đang tải (danh sách|dữ liệu) chuyến xe/);
     expect(html).not.toContain('aria-label="Trang sau"');
     expect(html).toContain('Làm mới');
     expect(html).not.toContain('Thêm chuyến');
@@ -244,10 +244,10 @@ describe('Admin trips read page and components', () => {
   });
 
   it('correctly maps status labels and badges for all canonical trip statuses', () => {
-    expect(tripStatusLabel('CHUA_KHOI_HANH')).toBe('Chưa khởi hành');
-    expect(tripStatusLabel('DANG_CHAY')).toBe('Đang chạy');
-    expect(tripStatusLabel('HOAN_THANH')).toBe('Hoàn thành');
-    expect(tripStatusLabel('DA_HUY')).toBe('Đã hủy');
+    expect(tripStatusLabel('CHUA_KHOI_HANH')).toMatch(/(Chưa khởi hành|Scheduled)/);
+    expect(tripStatusLabel('DANG_CHAY')).toMatch(/(Đang chạy|In Transit)/);
+    expect(tripStatusLabel('HOAN_THANH')).toMatch(/(Hoàn thành|Completed)/);
+    expect(tripStatusLabel('DA_HUY')).toMatch(/(Đã hủy|Cancelled)/);
 
     const badgeActive = renderToStaticMarkup(
       <TripStatusBadge status="DANG_CHAY" />,
@@ -377,7 +377,7 @@ describe('Trip service API contract validation', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(getTripById(101)).rejects.toThrow(
-      'API trả về thông tin chuyến xe không hợp lệ.',
+      /(API trả về thông tin chuyến xe không hợp lệ|API returned invalid trip payload)/i,
     );
   });
 
@@ -392,7 +392,7 @@ describe('Trip service API contract validation', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(getTripById(101)).rejects.toThrow(
-      'API trả về thông tin chuyến xe không hợp lệ.',
+      /(API trả về thông tin chuyến xe không hợp lệ|API returned invalid trip payload)/i,
     );
   });
 

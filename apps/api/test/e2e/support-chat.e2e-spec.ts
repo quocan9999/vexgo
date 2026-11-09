@@ -82,7 +82,6 @@ describe('Support Chat HTTP E2E Full Pipeline Tests (F-NEW-07)', () => {
       data: {
         soDienThoai: `+8491${Date.now().toString().slice(-7)}`,
         matKhau: '$2b$10$hashedpasswordfore2etests1234567890',
-        hoTen: `Khách Hàng E2E ${testSuffix}`,
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
         taiKhoanVaiTros: {
@@ -91,6 +90,7 @@ describe('Support Chat HTTP E2E Full Pipeline Tests (F-NEW-07)', () => {
         khachHang: {
           create: {
             maKhachHang: `KH-E2E-${testSuffix}`,
+            hoTen: `Khách Hàng E2E ${testSuffix}`,
           },
         },
       },
@@ -117,7 +117,6 @@ describe('Support Chat HTTP E2E Full Pipeline Tests (F-NEW-07)', () => {
       data: {
         soDienThoai: `+8492${Date.now().toString().slice(-7)}`,
         matKhau: '$2b$10$hashedpasswordfore2etests1234567890',
-        hoTen: `Nhân Viên B E2E ${testSuffix}`,
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
         taiKhoanVaiTros: {
@@ -126,6 +125,7 @@ describe('Support Chat HTTP E2E Full Pipeline Tests (F-NEW-07)', () => {
         nhanVien: {
           create: {
             maNhanVien: `NV-B-${testSuffix}`,
+            hoTen: `Nhân Viên B E2E ${testSuffix}`,
             nhaXeId: busCompanyBId,
             trangThaiLamViec: 'DANG_LAM_VIEC',
           },

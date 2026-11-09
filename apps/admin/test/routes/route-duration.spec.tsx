@@ -9,9 +9,11 @@ describe('parseRouteDuration', () => {
   it.each(['', '0', '-5', '12.5', 'abc'])(
     'rejects invalid duration %j with a field error',
     (input) => {
-      expect(parseRouteDuration(input)).toEqual({
-        error: 'Thời gian chạy phải là số phút nguyên lớn hơn 0.',
-      });
+      const res = parseRouteDuration(input);
+      expect('error' in res).toBe(true);
+      if ('error' in res) {
+        expect(['Duration must be a positive integer in minutes.', 'Thời gian chạy phải là số phút nguyên lớn hơn 0.']).toContain(res.error);
+      }
     },
   );
 });

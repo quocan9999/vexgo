@@ -30,7 +30,7 @@ vi.mock('@/features/auth/auth-session', () => ({
 }));
 
 vi.mock('@/features/locations/components/location-picker', () => ({
-  LocationPicker: (props: any) => (
+  LocationPicker: (props: { id?: string; placeholder?: string; value?: string }) => (
     <input
       data-testid={props.id}
       id={props.id}
@@ -245,8 +245,6 @@ describe('Customer Freight & Shipments Deep i18n (Phase C2)', () => {
     // ZERO-HARDCODED-VI ASSERTION on Step 2 container
     const step2El = document.getElementById('step-sender-receiver');
     expect(step2El).toBeTruthy();
-    const viDiacriticsRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/;
-    
     // Check that receiver section does not contain hardcoded Vietnamese words
     const receiverSectionText = step2El?.textContent || '';
     expect(receiverSectionText).not.toContain('Người nhận');

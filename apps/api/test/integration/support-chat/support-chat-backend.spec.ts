@@ -82,7 +82,6 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
     // 2. Tạo tài khoản Khách hàng
     const tkCustomer = await prisma.taiKhoan.create({
       data: {
-        hoTen: `Khách Hàng ${testSuffix}`,
         soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
         matKhau: '$2b$10$hashedpasswordforexample',
         email: `cust_${testSuffix}@example.com`,
@@ -93,6 +92,7 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
     const khachHang = await prisma.khachHang.create({
       data: {
         maKhachHang: `KH-${testSuffix}`,
+        hoTen: `Khách Hàng ${testSuffix}`,
         taiKhoanId: tkCustomer.taiKhoanId,
       },
     });
@@ -113,7 +113,6 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
     const createStaff = async (name: string, companyId: number) => {
       const tk = await prisma.taiKhoan.create({
         data: {
-          hoTen: `${name} ${testSuffix}`,
           soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
           matKhau: '$2b$10$hashedpasswordforexample',
           email: `${name.toLowerCase().replace(/\s+/g, '_')}_${testSuffix}@example.com`,
@@ -124,6 +123,7 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
       const nv = await prisma.nhanVien.create({
         data: {
           maNhanVien: `NV-${randomUUID().slice(0, 6)}`,
+          hoTen: `${name} ${testSuffix}`,
           taiKhoanId: tk.taiKhoanId,
           nhaXeId: companyId,
           trangThaiLamViec: 'DANG_LAM_VIEC',
@@ -150,7 +150,6 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
     // 4. Tạo tài khoản Super Admin
     const tkAdmin = await prisma.taiKhoan.create({
       data: {
-        hoTen: `Super Admin ${testSuffix}`,
         soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
         matKhau: '$2b$10$hashedpasswordforexample',
         email: `superadmin_${testSuffix}@example.com`,
@@ -449,7 +448,6 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
 
       const freshUser = await prisma.taiKhoan.create({
         data: {
-          hoTen: `Khách Hàng Mới ${testSuffix}`,
           soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
           matKhau: '$2b$10$hashedpasswordforexample',
           email: `concurrent_cust_${Date.now()}_${testSuffix}@example.com`,
@@ -458,6 +456,12 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
           taiKhoanVaiTros: {
             create: {
               vaiTroId: role.vaiTroId,
+            },
+          },
+          khachHang: {
+            create: {
+              maKhachHang: `KH-FRESH-${Date.now()}`,
+              hoTen: `Khách Hàng Mới ${testSuffix}`,
             },
           },
         },

@@ -226,7 +226,7 @@ export function VehicleTypesManagement() {
                                     )
                                   }
                                   label={tCommon('viewDetails')}
-                                  resourceName={item.name}
+                                  resourceName={`loại xe ${item.name}`}
                                 />
                               </TableCell>
                             </TableRow>
@@ -308,7 +308,7 @@ export function VehicleTypesManagement() {
                                 )
                               }
                               label={tCommon('viewDetails')}
-                              resourceName={item.name}
+                              resourceName={`loại xe ${item.name}`}
                             />
                           </div>
                         </Card>

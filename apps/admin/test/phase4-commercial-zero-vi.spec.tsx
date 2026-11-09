@@ -184,15 +184,15 @@ describe('Phase 4: Commercial, Bookings & Customers Zero-Hardcoded-Vi Assertion 
 
     for (const ns of namespaces) {
       it(`ensures all keys in vi.${ns} exist in en.${ns}`, () => {
-        const viNs = (viMessages as Record<string, any>)[ns] || {};
-        const enNs = (enMessages as Record<string, any>)[ns] || {};
+        const viNs = (viMessages as Record<string, unknown>)[ns] as Record<string, unknown> || {};
+        const enNs = (enMessages as Record<string, unknown>)[ns] as Record<string, unknown> || {};
 
-        function checkKeys(viObj: any, enObj: any, prefix = '') {
+        function checkKeys(viObj: Record<string, unknown>, enObj: Record<string, unknown>, prefix = '') {
           for (const key of Object.keys(viObj)) {
             const fullKey = prefix ? `${prefix}.${key}` : key;
             expect(enObj).toHaveProperty(key);
             if (typeof viObj[key] === 'object' && viObj[key] !== null) {
-              checkKeys(viObj[key], enObj[key], fullKey);
+              checkKeys(viObj[key] as Record<string, unknown>, enObj[key] as Record<string, unknown>, fullKey);
             }
           }
         }
@@ -201,15 +201,15 @@ describe('Phase 4: Commercial, Bookings & Customers Zero-Hardcoded-Vi Assertion 
       });
 
       it(`ensures all keys in en.${ns} exist in vi.${ns}`, () => {
-        const viNs = (viMessages as Record<string, any>)[ns] || {};
-        const enNs = (enMessages as Record<string, any>)[ns] || {};
+        const viNs = (viMessages as Record<string, unknown>)[ns] as Record<string, unknown> || {};
+        const enNs = (enMessages as Record<string, unknown>)[ns] as Record<string, unknown> || {};
 
-        function checkKeys(enObj: any, viObj: any, prefix = '') {
+        function checkKeys(enObj: Record<string, unknown>, viObj: Record<string, unknown>, prefix = '') {
           for (const key of Object.keys(enObj)) {
             const fullKey = prefix ? `${prefix}.${key}` : key;
             expect(viObj).toHaveProperty(key);
             if (typeof enObj[key] === 'object' && enObj[key] !== null) {
-              checkKeys(enObj[key], viObj[key], fullKey);
+              checkKeys(enObj[key] as Record<string, unknown>, viObj[key] as Record<string, unknown>, fullKey);
             }
           }
         }

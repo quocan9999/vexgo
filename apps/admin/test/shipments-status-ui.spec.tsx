@@ -651,7 +651,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     ).toBeNull();
     const lockedConfirmation = screen.getByRole('alertdialog');
     fireEvent.click(
-      within(lockedConfirmation).getByRole('button', { name: 'Hủy' }),
+      within(lockedConfirmation).getByRole('button', { name: /Hủy/ }),
     );
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(

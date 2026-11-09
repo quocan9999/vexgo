@@ -194,7 +194,6 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
     const employeeAccount = await prisma.taiKhoan.create({
       data: {
-        hoTen: `Nhân viên test ${token}`,
         email: `f09-status-nv-${token}@example.test`,
         soDienThoai: `+849${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
         matKhau: 'test-only-password-hash',
@@ -207,6 +206,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     const employee = await prisma.nhanVien.create({
       data: {
         maNhanVien: `F09-STATUS-${token}`,
+        hoTen: `Nhân viên test ${token}`,
         trangThaiLamViec: 'DANG_LAM',
         nhaXeId: tenantOneId,
         taiKhoanId: testAccountId,
@@ -217,7 +217,6 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
     const customerAccount = await prisma.taiKhoan.create({
       data: {
-        hoTen: `Khách test ${token}`,
         email: `f09-status-kh-${token}@example.test`,
         soDienThoai: `+848${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
         matKhau: 'test-only-password-hash',
@@ -229,6 +228,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     const customer = await prisma.khachHang.create({
       data: {
         maKhachHang: `F09-STATUS-${token}`,
+        hoTen: `Khách test ${token}`,
         taiKhoanId: customerAccount.taiKhoanId,
       },
     });

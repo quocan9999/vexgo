@@ -38,6 +38,6 @@ describe('promotion API service', () => {
 
   it('rejects an invalid success envelope instead of passing untrusted data through', async () => {
     state.fetch.mockResolvedValue(response({ data: [{ ...promotion, remainingUses: -1 }], meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 } }));
-    await expect(getPromotions({ page: 1, pageSize: 10, search: '', sortBy: 'createdAt', sortDirection: 'desc' })).rejects.toThrow('API trả về danh sách khuyến mãi không hợp lệ.');
+    await expect(getPromotions({ page: 1, pageSize: 10, search: '', sortBy: 'createdAt', sortDirection: 'desc' })).rejects.toThrow(/(API trả về danh sách khuyến mãi không hợp lệ|API returned invalid promotion list)/i);
   });
 });

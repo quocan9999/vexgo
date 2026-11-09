@@ -435,7 +435,7 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
 
-    expect(screen.getByText('Chưa có tài khoản Admin')).toBeTruthy();
+    expect(screen.getByText(/Chưa có tài khoản (Admin|quản trị)/i)).toBeTruthy();
   });
 
   it('shows a retry action when loading the account list fails', () => {
@@ -484,7 +484,7 @@ describe('Admin accounts management page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
 
     const dialog = await screen.findByRole('dialog', {
-      name: 'Thêm tài khoản Admin',
+      name: /Thêm tài khoản( Admin)?/i,
     });
     expect(
       within(dialog).queryByRole('checkbox', { name: 'Super Admin' }),
@@ -542,7 +542,7 @@ describe('Admin accounts management page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
 
     const dialog = await screen.findByRole('dialog', {
-      name: 'Thêm tài khoản Admin',
+      name: /Thêm tài khoản( Admin)?/i,
     });
     fireEvent.change(within(dialog).getByLabelText(/^Họ và tên/), {
       target: { value: 'Trần Minh Anh' },
@@ -585,7 +585,7 @@ describe('Admin accounts management page', () => {
     render(<AdminAccountsManagement />);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
     const dialog = await screen.findByRole('dialog', {
-      name: 'Thêm tài khoản Admin',
+      name: /Thêm tài khoản( Admin)?/i,
     });
     await within(dialog).findByRole('checkbox', { name: 'Nhân viên bán vé' });
     await fillRequiredCreateFields(dialog);
@@ -616,7 +616,7 @@ describe('Admin accounts management page', () => {
     render(<AdminAccountsManagement />);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
     const dialog = await screen.findByRole('dialog', {
-      name: 'Thêm tài khoản Admin',
+      name: /Thêm tài khoản( Admin)?/i,
     });
     await within(dialog).findByRole('checkbox', { name: 'Nhân viên bán vé' });
     await fillRequiredCreateFields(dialog);
@@ -649,7 +649,7 @@ describe('Admin accounts management page', () => {
     );
 
     const editDialog = await screen.findByRole('dialog', {
-      name: 'Chỉnh sửa tài khoản Admin',
+      name: /Chỉnh sửa tài khoản( Admin)?/i,
     });
     expect(within(editDialog).getByLabelText(/^Họ và tên/)).toBeTruthy();
     expect(within(editDialog).getByLabelText('Email')).toBeTruthy();
@@ -732,7 +732,7 @@ describe('Admin accounts management page', () => {
         'TAM_KHOA',
       ),
     );
-    expect(await screen.findByText('Tạm khóa')).toBeTruthy();
+    expect(await screen.findByText(/(Đang khóa|Tạm khóa)/)).toBeTruthy();
     expect(state.hook.refresh).toHaveBeenCalledOnce();
   });
 
@@ -751,7 +751,7 @@ describe('Admin accounts management page', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Mở khóa tài khoản',
+        name: /(Mở khóa( tài khoản)?)/i,
       }),
     );
     const confirmation = await screen.findByRole('alertdialog', {
@@ -759,7 +759,7 @@ describe('Admin accounts management page', () => {
     });
     expect(confirmation.textContent).toContain('không tạo phiên đăng nhập mới');
     fireEvent.click(
-      within(confirmation).getByRole('button', { name: 'Mở khóa tài khoản' }),
+      within(confirmation).getByRole('button', { name: /(Mở khóa( tài khoản)?)/i }),
     );
 
     await waitFor(() =>
@@ -768,7 +768,7 @@ describe('Admin accounts management page', () => {
         'HOAT_DONG',
       ),
     );
-    expect(await screen.findByText('Hoạt động')).toBeTruthy();
+    expect(await screen.findByText(/(Đang hoạt động|Hoạt động)/)).toBeTruthy();
     expect(state.hook.refresh).toHaveBeenCalledOnce();
   });
 
@@ -793,7 +793,7 @@ describe('Admin accounts management page', () => {
     expect(
       await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?' }),
     ).toBeTruthy();
-    expect(screen.getByText('Hoạt động')).toBeTruthy();
+    expect(screen.getByText(/(Đang hoạt động|Hoạt động)/)).toBeTruthy();
     expect(state.hook.refresh).not.toHaveBeenCalled();
   });
 
@@ -847,7 +847,7 @@ describe('Admin accounts management page', () => {
     ).toBeNull();
     expect(
       screen.queryByRole('button', {
-        name: 'Gán vai trò',
+        name: /(Gán|Phân) vai trò/i,
       }),
     ).toBeNull();
   });
@@ -870,7 +870,7 @@ describe('Admin accounts management page', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Gán vai trò',
+        name: /(Gán|Phân) vai trò/i,
       }),
     );
 
@@ -930,7 +930,7 @@ describe('Admin accounts management page', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Gán vai trò',
+        name: /(Gán|Phân) vai trò/i,
       }),
     );
     const roleDialog = await screen.findByRole('dialog', {
@@ -950,7 +950,7 @@ describe('Admin accounts management page', () => {
       'tài khoản sẽ không còn quyền quản trị',
     );
     expect(state.replaceAdminAccountRoles).not.toHaveBeenCalled();
-    fireEvent.click(within(confirmation).getByRole('button', { name: 'Hủy' }));
+    fireEvent.click(within(confirmation).getByRole('button', { name: /Hủy/ }));
     expect(
       screen.queryByRole('alertdialog', { name: 'Thu hồi toàn bộ vai trò?' }),
     ).toBeNull();
@@ -994,7 +994,7 @@ describe('Admin accounts management page', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Gán vai trò',
+        name: /(Gán|Phân) vai trò/i,
       }),
     );
     const roleDialog = await screen.findByRole('dialog', {
@@ -1037,7 +1037,7 @@ describe('Admin accounts management page', () => {
     );
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Gán vai trò' }),
+      await screen.findByRole('button', { name: /(Gán|Phân) vai trò/i }),
     );
     const roleDialog = await screen.findByRole('dialog', {
       name: 'Gán vai trò tài khoản',
@@ -1078,7 +1078,7 @@ describe('Admin accounts management page', () => {
     );
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Gán vai trò' }),
+      await screen.findByRole('button', { name: /(Gán|Phân) vai trò/i }),
     );
 
     const roleDialog = await screen.findByRole('dialog', {

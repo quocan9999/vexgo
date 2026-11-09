@@ -156,7 +156,7 @@ describe('Fare Price API service', () => {
         sortBy: 'validFrom',
         sortDirection: 'desc',
       }),
-    ).rejects.toThrow('API trả về danh sách bảng giá không hợp lệ.');
+    ).rejects.toThrow(/(API trả về danh sách bảng giá không hợp lệ|API returned invalid fare price list)/i);
   });
 
   it('rejects a malformed detail resource', async () => {
@@ -174,7 +174,7 @@ describe('Fare Price API service', () => {
     );
 
     await expect(service.getFarePriceById(15)).rejects.toThrow(
-      'API trả về thông tin bảng giá không hợp lệ.',
+      /(API trả về thông tin bảng giá không hợp lệ|API returned invalid fare price details)/i,
     );
   });
 

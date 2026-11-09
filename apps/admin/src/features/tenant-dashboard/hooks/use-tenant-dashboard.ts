@@ -26,12 +26,12 @@ export function useTenantDashboard() {
     } else {
       setLoading(true);
     }
-    setError(null);
 
     try {
       const overview = await getTenantDashboardOverview(controller.signal);
       setData(overview);
       setLastUpdated(new Date());
+      setError(null);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         return;
@@ -49,13 +49,40 @@ export function useTenantDashboard() {
 
   // Initial fetch
   useEffect(() => {
-    void fetchOverview(false);
+    let ignore = false;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    getTenantDashboardOverview(controller.signal)
+      .then((overview) => {
+        if (!ignore) {
+          setData(overview);
+          setLastUpdated(new Date());
+          setError(null);
+          setLoading(false);
+          setIsRefreshing(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            return;
+          }
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load bus company dashboard data. Please try again.',
+          );
+          setLoading(false);
+          setIsRefreshing(false);
+        }
+      });
+
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      ignore = true;
+      controller.abort();
     };
-  }, [fetchOverview]);
+  }, []);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -63,6 +90,7 @@ export function useTenantDashboard() {
 
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
+        setIsRefreshing(true);
         void fetchOverview(true);
       }
     }, autoRefreshInterval * 1000);
@@ -73,6 +101,7 @@ export function useTenantDashboard() {
   }, [autoRefreshInterval, fetchOverview]);
 
   const refresh = useCallback(() => {
+    setIsRefreshing(true);
     return fetchOverview(true);
   }, [fetchOverview]);
 

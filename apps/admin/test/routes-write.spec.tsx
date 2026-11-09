@@ -80,7 +80,7 @@ describe('Route form composition', () => {
         onSaved={vi.fn()}
       />,
     );
-    const dialog = await screen.findByRole('dialog', { name: 'Thêm tuyến xe' });
+    const dialog = await screen.findByRole('dialog', { name: /Thêm tuyến( xe)?/i });
     const view = within(dialog);
     expect(
       view
@@ -140,7 +140,7 @@ describe('Route form composition', () => {
         onSaved={vi.fn()}
       />,
     );
-    const dialog = await screen.findByRole('dialog', { name: 'Thêm tuyến xe' });
+    const dialog = await screen.findByRole('dialog', { name: /Thêm tuyến( xe)?/i });
     expect(
       within(dialog).queryByRole('combobox', { name: /Nhà xe/ }),
     ).toBeNull();

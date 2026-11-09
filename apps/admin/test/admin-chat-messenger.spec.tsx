@@ -29,6 +29,7 @@ const rect = (top: number, bottom: number): DOMRect => ({top, bottom, left: 10, 
 
 vi.mock('@/features/admin-auth/services/admin-auth', () => ({
   getAdminAccessToken: () => 'mock-admin-token-123',
+  refreshAdminAccessToken: vi.fn(),
 }));
 
 vi.mock('../src/features/support-chat/hooks/use-admin-chat-socket', () => ({
@@ -387,7 +388,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       // Sau khi bấm quay lại, màn hình quay về trạng thái chưa chọn cuộc trò chuyện
       await waitFor(() => {
-        expect(screen.getByText('Chọn cuộc trò chuyện')).toBeTruthy();
+        expect(screen.getByText(/Chọn.*cuộc trò chuyện/i)).toBeTruthy();
       });
     });
   });
@@ -423,7 +424,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       // Nút Tải thêm cuộc trò chuyện (20/55) phải xuất hiện vì còn trang tiếp theo
       const loadMoreBtn = await screen.findByRole('button', {
-        name: /Tải thêm hội thoại/i,
+        name: /Tải thêm (hội thoại|cuộc trò chuyện)/i,
       });
       expect(loadMoreBtn).toBeTruthy();
 
@@ -450,7 +451,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       render(<AdminChatMessenger session={mockSession} />);
 
-      const searchInput = screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' });
+      const searchInput = screen.getByRole('searchbox', { name: /Tìm cuộc trò chuyện/i });
       fireEvent.change(searchInput, { target: { value: 'Khách Tìm Kiếm' } });
 
       // Chờ debounce 400ms kích hoạt gọi API với search param
@@ -816,7 +817,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       fireEvent.pointerDown(pendingOption, { button: 0, pointerType: 'mouse' });
       fireEvent.pointerUp(pendingOption, { button: 0, pointerType: 'mouse' });
       fireEvent.click(pendingOption);
-      fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' }), { target: { value: 'Khớp' } });
+      fireEvent.change(screen.getByRole('searchbox', { name: /Tìm cuộc trò chuyện/i }), { target: { value: 'Khớp' } });
       await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({ search: 'Khớp', trangThai: 'CHO_TIEP_NHAN', page: 1 }),
         'mock-admin-token-123',
@@ -878,7 +879,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       });
       render(<AdminChatMessenger session={mockSession} />);
       await waitFor(() => expect(listSpy).toHaveBeenCalled());
-      const input = screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' });
+      const input = screen.getByRole('searchbox', { name: /Tìm cuộc trò chuyện/i });
       fireEvent.change(input, { target: { value: 'cũ' } });
       await waitFor(() => expect(listSpy).toHaveBeenCalledWith(
         expect.objectContaining({ search: 'cũ' }), 'mock-admin-token-123',

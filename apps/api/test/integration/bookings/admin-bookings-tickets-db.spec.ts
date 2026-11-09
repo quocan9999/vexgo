@@ -539,7 +539,6 @@ featureDescribe(
       customerPhone = `+8490${suffix.slice(0, 9)}`;
       const account = await prisma.taiKhoan.create({
         data: {
-          hoTen: customerName,
           soDienThoai: customerPhone,
           matKhau: 'test-only-password-hash',
           daXacThucSoDienThoai: true,
@@ -551,6 +550,7 @@ featureDescribe(
       const customer = await prisma.khachHang.create({
         data: {
           maKhachHang: `${fixturePrefix}-CUSTOMER`,
+          hoTen: customerName,
           taiKhoanId: account.taiKhoanId,
         },
         select: { khachHangId: true },

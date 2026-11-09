@@ -230,7 +230,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
               <ResourceStatusBadge
                 tone={trip.trangThai === 'DANG_CHAY' ? 'active' : 'muted'}
               >
-                {tripStatusLabel(trip.trangThai as any, tTrips)}
+                {tripStatusLabel(trip.trangThai, tTrips)}
               </ResourceStatusBadge>
             </div>
             <p className="text-sm font-semibold mt-1">

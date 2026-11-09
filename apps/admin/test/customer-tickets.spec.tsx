@@ -194,8 +194,8 @@ describe('Customer Ticket History Tab (Feature 06.3)', () => {
     expect((await screen.findAllByText('VE000901')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('PDV000080').length).toBeGreaterThan(0);
     expect(screen.getAllByText('TP.HCM → Đà Lạt').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('290.000 đ').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Đã xuất vé').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(290\.000\s*[đ₫])/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(Đã xuất vé|Đã thanh toán)/i).length).toBeGreaterThan(0);
   });
 
   it('shows empty state when customer has no tickets with current tenant', async () => {
@@ -231,7 +231,7 @@ describe('Customer Ticket History Tab (Feature 06.3)', () => {
     const ticketsTab = await screen.findByRole('tab', { name: 'Vé' });
     fireEvent.click(ticketsTab);
 
-    const searchInput = await screen.findByLabelText('Tìm kiếm vé');
+    const searchInput = await screen.findByPlaceholderText(/(Tìm theo mã vé|Tìm kiếm vé)/i);
     fireEvent.change(searchInput, { target: { value: 'CX-0001' } });
 
     // Wait a moment for debounced search

@@ -162,7 +162,6 @@ featureTestDescribe(
       const [accountA, accountB] = await Promise.all([
         prisma.taiKhoan.create({
           data: {
-            hoTen: `Feature 07 Admin A ${suffix}`,
             soDienThoai: `+849${suffix.slice(0, 8)}01`,
             matKhau: 'test-only-not-a-login-secret',
             daXacThucSoDienThoai: true,
@@ -172,7 +171,6 @@ featureTestDescribe(
         }),
         prisma.taiKhoan.create({
           data: {
-            hoTen: `Feature 07 Admin B ${suffix}`,
             soDienThoai: `+849${suffix.slice(0, 8)}02`,
             matKhau: 'test-only-not-a-login-secret',
             daXacThucSoDienThoai: true,
@@ -188,6 +186,7 @@ featureTestDescribe(
         prisma.nhanVien.create({
           data: {
             maNhanVien: `F07-ADMIN-A-${suffix}`,
+            hoTen: `Feature 07 Admin A ${suffix}`,
             trangThaiLamViec: 'DANG_LAM',
             nhaXeId: companyAId,
             taiKhoanId: accountAId,
@@ -196,6 +195,7 @@ featureTestDescribe(
         prisma.nhanVien.create({
           data: {
             maNhanVien: `F07-ADMIN-B-${suffix}`,
+            hoTen: `Feature 07 Admin B ${suffix}`,
             trangThaiLamViec: 'DANG_LAM',
             nhaXeId: companyBId,
             taiKhoanId: accountBId,

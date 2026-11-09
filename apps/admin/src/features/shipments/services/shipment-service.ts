@@ -150,7 +150,11 @@ export async function updateShipmentStatus(
     try {
       errorData = (await response.json()) as ShipmentStatusErrorResponse;
       if (response.status === 409) {
-        if (errorData?.error === 'SHIPMENT_PAYMENT_NOT_CONFIRMED') {
+        if (errorData?.message) {
+          errorMessage = Array.isArray(errorData.message)
+            ? errorData.message.join(', ')
+            : errorData.message;
+        } else if (errorData?.error === 'SHIPMENT_PAYMENT_NOT_CONFIRMED') {
           errorMessage =
             'Shipment status can only be updated to in-transit after payment is confirmed.';
         } else if (errorData?.error === 'CONCURRENT_STATUS_UPDATE') {
@@ -159,10 +163,6 @@ export async function updateShipmentStatus(
         } else if (errorData?.error === 'INVALID_STATUS_TRANSITION') {
           errorMessage =
             'Shipment status has changed or operation is invalid. Fresh data has been reloaded; please verify before continuing.';
-        } else if (errorData?.message) {
-          errorMessage = Array.isArray(errorData.message)
-            ? errorData.message.join(', ')
-            : errorData.message;
         }
       } else if (response.status === 403) {
         errorMessage = 'You do not have permission to update shipment status.';

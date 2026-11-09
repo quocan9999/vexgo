@@ -41,15 +41,6 @@ function initials(value: string) {
     .toLocaleUpperCase('vi');
 }
 
-function statusLabel(status: BusCompanyStatus, tCompanies: (key: any) => string) {
-  switch (status) {
-    case 'HOAT_DONG':
-      return tCompanies('statusActive');
-    case 'TAM_NGUNG':
-      return tCompanies('statusSuspended');
-  }
-}
-
 function CompanyMark({ name }: { name: string }) {
   return (
     <span

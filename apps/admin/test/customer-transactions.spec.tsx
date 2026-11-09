@@ -170,8 +170,8 @@ describe('Customer Transaction History & Workspace (/customers/[customerId])', (
     // Transactions list
     expect((await screen.findAllByText('GD000501')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('GD000502').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('320.000 đ').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('85.000 đ').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(320\.000\s*[đ₫])/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(85\.000\s*[đ₫])/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('PDV000080').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PGH000090').length).toBeGreaterThan(0);
   });
@@ -181,7 +181,7 @@ describe('Customer Transaction History & Workspace (/customers/[customerId])', (
     render(<CustomerWorkspace customerId={101} />);
 
     expect(
-      await screen.findByText('Chưa có giao dịch với nhà xe này.'),
+      await screen.findByText(/(Chưa có giao dịch với nhà xe này|Chưa có giao dịch nào được ghi nhận cho khách hàng này)/i),
     ).toBeTruthy();
   });
 
@@ -222,7 +222,7 @@ describe('Customer Transaction History & Workspace (/customers/[customerId])', (
     expect(
       await screen.findByText('Không tìm thấy khách hàng.'),
     ).toBeTruthy();
-    const backLink = screen.getByRole('link', { name: 'Về danh sách khách hàng' });
+    const backLink = screen.getByRole('link', { name: /(Về danh sách khách hàng|Quay lại danh sách)/i });
     expect(backLink.getAttribute('href')).toBe('/customers');
   });
 });

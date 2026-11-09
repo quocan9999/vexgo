@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Calendar,
-  Clock,
   Compass,
   LoaderCircle,
   Pencil,
@@ -66,11 +65,11 @@ function formatTimestamp(value: string) {
     .replaceAll('/', '-');
 }
 
-function getStatusLabel(status: FarePrice['status'], tFare: (key: any) => string) {
+function getStatusLabel(status: FarePrice['status'], tFare: (key: string) => string) {
   return status === 'HOAT_DONG' ? tFare('statusActive') : tFare('statusSuspended');
 }
 
-function getEffectiveStateLabel(state: FarePrice['effectiveState'], tFare: (key: any) => string) {
+function getEffectiveStateLabel(state: FarePrice['effectiveState'], tFare: (key: string) => string) {
   switch (state) {
     case 'CHUA_HIEU_LUC':
       return tFare('statePending');
@@ -262,7 +261,7 @@ export function FarePriceWorkspace({
       current = false;
       controller.abort();
     };
-  }, [farePriceId, retryCount, tFare]);
+  }, [farePriceId, retryCount]);
 
   return (
     <SuperAdminLayout
@@ -501,7 +500,7 @@ export function FarePriceWorkspace({
             onClose={() => setEditDialogOpen(false)}
             onNotFound={() => {
               setEditDialogOpen(false);
-              toast.error(tFare('emptyNoData'));
+              toast.error(tFare('errors.notFound'));
               onNotFound?.();
             }}
             onRetryRouteOptions={onRetryRouteOptions ?? (() => {})}

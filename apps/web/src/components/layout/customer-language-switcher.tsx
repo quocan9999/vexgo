@@ -41,6 +41,12 @@ export function getLocalizedPath(
   return `/${newLocale}${normalized === '/' ? '' : normalized}`;
 }
 
+function setLocaleCookie(code: SupportedLocale) {
+  if (typeof document !== 'undefined') {
+    document.cookie = `NEXT_LOCALE=${code}; path=/; max-age=31536000; SameSite=Lax`;
+  }
+}
+
 export function CustomerLanguageSwitcher({
   className = '',
   isMobile = false,
@@ -77,9 +83,7 @@ export function CustomerLanguageSwitcher({
   }, [open]);
 
   function handleSelect(code: SupportedLocale) {
-    if (typeof document !== 'undefined') {
-      document.cookie = `NEXT_LOCALE=${code}; path=/; max-age=31536000; SameSite=Lax`;
-    }
+    setLocaleCookie(code);
     const localizedPath = getLocalizedPath(rawPathname, code);
     const search =
       typeof window !== 'undefined' && window.location.search
@@ -88,7 +92,7 @@ export function CustomerLanguageSwitcher({
     const targetPath = `${localizedPath}${search}`;
 
     router.replace(targetPath);
-    (router as any).refresh?.();
+    router.refresh();
     setOpen(false);
   }
 

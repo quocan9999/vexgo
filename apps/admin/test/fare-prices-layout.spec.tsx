@@ -88,7 +88,7 @@ describe('Super Admin navigation for fare prices', () => {
 
     expect(
       screen
-        .getByRole('link', { name: 'Quản lý phiếu đặt vé & vé' })
+        .getByRole('link', { name: /(Quản lý (phiếu )?đặt vé & vé|bookingManagement)/i })
         .getAttribute('href'),
     ).toBe('/booking-management');
 

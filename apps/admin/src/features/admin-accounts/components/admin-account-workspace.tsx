@@ -140,6 +140,7 @@ export function AdminAccountWorkspace({
   }, [onNotFound]);
 
   useEffect(() => {
+    if (initialAccount && retryCount === 0) return;
     const controller = new AbortController();
 
     getAdminAccountById(accountId, controller.signal)
@@ -167,7 +168,7 @@ export function AdminAccountWorkspace({
       });
 
     return () => controller.abort();
-  }, [accountId, retryCount, tAccounts]);
+  }, [accountId, retryCount, initialAccount]);
 
   async function handleConfirmStatusChange() {
     if (statusSubmittingRef.current || detail.status !== 'success') return;

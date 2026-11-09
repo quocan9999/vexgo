@@ -84,7 +84,7 @@ function useSafeChatTranslations() {
   try {
     return useTranslations('chat');
   } catch {
-    return ((key: string, values?: Record<string, any>) => {
+    const fallbackT = (key: string, values?: Record<string, unknown>) => {
       let text = CHAT_FALLBACK[key] || key;
       if (values) {
         for (const [k, v] of Object.entries(values)) {
@@ -92,7 +92,8 @@ function useSafeChatTranslations() {
         }
       }
       return text;
-    }) as any;
+    };
+    return fallbackT as unknown as ReturnType<typeof useTranslations>;
   }
 }
 
@@ -360,10 +361,12 @@ function CustomerSupportChatSession({
   // Khi có yêu cầu chuyển giao mới từ AI, mở lại màn hình chọn nhà xe để khách hàng chỉ định đích đến
   useEffect(() => {
     if (handoffSessionToken) {
-      setSelectedCompany(null);
-      setActiveConversation(null);
-      setMessages([]);
-      setShowHistoryList(false);
+      queueMicrotask(() => {
+        setSelectedCompany(null);
+        setActiveConversation(null);
+        setMessages([]);
+        setShowHistoryList(false);
+      });
     }
   }, [handoffSessionToken]);
 

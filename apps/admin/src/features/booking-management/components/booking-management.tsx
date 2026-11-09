@@ -91,7 +91,7 @@ function formatDisplayTimestamp(value: string | null | undefined) {
 
 function getBookingStatusDisplay(
   status: string,
-  tBookings: (key: any) => string,
+  tBookings: (key: string) => string,
 ) {
   switch (status) {
     case 'CHO_THANH_TOAN':

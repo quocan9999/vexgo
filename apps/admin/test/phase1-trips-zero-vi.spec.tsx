@@ -203,8 +203,8 @@ describe('Phase 1: Trips & Operations Deep i18n & Zero-Hardcoded-Vi Verification
       ];
 
       keysToCheck.forEach((key) => {
-        expect((viMessages.trips as any)[key], `vi.trips.${key} missing`).toBeDefined();
-        expect((enMessages.trips as any)[key], `en.trips.${key} missing`).toBeDefined();
+        expect((viMessages.trips as Record<string, unknown>)[key], `vi.trips.${key} missing`).toBeDefined();
+        expect((enMessages.trips as Record<string, unknown>)[key], `en.trips.${key} missing`).toBeDefined();
       });
     });
   });

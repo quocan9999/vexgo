@@ -1835,7 +1835,7 @@
     "colCreatedAt": "Ngày tạo",
     "colUpdatedAt": "Cập nhật",
     "colActions": "Thao tác",
-    "resourceLabel": "phương tiện",
+    "resourceLabel": "xe",
     "loadingFilterOptions": "Đang tải tùy chọn bộ lọc…",
     "retryFilterOptions": "Thử tải lại",
     "createdSuccess": "Đã tạo phương tiện thành công.",
@@ -2134,6 +2134,7 @@
     }
   },
   "adminAccounts": {
+    "resourceLabel": "danh sách tài khoản",
     "adminAccountsTitle": "Quản lý tài khoản Admin",
     "adminAccountsSubtitle": "Danh sách tài khoản quản trị hệ thống và nhân sự nhà xe",
     "createAccount": "Thêm tài khoản",
@@ -2249,6 +2250,7 @@
   },
   "rbac": {
     "rbacTitle": "Phân quyền vai trò",
+    "tenantTitle": "Phân quyền theo nhà xe",
     "tenantRbacTitle": "Phân quyền nhà xe",
     "rbacSubtitle": "Cấu hình vai trò và ma trận quyền hạn",
     "roleName": "Tên vai trò",
