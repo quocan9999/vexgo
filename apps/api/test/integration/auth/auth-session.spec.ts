@@ -90,7 +90,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
   function account(overrides: Record<string, unknown> = {}) {
     return {
       taiKhoanId: 42,
-      hoTen: 'Nguyễn Văn An',
+      loaiTaiKhoan: 'KHACH_HANG',
       soDienThoai: PHONE,
       matKhau: passwordHash,
       ngaySinh: null,
@@ -151,7 +151,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
   it('returns the token envelope for valid credentials', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ phoneNumber: PHONE, password: 'VexGo@123' })
+      .send({ accountType: 'KHACH_HANG', phoneNumber: PHONE, password: 'VexGo@123' })
       .expect(200);
 
     expect(response.body).toEqual({
@@ -181,7 +181,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
 
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
-        .send({ phoneNumber: PHONE, password })
+        .send({ accountType: 'KHACH_HANG', phoneNumber: PHONE, password })
         .expect(401);
 
       expect(response.body).toEqual({
@@ -195,6 +195,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
   it('logs in through a normalized email identifier without changing the token contract', async () => {
     taiKhoan.findUnique.mockResolvedValueOnce(
       account({
+        loaiTaiKhoan: 'QUAN_TRI',
         email: 'admin@example.com',
         khachHang: null,
         taiKhoanVaiTros: [
@@ -205,22 +206,40 @@ describe('Auth login, refresh and logout HTTP contract', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ identifier: '  ADMIN@EXAMPLE.COM ', password: 'VexGo@123' })
+      .send({ accountType: 'QUAN_TRI', identifier: '  ADMIN@EXAMPLE.COM ', password: 'VexGo@123' })
       .expect(200);
 
     expect(taiKhoan.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { email: 'admin@example.com' } }),
+      expect.objectContaining({
+        where: {
+          email_loaiTaiKhoan: {
+            email: 'admin@example.com',
+            loaiTaiKhoan: 'QUAN_TRI',
+          },
+        },
+      }),
     );
     expect(response.body.data.user.roles).toEqual(['NHA_XE_ADMIN']);
     expect(response.body.data.refreshToken).toEqual(expect.any(String));
   });
 
   it('stores Admin refresh token in an HttpOnly cookie and omits it from JSON', async () => {
+    taiKhoan.findUnique.mockResolvedValueOnce(
+      account({
+        loaiTaiKhoan: 'QUAN_TRI',
+        email: 'admin@example.com',
+        khachHang: null,
+        taiKhoanVaiTros: [
+          { vaiTro: { vaiTroId: 2, tenVaiTro: 'NHA_XE_ADMIN' } },
+        ],
+      }),
+    );
+
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .set('Origin', 'http://localhost:3001')
       .set('X-Refresh-Token-Transport', 'cookie')
-      .send({ identifier: 'admin@example.com', password: 'VexGo@123' })
+      .send({ accountType: 'QUAN_TRI', identifier: 'admin@example.com', password: 'VexGo@123' })
       .expect(200);
 
     expect(response.body.data).toMatchObject({
@@ -242,7 +261,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
     await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .set('X-Refresh-Token-Transport', 'cookie')
-      .send({ identifier: 'admin@example.com', password: 'VexGo@123' })
+      .send({ accountType: 'QUAN_TRI', identifier: 'admin@example.com', password: 'VexGo@123' })
       .expect(403);
     await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
@@ -254,7 +273,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       .post('/api/v1/auth/login')
       .set('Origin', 'http://localhost:3000')
       .set('X-Refresh-Token-Transport', 'cookie')
-      .send({ identifier: 'admin@example.com', password: 'VexGo@123' })
+      .send({ accountType: 'QUAN_TRI', identifier: 'admin@example.com', password: 'VexGo@123' })
       .expect(403);
     expect(taiKhoan.findUnique).toHaveBeenCalledTimes(callsBefore);
   });
@@ -421,7 +440,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ phoneNumber: PHONE, password: 'VexGo@123' })
+      .send({ accountType: 'KHACH_HANG', phoneNumber: PHONE, password: 'VexGo@123' })
       .expect(403);
 
     expect(response.body.error).toBe('ACCOUNT_SUSPENDED');

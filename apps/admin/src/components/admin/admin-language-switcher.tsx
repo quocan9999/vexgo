@@ -89,7 +89,9 @@ export function AdminLanguageSwitcher({
     const targetPath = `${localizedPath}${search}`;
 
     router.replace(targetPath);
-    router.refresh();
+    if (typeof router.refresh === 'function') {
+      router.refresh();
+    }
     onChange?.(code);
     setOpen(false);
   }

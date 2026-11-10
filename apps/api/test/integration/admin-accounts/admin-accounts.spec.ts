@@ -228,6 +228,7 @@ describe('Admin account management API', () => {
     const account = await prisma.taiKhoan.create({
       data: {
         soDienThoai: phoneNumber,
+        loaiTaiKhoan: 'QUAN_TRI',
         matKhau: 'not-a-real-login-hash',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
@@ -260,6 +261,7 @@ describe('Admin account management API', () => {
     const account = await prisma.taiKhoan.create({
       data: {
         soDienThoai: phoneNumber,
+        loaiTaiKhoan: 'QUAN_TRI',
         matKhau: 'not-a-real-login-hash',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
