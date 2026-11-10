@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { LabeledSelectFilter } from '@/components/data-filters/labeled-select-filter';
 import { Card } from '@/components/ui/card';
@@ -50,6 +50,16 @@ export function AdminRbacRoleSelector<RoleName extends string>({
   titleId,
 }: AdminRbacRoleSelectorProps<RoleName>) {
   const tRbac = useTranslations('rbac');
+  const locale = useLocale();
+
+  const getRoleDesc = (role: AdminRbacRoleOption<RoleName>) => {
+    const translate = tRbac as (k: string) => string;
+    if (locale === 'en' && ROLE_DESC_KEYS[role.roleName]) {
+      return translate(ROLE_DESC_KEYS[role.roleName]);
+    }
+    return role.description ?? (ROLE_DESC_KEYS[role.roleName] ? translate(ROLE_DESC_KEYS[role.roleName]) : tRbac('noRoleDescription'));
+  };
+
   return (
     <Card
       role="region"
@@ -66,9 +76,7 @@ export function AdminRbacRoleSelector<RoleName extends string>({
           value={selectedRoleName}
           disabled={disabled}
           options={roles.map((role) => {
-            const roleDesc = ROLE_DESC_KEYS[role.roleName]
-              ? tRbac(ROLE_DESC_KEYS[role.roleName] as any)
-              : (role.description ?? tRbac('noRoleDescription'));
+            const roleDesc = getRoleDesc(role);
             return {
               value: role.roleName,
               label: `${roleDesc}${dirtyRoleNames.has(role.roleName) ? ` · ${tRbac('dirtyRoleSuffix')}` : ''}`,
@@ -106,9 +114,7 @@ export function AdminRbacRoleSelector<RoleName extends string>({
                 {role.roleName}
               </strong>
               <span className="text-xs text-muted-foreground">
-                {ROLE_DESC_KEYS[role.roleName]
-                  ? tRbac(ROLE_DESC_KEYS[role.roleName] as any)
-                  : (role.description ?? tRbac('noRoleDescription'))}
+                {getRoleDesc(role)}
               </span>
               <span className="flex flex-wrap gap-2">
                 <Badge variant="secondary">

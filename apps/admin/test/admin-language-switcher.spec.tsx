@@ -10,6 +10,7 @@ import {
 const mockRouter = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
+  refresh: vi.fn(),
 }));
 
 const mockUsePathname = vi.hoisted(() => vi.fn(() => '/vi/trips'));

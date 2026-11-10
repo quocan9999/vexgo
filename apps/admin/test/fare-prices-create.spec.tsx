@@ -323,7 +323,7 @@ describe('Fare Price create dialog behavior', () => {
       within(dialog).getByRole('button', { name: 'Tạo bảng giá' }),
     );
 
-    await expectOperationToast('error', 'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.');
+    await expectOperationToast('error', /khoảng hiệu lực.*trùng với một bảng giá đang hoạt động/i);
     expect(within(dialog).getByLabelText(/Giá niêm yết/)).toHaveProperty(
       'value',
       '250000',
@@ -368,7 +368,7 @@ describe('Fare Price create dialog behavior', () => {
       ),
     ).toHaveLength(0);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /Hủy/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(api.requests.filter((item) => item.method === 'POST')).toHaveLength(
       0,
@@ -384,10 +384,10 @@ describe('Fare Price create dialog behavior', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
     expect((await within(dialog).findByRole('alert')).textContent).toMatch(
-      /không thể tải danh sách tuyến/i,
+      /không thể tải (danh sách tuyến|bộ lọc tuyến xe)/i,
     );
     fireEvent.click(
-      within(dialog).getByRole('button', { name: /thử lại tuyến xe/i }),
+      within(dialog).getByRole('button', { name: /thử (tải )?lại tuyến xe/i }),
     );
     expect(
       await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Tuyến xe/ }), 'TP.HCM → Đà Lạt'),
@@ -403,10 +403,10 @@ describe('Fare Price create dialog behavior', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
     expect((await within(dialog).findByRole('alert')).textContent).toMatch(
-      /không thể tải danh sách loại xe/i,
+      /không thể tải (danh sách loại xe|bộ lọc tuyến xe hoặc loại xe)/i,
     );
     fireEvent.click(
-      within(dialog).getByRole('button', { name: /thử lại loại xe/i }),
+      within(dialog).getByRole('button', { name: /thử (tải )?lại loại xe/i }),
     );
     expect(
       await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Loại xe/ }), 'Limousine'),

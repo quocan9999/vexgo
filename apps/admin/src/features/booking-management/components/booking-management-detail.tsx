@@ -82,7 +82,7 @@ function isAuthorizationError(error: unknown) {
   );
 }
 
-function sourceLabel(source: string, tBookings: (key: any) => string) {
+function sourceLabel(source: string, tBookings: (key: string) => string) {
   if (source === 'SYSTEM') return tBookings('sourceSystem');
   if (source === 'STAFF') return tBookings('sourceStaff');
   if (source === 'CUSTOMER') return tBookings('sourceCustomer');
@@ -91,7 +91,7 @@ function sourceLabel(source: string, tBookings: (key: any) => string) {
 
 function getBookingStatusDisplay(
   status: string,
-  tBookings: (key: any) => string,
+  tBookings: (key: string) => string,
 ) {
   switch (status) {
     case 'CHO_THANH_TOAN':

@@ -57,7 +57,7 @@ function getSelfLockoutWarning(
   role: TenantRbacRole,
   nextPermissionKeys: readonly string[],
   sessionRoles: readonly string[],
-  tRbac: (key: any) => string,
+  tRbac: (key: string) => string,
 ): string | null {
   if (!sessionRoles.includes(role.roleName)) return null;
 

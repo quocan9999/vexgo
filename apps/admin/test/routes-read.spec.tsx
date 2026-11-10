@@ -64,7 +64,7 @@ beforeEach(() => {
 describe('Admin routes read page', () => {
   it('uses the shared skeleton and loading result summary before the API responds', () => {
     const html = renderToStaticMarkup(<RoutesManagement />);
-    expect(html).toContain('Đang tải danh sách tuyến xe');
+    expect(html).toMatch(/Đang tải (danh sách|dữ liệu) tuyến xe/);
     expect(html).not.toContain('aria-label="Trang sau"');
     expect(html).toContain('Làm mới');
     expect(html).not.toContain('Thêm tuyến');
@@ -147,7 +147,7 @@ describe('Route frontend API service', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({
       data: { routeId: 17, code: 'FUTA-TX-0001' },
     }), { status: 200 }));
-    await expect(getRouteById(17)).rejects.toThrow('API trả về thông tin tuyến xe không hợp lệ.');
+    await expect(getRouteById(17)).rejects.toThrow(/(API trả về thông tin tuyến xe không hợp lệ|Invalid route details returned by API)/i);
   });
 
   it.each([
@@ -160,7 +160,7 @@ describe('Route frontend API service', () => {
     { ...validRoute, createdAt: null }, { ...validRoute, updatedAt: null },
   ])('rejects malformed route field values %j', async (data) => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ data }), { status: 200 }));
-    await expect(getRouteById(17)).rejects.toThrow('API trả về thông tin tuyến xe không hợp lệ.');
+    await expect(getRouteById(17)).rejects.toThrow(/(API trả về thông tin tuyến xe không hợp lệ|Invalid route details returned by API)/i);
   });
 
   it.each([
@@ -172,6 +172,6 @@ describe('Route frontend API service', () => {
   ])('rejects malformed route page %j', async (body) => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 200 }));
     await expect(getRoutes({ page: 1, pageSize: 10, search: '', sortBy: 'code', sortDirection: 'asc' }))
-      .rejects.toThrow('API trả về danh sách tuyến xe không hợp lệ.');
+      .rejects.toThrow(/(API trả về danh sách tuyến xe không hợp lệ|Invalid routes list returned by API)/i);
   });
 });

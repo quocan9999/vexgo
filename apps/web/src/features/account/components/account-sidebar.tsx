@@ -4,16 +4,11 @@ import React from 'react';
 import Link from 'next/link';
 import { Award, KeyRound, Ticket, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useAuthSession } from '@/features/auth/auth-session';
+import { useOptionalAuthSession } from '@/features/auth/auth-session';
 
 export function AccountSidebar() {
   const t = useTranslations('account.sidebar');
-  let authContext: ReturnType<typeof useAuthSession> | null = null;
-  try {
-    authContext = useAuthSession();
-  } catch {
-    authContext = null;
-  }
+  const authContext = useOptionalAuthSession();
   const user = authContext?.user;
 
   const items = [

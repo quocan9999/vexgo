@@ -10,7 +10,7 @@ describe('shipment receiving measurements', () => {
       buildAcceptanceItems([
         { cargoId: 1, weight: '', length: '', width: '', height: '' },
       ]),
-    ).toThrow('khối lượng');
+    ).toThrow(/(khối lượng|weight)/i);
   });
   it('sends measured weight and complete optional dimensions', () => {
     expect(
@@ -26,7 +26,7 @@ describe('shipment receiving measurements', () => {
       buildAcceptanceItems([
         { cargoId: 1, weight: '2', length: '10', width: '', height: '' },
       ]),
-    ).toThrow('kích thước');
+    ).toThrow(/(kích thước|dimensions?)/i);
   });
   it('requires assignment and sender payment before dispatch', () => {
     expect(

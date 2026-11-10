@@ -28,13 +28,12 @@ export const ProfileSidebar: React.FC = () => {
       <nav className="flex flex-col space-y-1">
         {ACCOUNT_NAVIGATION_ITEMS.map((item) => {
           const isActive = isAccountNavigationItemActive(item, pathname);
-          const localizedHref = `/${locale}${item.href}`;
-          const label = t.has(item.id) ? t(item.id as 'profile' | 'history' | 'shipments' | 'security') : item.label;
+          const label = t(item.id as 'profile' | 'history' | 'shipments' | 'security');
 
           return (
             <Link
               key={item.id}
-              href={localizedHref}
+              href={item.href}
               aria-current={isActive ? 'page' : undefined}
               className={`flex items-center gap-3 px-4 py-3.5 rounded-lg text-sm font-semibold transition-all ${
                 isActive

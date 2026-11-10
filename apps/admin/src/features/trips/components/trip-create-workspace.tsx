@@ -86,31 +86,38 @@ export function TripCreateWorkspace() {
   const [loadingStops, setLoadingStops] = useState(false);
 
   useEffect(() => {
-    if (!values.routeId) {
-      setStops([]);
-      return;
-    }
-
     const routeIdNum = Number(values.routeId);
     if (!Number.isSafeInteger(routeIdNum) || routeIdNum < 1) return;
 
-    setLoadingStops(true);
+    let active = true;
     getRouteStops(routeIdNum)
       .then((data) => {
-        setStops(data);
+        if (active) setStops(data);
       })
       .catch(() => {
-        setStops([]);
+        if (active) setStops([]);
       })
       .finally(() => {
-        setLoadingStops(false);
+        if (active) setLoadingStops(false);
       });
+
+    return () => {
+      active = false;
+    };
   }, [values.routeId]);
 
   function updateField<F extends FormField>(field: F, value: FormValues[F]) {
     setValues((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     setFormError(null);
+    if (field === 'routeId') {
+      if (!value) {
+        setStops([]);
+        setLoadingStops(false);
+      } else {
+        setLoadingStops(true);
+      }
+    }
   }
 
   function validate(): FieldErrors {

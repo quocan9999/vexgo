@@ -10,13 +10,11 @@ import {
   User,
   Minimize2,
   Headphones,
-  BookOpen,
   Calendar,
   Clock,
   Bus,
   ArrowRight,
   AlertCircle,
-  ChevronDown,
   Sparkles,
   Loader2,
   ArrowRightLeft,
@@ -26,8 +24,6 @@ import { CustomerSupportChat } from '@/features/support-chat/components/customer
 import { aiChatbotService } from '@/features/ai-chatbot/services/ai-chatbot.service';
 import type {
   AiChatMessageItem,
-  CitationItem,
-  TripSearchResultItem,
   AiSuggestionItem,
 } from '@/features/ai-chatbot/types/ai-chatbot.types';
 
@@ -268,7 +264,7 @@ function useSafeWidgetTranslations() {
   try {
     return useTranslations('chat');
   } catch {
-    return ((key: string, values?: Record<string, any>) => {
+    const fallbackT = (key: string, values?: Record<string, unknown>) => {
       let text = WIDGET_FALLBACK[key] || key;
       if (values) {
         for (const [k, v] of Object.entries(values)) {
@@ -276,8 +272,20 @@ function useSafeWidgetTranslations() {
         }
       }
       return text;
-    }) as any;
+    };
+    return fallbackT as unknown as ReturnType<typeof useTranslations>;
   }
+}
+
+function createMessageId(offset = 0): string {
+  return (Date.now() + offset).toString();
+}
+
+function getFormattedTimeString(): string {
+  return new Date().toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export const SupportWidget: React.FC = () => {
@@ -297,53 +305,55 @@ export const SupportWidget: React.FC = () => {
 
   // Khởi tạo và khôi phục session/tin nhắn từ localStorage (Rolling TTL 7 ngày)
   useEffect(() => {
-    try {
-      if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
-        const raw = window.localStorage.getItem(AI_CHAT_STORAGE_KEY);
-        if (raw) {
-          const parsed: StoredAiChatData = JSON.parse(raw);
-          const isUuidValid =
-            typeof parsed.sessionToken === 'string' &&
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-              parsed.sessionToken,
-            );
-          const isNotExpired =
-            typeof parsed.lastActiveAt === 'number' &&
-            Date.now() - parsed.lastActiveAt < AI_CHAT_TTL_MS;
+    queueMicrotask(() => {
+      try {
+        if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+          const raw = window.localStorage.getItem(AI_CHAT_STORAGE_KEY);
+          if (raw) {
+            const parsed: StoredAiChatData = JSON.parse(raw);
+            const isUuidValid =
+              typeof parsed.sessionToken === 'string' &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                parsed.sessionToken,
+              );
+            const isNotExpired =
+              typeof parsed.lastActiveAt === 'number' &&
+              Date.now() - parsed.lastActiveAt < AI_CHAT_TTL_MS;
 
-          if (
-            isUuidValid &&
-            isNotExpired &&
-            Array.isArray(parsed.messages) &&
-            parsed.messages.length > 0
-          ) {
-            setSessionToken(parsed.sessionToken);
-            setMessages(parsed.messages);
+            if (
+              isUuidValid &&
+              isNotExpired &&
+              Array.isArray(parsed.messages) &&
+              parsed.messages.length > 0
+            ) {
+              setSessionToken(parsed.sessionToken);
+              setMessages(parsed.messages);
 
-            // Kiểm tra tính hợp lệ với backend trong nền
-            aiChatbotService
-              .getSessionHistory(parsed.sessionToken)
-              .catch(() => {});
-            return;
+              // Kiểm tra tính hợp lệ với backend trong nền
+              aiChatbotService
+                .getSessionHistory(parsed.sessionToken)
+                .catch(() => {});
+              return;
+            }
           }
         }
+      } catch {
+        // Bỏ qua lỗi parse
       }
-    } catch {
-      // Bỏ qua lỗi parse
-    }
 
-    // Nếu không có dữ liệu hoặc đã hết hạn quá 7 ngày, tạo phiên mới
-    const newSession = generateUuidV4();
-    setSessionToken(newSession);
-    setMessages([DEFAULT_WELCOME_MESSAGE]);
-    persistChatData(newSession, [DEFAULT_WELCOME_MESSAGE]);
-    try {
-      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
-        window.sessionStorage.removeItem('vexgo_ai_session_token');
+      // Nếu không có dữ liệu hoặc đã hết hạn quá 7 ngày, tạo phiên mới
+      const newSession = generateUuidV4();
+      setSessionToken(newSession);
+      setMessages([DEFAULT_WELCOME_MESSAGE]);
+      persistChatData(newSession, [DEFAULT_WELCOME_MESSAGE]);
+      try {
+        if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+          window.sessionStorage.removeItem('vexgo_ai_session_token');
+        }
+      } catch {
+        // Ignore
       }
-    } catch {
-      // Ignore
-    }
+    });
   }, []);
 
   // Tải các gợi ý câu hỏi mặc định
@@ -402,13 +412,10 @@ export const SupportWidget: React.FC = () => {
     if (!text || isLoading) return;
 
     const userMessage: AiChatMessageItem = {
-      id: Date.now().toString(),
+      id: createMessageId(),
       text,
       sender: 'user',
-      time: new Date().toLocaleTimeString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      time: getFormattedTimeString(),
     };
 
     const nextMessages = [...messages, userMessage];
@@ -430,13 +437,10 @@ export const SupportWidget: React.FC = () => {
       }
 
       const botMessage: AiChatMessageItem = {
-        id: (Date.now() + 1).toString(),
+        id: createMessageId(1),
         text: res.reply,
         sender: 'bot',
-        time: new Date().toLocaleTimeString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        time: getFormattedTimeString(),
         citations: res.citations,
         suggestedTrips: res.suggestedTrips,
         suggestedReturnTrips: res.suggestedReturnTrips,
@@ -451,13 +455,10 @@ export const SupportWidget: React.FC = () => {
       persistChatData(currentToken, finalMessages);
     } catch {
       const errorMessage: AiChatMessageItem = {
-        id: (Date.now() + 1).toString(),
+        id: createMessageId(1),
         text: 'Xin lỗi, hiện tại kết nối đến hệ thống AI đang gặp gián đoạn. Bạn có thể thử lại hoặc bấm nút dưới đây để kết nối trực tiếp với nhân viên hỗ trợ nhé!',
         sender: 'bot',
-        time: new Date().toLocaleTimeString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        time: getFormattedTimeString(),
         requiresHumanHandoff: true,
       };
       const errorMessages = [...nextMessages, errorMessage];

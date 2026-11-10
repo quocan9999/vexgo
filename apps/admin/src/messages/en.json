@@ -2134,6 +2134,7 @@
     }
   },
   "adminAccounts": {
+    "resourceLabel": "accounts",
     "adminAccountsTitle": "Admin Account Management",
     "adminAccountsSubtitle": "System administrators and company staff accounts",
     "createAccount": "Add Account",
@@ -2249,6 +2250,7 @@
   },
   "rbac": {
     "rbacTitle": "Platform RBAC Management",
+    "tenantTitle": "Tenant Permissions",
     "tenantRbacTitle": "Tenant RBAC Management",
     "rbacSubtitle": "Configure roles and permission matrices",
     "roleName": "Role Name",

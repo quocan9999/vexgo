@@ -28,11 +28,15 @@ const account = {
   email: 'an@example.com',
   daXacThucSoDienThoai: true,
   trangThai: 'HOAT_DONG',
+  loaiTaiKhoan: 'KHACH_HANG',
   createdAt: NOW,
   updatedAt: new Date('2026-09-28T10:05:00.000Z'),
   khachHang: {
     khachHangId: 12,
     maKhachHang: 'KH00000042',
+    hoTen: 'Nguyễn Văn An',
+    ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
+    cccd: '079123456789',
     diemTichLuy: 25,
     taiKhoanId: 42,
     createdAt: NOW,
@@ -112,6 +116,7 @@ describe('GET/PATCH /api/v1/me', () => {
       taiKhoan: {
         taiKhoanId: 42,
         trangThai: 'HOAT_DONG',
+        loaiTaiKhoan: 'KHACH_HANG',
         nhanVien: null,
         taiKhoanVaiTros: [
           { vaiTro: { tenVaiTro: 'KHACH_HANG', vaiTroQuyens: [] } },
@@ -192,20 +197,19 @@ describe('GET/PATCH /api/v1/me', () => {
   it('updates only the account from the token and supports null clearing', async () => {
     taiKhoan.update.mockResolvedValueOnce({
       ...account,
-      hoTen: 'Nguyễn Văn Bình',
-      ngaySinh: null,
       email: null,
-      cccd: null,
       khachHang: {
         ...account.khachHang,
         hoTen: 'Nguyễn Văn Bình',
         ngaySinh: null,
+        cccd: null,
       },
     });
     khachHang.update.mockResolvedValueOnce({
       ...account.khachHang,
       hoTen: 'Nguyễn Văn Bình',
       ngaySinh: null,
+      cccd: null,
     });
 
     const response = await request(app.getHttpServer())

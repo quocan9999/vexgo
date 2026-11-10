@@ -264,7 +264,7 @@ export function AdminAccountsManagement() {
               </div>
             )}
 
-            {loading && !accountPage && !error && <ResourceTableSkeleton resourceLabel={tAccounts('colAccount')} />}
+            {loading && !accountPage && !error && <ResourceTableSkeleton resourceLabel={tAccounts('resourceLabel')} />}
 
             <ResourceSortControls
               direction={sortDirection}
@@ -328,7 +328,7 @@ export function AdminAccountsManagement() {
                           <TableCell><AccountStatusBadge status={account.status} t={tAccounts} /></TableCell>
                           <TableCell>{account.createdAt}</TableCell>
                           <TableCell className="text-right">
-                            <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`${tAccounts('colAccount')} ${account.fullName}`} />
+                            <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`${tAccounts('colAccount').toLowerCase()} ${account.fullName}`} />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -362,7 +362,7 @@ export function AdminAccountsManagement() {
                         <div className="col-span-2"><dt>{tAccounts('colRole')}</dt><dd className="mt-2"><RoleBadges roles={account.roles} t={tAccounts} /></dd></div>
                       </dl>
                       <div className="border-t pt-3">
-                        <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`${tAccounts('colAccount')} ${account.fullName}`} />
+                        <ResourceDetailAction href={`/admin-accounts/${account.accountId}`} resourceName={`${tAccounts('colAccount').toLowerCase()} ${account.fullName}`} />
                       </div>
                     </Card>
                   ))}

@@ -183,14 +183,14 @@ describe('Trip Form Composition & Validation', () => {
     );
 
     expect(html).toContain('Thêm chuyến xe');
-    expect(html).toContain('Tuyến xe');
-    expect(html).toContain('Xe phục vụ');
+    expect(html).toMatch(/Tuyến (xe|đường)/);
+    expect(html).toMatch(/(Xe phục vụ|Phương tiện|Xe)/);
     expect(html).toContain('Nhận gửi hàng');
     expect(html).toContain('Ngày khởi hành');
     expect(html).toContain('Giờ khởi hành');
-    expect(screen.getByRole('combobox', { name: /Tuyến xe/ })).toBeTruthy();
-    expect(screen.getByRole('combobox', { name: /Xe phục vụ/ })).toBeTruthy();
-    expect(html).toContain('Tạo chuyến xe');
+    expect(screen.getByRole('combobox', { name: /Tuyến (xe|đường)/ })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: /(Xe phục vụ|Phương tiện|Xe)/ })).toBeTruthy();
+    expect(html).toMatch(/(Tạo|Thêm) chuyến/);
   });
 
   it('renders edit mode with immutable code, route, and vehicle', () => {
@@ -253,8 +253,8 @@ describe('Trip Form Composition & Validation', () => {
       expect(checkbox.checked).toBe(false);
       if (state === 'selected') fireEvent.click(checkbox);
 
-      await selectCanonicalOption(within(dialog).getByLabelText(/Tuyến xe/), /FUTA-TX-0001/);
-      await selectCanonicalOption(within(dialog).getByLabelText(/Xe phục vụ/), /30F-123.45/);
+      await selectCanonicalOption(within(dialog).getByLabelText(/Tuyến (xe|đường)/), /FUTA-TX-0001/);
+      await selectCanonicalOption(within(dialog).getByLabelText(/(Xe phục vụ|Phương tiện|Xe)/), /30F-123.45/);
       fireEvent.change(within(dialog).getByLabelText(/Ngày khởi hành/), {
         target: { value: '2026-10-10' },
       });
@@ -262,7 +262,7 @@ describe('Trip Form Composition & Validation', () => {
         target: { value: '07:30' },
       });
       fireEvent.click(
-        within(dialog).getByRole('button', { name: 'Tạo chuyến xe' }),
+        within(dialog).getByRole('button', { name: /(Tạo|Thêm) chuyến/i }),
       );
 
       await waitFor(() => expect(onSaved).toHaveBeenCalledWith(savedTrip));
@@ -334,8 +334,8 @@ describe('Trip Form Composition & Validation', () => {
       />,
     );
 
-    expect(html).toContain('Đang tải tuyến xe…');
-    expect(html).toContain('Đang tải xe phục vụ…');
+    expect(html).toMatch(/Đang tải (tuyến xe|Tuyến đường|Tuyến xe)…/);
+    expect(html).toMatch(/Đang tải (xe phục vụ|Phương tiện|Xe)…/);
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
 

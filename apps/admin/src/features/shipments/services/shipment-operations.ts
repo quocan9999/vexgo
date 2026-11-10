@@ -12,7 +12,7 @@ export function buildAcceptanceItems(items: MeasurementDraft[]) {
   return items.map((item) => {
     const weight = Number(item.weight);
     if (!Number.isFinite(weight) || weight <= 0)
-      throw new Error('Actual weight must be greater than 0 for each item.');
+      throw new Error('Enter actual weight greater than 0 for each package.');
     const dimensions = [item.length, item.width, item.height];
     if (
       dimensions.some(Boolean) &&
@@ -20,7 +20,7 @@ export function buildAcceptanceItems(items: MeasurementDraft[]) {
         (value) => Number.isFinite(Number(value)) && Number(value) > 0,
       )
     )
-      throw new Error('All three dimensions must be greater than 0.');
+      throw new Error('Enter all three actual dimensions greater than 0.');
     return {
       cargoId: item.cargoId,
       weight,

@@ -56,7 +56,7 @@ const ACTION_KEYS: Record<string, string> = {
 
 function getPermissionGroups(
   permissions: readonly AdminRbacPermissionOption[],
-  tRbac: (k: any) => string,
+  tRbac: (k: string) => string,
 ) {
   const groups = new Map<string, AdminRbacPermissionOption[]>();
   for (const permission of permissions) {
@@ -68,14 +68,14 @@ function getPermissionGroups(
 
   return [...groups].map(([resource, items]) => ({
     resource,
-    label: RESOURCE_KEYS[resource] ? tRbac(RESOURCE_KEYS[resource] as any) : resource,
+    label: RESOURCE_KEYS[resource] ? (tRbac as (k: string) => string)(RESOURCE_KEYS[resource]) : resource,
     permissions: items,
   }));
 }
 
-function getPermissionActionLabel(permissionKey: string, tRbac: (k: any) => string): string {
+function getPermissionActionLabel(permissionKey: string, tRbac: (k: string) => string): string {
   const action = permissionKey.split(':')[1];
-  return ACTION_KEYS[action] ? tRbac(ACTION_KEYS[action] as any) : action ?? permissionKey;
+  return ACTION_KEYS[action] ? (tRbac as (k: string) => string)(ACTION_KEYS[action]) : action ?? permissionKey;
 }
 
 export function AdminRbacPermissionMatrix({

@@ -66,7 +66,10 @@ function formatMoney(value: string): string {
   return `${amount}${cents ? `,${cents}` : ''} ₫`;
 }
 
-function formatDiscount(promotion: Promotion, tPromotions?: (key: any, options?: any) => string): string {
+function formatDiscount(
+  promotion: Promotion,
+  tPromotions?: (key: string, options?: Record<string, string | number | Date>) => string,
+): string {
   if (promotion.discountType !== 'PHAN_TRAM') {
     return formatMoney(promotion.discountValue);
   }

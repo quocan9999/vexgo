@@ -73,7 +73,7 @@ function formatGender(
 function getStatusBadgeConfig(
   status: string,
   lockedUntil: string | null | undefined,
-  tCustomers: (key: string, values?: any) => string,
+  tCustomers: (key: string, values?: Record<string, string | number | Date>) => string,
 ) {
   if (status === 'HOAT_DONG') return { tone: 'active' as const, label: tCustomers('statusActive') };
   if (status === 'BI_KHOA') return { tone: 'danger' as const, label: tCustomers('statusLocked') };

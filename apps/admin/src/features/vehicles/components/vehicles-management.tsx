@@ -382,7 +382,7 @@ export function VehiclesManagement() {
                                     router.push(`/vehicles/${vehicle.vehicleId}`)
                                   }
                                   label={tCommon('viewDetails')}
-                                  resourceName={vehicle.licensePlate}
+                                  resourceName={`xe ${vehicle.licensePlate}`}
                                 />
                               </TableCell>
                             </TableRow>
@@ -434,7 +434,7 @@ export function VehiclesManagement() {
                                 router.push(`/vehicles/${vehicle.vehicleId}`)
                               }
                               label={tCommon('viewDetails')}
-                              resourceName={vehicle.licensePlate}
+                              resourceName={`xe ${vehicle.licensePlate}`}
                             />
                           </div>
                         </Card>

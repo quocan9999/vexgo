@@ -84,7 +84,7 @@ function compareMinorUnits(left: string, right: string): number {
   return left === right ? 0 : left < right ? -1 : 1;
 }
 
-function validate(values: FormValues, tPromotions: (key: any) => string): FieldErrors {
+function validate(values: FormValues, tPromotions: (key: string) => string): FieldErrors {
   const errors: FieldErrors = {};
   const name = values.name.trim();
   const code = values.code.trim().toUpperCase();

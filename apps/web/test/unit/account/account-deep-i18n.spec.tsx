@@ -105,18 +105,19 @@ describe('Customer Account, Auth & Loyalty Deep i18n (Phase C3)', () => {
     const namespaces = ['auth', 'account', 'loyalty', 'chat'] as const;
 
     for (const ns of namespaces) {
-      const viNs = viMessages[ns as keyof typeof viMessages] as Record<string, any>;
-      const enNs = enMessages[ns as keyof typeof enMessages] as Record<string, any>;
+      const viNs = viMessages[ns as keyof typeof viMessages] as Record<string, unknown>;
+      const enNs = enMessages[ns as keyof typeof enMessages] as Record<string, unknown>;
 
       expect(viNs).toBeDefined();
       expect(enNs).toBeDefined();
 
-      const getKeys = (obj: Record<string, any>, prefix = ''): string[] => {
+      const getKeys = (obj: Record<string, unknown>, prefix = ''): string[] => {
         let keys: string[] = [];
         for (const k in obj) {
           const full = prefix ? `${prefix}.${k}` : k;
-          if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
-            keys = keys.concat(getKeys(obj[k], full));
+          const val = obj[k];
+          if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+            keys = keys.concat(getKeys(val as Record<string, unknown>, full));
           } else {
             keys.push(full);
           }

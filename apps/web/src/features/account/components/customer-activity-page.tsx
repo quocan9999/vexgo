@@ -70,7 +70,7 @@ function formatPrice(amount: number, locale: string = 'vi'): string {
   return `${new Intl.NumberFormat('vi-VN').format(amount)}đ`;
 }
 
-function renderStatusBadge(status: string | null, t: (key: any) => string) {
+function renderStatusBadge(status: string | null, t: (key: string) => string) {
   if (!status) return null;
   const s = status.toUpperCase();
   if (s === 'DA_THANH_TOAN' || s === 'THANH_CONG' || s === 'HOAN_TAT') {

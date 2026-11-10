@@ -93,11 +93,11 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
     ): Promise<string> => {
       const account = await prisma.taiKhoan.create({
         data: {
-          hoTen: `Promotion API ${label} ${suffix}`,
           soDienThoai: `P10${suffix.slice(0, 10)}${String(++accountOrdinal).padStart(3, '0')}`,
           matKhau: 'integration-test-only',
           daXacThucSoDienThoai: true,
           trangThai: 'HOAT_DONG',
+          loaiTaiKhoan: 'QUAN_TRI',
         },
         select: { taiKhoanId: true },
       });
@@ -107,6 +107,7 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
         await prisma.nhanVien.create({
           data: {
             maNhanVien: `P10-${suffix}-${label}`,
+            hoTen: `Promotion API ${label} ${suffix}`,
             trangThaiLamViec: 'DANG_LAM',
             nhaXeId: tenantId,
             taiKhoanId: account.taiKhoanId,

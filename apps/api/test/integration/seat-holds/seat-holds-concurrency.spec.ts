@@ -109,12 +109,12 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
       data: {
         soDienThoai: `+8491${suffix.slice(0, 7)}`,
         matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `User A ${suffix}`,
         trangThai: 'HOAT_DONG',
         daXacThucSoDienThoai: true,
         khachHang: {
           create: {
             maKhachHang: `KH-A-${suffix}`,
+            hoTen: `User A ${suffix}`,
           },
         },
       },
@@ -135,12 +135,12 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
       data: {
         soDienThoai: `+8492${suffix.slice(0, 7)}`,
         matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `User B ${suffix}`,
         trangThai: 'HOAT_DONG',
         daXacThucSoDienThoai: true,
         khachHang: {
           create: {
             maKhachHang: `KH-B-${suffix}`,
+            hoTen: `User B ${suffix}`,
           },
         },
       },

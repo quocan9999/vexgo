@@ -49,7 +49,7 @@ import type { Trip, TripLookupOptionsState, TripStatus } from '../types/trip';
 import { TripFormDialog } from './trip-form-dialog';
 import '../trips.css';
 
-export function tripStatusLabel(status: TripStatus, t?: (key: any) => string) {
+export function tripStatusLabel(status: TripStatus | string, t?: (key: string) => string) {
   switch (status) {
     case 'CHUA_KHOI_HANH':
       return t ? t('statusScheduled') : 'Scheduled';

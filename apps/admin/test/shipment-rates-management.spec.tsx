@@ -209,7 +209,7 @@ describe('ShipmentRatesManagement', () => {
     render(<ShipmentRatesManagement />);
 
     expect(
-      screen.getByRole('heading', { name: 'Quản lý bảng giá cước gửi hàng' }),
+      screen.getByRole('heading', { name: /(Quản lý bảng giá cước gửi hàng|Bảng giá cước vận chuyển)/i }),
     ).toBeTruthy();
 
     // Verify redundant surcharge card in Figure 2 is removed

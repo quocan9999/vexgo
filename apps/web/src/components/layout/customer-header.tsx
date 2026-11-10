@@ -16,7 +16,6 @@ import {
   Settings,
   LogOut,
   Award,
-  Globe,
   Clock,
   QrCode,
   Ticket,

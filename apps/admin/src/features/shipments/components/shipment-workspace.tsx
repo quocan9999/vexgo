@@ -296,7 +296,7 @@ export function ShipmentWorkspace({
       });
 
     return () => controller.abort();
-  }, [shipmentId, retryCount, tShipments]);
+  }, [shipmentId, retryCount]);
 
   function retry() {
     setRetryCount((c) => c + 1);

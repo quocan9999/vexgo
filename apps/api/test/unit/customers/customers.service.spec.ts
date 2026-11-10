@@ -12,6 +12,7 @@ import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 const account = {
   taiKhoanId: 42,
   soDienThoai: '+84901234567',
+  loaiTaiKhoan: 'KHACH_HANG',
   matKhau: '$2b$10$hidden',
   email: 'an@example.com',
   daXacThucSoDienThoai: true,

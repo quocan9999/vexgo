@@ -21,7 +21,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { sendTestChatMessage } from '../services/ai-knowledge-service';
-import type { CitationItem } from '@/features/ai-knowledge/types/ai-knowledge';
 
 interface TestChatMessage {
   id: string;
@@ -95,6 +94,28 @@ function FormattedMessageText({ content, isUser }: { content: string; isUser: bo
   );
 }
 
+function generateTestMessageId(offset = 0): string {
+  return `${Date.now() + offset}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function formatMessageTime(): string {
+  return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function getInitialCitationsDebug(): boolean {
+  try {
+    if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
+      const saved = window.sessionStorage.getItem('vexgo_admin_ai_citations_debug');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return true;
+}
+
 export function AiKnowledgeTestDialog({
   open,
   onOpenChange,
@@ -109,23 +130,10 @@ export function AiKnowledgeTestDialog({
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showCitationsDebug, setShowCitationsDebug] = useState(true);
+  const [showCitationsDebug, setShowCitationsDebug] = useState(getInitialCitationsDebug);
   const [expandedCitationId, setExpandedCitationId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined') {
-        const saved = window.sessionStorage.getItem('vexgo_admin_ai_citations_debug');
-        if (saved !== null) {
-          setShowCitationsDebug(saved === 'true');
-        }
-      }
-    } catch {
-      // Ignore
-    }
-  }, []);
 
   const handleToggleCitationDebug = () => {
     setShowCitationsDebug((prev) => {
@@ -146,10 +154,10 @@ export function AiKnowledgeTestDialog({
     if (!text || loading) return;
 
     const userMsg: TestChatMessage = {
-      id: Date.now().toString(),
+      id: generateTestMessageId(),
       sender: 'user',
       text,
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      time: formatMessageTime(),
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -159,19 +167,19 @@ export function AiKnowledgeTestDialog({
     try {
       const res = await sendTestChatMessage(text);
       const botMsg: TestChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: generateTestMessageId(1),
         sender: 'bot',
         text: res.reply,
         citations: res.citations,
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        time: formatMessageTime(),
       };
       setMessages((prev) => [...prev, botMsg]);
     } catch (err: unknown) {
       const errorMsg: TestChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: generateTestMessageId(1),
         sender: 'bot',
         text: `Lỗi kết nối kiểm thử: ${err instanceof Error ? err.message : 'Không thể kết nối đến máy chủ AI.'}`,
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        time: formatMessageTime(),
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {

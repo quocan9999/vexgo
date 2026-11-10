@@ -333,7 +333,6 @@ describe('Fare Price update HTTP and database behavior', () => {
       });
       const account = await transaction.taiKhoan.create({
         data: {
-          hoTen: 'Fare Price Test Customer',
           soDienThoai: `099${suffix}`,
           matKhau: 'test-only',
           daXacThucSoDienThoai: false,
@@ -344,6 +343,7 @@ describe('Fare Price update HTTP and database behavior', () => {
       const customer = await transaction.khachHang.create({
         data: {
           maKhachHang: `T04-${suffix}`,
+          hoTen: 'Fare Price Test Customer',
           taiKhoanId: account.taiKhoanId,
         },
         select: { khachHangId: true },

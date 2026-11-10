@@ -147,7 +147,7 @@ export function RouteWorkspace({
       });
 
     return () => controller.abort();
-  }, [routeId, retryCount, tRoutes]);
+  }, [routeId, retryCount]);
 
   function retry() {
     setDetail({ status: 'loading' });
