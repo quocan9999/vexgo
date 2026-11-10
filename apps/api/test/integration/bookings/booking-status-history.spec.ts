@@ -1341,7 +1341,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     const booking = response.body.data as { bookingId: number; orderId: number; orderCode: string; totalAmount: number };
-    if (paid) await settleSePayOrder(booking.orderCode, booking.totalAmount);
+    if (paid && booking.totalAmount > 0) await settleSePayOrder(booking.orderCode, booking.totalAmount);
     const shipment = await prisma.phieuGuiHang.findFirstOrThrow({ where: { donGiaoDichId: booking.orderId } });
     const tickets = await prisma.ve.findMany({ where: { phieuDatVeId: booking.bookingId }, orderBy: { veId: 'asc' } });
     return { booking, promotion, shipment, tickets };
@@ -1395,7 +1395,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       expect(result.body.data.refundAmount).toBe(free ? 0 : 108000);
       expect(enqueue).toHaveBeenCalledTimes(free ? 0 : 1);
       const payments = await prisma.thanhToan.findMany({ where: { donGiaoDichId: f.booking.orderId } });
-      expect(payments).toHaveLength(free ? 1 : 2);
+      expect(payments).toHaveLength(free ? 0 : 2);
       expect(payments.filter(p => p.loaiGiaoDich === 'HOAN_TIEN')).toHaveLength(free ? 0 : 1);
       expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: f.tickets[0].gheChuyenXeId } })).trangThai).toBe('TRONG');
       expect(await prisma.suDungKhuyenMai.findMany({ where: { phieuDatVeId: f.booking.bookingId } })).toEqual(usage);
