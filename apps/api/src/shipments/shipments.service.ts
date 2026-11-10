@@ -54,6 +54,42 @@ import {
   type CollectShipmentPaymentDto,
 } from './dto/shipment-operations.dto.js';
 
+const SHIPMENT_CANCELLATION_SELECT = {
+  phieuGuiHangId: true,
+  maVanDon: true,
+  trangThai: true,
+  diemGuiId: true,
+  diemNhanId: true,
+  tuyenXeId: true,
+  chuyenXeId: true,
+  cuocChinh: true,
+  phiDichVu: true,
+  soTienGiam: true,
+  tongPhi: true,
+  chuyenXe: {
+    select: {
+      chuyenXeId: true,
+      tuyenXeId: true,
+      nhaXeId: true,
+      ngayKhoiHanh: true,
+    },
+  },
+  hangHoas: { include: { loaiHangHoa: true } },
+  donGiaoDich: {
+    select: {
+      donGiaoDichId: true,
+      nhaXeId: true,
+      trangThai: true,
+      phieuDatVe: { select: { phieuDatVeId: true } },
+      thanhToans: { select: { loaiGiaoDich: true, trangThai: true } },
+    },
+  },
+} as const satisfies Prisma.PhieuGuiHangSelect;
+
+type ShipmentCancellationRecord = Prisma.PhieuGuiHangGetPayload<{
+  select: typeof SHIPMENT_CANCELLATION_SELECT;
+}>;
+
 function combineDeparture(
   date: Date,
   time: Date,
@@ -1619,6 +1655,199 @@ export class ShipmentsService {
     };
   }
 
+  private async cancelPartialShipmentItemsInTransaction(
+    tx: Prisma.TransactionClient,
+    shipment: ShipmentCancellationRecord,
+    effectiveItemIds: number[],
+    remainingItems: ShipmentCancellationRecord['hangHoas'],
+    now: Date,
+    principalId: number | null,
+  ) {
+    // PARTIAL cancellation of selected items
+    await tx.hinhAnhHangHoa.deleteMany({
+      where: { hangHoaId: { in: effectiveItemIds } },
+    });
+    await tx.hangHoa.deleteMany({
+      where: {
+        phieuGuiHangId: shipment.phieuGuiHangId,
+        hangHoaId: { in: effectiveItemIds },
+      },
+    });
+
+    const tuyenXeId = shipment.tuyenXeId ?? shipment.chuyenXe?.tuyenXeId;
+    const nhaXeId =
+      shipment.donGiaoDich.nhaXeId ?? shipment.chuyenXe?.nhaXeId;
+    const departureDate = shipment.chuyenXe?.ngayKhoiHanh
+      ? new Date(shipment.chuyenXe.ngayKhoiHanh)
+      : now;
+
+    let newBaseFee = new Prisma.Decimal(0);
+    let newServiceFee = new Prisma.Decimal(0);
+    let newTotalFee = new Prisma.Decimal(0);
+
+    if (tuyenXeId && nhaXeId) {
+      try {
+        const pricing = await this.cargoPricingService.calculate(
+          tx,
+          {
+            tuyenXeId,
+            nhaXeId,
+            ngayKhoiHanh: departureDate,
+          },
+          {
+            senderPointId: shipment.diemGuiId,
+            receiverPointId: shipment.diemNhanId,
+            items: remainingItems.map((item) => ({
+              name: item.tenHang,
+              quantity: item.soLuong,
+              loaiHangHoaId: item.loaiHangHoaId,
+              weight: Number(item.khoiLuong),
+              length: item.chieuDai ? Number(item.chieuDai) : undefined,
+              width: item.chieuRong ? Number(item.chieuRong) : undefined,
+              height: item.chieuCao ? Number(item.chieuCao) : undefined,
+            })),
+          },
+        );
+
+        newBaseFee = pricing.baseFee;
+        newServiceFee = pricing.serviceFee;
+        newTotalFee = pricing.totalFee;
+
+        await tx.chiTietCuocGuiHang.deleteMany({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        });
+
+        for (const rate of pricing.rates) {
+          await tx.chiTietCuocGuiHang.create({
+            data: {
+              phieuGuiHangId: shipment.phieuGuiHangId,
+              loaiHangHoaId: rate.loaiHangHoaId,
+              bangCuocGuiHangId: rate.bangCuocGuiHangId,
+              khoiLuongTinhCuoc: new Prisma.Decimal(rate.totalWeight),
+              soTienCuoc: new Prisma.Decimal(rate.fee),
+            },
+          });
+        }
+      } catch {
+        const remainingRatio =
+          remainingItems.length / shipment.hangHoas.length;
+        newTotalFee = shipment.tongPhi
+          .mul(remainingRatio)
+          .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+        newBaseFee = newTotalFee;
+      }
+    }
+
+    await tx.phieuGuiHang.update({
+      where: { phieuGuiHangId: shipment.phieuGuiHangId },
+      data: {
+        cuocChinh: newBaseFee,
+        phiDichVu: newServiceFee,
+        tongPhi: newTotalFee,
+        updatedAt: now,
+      },
+    });
+
+    const itemsToRemove = shipment.hangHoas.filter((h) =>
+      effectiveItemIds.includes(h.hangHoaId),
+    );
+    const removedNames = itemsToRemove
+      .map((h) => `${h.soLuong}x ${h.tenHang}`)
+      .join(', ');
+
+    await tx.lichSuTrangThaiPhieuGuiHang.create({
+      data: {
+        phieuGuiHangId: shipment.phieuGuiHangId,
+        trangThai: 'MOI_TAO',
+        thoiGian: now,
+        taiKhoanId: principalId,
+        ghiChu: `Khách hàng hủy ${effectiveItemIds.length} kiện: ${removedNames}. Cước mới: ${newTotalFee.toString()} đ.`,
+      },
+    });
+
+    return {
+      waybillCode: shipment.maVanDon,
+      status: 'MOI_TAO' as const,
+      updatedAt: now.toISOString(),
+      hasPaidBeforeCancel: false,
+      cancelledItemIds: effectiveItemIds,
+      remainingItemsCount: remainingItems.length,
+      newTotalFee: newTotalFee.toNumber(),
+      message: `Đã hủy ${effectiveItemIds.length} kiện hành lý. Còn lại ${remainingItems.length} kiện trong đơn.`,
+    };
+  }
+
+  async cancelAttachedCargoSelectionInTransaction(
+    tx: Prisma.TransactionClient,
+    orderId: number,
+    itemIds: number[],
+    now: Date,
+  ) {
+    const shipment = await tx.phieuGuiHang.findUnique({
+      where: { donGiaoDichId: orderId },
+      select: SHIPMENT_CANCELLATION_SELECT,
+    });
+    if (!shipment || shipment.trangThai !== 'MOI_TAO') {
+      throw new ConflictException({
+        error: 'SHIPMENT_CANNOT_BE_CANCELLED_ONLINE',
+        message: 'Hành lý không còn ở trạng thái Mới tạo. Vui lòng tải lại thông tin đơn.',
+      });
+    }
+
+    const selectedIds = [...new Set(itemIds)];
+    const currentIds = new Set(shipment.hangHoas.map((item) => item.hangHoaId));
+    if (
+      selectedIds.length === 0 ||
+      selectedIds.some((id) => !Number.isInteger(id) || !currentIds.has(id))
+    ) {
+      throw new BadRequestException({
+        error: 'INVALID_CARGO_ITEM_IDS',
+        message: 'Một hoặc nhiều mục hành lý đã thay đổi. Vui lòng tải lại thông tin đơn.',
+      });
+    }
+
+    const remainingItems = shipment.hangHoas.filter(
+      (item) => !selectedIds.includes(item.hangHoaId),
+    );
+    if (remainingItems.length > 0) {
+      return this.cancelPartialShipmentItemsInTransaction(
+        tx,
+        shipment,
+        selectedIds,
+        remainingItems,
+        now,
+        null,
+      );
+    }
+
+    const updated = await tx.phieuGuiHang.updateMany({
+      where: { phieuGuiHangId: shipment.phieuGuiHangId, trangThai: 'MOI_TAO' },
+      data: { trangThai: 'DA_HUY', updatedAt: now },
+    });
+    if (updated.count !== 1) {
+      throw new ConflictException({
+        error: 'CONCURRENT_STATUS_UPDATE',
+        message: 'Trạng thái hành lý đã thay đổi. Vui lòng tải lại thông tin đơn.',
+      });
+    }
+    await tx.lichSuTrangThaiPhieuGuiHang.create({
+      data: {
+        phieuGuiHangId: shipment.phieuGuiHangId,
+        trangThai: 'DA_HUY',
+        thoiGian: now,
+        taiKhoanId: null,
+        ghiChu: 'Khách hàng chọn hủy toàn bộ hành lý khi xác nhận hủy vé',
+      },
+    });
+    return {
+      waybillCode: shipment.maVanDon,
+      status: 'DA_HUY' as const,
+      cancelledItemIds: selectedIds,
+      remainingItemsCount: 0,
+      newTotalFee: 0,
+    };
+  }
+
   async cancelCustomerShipment(
     dto: CancelShipmentDto,
     principal?: AuthPrincipal,
@@ -1677,38 +1906,13 @@ export class ShipmentsService {
 
       const shipment = await tx.phieuGuiHang.findUnique({
         where: { phieuGuiHangId: snapshot.phieuGuiHangId },
-        select: {
-          phieuGuiHangId: true,
-          maVanDon: true,
-          trangThai: true,
-          donGiaoDich: {
-            select: {
-              donGiaoDichId: true,
-              trangThai: true,
-              phieuDatVe: { select: { phieuDatVeId: true } },
-              thanhToans: {
-                select: {
-                  loaiGiaoDich: true,
-                  trangThai: true,
-                },
-              },
-            },
-          },
-        },
+        select: SHIPMENT_CANCELLATION_SELECT,
       });
 
       if (!shipment) {
         throw new NotFoundException({
           error: 'SHIPMENT_NOT_FOUND',
           message: 'Không tìm thấy phiếu gửi hàng.',
-        });
-      }
-
-      if (shipment.donGiaoDich.phieuDatVe) {
-        throw new ConflictException({
-          error: 'BOOKING_SHIPMENT_TRIP_FIXED',
-          message:
-            'Đây là hành lý/hàng hóa đi kèm vé xe. Vui lòng thực hiện hủy vé hoặc liên hệ nhà xe để được hỗ trợ.',
         });
       }
 
@@ -1728,21 +1932,61 @@ export class ShipmentsService {
       }
 
       const now = new Date();
+      const isAttachedToTicketBooking = Boolean(shipment.donGiaoDich.phieuDatVe);
 
-      await tx.donGiaoDich.updateMany({
-        where: {
-          donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
-        },
-        data: { trangThai: 'DA_HUY' },
-      });
+      // Handle partial cancellation if specific itemIds or itemIndices are provided
+      let effectiveItemIds: number[] | null = null;
+      if (dto.itemIds && dto.itemIds.length > 0) {
+        effectiveItemIds = dto.itemIds;
+      } else if (dto.itemIndices && dto.itemIndices.length > 0) {
+        effectiveItemIds = dto.itemIndices
+          .map((idx) => shipment.hangHoas[idx]?.hangHoaId)
+          .filter((id): id is number => typeof id === 'number');
+      }
 
-      await tx.thanhToan.updateMany({
-        where: {
-          donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
-          trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
-        },
-        data: { trangThai: 'THAT_BAI' },
-      });
+      if (effectiveItemIds && effectiveItemIds.length > 0) {
+        const allCurrentIds = shipment.hangHoas.map((h) => h.hangHoaId);
+        const invalidIds = effectiveItemIds.filter((id) => !allCurrentIds.includes(id));
+        if (invalidIds.length > 0) {
+          throw new BadRequestException({
+            error: 'INVALID_CARGO_ITEM_IDS',
+            message: 'Một hoặc nhiều kiện hàng không thuộc vận đơn này.',
+          });
+        }
+
+        const remainingItems = shipment.hangHoas.filter(
+          (h) => !effectiveItemIds!.includes(h.hangHoaId),
+        );
+
+        if (remainingItems.length > 0) {
+          return this.cancelPartialShipmentItemsInTransaction(
+            tx,
+            shipment,
+            effectiveItemIds,
+            remainingItems,
+            now,
+            principal?.taiKhoanId ?? null,
+          );
+        }
+      }
+
+      // FULL cancellation of the entire shipment
+      if (!isAttachedToTicketBooking) {
+        await tx.donGiaoDich.updateMany({
+          where: {
+            donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+          },
+          data: { trangThai: 'DA_HUY' },
+        });
+
+        await tx.thanhToan.updateMany({
+          where: {
+            donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+            trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+          },
+          data: { trangThai: 'THAT_BAI' },
+        });
+      }
 
       const updated = await tx.phieuGuiHang.updateMany({
         where: {

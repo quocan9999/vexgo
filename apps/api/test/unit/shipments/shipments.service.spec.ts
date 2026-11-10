@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '../../../src/generated/prisma/client.js';
 import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { ConfigService } from '@nestjs/config';
@@ -1237,6 +1238,140 @@ describe('ShipmentsService', () => {
           ghiChu: 'Đặt nhầm thông tin người nhận',
         },
       });
+    });
+
+    it('cancels specific cargo items partially when itemIds is provided and keeps remaining items', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        phieuGuiHangId: 50,
+        donGiaoDichId: 200,
+        soDienThoaiNguoiNhan: '0907654321',
+        donGiaoDich: {
+          soDienThoaiKhachHang: '0901234567',
+        },
+      });
+
+      const txMock = {
+        $queryRaw: vi.fn().mockResolvedValue([{ donGiaoDichId: 200 }]),
+        phieuGuiHang: {
+          findUnique: vi.fn().mockResolvedValue({
+            phieuGuiHangId: 50,
+            maVanDon: 'FUTA-VD-050',
+            trangThai: 'MOI_TAO',
+            diemGuiId: 1,
+            diemNhanId: 2,
+            tuyenXeId: 1,
+            cuocChinh: new Prisma.Decimal(200000),
+            phiDichVu: new Prisma.Decimal(0),
+            soTienGiam: new Prisma.Decimal(0),
+            tongPhi: new Prisma.Decimal(200000),
+            chuyenXe: null,
+            hangHoas: [
+              {
+                hangHoaId: 101,
+                tenHang: 'Xe máy Wave Alpha',
+                soLuong: 1,
+                khoiLuong: new Prisma.Decimal(100),
+                loaiHangHoaId: 1,
+              },
+              {
+                hangHoaId: 102,
+                tenHang: 'Vali du lịch',
+                soLuong: 1,
+                khoiLuong: new Prisma.Decimal(15),
+                loaiHangHoaId: 2,
+              },
+            ],
+            donGiaoDich: {
+              donGiaoDichId: 200,
+              nhaXeId: 1,
+              trangThai: 'CHO_THANH_TOAN',
+              phieuDatVe: { phieuDatVeId: 1 },
+              thanhToans: [],
+            },
+          }),
+          update: vi.fn().mockResolvedValue({ phieuGuiHangId: 50 }),
+        },
+        hinhAnhHangHoa: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+        hangHoa: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        chiTietCuocGuiHang: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+          create: vi.fn().mockResolvedValue({ chiTietCuocGuiHangId: 1 }),
+        },
+        lichSuTrangThaiPhieuGuiHang: {
+          create: vi.fn().mockResolvedValue({ lichSuTrangThaiId: 1 }),
+        },
+      };
+      prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+
+      const result = await service.cancelCustomerShipment({
+        waybillCode: 'FUTA-VD-050',
+        phoneNumber: '0901234567',
+        itemIds: [101],
+      });
+
+      expect(result).toMatchObject({
+        waybillCode: 'FUTA-VD-050',
+        status: 'MOI_TAO',
+        cancelledItemIds: [101],
+        remainingItemsCount: 1,
+      });
+      expect(txMock.hangHoa.deleteMany).toHaveBeenCalledWith({
+        where: { phieuGuiHangId: 50, hangHoaId: { in: [101] } },
+      });
+      expect(txMock.phieuGuiHang.findUnique.mock.calls[0][0].select.chuyenXe.select).toMatchObject({
+        ngayKhoiHanh: true,
+      });
+      expect(txMock.phieuGuiHang.findUnique.mock.calls[0][0].select.chuyenXe.select).not.toHaveProperty('thoiGianKhoiHanh');
+      expect(txMock.phieuGuiHang.update).toHaveBeenCalled();
+    });
+
+    it('cancels all selected cargo in the locked ticket order without cancelling the ticket order', async () => {
+      const txMock = {
+        phieuGuiHang: {
+          findUnique: vi.fn().mockResolvedValue({
+            phieuGuiHangId: 50,
+            maVanDon: 'VD-50',
+            trangThai: 'MOI_TAO',
+            hangHoas: [{ hangHoaId: 101 }, { hangHoaId: 102 }],
+          }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        lichSuTrangThaiPhieuGuiHang: { create: vi.fn().mockResolvedValue({}) },
+        donGiaoDich: { updateMany: vi.fn() },
+      };
+
+      const result = await service.cancelAttachedCargoSelectionInTransaction(
+        txMock as never, 200, [101, 102], new Date('2026-11-11T00:00:00Z'),
+      );
+
+      expect(txMock.phieuGuiHang.findUnique).toHaveBeenCalledWith({
+        where: { donGiaoDichId: 200 },
+        select: expect.any(Object),
+      });
+      expect(result).toMatchObject({ status: 'DA_HUY', cancelledItemIds: [101, 102] });
+      expect(txMock.donGiaoDich.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects cargo IDs that no longer belong to the locked ticket order', async () => {
+      const txMock = {
+        phieuGuiHang: {
+          findUnique: vi.fn().mockResolvedValue({
+            phieuGuiHangId: 50,
+            trangThai: 'MOI_TAO',
+            hangHoas: [{ hangHoaId: 101 }],
+          }),
+          updateMany: vi.fn(),
+        },
+      };
+
+      await expect(service.cancelAttachedCargoSelectionInTransaction(
+        txMock as never, 200, [999], new Date('2026-11-11T00:00:00Z'),
+      )).rejects.toMatchObject({ response: { error: 'INVALID_CARGO_ITEM_IDS' } });
+      expect(txMock.phieuGuiHang.updateMany).not.toHaveBeenCalled();
     });
 
     it('rejects online cancellation when shipment has already been accepted (DA_TIEP_NHAN)', async () => {

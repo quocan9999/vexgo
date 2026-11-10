@@ -6,7 +6,6 @@ import { useTranslations, useLocale } from 'next-intl';
 import {
   AlertCircle,
   CheckCircle2,
-  Clock,
   HelpCircle,
   Loader2,
   MapPin,
@@ -19,6 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { AlertModal } from '@/components/ui/alert-modal';
+import { BookingCargoCancellation } from './booking-cargo-cancellation';
 import {
   ticketsApi,
   ApiError,
@@ -129,6 +129,7 @@ function CancelTicketContent() {
     ),
   );
   const [isCancelling, setIsCancelling] = useState(false);
+  const [selectedCargoItemIds, setSelectedCargoItemIds] = useState<number[]>([]);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [ticketCodeError, setTicketCodeError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -226,6 +227,7 @@ function CancelTicketContent() {
         ...repTicket,
         bookingTickets: allTickets,
       });
+      setSelectedCargoItemIds([]);
       setSelectedTicketCodes(cancellable.map((tItem) => tItem.ticketCode));
       setStep(2);
     } catch (err: unknown) {
@@ -286,6 +288,7 @@ function CancelTicketContent() {
             ...repTicket,
             bookingTickets: allTickets,
           });
+          setSelectedCargoItemIds([]);
           setSelectedTicketCodes(cancellable.map((tItem) => tItem.ticketCode));
           setStep(2);
         })
@@ -438,6 +441,7 @@ function CancelTicketContent() {
         undefined,
         currentEligibility.cancelFeeRate,
         isMultiTicket ? selectedTicketCodes : undefined,
+        willCancelAllTickets ? undefined : selectedCargoItemIds,
       );
       setCancelResult(res.data);
       setStep(3);
@@ -557,6 +561,9 @@ function CancelTicketContent() {
       (tItem.status || '').toUpperCase() !== 'HUY' &&
       (tItem.status || '').toUpperCase() !== 'CANCELLED',
   );
+  const willCancelAllTickets = isMultiTicket
+    ? selectedTicketCodes.length === cancellableTickets.length
+    : true;
   const selectedTickets = bookingTickets.filter((tItem) =>
     selectedTicketCodes.includes(tItem.ticketCode),
   );
@@ -600,13 +607,16 @@ function CancelTicketContent() {
       setSelectedTicketCodes([]);
     } else {
       setSelectedTicketCodes(cancellableTickets.map((tItem) => tItem.ticketCode));
+      setSelectedCargoItemIds([]);
     }
   };
 
   const handleToggleTicket = (code: string) => {
-    setSelectedTicketCodes((prev) =>
-      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
-    );
+    const next = selectedTicketCodes.includes(code)
+      ? selectedTicketCodes.filter((item) => item !== code)
+      : [...selectedTicketCodes, code];
+    setSelectedTicketCodes(next);
+    if (next.length === cancellableTickets.length) setSelectedCargoItemIds([]);
   };
 
   return (
@@ -855,7 +865,11 @@ function CancelTicketContent() {
                           {t('seatAndPosition')}
                         </span>
                         <span className="font-bold text-[#0060c4]">
-                          {t('seatNumberWithLabel', { seatNumber: ticket.seatNumber || 'N/A' })} ({ticket.seatPosition || t('seatStandard')})
+                          {t('seatNumberWithLabel', {
+                            seat: ticket.seatNumber || 'N/A',
+                            seatNumber: ticket.seatNumber || 'N/A',
+                          })}{' '}
+                          ({ticket.seatPosition || t('seatStandard')})
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -938,7 +952,10 @@ function CancelTicketContent() {
                               <div>
                                 <div className="flex items-center gap-2">
                                   <span className="font-extrabold text-slate-900 text-sm">
-                                    {t('seatNumberWithLabel', { seatNumber: item.seatNumber || t('unassignedSeat') })}
+                                    {t('seatNumberWithLabel', {
+                                      seat: item.seatNumber || t('unassignedSeat'),
+                                      seatNumber: item.seatNumber || t('unassignedSeat'),
+                                    })}
                                   </span>
                                   <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                                     {item.ticketCode}
@@ -968,8 +985,28 @@ function CancelTicketContent() {
                         );
                       })}
                     </div>
+
+                    {selectedTicketCodes.length > 0 && (
+                      <div className="border-t border-slate-100 p-4 sm:p-5">
+                        <p
+                          className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-900"
+                          role="status"
+                        >
+                          {t('ticketSelectionStaged', { count: selectedTicketCodes.length })}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                <BookingCargoCancellation
+                  key={ticket.cargoWaybillCode ?? ticket.bookingCode ?? ticket.ticketCode}
+                  ticket={ticket}
+                  locale={locale}
+                  selectedIds={selectedCargoItemIds}
+                  onSelectionChange={setSelectedCargoItemIds}
+                  willCancelAllTickets={willCancelAllTickets}
+                />
 
                 {/* Refund & Fee Policy Box */}
                 <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
@@ -1038,7 +1075,7 @@ function CancelTicketContent() {
                     onClick={() => setStep(1)}
                     className="flex-1 h-12 bg-white text-slate-700 font-bold rounded-xl border border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
-                    {t('back')}
+                    {tCommon('back')}
                   </button>
                   <button
                     type="button"
@@ -1103,6 +1140,11 @@ function CancelTicketContent() {
                       })
                     )}
                   </p>
+                  {cancelResult?.cargoCancellation && (
+                    <p className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-900">
+                      {t('cargoCancelledWithTicket')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="p-5 rounded-2xl bg-amber-50/90 border border-amber-200 text-left max-w-md mx-auto space-y-2.5 shadow-xs">

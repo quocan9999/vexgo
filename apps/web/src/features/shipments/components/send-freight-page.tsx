@@ -989,7 +989,7 @@ function SendFreightContent() {
               orderStatus: 'DA_HUY',
               timeline: [
                 ...(prev.timeline || []),
-                { status: 'DA_HUY', time: res.data.updatedAt },
+                { status: 'DA_HUY', time: res.data.updatedAt || new Date().toISOString() },
               ],
             }
           : prev,

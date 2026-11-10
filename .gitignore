@@ -27,3 +27,6 @@ backups/
 *.sql
 !prisma/migrations/**/*.sql
 *.sql.gz
+
+.codex-work/
+outputs/

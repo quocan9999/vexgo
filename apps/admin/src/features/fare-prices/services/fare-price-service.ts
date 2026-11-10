@@ -77,7 +77,7 @@ function isFarePrice(value: unknown): value is FarePrice {
   return (
     isRecord(value) &&
     isPositiveInteger(value.farePriceId) &&
-    isPositiveInteger(value.listedPrice) &&
+    isNonNegativeInteger(value.listedPrice) &&
     value.currency === 'VND' &&
     isDateOnly(value.validFrom) &&
     (value.validTo === null || isDateOnly(value.validTo)) &&

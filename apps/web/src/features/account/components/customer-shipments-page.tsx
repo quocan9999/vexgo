@@ -335,7 +335,7 @@ export default function CustomerShipmentsPage() {
                   {
                     id: Date.now(),
                     status: 'DA_HUY',
-                    time: res.data.updatedAt,
+                    time: res.data.updatedAt || new Date().toISOString(),
                     note: cancelReason,
                   },
                 ],
