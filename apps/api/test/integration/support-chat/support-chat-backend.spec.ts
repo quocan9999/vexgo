@@ -458,12 +458,6 @@ describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)
               vaiTroId: role.vaiTroId,
             },
           },
-          khachHang: {
-            create: {
-              maKhachHang: `KH-FRESH-${Date.now()}`,
-              hoTen: `Khách Hàng Mới ${testSuffix}`,
-            },
-          },
         },
       });
 

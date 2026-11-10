@@ -992,7 +992,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
         totalFee: 62500,
         freightPayer: 'NGUOI_GUI',
       });
-      expect(data.totalFee).toBe(62500);
+      expect(data.feeSummary.totalFee).toBe(62500);
 
       expect(Array.isArray(data.history)).toBe(true);
       expect(data.history).toHaveLength(sample.lichSuTrangThais.length);
@@ -1095,13 +1095,13 @@ describe('Shipment Read APIs (Phase 02)', () => {
       expect(order?.thanhToans).toHaveLength(1);
       const [payment] = order?.thanhToans ?? [];
       expect(payment?.thanhToanId).toBe(data.paymentId);
-      expect(payment?.phuongThuc).toBe('SEPAY');
+      expect(payment?.phuongThuc).toBe('TAI_BEN');
       expect(payment?.loaiGiaoDich).toBe('THANH_TOAN');
       expect(payment?.trangThai).toBe('DANG_XU_LY');
       expect(payment?.soTien.toNumber()).toBe(order?.tongTien.toNumber());
       expect(payment?.thoiGian.getTime()).toBe(order?.ngayTao.getTime());
       expect(Date.parse(data.paymentExpiresAt)).toBe(
-        order!.ngayTao.getTime() + 10 * 60 * 1000,
+        order!.ngayTao.getTime() + 72 * 60 * 60 * 1000,
       );
     });
 

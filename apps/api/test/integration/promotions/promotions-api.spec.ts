@@ -97,6 +97,7 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
           matKhau: 'integration-test-only',
           daXacThucSoDienThoai: true,
           trangThai: 'HOAT_DONG',
+          loaiTaiKhoan: 'QUAN_TRI',
         },
         select: { taiKhoanId: true },
       });

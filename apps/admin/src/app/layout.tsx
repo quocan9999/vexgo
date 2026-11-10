@@ -9,7 +9,6 @@ import { Toaster } from '@/components/ui/sonner';
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin', 'vietnamese'],
   variable: '--font-sans',
-  weight: ['400', '500', '600', '700', '800'],
 });
 const inter = Inter({
   subsets: ['latin', 'vietnamese'],
