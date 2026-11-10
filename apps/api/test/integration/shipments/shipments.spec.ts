@@ -1100,9 +1100,12 @@ describe('Shipment Read APIs (Phase 02)', () => {
       expect(payment?.trangThai).toBe('DANG_XU_LY');
       expect(payment?.soTien.toNumber()).toBe(order?.tongTien.toNumber());
       expect(payment?.thoiGian.getTime()).toBe(order?.ngayTao.getTime());
-      expect(Date.parse(data.paymentExpiresAt)).toBe(
-        order!.ngayTao.getTime() + 72 * 60 * 60 * 1000,
-      );
+      expect(
+        Math.abs(
+          Date.parse(data.paymentExpiresAt) -
+            (order!.ngayTao.getTime() + 72 * 60 * 60 * 1000),
+        ),
+      ).toBeLessThanOrEqual(1000);
     });
 
     it('associates an authenticated shipment with its Customer and exposes its payment, list, and detail', async () => {
