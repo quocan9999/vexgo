@@ -84,6 +84,7 @@ describe('Support Chat HTTP E2E Full Pipeline Tests (F-NEW-07)', () => {
         matKhau: '$2b$10$hashedpasswordfore2etests1234567890',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
+        loaiTaiKhoan: 'KHACH_HANG',
         taiKhoanVaiTros: {
           create: { vaiTroId: customerRole.vaiTroId },
         },
@@ -119,6 +120,7 @@ describe('Support Chat HTTP E2E Full Pipeline Tests (F-NEW-07)', () => {
         matKhau: '$2b$10$hashedpasswordfore2etests1234567890',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
+        loaiTaiKhoan: 'QUAN_TRI',
         taiKhoanVaiTros: {
           create: { vaiTroId: staffRole.vaiTroId },
         },
