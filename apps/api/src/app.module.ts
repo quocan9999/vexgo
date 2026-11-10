@@ -29,6 +29,7 @@ import { RevenueReportsModule } from './revenue-reports/revenue-reports.module.j
 import { PlatformDashboardModule } from './platform-dashboard/platform-dashboard.module.js';
 import { TenantDashboardModule } from './tenant-dashboard/tenant-dashboard.module.js';
 import { MediaModule } from './media/media.module.js';
+import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module.js';
 
 @Module({
   imports: [
@@ -36,6 +37,9 @@ import { MediaModule } from './media/media.module.js';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [
+        resolve(process.cwd(), 'apps/api/.env.local'),
+        resolve(process.cwd(), 'apps/api/.env'),
+        resolve(process.cwd(), '.env.local'),
         resolve(process.cwd(), '../../.env'),
         resolve(process.cwd(), '.env'),
       ],
@@ -67,6 +71,7 @@ import { MediaModule } from './media/media.module.js';
     TenantDashboardModule,
     StationsModule,
     MediaModule,
+    AiChatbotModule,
   ],
 })
 export class AppModule {}

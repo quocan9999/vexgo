@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ResourceNotice, ResourceState } from '@/components/admin/resource-ui';
@@ -23,37 +25,38 @@ type AdminRbacPermissionMatrixProps = {
   selectedKeys: readonly string[];
 };
 
-const RESOURCE_LABELS: Record<string, string> = {
-  'admin-account': 'Tài khoản quản trị',
-  'bus-company': 'Nhà xe',
-  'fare-price': 'Bảng giá vé',
-  permission: 'Quyền',
-  role: 'Vai trò',
-  route: 'Tuyến xe',
-  seat: 'Ghế',
-  vehicle: 'Xe',
-  'vehicle-type': 'Loại xe',
-  trip: 'Chuyến xe',
-  customer: 'Khách hàng',
-  booking: 'Phiếu đặt vé',
-  revenue: 'Báo cáo doanh thu',
-  promotion: 'Khuyến mãi',
-  shipment: 'Gửi hàng',
-  chat: 'Chăm sóc khách hàng',
+const RESOURCE_KEYS: Record<string, string> = {
+  'admin-account': 'resourceAdminAccount',
+  'bus-company': 'resourceBusCompany',
+  'fare-price': 'resourceFarePrice',
+  permission: 'resourcePermission',
+  role: 'resourceRole',
+  route: 'resourceRoute',
+  seat: 'resourceSeat',
+  vehicle: 'resourceVehicle',
+  'vehicle-type': 'resourceVehicleType',
+  trip: 'resourceTrip',
+  customer: 'resourceCustomer',
+  booking: 'resourceBooking',
+  revenue: 'resourceRevenue',
+  promotion: 'resourcePromotion',
+  shipment: 'resourceShipment',
+  chat: 'resourceChat',
 };
 
-const ACTION_LABELS: Record<string, string> = {
-  assign: 'Gán',
-  create: 'Tạo',
-  delete: 'Xóa',
-  read: 'Xem',
-  update: 'Cập nhật',
-  cancel: 'Hủy',
-  manage: 'Quản lý',
+const ACTION_KEYS: Record<string, string> = {
+  assign: 'actionAssign',
+  create: 'actionCreate',
+  delete: 'actionDelete',
+  read: 'actionRead',
+  update: 'actionUpdate',
+  cancel: 'actionCancel',
+  manage: 'actionManage',
 };
 
 function getPermissionGroups(
   permissions: readonly AdminRbacPermissionOption[],
+  tRbac: (k: string) => string,
 ) {
   const groups = new Map<string, AdminRbacPermissionOption[]>();
   for (const permission of permissions) {
@@ -65,14 +68,14 @@ function getPermissionGroups(
 
   return [...groups].map(([resource, items]) => ({
     resource,
-    label: RESOURCE_LABELS[resource] ?? resource,
+    label: RESOURCE_KEYS[resource] ? (tRbac as (k: string) => string)(RESOURCE_KEYS[resource]) : resource,
     permissions: items,
   }));
 }
 
-function getPermissionActionLabel(permissionKey: string): string {
+function getPermissionActionLabel(permissionKey: string, tRbac: (k: string) => string): string {
   const action = permissionKey.split(':')[1];
-  return ACTION_LABELS[action] ?? action ?? permissionKey;
+  return ACTION_KEYS[action] ? (tRbac as (k: string) => string)(ACTION_KEYS[action]) : action ?? permissionKey;
 }
 
 export function AdminRbacPermissionMatrix({
@@ -85,8 +88,10 @@ export function AdminRbacPermissionMatrix({
   scope,
   selectedKeys,
 }: AdminRbacPermissionMatrixProps) {
+  const tRbac = useTranslations('rbac');
   const permissionGroups = getPermissionGroups(
     permissions.filter((permission) => permission.scope === scope),
+    tRbac,
   );
 
   return (
@@ -98,28 +103,28 @@ export function AdminRbacPermissionMatrix({
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <p className="text-xs font-medium text-muted-foreground">
-            {scope === 'platform' ? 'PLATFORM' : 'PHẠM VI NHÀ XE'}
+            {scope === 'platform' ? tRbac('scopePlatformBanner') : tRbac('scopeTenantBanner')}
           </p>
           <h2
             id="rbac-permissions-title"
             className="text-base font-semibold break-words"
           >
-            Quyền của <span className="admin-data-mono">{roleName}</span>
+            {tRbac('permissionsFor', { role: roleName })}
           </h2>
         </div>
         {isProtected && (
           <ResourceNotice kind="info">
-            Vai trò hệ thống được bảo vệ
+            {tRbac('protectedRoleNotice')}
           </ResourceNotice>
         )}
       </div>
       {isProtected && (
         <ResourceNotice kind="info">
-          Không thể chỉnh sửa quyền của vai trò hệ thống này.
+          {tRbac('protectedRoleCannotEditNotice')}
         </ResourceNotice>
       )}
       {permissionGroups.length === 0 ? (
-        <ResourceState>Danh mục chưa có quyền thuộc scope này.</ResourceState>
+        <ResourceState>{tRbac('noPermissionsInScope')}</ResourceState>
       ) : (
         <div className="grid min-w-0 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {permissionGroups.map((group) => (
@@ -142,7 +147,10 @@ export function AdminRbacPermissionMatrix({
                   >
                     <Checkbox
                       className="mt-0.5"
-                      aria-label={`Gán quyền ${permission.key} cho ${roleName}`}
+                      aria-label={tRbac('assignPermissionAriaLabel', {
+                        key: permission.key,
+                        role: roleName,
+                      })}
                       checked={selectedKeys.includes(permission.key)}
                       disabled={disabled || isProtected}
                       onCheckedChange={(checked) =>
@@ -151,7 +159,7 @@ export function AdminRbacPermissionMatrix({
                     />
                     <span className="grid min-w-0 gap-1 text-[13px]">
                       <strong className="font-medium">
-                        {getPermissionActionLabel(permission.key)}
+                        {getPermissionActionLabel(permission.key, tRbac)}
                       </strong>
                       <code className="admin-data-mono break-all text-xs text-muted-foreground">
                         {permission.key}

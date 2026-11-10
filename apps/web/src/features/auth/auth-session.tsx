@@ -324,6 +324,10 @@ export function AuthSessionProvider({
   );
 }
 
+export function useOptionalAuthSession() {
+  return useContext(AuthSessionContext);
+}
+
 export function useAuthSession() {
   const context = useContext(AuthSessionContext);
   if (!context)

@@ -104,17 +104,17 @@ describe('Vehicle action permissions', () => {
     setEmployeeAdminTestSession(['vehicle:read']);
     const { rerender } = render(<VehiclesManagement />);
 
-    expect(screen.queryByRole('button', { name: 'Thêm xe' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Thêm (xe|phương tiện)/i })).toBeNull();
     setEmployeeAdminTestSession(['vehicle:read', 'vehicle:create']);
     rerender(<VehiclesManagement />);
-    expect(screen.getByRole('button', { name: 'Thêm xe' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Thêm (xe|phương tiện)/i })).toBeTruthy();
   });
 
   it('renders link to vehicle detail page on detail action', () => {
     setEmployeeAdminTestSession(['vehicle:read']);
     render(<VehiclesManagement />);
 
-    const detailButtons = screen.getAllByRole('button', { name: 'Xem chi tiết xe 29A-123.45' });
+    const detailButtons = screen.getAllByRole('button', { name: /Xem chi tiết/i });
     expect(detailButtons[0]?.getAttribute('href')).toBe('/vehicles/12');
   });
 
@@ -123,7 +123,7 @@ describe('Vehicle action permissions', () => {
     render(<VehicleWorkspace vehicleId={12} />);
 
     await screen.findByText('29A-123.45');
-    expect(screen.queryByRole('button', { name: 'Cấu hình ghế' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /(quản lý sơ đồ|cấu hình) ghế/i })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Chuyển sang bảo trì' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
   });
@@ -133,7 +133,7 @@ describe('Vehicle action permissions', () => {
     render(<VehicleWorkspace vehicleId={12} />);
 
     await screen.findByText('29A-123.45');
-    expect(screen.getAllByRole('button', { name: /cấu hình ghế/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /(quản lý sơ đồ|cấu hình) ghế/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
   });
 

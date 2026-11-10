@@ -9,10 +9,21 @@ export const ACCOUNT_NAVIGATION_ITEMS = [
 
 export type AccountNavigationItem = (typeof ACCOUNT_NAVIGATION_ITEMS)[number];
 
-export function isAccountNavigationItemActive(item: AccountNavigationItem, pathname: string) {
-  return item.href === pathname || item.aliases.some((alias) => alias === pathname);
+function stripLocale(pathname: string | null | undefined): string {
+  if (!pathname) return '/';
+  const match = pathname.match(/^\/(vi|en)(\/.*|$)/);
+  if (match) return match[2] || '/';
+  return pathname;
 }
 
-export function getMobileMenuLabel(isOpen: boolean) {
+export function isAccountNavigationItemActive(item: AccountNavigationItem, pathname: string) {
+  const normalized = stripLocale(pathname);
+  return item.href === normalized || item.aliases.some((alias) => alias === normalized);
+}
+
+export function getMobileMenuLabel(isOpen: boolean, locale: string = 'vi') {
+  if (locale === 'en') {
+    return isOpen ? 'Close menu' : 'Open menu';
+  }
   return isOpen ? 'Đóng menu' : 'Mở menu';
 }

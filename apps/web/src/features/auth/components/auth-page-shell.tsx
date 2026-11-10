@@ -2,8 +2,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bus, CheckCircle2 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 
 export function AuthPageShell({ children }: { children: React.ReactNode }) {
+  const t = useTranslations('auth.authPageShell');
+  const locale = useLocale();
+
   return (
     <div className="min-h-screen bg-white flex font-sans">
       {/* Left side - Decorative */}
@@ -18,9 +22,9 @@ export function AuthPageShell({ children }: { children: React.ReactNode }) {
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 h-full text-white w-full">
           <div>
-            <Link href="/" className="inline-flex items-center gap-2 text-red-100 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full backdrop-blur-sm border border-white/10 w-fit">
+            <Link href={`/${locale}`} className="inline-flex items-center gap-2 text-red-100 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full backdrop-blur-sm border border-white/10 w-fit">
               <ArrowLeft className="w-4 h-4" />
-              <span className="text-sm font-medium">Quay lại trang chủ</span>
+              <span className="text-sm font-medium">{t('backToHome')}</span>
             </Link>
           </div>
           
@@ -37,19 +41,19 @@ export function AuthPageShell({ children }: { children: React.ReactNode }) {
             </div>
             
             <h1 className="text-4xl lg:text-5xl xl:text-6xl font-bold leading-[1.1] tracking-tight">
-              Nền tảng đặt vé <br />
-              <span className="text-[#FFB300]">Xe Khách</span> hàng đầu.
+              {t('heroTitle1')} <br />
+              <span className="text-[#FFB300]">{t('heroTitleHighlight')}</span> {t('heroTitle2')}
             </h1>
             
             <p className="text-lg text-red-50/90 leading-relaxed font-medium">
-              Đặt vé xe khách trực tuyến dễ dàng, an toàn và tiện lợi. Hàng ngàn chuyến đi với nhiều sự lựa chọn đang chờ đón bạn.
+              {t('heroDescription')}
             </p>
             
             <div className="pt-6 space-y-4">
               {[
-                'Hàng ngàn chuyến xe được cập nhật mỗi ngày',
-                'Đặt vé nhanh chóng, giữ chỗ tức thì',
-                'Thanh toán an toàn, đa dạng hình thức'
+                t('feature1'),
+                t('feature2'),
+                t('feature3')
               ].map((feature, idx) => (
                 <div key={idx} className="flex items-center gap-3">
                   <CheckCircle2 className="w-6 h-6 text-[#FFB300] shrink-0" />
@@ -64,9 +68,9 @@ export function AuthPageShell({ children }: { children: React.ReactNode }) {
       {/* Right side - Form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 lg:px-20 xl:px-32 bg-white relative">
         <div className="lg:hidden absolute top-6 left-6">
-          <Link href="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full">
+          <Link href={`/${locale}`} className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full">
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">Trang chủ</span>
+            <span className="text-sm font-medium">{t('home')}</span>
           </Link>
         </div>
 

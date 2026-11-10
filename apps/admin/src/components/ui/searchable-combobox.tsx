@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, type AriaAttributes, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { Combobox } from '@base-ui/react/combobox';
 import { Bus, Check, ChevronDown, LoaderCircle, MapPin, Plus, Search, X } from 'lucide-react';
 import { Input } from './input';
@@ -50,6 +51,7 @@ export function SearchableCombobox({
   AriaAttributes,
   'aria-invalid' | 'aria-describedby' | 'aria-required'
 >) {
+  const t = useTranslations('combobox');
   const [selectedId, setSelectedId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -73,13 +75,13 @@ export function SearchableCombobox({
       list.unshift({
         id: `custom:${query}`,
         value: query,
-        label: `Sử dụng "${query}" làm điểm mới`,
+        label: t('useAsCustomPoint', { query }),
         keywords: query,
         group: 'custom',
       });
     }
     return list;
-  }, [selected, options, allowCustom, query, normalizedQuery]);
+  }, [selected, options, allowCustom, query, normalizedQuery, t]);
 
   const filteredItems = useMemo(() => {
     if (!normalizedQuery) return allItems;
@@ -195,13 +197,13 @@ export function SearchableCombobox({
           }`}
           {...aria}
           aria-busy={loading}
-          placeholder={loading ? 'Đang tải địa điểm…' : placeholder}
+          placeholder={loading ? t('loadingLocations') : placeholder}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         {value && !disabled && (
           <button
             type="button"
-            aria-label="Xóa địa điểm đã chọn"
+            aria-label={t('clearSelectedLocation')}
             className="absolute right-9 top-1/2 -translate-y-1/2 grid size-6 place-items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={(e) => {
               e.preventDefault();
@@ -215,7 +217,7 @@ export function SearchableCombobox({
           </button>
         )}
         <Combobox.Trigger
-          aria-label="Mở danh sách địa điểm"
+          aria-label={t('openLocationList')}
           className="group absolute right-0 top-0 grid h-full w-10 place-items-center rounded-[var(--admin-radius-control)] text-muted-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           <ChevronDown
@@ -234,8 +236,8 @@ export function SearchableCombobox({
             <Combobox.Empty className="empty:hidden text-center text-sm leading-relaxed text-muted-foreground">
               <div className="px-4 py-6">
                 {loading
-                  ? 'Đang tải địa điểm…'
-                  : 'Không tìm thấy. Bạn có thể nhấn để tạo điểm mới.'}
+                  ? t('loadingLocations')
+                  : t('noLocationsFound')}
               </div>
             </Combobox.Empty>
             <Combobox.List className="space-y-2">
@@ -250,7 +252,7 @@ export function SearchableCombobox({
               {provinceGroup.length > 0 && (
                 <Combobox.Group>
                   <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Tỉnh / Thành phố
+                    {t('groupProvince')}
                   </Combobox.GroupLabel>
                   <div className="mt-0.5 space-y-0.5">
                     {provinceGroup.map((item) => renderItem(item))}
@@ -262,7 +264,7 @@ export function SearchableCombobox({
               {districtGroup.length > 0 && (
                 <Combobox.Group>
                   <Combobox.GroupLabel className="px-3 pt-2.5 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Quận / Huyện / TP trực thuộc
+                    {t('groupDistrict')}
                   </Combobox.GroupLabel>
                   <div className="mt-0.5 space-y-0.5">
                     {districtGroup.map((item) => renderItem(item))}
@@ -275,7 +277,7 @@ export function SearchableCombobox({
                 <Combobox.Group>
                   <Combobox.GroupLabel className="flex items-center gap-1.5 px-3 pt-2.5 pb-1 text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                     <Bus className="size-3.5" />
-                    Bến xe / Điểm đón trả
+                    {t('groupStation')}
                   </Combobox.GroupLabel>
                   <div className="mt-0.5 space-y-0.5">
                     {stationGroup.map((item) => renderItem(item))}

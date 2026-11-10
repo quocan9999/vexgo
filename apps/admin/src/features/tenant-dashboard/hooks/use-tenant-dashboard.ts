@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getTenantDashboardOverview } from '../services/tenant-dashboard-service';
 import type { TenantDashboardOverview } from '../types/tenant-dashboard';
 
@@ -11,42 +11,78 @@ export function useTenantDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(30); // 30s default
-  const [refreshCount, setRefreshCount] = useState(0);
 
-  // Data fetching effect
-  useEffect(() => {
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const fetchOverview = useCallback(async (isSilent = false) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     const controller = new AbortController();
-    let current = true;
+    abortControllerRef.current = controller;
+
+    if (isSilent) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const overview = await getTenantDashboardOverview(controller.signal);
+      setData(overview);
+      setLastUpdated(new Date());
+      setError(null);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return;
+      }
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load bus company dashboard data. Please try again.',
+      );
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    let ignore = false;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     getTenantDashboardOverview(controller.signal)
       .then((overview) => {
-        if (current) {
+        if (!ignore) {
           setData(overview);
-          setError(null);
           setLastUpdated(new Date());
+          setError(null);
           setLoading(false);
           setIsRefreshing(false);
         }
       })
       .catch((err: unknown) => {
-        if (!current) return;
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          return;
+        if (!ignore) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            return;
+          }
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load bus company dashboard data. Please try again.',
+          );
+          setLoading(false);
+          setIsRefreshing(false);
         }
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Không thể tải dữ liệu bảng điều khiển nhà xe. Vui lòng thử lại.',
-        );
-        setLoading(false);
-        setIsRefreshing(false);
       });
 
     return () => {
-      current = false;
+      ignore = true;
       controller.abort();
     };
-  }, [refreshCount]);
+  }, []);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -55,19 +91,19 @@ export function useTenantDashboard() {
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         setIsRefreshing(true);
-        setRefreshCount((c) => c + 1);
+        void fetchOverview(true);
       }
     }, autoRefreshInterval * 1000);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [autoRefreshInterval]);
+  }, [autoRefreshInterval, fetchOverview]);
 
   const refresh = useCallback(() => {
     setIsRefreshing(true);
-    setRefreshCount((c) => c + 1);
-  }, []);
+    return fetchOverview(true);
+  }, [fetchOverview]);
 
   return {
     data,

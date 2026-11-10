@@ -1,11 +1,17 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import {
   ArrowLeft,
+  Calendar,
   Clock,
   Compass,
+  Bus,
+  MapPin,
   LoaderCircle,
   AlertCircle,
+  PackageCheck,
   Route as RouteIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -55,6 +61,8 @@ function addMinutesToTime(timeStr: string, minutesToAdd: number): string {
 }
 
 export function TripCreateWorkspace() {
+  const tTrips = useTranslations('trips');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { routeOptions, vehicleOptions } = useTripLookupOptions();
   const formRef = useRef<HTMLFormElement>(null);
@@ -79,26 +87,18 @@ export function TripCreateWorkspace() {
 
   useEffect(() => {
     const routeIdNum = Number(values.routeId);
-    if (!Number.isSafeInteger(routeIdNum) || routeIdNum < 1) {
-      return;
-    }
+    if (!Number.isSafeInteger(routeIdNum) || routeIdNum < 1) return;
 
     let active = true;
     getRouteStops(routeIdNum)
       .then((data) => {
-        if (active) {
-          setStops(data);
-        }
+        if (active) setStops(data);
       })
       .catch(() => {
-        if (active) {
-          setStops([]);
-        }
+        if (active) setStops([]);
       })
       .finally(() => {
-        if (active) {
-          setLoadingStops(false);
-        }
+        if (active) setLoadingStops(false);
       });
 
     return () => {
@@ -113,6 +113,7 @@ export function TripCreateWorkspace() {
     if (field === 'routeId') {
       if (!value) {
         setStops([]);
+        setLoadingStops(false);
       } else {
         setLoadingStops(true);
       }
@@ -125,19 +126,19 @@ export function TripCreateWorkspace() {
     const vehicleId = Number(values.vehicleId);
 
     if (!Number.isSafeInteger(routeId) || routeId < 1) {
-      errors.routeId = 'Vui lòng chọn tuyến xe.';
+      errors.routeId = tTrips('errorRouteRequired');
     }
 
     if (!Number.isSafeInteger(vehicleId) || vehicleId < 1) {
-      errors.vehicleId = 'Vui lòng chọn xe phục vụ.';
+      errors.vehicleId = tTrips('errorVehicleRequired');
     }
 
     if (!values.departureDate.trim()) {
-      errors.departureDate = 'Vui lòng chọn ngày khởi hành.';
+      errors.departureDate = tTrips('errorDepartureDateRequired');
     }
 
     if (!values.departureTime.trim()) {
-      errors.departureTime = 'Vui lòng chọn giờ khởi hành.';
+      errors.departureTime = tTrips('errorDepartureTimeRequired');
     }
 
     return errors;
@@ -205,12 +206,12 @@ export function TripCreateWorkspace() {
           <div className="flex items-center gap-2">
             <Button disabled={submitting} render={<Link href="/trips" />} variant="outline">
               <ArrowLeft aria-hidden="true" className="size-4" />
-              Quay lại danh sách
+              {tCommon('backToList')}
             </Button>
           </div>
         }
-        eyebrow="QUẢN LÝ CHUYẾN XE"
-        title="Thêm chuyến xe mới"
+        eyebrow={tTrips('eyebrow')}
+        title={tTrips('createNewTrip')}
         titleId="create-trip-title"
       />
 
@@ -224,17 +225,17 @@ export function TripCreateWorkspace() {
               <CardHeader className="border-b p-5">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Compass className="size-5 text-primary" />
-                  Thông tin chuyến xe
+                  {tTrips('tripInfoTitle')}
                 </CardTitle>
                 <CardDescription>
-                  Chọn tuyến đường, phương tiện phục vụ và thời gian khởi hành.
+                  {tTrips('tripInfoSubtitle')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 p-5">
                 {/* Tuyến xe */}
                 <Field data-invalid={Boolean(fieldErrors.routeId)}>
                   <FieldLabel htmlFor="create-trip-route">
-                    Tuyến xe <span aria-hidden="true">*</span>
+                    {tTrips('colRoute')} <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <Select
                     disabled={submitting || routeOptions.status !== 'success'}
@@ -246,7 +247,7 @@ export function TripCreateWorkspace() {
                       aria-invalid={Boolean(fieldErrors.routeId)}
                       id="create-trip-route"
                     >
-                      <SelectValue placeholder="Chọn tuyến xe">
+                      <SelectValue placeholder={tTrips('selectRoutePlaceholder')}>
                         {routeOptions.status === 'success'
                           ? routeOptions.options.find((opt) => String(opt.id) === values.routeId)?.label
                           : 'Đang tải tuyến xe…'}
@@ -267,7 +268,7 @@ export function TripCreateWorkspace() {
                 {/* Xe phục vụ */}
                 <Field data-invalid={Boolean(fieldErrors.vehicleId)}>
                   <FieldLabel htmlFor="create-trip-vehicle">
-                    Xe phục vụ <span aria-hidden="true">*</span>
+                    {tTrips('colVehicle')} <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <Select
                     disabled={submitting || vehicleOptions.status !== 'success'}
@@ -279,7 +280,7 @@ export function TripCreateWorkspace() {
                       aria-invalid={Boolean(fieldErrors.vehicleId)}
                       id="create-trip-vehicle"
                     >
-                      <SelectValue placeholder="Chọn xe phục vụ">
+                      <SelectValue placeholder={tTrips('selectVehiclePlaceholder')}>
                         {vehicleOptions.status === 'success'
                           ? vehicleOptions.options.find((opt) => String(opt.id) === values.vehicleId)?.label
                           : 'Đang tải xe…'}
@@ -301,7 +302,7 @@ export function TripCreateWorkspace() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field data-invalid={Boolean(fieldErrors.departureDate)}>
                     <FieldLabel htmlFor="create-trip-date">
-                      Ngày khởi hành <span aria-hidden="true">*</span>
+                      {tTrips('departureDate')} <span aria-hidden="true">*</span>
                     </FieldLabel>
                     <Input
                       aria-describedby={fieldErrors.departureDate ? 'create-trip-date-error' : undefined}
@@ -317,7 +318,7 @@ export function TripCreateWorkspace() {
 
                   <Field data-invalid={Boolean(fieldErrors.departureTime)}>
                     <FieldLabel htmlFor="create-trip-time">
-                      Giờ khởi hành <span aria-hidden="true">*</span>
+                      {tTrips('departureTime')} <span aria-hidden="true">*</span>
                     </FieldLabel>
                     <Input
                       aria-describedby={fieldErrors.departureTime ? 'create-trip-time-error' : undefined}
@@ -340,7 +341,7 @@ export function TripCreateWorkspace() {
                       disabled={submitting}
                       onCheckedChange={(checked) => updateField('copyRouteStops', Boolean(checked))}
                     />
-                    <span>Tự động sao chép lộ trình từ khuôn mẫu tuyến</span>
+                    <span>{tTrips('autoCopyRouteTemplate')}</span>
                   </label>
 
                   <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium select-none">
@@ -349,7 +350,7 @@ export function TripCreateWorkspace() {
                       disabled={submitting}
                       onCheckedChange={(checked) => updateField('acceptsShipments', Boolean(checked))}
                     />
-                    <span>Mở nhận vận chuyển hàng hóa trên chuyến này</span>
+                    <span>{tTrips('enableCargoTransport')}</span>
                   </label>
                 </div>
               </CardContent>
@@ -368,7 +369,7 @@ export function TripCreateWorkspace() {
                   {submitting && (
                     <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" />
                   )}
-                  {submitting ? 'Đang tạo chuyến…' : 'Hoàn tất & Tạo chuyến'}
+                  {submitting ? tCommon('saving') : tTrips('completeAndCreateTrip')}
                 </Button>
                 <Button
                   className="w-full"
@@ -376,7 +377,7 @@ export function TripCreateWorkspace() {
                   render={<Link href="/trips" />}
                   variant="outline"
                 >
-                  Hủy thao tác
+                  {tCommon('cancel')}
                 </Button>
               </CardContent>
             </Card>
@@ -390,25 +391,25 @@ export function TripCreateWorkspace() {
                   <div>
                     <CardTitle className="text-base flex items-center gap-2">
                       <RouteIcon className="size-5 text-primary" />
-                      Lộ trình điểm đón / trả dự kiến
+                      {tTrips('scheduledStopsRoute')}
                     </CardTitle>
                     <CardDescription>
                       {values.departureTime
-                        ? `Giờ mốc xuất bến: ${values.departureTime}. Giờ dự kiến đón/trả được tự động tính theo phút lệch.`
-                        : 'Giờ đón trả dự kiến sẽ hiển thị khi bạn nhập giờ khởi hành.'}
+                        ? `${tTrips('departureTime')}: ${values.departureTime}. ${tTrips('scheduledStopsSubtitle')}`
+                        : tTrips('scheduledStopsSubtitle')}
                     </CardDescription>
                   </div>
                   {stops.length > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant="outline" className="text-xs">
-                        {donCount} đón
+                        {donCount} {tTrips('stopsPickup')}
                       </Badge>
                       <Badge variant="outline" className="text-xs">
-                        {traCount} trả
+                        {traCount} {tTrips('stopsDropoff')}
                       </Badge>
                       {nghiCount > 0 && (
                         <Badge variant="outline" className="text-xs">
-                          {nghiCount} nghỉ
+                          {nghiCount} {tTrips('stopsRest')}
                         </Badge>
                       )}
                     </div>
@@ -419,30 +420,30 @@ export function TripCreateWorkspace() {
                 {!values.routeId ? (
                   <div className="flex flex-col items-center justify-center p-12 text-center border border-dashed rounded-lg bg-muted/10">
                     <Compass className="size-10 text-muted-foreground/50 mb-3" />
-                    <p className="text-sm font-semibold text-foreground">Chưa chọn tuyến xe</p>
+                    <p className="text-sm font-semibold text-foreground">{tTrips('noRouteSelectedTitle')}</p>
                     <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                      Vui lòng chọn tuyến xe ở cột bên trái để tải và xem trước toàn bộ danh sách điểm đón, điểm trả và trạm dừng.
+                      {tTrips('noRouteSelectedDesc')}
                     </p>
                   </div>
                 ) : loadingStops ? (
                   <div className="flex items-center justify-center p-12 gap-3 text-muted-foreground">
                     <LoaderCircle className="size-5 motion-safe:animate-spin" />
-                    <span className="text-sm">Đang tải lộ trình trạm dừng của tuyến…</span>
+                    <span className="text-sm">{tTrips('loadingRouteStops')}</span>
                   </div>
                 ) : stops.length === 0 ? (
                   <div className="flex flex-col items-center justify-center p-10 text-center border border-dashed rounded-lg bg-amber-500/5 border-amber-500/30">
                     <AlertCircle className="size-8 text-amber-600 mb-2" />
                     <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
-                      Tuyến xe này chưa cấu hình lộ trình mẫu
+                      {tTrips('noRouteTemplateTitle')}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1 max-w-md">
-                      Chuyến xe vẫn có thể tạo bình thường. Bạn có thể bổ sung các điểm đón trả cho chuyến xe bất kỳ lúc nào tại trang chi tiết chuyến sau khi tạo.
+                      {tTrips('noRouteTemplateDesc')}
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Danh sách trạm dừng theo thứ tự hành trình ({stops.length} điểm)
+                      {tTrips('stopsListHeader', { count: stops.length })}
                     </p>
                     <div className="divide-y rounded-lg border bg-card">
                       {stops.map((stop, index) => {
@@ -472,10 +473,10 @@ export function TripCreateWorkspace() {
                                     className="text-[11px]"
                                   >
                                     {stop.loaiDiem === 'DON'
-                                      ? 'Đón khách'
+                                      ? tTrips('stopPickup')
                                       : stop.loaiDiem === 'TRA'
-                                        ? 'Trả khách'
-                                        : 'Trạm nghỉ'}
+                                        ? tTrips('stopDropoff')
+                                        : tTrips('stopRest')}
                                   </Badge>
                                   {stop.phuPhi > 0 && (
                                     <Badge variant="warning" className="text-[11px]">
@@ -490,7 +491,7 @@ export function TripCreateWorkspace() {
                                 )}
                                 {stop.ghiChu && (
                                   <p className="text-xs text-muted-foreground/80 italic">
-                                    Ghi chú: {stop.ghiChu}
+                                    {tTrips('note')}: {stop.ghiChu}
                                   </p>
                                 )}
                               </div>
@@ -502,7 +503,7 @@ export function TripCreateWorkspace() {
                                 <span>{estimatedTime}</span>
                               </div>
                               <span className="text-[11px] text-muted-foreground">
-                                {stop.phutLech >= 0 ? `+${stop.phutLech} phút` : `${stop.phutLech} phút`}
+                                {stop.phutLech >= 0 ? `+${stop.phutLech} ${tTrips('minutes')}` : `${stop.phutLech} ${tTrips('minutes')}`}
                               </span>
                             </div>
                           </div>

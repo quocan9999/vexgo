@@ -13,6 +13,7 @@ const { mockReplace, mockSignIn } = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mockReplace }),
+  usePathname: () => '/login',
 }));
 
 vi.mock('next/link', () => ({

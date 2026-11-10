@@ -138,11 +138,9 @@ async function createUuidV1(client: Prisma.TransactionClient): Promise<string> {
 async function createAccount(
   client: Prisma.TransactionClient,
   phone: string,
-  name: string,
 ): Promise<number> {
   const account = await client.taiKhoan.create({
     data: {
-      hoTen: name,
       soDienThoai: phone,
       matKhau: 'test-fixture-password-hash',
       daXacThucSoDienThoai: true,
@@ -168,15 +166,15 @@ async function createFixture(
     },
     select: { nhaXeId: true },
   });
-  const customerAccountId = await createAccount(client, phone, `Customer ${suffix}`);
+  const customerAccountId = await createAccount(client, phone);
   const staffAccountId = await createAccount(
     client,
     `8${phone.slice(1)}`,
-    `Staff ${suffix}`,
   );
   const khachHang = await client.khachHang.create({
     data: {
       maKhachHang: `TEST-KH-${suffix}`,
+      hoTen: `Customer ${suffix}`,
       taiKhoanId: customerAccountId,
     },
     select: { khachHangId: true },

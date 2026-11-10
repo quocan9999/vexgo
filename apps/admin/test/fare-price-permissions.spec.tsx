@@ -204,11 +204,11 @@ describe('Admin fare price action permissions', () => {
 
     expect(await screen.findByText('SG-DL-01')).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
-    expect(await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' })).toBeTruthy();
+    expect(await screen.findByRole('alertdialog', { name: /Tạm ngưng( bảng giá\?)?/i })).toBeTruthy();
 
     setEmployeeAdminTestSession(['fare-price:read']);
     rerender(<FarePriceWorkspace farePriceId={15} />);
-    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: /Tạm ngưng( bảng giá\?)?/i })).toBeNull());
     expect(state.updateFarePriceStatus).not.toHaveBeenCalled();
   });
 });

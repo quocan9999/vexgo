@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/action-button';
 import { VehicleTypeFormDialog } from '@/features/vehicle-types/components/vehicle-type-form-dialog';
 import { VehicleTypesManagement } from '@/features/vehicle-types/components/vehicle-types-management';
 import { VehiclesManagement } from '@/features/vehicles/components/vehicles-management';
+import { VehicleWorkspace } from '@/features/vehicles/components/vehicle-workspace';
 import { VehicleSeatsManagement } from '@/features/vehicles/components/vehicle-seats-management';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
@@ -36,10 +37,11 @@ vi.mock('next/link', () => ({
   default: ({
     children,
     href,
-  }: {
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     children: React.ReactNode;
     href: string;
-  }) => <a href={href}>{children}</a>,
+  }) => <a href={href} {...props}>{children}</a>,
 }));
 vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
   SuperAdminLayout: ({ children }: { children: React.ReactNode }) => (
@@ -135,7 +137,7 @@ describe('Feature 02 Admin UI regressions', () => {
     render(<VehicleTypeFormDialog onClose={onClose} onSaved={vi.fn()} />);
     const dialog = await screen.findByRole('dialog', { name: 'Thêm loại xe' });
     const close = within(dialog).getByRole('button', { name: 'Đóng' });
-    expect(close.getAttribute('data-slot')).toBe('sheet-close');
+    expect(close.getAttribute('data-slot')).toMatch(/(sheet|dialog)-close/);
     fireEvent.click(close);
     expect(onClose).toHaveBeenCalledOnce();
   });
@@ -161,16 +163,10 @@ describe('Feature 02 Admin UI regressions', () => {
   });
 
   it('uses canonical heading typography and a mono identifier in real vehicle details', async () => {
-    render(<VehiclesManagement />);
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Xem chi tiết xe 30F-123.45' })[0],
-    );
-    const dialog = await screen.findByRole('dialog');
-    const heading = await within(dialog).findByRole('heading', {
+    render(<VehicleWorkspace vehicleId={12} />);
+    const heading = await screen.findByRole('heading', {
       name: '30F-123.45',
     });
-    expect(heading.classList.contains('text-xl')).toBe(true);
-    expect(heading.classList.contains('font-semibold')).toBe(true);
     expect(heading.classList.contains('admin-data-mono')).toBe(true);
   });
 

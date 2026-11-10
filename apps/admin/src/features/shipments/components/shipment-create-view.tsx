@@ -21,6 +21,7 @@ import {
   Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Button, buttonVariants } from '@/components/ui/action-button';
 import {
   Card,
@@ -92,6 +93,8 @@ const initialCargoItem: CargoItemDraft = {
 
 export function ShipmentCreateView() {
   const router = useRouter();
+  const t = useTranslations('shipments');
+  const tCommon = useTranslations('common');
 
   // Initial loading
   const [loadingInitial, setLoadingInitial] = useState(true);
@@ -170,7 +173,7 @@ export function ShipmentCreateView() {
     }));
   }, [receiverPoints]);
 
-  // Hoán đổi chiều tuyến vận chuyển
+  // Swap route directions
   const handleSwapLocations = () => {
     const tempOrigin = origin;
     setOrigin(destination);
@@ -197,7 +200,7 @@ export function ShipmentCreateView() {
         setMatchingRoute(firstRoute);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Không thể tải danh sách tuyến hoặc danh mục hàng.';
+      const msg = err instanceof Error ? err.message : t('createInitialError');
       setInitialError(msg);
     } finally {
       setLoadingInitial(false);
@@ -208,7 +211,7 @@ export function ShipmentCreateView() {
     void loadInitialData();
   }, []);
 
-  // Tự động tìm và khớp tuyến xe khi Nơi gửi hoặc Nơi nhận thay đổi
+  // Automatically find and match route when origin or destination changes
   useEffect(() => {
     if (!origin || !destination) {
       setMatchingRoute(null);
@@ -219,7 +222,7 @@ export function ShipmentCreateView() {
     const normOrigin = origin.trim().toLowerCase();
     const normDest = destination.trim().toLowerCase();
 
-    // 1. Kiểm tra trong danh sách routes đã tải
+    // 1. Check in cached route list
     const found = routes.find(
       (r) =>
         r.route.origin.trim().toLowerCase() === normOrigin &&
@@ -239,7 +242,7 @@ export function ShipmentCreateView() {
       return;
     }
 
-    // 2. Nếu chưa có trong cache cục bộ, truy vấn API theo from/to
+    // 2. Query API if not found in local cache
     let active = true;
     getAdminShipmentRouteOptions({ from: origin, to: destination })
       .then((results) => {
@@ -365,7 +368,7 @@ export function ShipmentCreateView() {
             isFragile,
             isValuable,
             items: validItems.map((it) => ({
-              name: it.name.trim() || 'Hàng hóa',
+              name: it.name.trim() || t('cargoNameDefault'),
               loaiHangHoaId: it.categoryId ? Number(it.categoryId) : undefined,
               weight: parseFloat(it.weight),
               quantity: parseInt(it.quantity || '1', 10) || 1,
@@ -380,7 +383,7 @@ export function ShipmentCreateView() {
         setQuote(quoteRes);
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'AbortError') return;
-        const msg = err instanceof Error ? err.message : 'Không thể tính giá cước tạm tính.';
+        const msg = err instanceof Error ? err.message : t('createQuoteError');
         setQuoteError(msg);
         setQuote(null);
       } finally {
@@ -435,49 +438,49 @@ export function ShipmentCreateView() {
   const validateForm = (): boolean => {
     const errs: Record<string, string> = {};
 
-    if (!origin.trim()) errs.origin = 'Vui lòng chọn nơi gửi hàng.';
-    if (!destination.trim()) errs.destination = 'Vui lòng chọn nơi nhận hàng.';
+    if (!origin.trim()) errs.origin = t('errOriginRequired');
+    if (!destination.trim()) errs.destination = t('errDestRequired');
     if (origin.trim() && destination.trim() && origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
-      errs.destination = 'Nơi nhận phải khác nơi gửi.';
+      errs.destination = t('errDestDifferent');
     }
-    if (!routeId) errs.routeId = 'Nhà xe chưa có tuyến vận chuyển giữa hai điểm đã chọn.';
-    if (!senderPointId) errs.senderPointId = 'Vui lòng chọn điểm gửi hàng tại quầy.';
-    if (!receiverPointId) errs.receiverPointId = 'Vui lòng chọn điểm trả hàng cho người nhận.';
+    if (!routeId) errs.routeId = t('errNoRouteBetween');
+    if (!senderPointId) errs.senderPointId = t('errSenderPointRequired');
+    if (!receiverPointId) errs.receiverPointId = t('errReceiverPointRequired');
     if (senderPointId && receiverPointId && senderPointId === receiverPointId) {
-      errs.receiverPointId = 'Điểm nhận hàng phải khác điểm gửi hàng.';
+      errs.receiverPointId = t('errReceiverPointDifferent');
     }
 
     // Sender
-    if (!senderName.trim()) errs.senderName = 'Họ tên người gửi không được để trống.';
+    if (!senderName.trim()) errs.senderName = t('errSenderNameRequired');
     if (!senderPhone.trim()) {
-      errs.senderPhone = 'Số điện thoại người gửi không được để trống.';
+      errs.senderPhone = t('errSenderPhoneRequired');
     } else if (!/^0\d{9}$/.test(senderPhone.trim())) {
-      errs.senderPhone = 'Số điện thoại người gửi phải gồm 10 chữ số (bắt đầu bằng số 0).';
+      errs.senderPhone = t('errSenderPhoneFormat');
     }
 
     // Receiver
-    if (!receiverName.trim()) errs.receiverName = 'Họ tên người nhận không được để trống.';
+    if (!receiverName.trim()) errs.receiverName = t('errReceiverNameRequired');
     if (!receiverPhone.trim()) {
-      errs.receiverPhone = 'Số điện thoại người nhận không được để trống.';
+      errs.receiverPhone = t('errReceiverPhoneRequired');
     } else if (!/^0\d{9}$/.test(receiverPhone.trim())) {
-      errs.receiverPhone = 'Số điện thoại người nhận phải gồm 10 chữ số (bắt đầu bằng số 0).';
+      errs.receiverPhone = t('errReceiverPhoneFormat');
     }
 
     // Items
     if (items.length === 0) {
-      errs.items = 'Phải có ít nhất 1 kiện hàng.';
+      errs.items = t('errMinOneCargoItem');
     } else {
       items.forEach((it, idx) => {
         if (!it.name.trim()) {
-          errs[`item_${idx}_name`] = `Tên kiện hàng #${idx + 1} không được để trống.`;
+          errs[`item_${idx}_name`] = t('errCargoItemNameRequired', { index: idx + 1 });
         }
         const q = parseInt(it.quantity, 10);
         if (Number.isNaN(q) || q < 1) {
-          errs[`item_${idx}_quantity`] = `Số lượng kiện #${idx + 1} phải ≥ 1.`;
+          errs[`item_${idx}_quantity`] = t('errCargoItemQtyGte1', { index: idx + 1 });
         }
         const w = parseFloat(it.weight);
         if (Number.isNaN(w) || w <= 0) {
-          errs[`item_${idx}_weight`] = `Khối lượng kiện #${idx + 1} phải > 0 kg.`;
+          errs[`item_${idx}_weight`] = t('errCargoItemWeightGt0', { index: idx + 1 });
         }
 
         const l = it.length.trim() ? parseFloat(it.length) : null;
@@ -486,16 +489,16 @@ export function ShipmentCreateView() {
         const hasAnyDim = l !== null || widthVal !== null || h !== null;
         const hasAllDim = l !== null && widthVal !== null && h !== null;
         if (hasAnyDim && !hasAllDim) {
-          errs[`item_${idx}_dimensions`] = `Vui lòng nhập đủ cả 3 kích thước Dài, Rộng, Cao (cm) cho kiện #${idx + 1}.`;
+          errs[`item_${idx}_dimensions`] = t('errCargoItemDimensionsRequired', { index: idx + 1 });
         } else if (hasAllDim && (l! <= 0 || widthVal! <= 0 || h! <= 0)) {
-          errs[`item_${idx}_dimensions`] = `Kích thước kiện #${idx + 1} phải lớn hơn 0 cm.`;
+          errs[`item_${idx}_dimensions`] = t('errCargoItemDimensionsGt0', { index: idx + 1 });
         }
       });
     }
 
     // Counter constraints
     if (collectPaymentAtCounter && !acceptAtCounter) {
-      errs.payment = 'Thu tiền mặt tại quầy yêu cầu phải tiếp nhận hàng hóa tại quầy.';
+      errs.payment = t('errCashCounterPayment');
     }
 
     setErrors(errs);
@@ -548,7 +551,7 @@ export function ShipmentCreateView() {
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(code).then(() => {
         setCopiedCode(true);
-        toast.success('Đã sao chép mã vận đơn!');
+        toast.success(t('copiedWaybill'));
         setTimeout(() => setCopiedCode(false), 2000);
       });
     }
@@ -611,9 +614,9 @@ export function ShipmentCreateView() {
       const result = await createAdminShipment(payload, idempotencyKey);
       setCreatedShipment(result);
       setSuccessDialogOpen(true);
-      toast.success('Tạo đơn gửi hàng tại quầy thành công!');
+      toast.success(t('createSubmitSuccess'));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Có lỗi xảy ra khi tạo phiếu gửi hàng tại quầy.';
+      const msg = err instanceof Error ? err.message : t('createSubmitError');
       setSubmitError(msg);
       if (errorSummaryRef.current) {
         errorSummaryRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -635,19 +638,19 @@ export function ShipmentCreateView() {
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
             <ArrowLeft className="size-4" />
-            Quay lại danh sách
+            {t('createBackToList')}
           </Link>
         </div>
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <div>
             <p className="eyebrow text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-              QUẢN LÝ GỬI HÀNG
+              {t('createEyebrow')}
             </p>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Tạo đơn gửi hàng tại quầy
+              {t('createTitle')}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Tiếp nhận hàng hóa, cân đo kích thước và chốt cước thu tiền trực tiếp cho khách tại bến / văn phòng
+              {t('createSubtitle')}
             </p>
           </div>
         </div>
@@ -657,17 +660,17 @@ export function ShipmentCreateView() {
         <Card className="p-12 text-center text-muted-foreground">
           <div className="flex flex-col items-center justify-center gap-3">
             <LoaderCircle className="size-8 animate-spin text-primary" />
-            <p className="text-sm font-medium">Đang tải thông tin tuyến đường và danh mục hàng...</p>
+            <p className="text-sm font-medium">{t('createLoadingData')}</p>
           </div>
         </Card>
       ) : initialError ? (
         <Alert variant="destructive">
           <AlertCircle className="size-4" />
-          <AlertTitle>Lỗi tải dữ liệu</AlertTitle>
+          <AlertTitle>{tCommon('error')}</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
             <span>{initialError}</span>
             <Button onClick={loadInitialData} size="sm" variant="outline">
-              Thử lại
+              {tCommon('retry')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -680,18 +683,18 @@ export function ShipmentCreateView() {
               {/* Card 1: Route & Stations */}
               <Card>
                 <CardHeader>
-                  <CardTitle>1. Tuyến vận chuyển & Điểm giao nhận</CardTitle>
+                  <CardTitle>{t('createRouteCardTitle')}</CardTitle>
                   <CardDescription>
-                    Chọn Nơi gửi và Nơi nhận để xác định tuyến xe, sau đó chọn trạm tiếp nhận và trạm trả hàng thực tế
+                    {t('createRouteCardDesc')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* 2 điểm Nơi gửi & Nơi nhận kèm nút đổi chiều */}
+                  {/* Origin & Destination pickers with swap button */}
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] items-end">
                     <FieldRoot>
                       <FieldLabel htmlFor="shipment-origin" className="flex items-center gap-1.5 font-semibold">
                         <MapPin className="size-4 text-primary" />
-                        Nơi gửi (Tỉnh / Thành phố) *
+                        {t('senderOriginLabel')} *
                       </FieldLabel>
                       <LocationPicker
                         id="shipment-origin"
@@ -706,7 +709,7 @@ export function ShipmentCreateView() {
                             });
                           }
                         }}
-                        placeholder="Chọn nơi gửi (ví dụ: Hồ Chí Minh)"
+                        placeholder={t('createOriginPlaceholder')}
                         disabled={submitting}
                         invalid={Boolean(errors.origin)}
                       />
@@ -719,8 +722,8 @@ export function ShipmentCreateView() {
                         variant="outline"
                         size="icon"
                         onClick={handleSwapLocations}
-                        title="Đổi chiều tuyến"
-                        aria-label="Đổi chiều tuyến"
+                        title={t('swapOriginDest')}
+                        aria-label={t('swapOriginDest')}
                         className="size-10 shrink-0"
                         disabled={submitting || (!origin && !destination)}
                       >
@@ -731,7 +734,7 @@ export function ShipmentCreateView() {
                     <FieldRoot>
                       <FieldLabel htmlFor="shipment-destination" className="flex items-center gap-1.5 font-semibold">
                         <MapPin className="size-4 text-destructive" />
-                        Nơi nhận (Tỉnh / Thành phố) *
+                        {t('receiverDestLabel')} *
                       </FieldLabel>
                       <LocationPicker
                         id="shipment-destination"
@@ -747,7 +750,7 @@ export function ShipmentCreateView() {
                             });
                           }
                         }}
-                        placeholder="Chọn nơi nhận (ví dụ: Đà Lạt)"
+                        placeholder={t('createDestPlaceholder')}
                         disabled={submitting}
                         invalid={Boolean(errors.destination)}
                       />
@@ -755,37 +758,43 @@ export function ShipmentCreateView() {
                     </FieldRoot>
                   </div>
 
-                  {/* Thông tin tuyến xe khớp hoặc cảnh báo */}
+                  {/* Matched route info or alert */}
                   {origin && destination && (
                     matchingRoute ? (
                       <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-primary/5 border border-primary/20 rounded-lg text-sm">
                         <div className="flex items-center gap-2">
                           <Bus className="size-4 text-primary shrink-0" />
                           <span>
-                            Tuyến vận chuyển:{' '}
-                            <strong>{matchingRoute.route.origin} → {matchingRoute.route.destination}</strong>
-                            {' '}({matchingRoute.busCompany.name})
+                            {t('matchedRouteNotice', {
+                              origin: matchingRoute.route.origin,
+                              destination: matchingRoute.route.destination,
+                              carrier: matchingRoute.busCompany.name,
+                            })}
                           </span>
                         </div>
                         <Badge variant="outline" className="bg-background text-xs font-semibold">
-                          Cước tối thiểu: {formatCurrency(matchingRoute.minimumEstimatedFee)}
+                          {t('createMinEstimatedFee', { fee: formatCurrency(matchingRoute.minimumEstimatedFee) })}
                         </Badge>
                       </div>
                     ) : (
                       <Alert variant="destructive">
                         <AlertCircle className="size-4" />
-                        <AlertTitle>Không tìm thấy tuyến xe</AlertTitle>
+                        <AlertTitle>{t('createNoRouteTitle')}</AlertTitle>
                         <AlertDescription>
-                          Nhà xe chưa khai thác tuyến từ <strong>{origin}</strong> đi <strong>{destination}</strong>. Vui lòng bấm đổi chiều hoặc chọn địa điểm khác.
+                          {t.rich('createNoRouteDesc', {
+                            origin,
+                            destination,
+                            strong: (chunks) => <strong>{chunks}</strong>,
+                          })}
                         </AlertDescription>
                       </Alert>
                     )
                   )}
 
-                  {/* 2 Combobox trạm gửi và trạm nhận tại quầy */}
+                  {/* Counter pickup and delivery stations combobox */}
                   <div className="grid gap-4 sm:grid-cols-2 pt-1">
                     <FieldRoot className="sm:col-span-1">
-                      <FieldLabel htmlFor="sender-point-combobox">Điểm gửi hàng tại quầy *</FieldLabel>
+                      <FieldLabel htmlFor="sender-point-combobox">{t('senderPointLabel')} *</FieldLabel>
                       <SearchableCombobox
                         id="sender-point-combobox"
                         value={senderPointId}
@@ -802,7 +811,7 @@ export function ShipmentCreateView() {
                         }}
                         disabled={submitting || pointsLoading || !routeId}
                         loading={pointsLoading}
-                        placeholder={pointsLoading ? 'Đang tải…' : '-- Tìm trạm / văn phòng gửi --'}
+                        placeholder={pointsLoading ? tCommon('loading') : t('createStationSelectSender')}
                         icon={<MapPin className="size-4" />}
                         allowCustom={false}
                         aria-invalid={Boolean(errors.senderPointId)}
@@ -811,7 +820,7 @@ export function ShipmentCreateView() {
                     </FieldRoot>
 
                     <FieldRoot className="sm:col-span-1">
-                      <FieldLabel htmlFor="receiver-point-combobox">Điểm trả hàng cho người nhận *</FieldLabel>
+                      <FieldLabel htmlFor="receiver-point-combobox">{t('receiverPointLabel')} *</FieldLabel>
                       <SearchableCombobox
                         id="receiver-point-combobox"
                         value={receiverPointId}
@@ -828,7 +837,7 @@ export function ShipmentCreateView() {
                         }}
                         disabled={submitting || pointsLoading || !routeId}
                         loading={pointsLoading}
-                        placeholder={pointsLoading ? 'Đang tải…' : '-- Tìm trạm / văn phòng trả hàng --'}
+                        placeholder={pointsLoading ? tCommon('loading') : t('createStationSelectReceiver')}
                         icon={<MapPin className="size-4" />}
                         excludeValue={senderPointId}
                         allowCustom={false}
@@ -843,89 +852,89 @@ export function ShipmentCreateView() {
               {/* Card 2: Customers Info */}
               <Card>
                 <CardHeader>
-                  <CardTitle>2. Thông tin khách hàng</CardTitle>
+                  <CardTitle>{t('createCustomerCardTitle')}</CardTitle>
                   <CardDescription>
-                    Ghi nhận thông tin người gửi trực tiếp tại quầy và người nhận hàng
+                    {t('createCustomerCardDesc')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-6 md:grid-cols-2">
-                    {/* Người gửi */}
+                    {/* Sender */}
                     <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
                       <div className="flex items-center justify-between border-b pb-2">
                         <span className="text-xs font-semibold text-primary uppercase tracking-wide">
-                          Khách gửi hàng tại quầy
+                          {t('createSenderCounterBadge')}
                         </span>
-                        <Badge variant="secondary">Người gửi</Badge>
+                        <Badge variant="secondary">{t('senderHeading')}</Badge>
                       </div>
                       <FieldRoot>
-                        <FieldLabel>Họ và tên người gửi *</FieldLabel>
+                        <FieldLabel>{t('senderNameLabel')} *</FieldLabel>
                         <Input
                           disabled={submitting}
                           onChange={(e) => setSenderName(e.target.value)}
-                          placeholder="Nguyễn Văn A"
+                          placeholder={t('createSenderNamePlaceholder')}
                           value={senderName}
                         />
                         {errors.senderName && <FieldError>{errors.senderName}</FieldError>}
                       </FieldRoot>
                       <FieldRoot>
-                        <FieldLabel>Số điện thoại *</FieldLabel>
+                        <FieldLabel>{t('senderPhoneLabel')} *</FieldLabel>
                         <Input
                           disabled={submitting}
                           onChange={(e) => setSenderPhone(e.target.value)}
-                          placeholder="0901234567"
+                          placeholder={t('createSenderPhonePlaceholder')}
                           type="tel"
                           value={senderPhone}
                         />
                         {errors.senderPhone && <FieldError>{errors.senderPhone}</FieldError>}
                       </FieldRoot>
                       <FieldRoot>
-                        <FieldLabel>Email (tùy chọn)</FieldLabel>
+                        <FieldLabel>{t('senderEmailLabel')}</FieldLabel>
                         <Input
                           disabled={submitting}
                           onChange={(e) => setSenderEmail(e.target.value)}
-                          placeholder="khachhang@gmail.com"
+                          placeholder={t('createSenderEmailPlaceholder')}
                           type="email"
                           value={senderEmail}
                         />
                       </FieldRoot>
                     </div>
 
-                    {/* Người nhận */}
+                    {/* Receiver */}
                     <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
                       <div className="flex items-center justify-between border-b pb-2">
                         <span className="text-xs font-semibold text-primary uppercase tracking-wide">
-                          Người nhận hàng
+                          {t('createReceiverBadge')}
                         </span>
-                        <Badge variant="secondary">Người nhận</Badge>
+                        <Badge variant="secondary">{t('receiverHeading')}</Badge>
                       </div>
                       <FieldRoot>
-                        <FieldLabel>Họ và tên người nhận *</FieldLabel>
+                        <FieldLabel>{t('receiverNameLabel')} *</FieldLabel>
                         <Input
                           disabled={submitting}
                           onChange={(e) => setReceiverName(e.target.value)}
-                          placeholder="Trần Thị B"
+                          placeholder={t('createReceiverNamePlaceholder')}
                           value={receiverName}
                         />
                         {errors.receiverName && <FieldError>{errors.receiverName}</FieldError>}
                       </FieldRoot>
                       <FieldRoot>
-                        <FieldLabel>Số điện thoại *</FieldLabel>
+                        <FieldLabel>{t('receiverPhoneLabel')} *</FieldLabel>
                         <Input
                           disabled={submitting}
                           onChange={(e) => setReceiverPhone(e.target.value)}
-                          placeholder="0987654321"
+                          placeholder={t('createReceiverPhonePlaceholder')}
                           type="tel"
                           value={receiverPhone}
                         />
                         {errors.receiverPhone && <FieldError>{errors.receiverPhone}</FieldError>}
                       </FieldRoot>
                       <FieldRoot>
-                        <FieldLabel>Số CCCD người nhận (tùy chọn)</FieldLabel>
+                        <FieldLabel>{t('receiverCccdLabel')}</FieldLabel>
                         <Input
                           disabled={submitting}
                           onChange={(e) => setReceiverCccd(e.target.value)}
-                          placeholder="Đối chiếu khi giao hàng"
+                          placeholder={t('createReceiverCccdPlaceholder')}
                           value={receiverCccd}
                         />
                       </FieldRoot>
@@ -938,9 +947,9 @@ export function ShipmentCreateView() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle>3. Danh sách kiện hàng & Cân đo tại quầy</CardTitle>
+                    <CardTitle>{t('createCargoCardTitle')}</CardTitle>
                     <CardDescription>
-                      Cân khối lượng thực tế và đo kích thước 3 chiều để chốt cước chính xác
+                      {t('createCargoCardDesc')}
                     </CardDescription>
                   </div>
                   <Button
@@ -951,7 +960,7 @@ export function ShipmentCreateView() {
                     variant="outline"
                   >
                     <Plus className="size-4" />
-                    Thêm kiện hàng
+                    {t('btnAddCargoItem')}
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -962,11 +971,11 @@ export function ShipmentCreateView() {
                       <Card className="relative p-4 border bg-muted/10 shadow-none" key={item.id}>
                         <div className="mb-3 flex items-center justify-between border-b pb-2">
                           <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
-                            Kiện #{idx + 1}
+                            {t('cargoItemHeader', { index: idx + 1 })}
                           </span>
                           {items.length > 1 && (
                             <Button
-                              aria-label={`Xóa kiện hàng ${idx + 1}`}
+                              aria-label={`${t('createBtnRemoveItem')} ${idx + 1}`}
                               disabled={submitting}
                               onClick={() => handleRemoveItem(item.id)}
                               size="sm"
@@ -975,18 +984,18 @@ export function ShipmentCreateView() {
                               className="text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="size-4" />
-                              <span className="text-xs">Xóa kiện</span>
+                              <span className="text-xs">{t('createBtnRemoveItem')}</span>
                             </Button>
                           )}
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-4">
                           <FieldRoot className="sm:col-span-2">
-                            <FieldLabel>Tên hoặc mô tả hàng hóa *</FieldLabel>
+                            <FieldLabel>{t('cargoItemNameLabel')} *</FieldLabel>
                             <Input
                               disabled={submitting}
                               onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                              placeholder="Thùng trái cây, Giấy tờ, Quần áo..."
+                              placeholder={t('createItemNamePlaceholder')}
                               value={item.name}
                             />
                             {errors[`item_${idx}_name`] && (
@@ -995,15 +1004,15 @@ export function ShipmentCreateView() {
                           </FieldRoot>
 
                           <FieldRoot className="sm:col-span-1">
-                            <FieldLabel>Phân loại hàng</FieldLabel>
+                            <FieldLabel>{t('cargoItemCategoryLabel')}</FieldLabel>
                             <Select
                               disabled={submitting}
                               onValueChange={(val) => handleItemChange(item.id, 'categoryId', val ?? '')}
                               value={item.categoryId}
                             >
                               <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Mặc định">
-                                  {categories.find((c) => String(c.categoryId) === item.categoryId)?.name ?? 'Mặc định'}
+                                <SelectValue placeholder={t('createDefaultCategory')}>
+                                  {categories.find((c) => String(c.categoryId) === item.categoryId)?.name ?? t('createDefaultCategory')}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
@@ -1019,7 +1028,7 @@ export function ShipmentCreateView() {
                           </FieldRoot>
 
                           <FieldRoot className="sm:col-span-1">
-                            <FieldLabel>Số lượng *</FieldLabel>
+                            <FieldLabel>{t('cargoItemQuantityLabel')} *</FieldLabel>
                             <Input
                               disabled={submitting}
                               min="1"
@@ -1033,7 +1042,7 @@ export function ShipmentCreateView() {
                           </FieldRoot>
 
                           <FieldRoot className="sm:col-span-1">
-                            <FieldLabel>Khối lượng (kg) *</FieldLabel>
+                            <FieldLabel>{t('cargoItemWeightLabel')} *</FieldLabel>
                             <Input
                               disabled={submitting}
                               min="0.1"
@@ -1049,13 +1058,13 @@ export function ShipmentCreateView() {
                           </FieldRoot>
 
                           <FieldRoot className="sm:col-span-3">
-                            <FieldLabel>Kích thước Dài × Rộng × Cao (cm, tùy chọn)</FieldLabel>
+                            <FieldLabel>{t('cargoItemDimensionsLabel')}</FieldLabel>
                             <div className="grid grid-cols-3 gap-2">
                               <Input
                                 disabled={submitting}
                                 min="1"
                                 onChange={(e) => handleItemChange(item.id, 'length', e.target.value)}
-                                placeholder="Dài"
+                                placeholder={t('dimLengthPlaceholder')}
                                 type="number"
                                 value={item.length}
                               />
@@ -1063,7 +1072,7 @@ export function ShipmentCreateView() {
                                 disabled={submitting}
                                 min="1"
                                 onChange={(e) => handleItemChange(item.id, 'width', e.target.value)}
-                                placeholder="Rộng"
+                                placeholder={t('dimWidthPlaceholder')}
                                 type="number"
                                 value={item.width}
                               />
@@ -1071,7 +1080,7 @@ export function ShipmentCreateView() {
                                 disabled={submitting}
                                 min="1"
                                 onChange={(e) => handleItemChange(item.id, 'height', e.target.value)}
-                                placeholder="Cao"
+                                placeholder={t('dimHeightPlaceholder')}
                                 type="number"
                                 value={item.height}
                               />
@@ -1085,7 +1094,7 @@ export function ShipmentCreateView() {
                     ))}
                   </div>
 
-                  {/* Phụ phí tính chất hàng */}
+                  {/* Special handling surcharges */}
                   <div className="flex flex-wrap gap-6 pt-3 border-t">
                     <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                       <Checkbox
@@ -1093,7 +1102,7 @@ export function ShipmentCreateView() {
                         disabled={submitting}
                         onCheckedChange={(checked) => setIsFragile(Boolean(checked))}
                       />
-                      <span>Hàng dễ vỡ (+20.000 đ)</span>
+                      <span>{t('createFragileOption')}</span>
                     </label>
 
                     <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
@@ -1102,7 +1111,7 @@ export function ShipmentCreateView() {
                         disabled={submitting}
                         onCheckedChange={(checked) => setIsValuable(Boolean(checked))}
                       />
-                      <span>Hàng có giá trị cao (+50.000 đ)</span>
+                      <span>{t('createValuableOption')}</span>
                     </label>
                   </div>
                 </CardContent>
@@ -1111,18 +1120,18 @@ export function ShipmentCreateView() {
               {/* Card 4: Notes */}
               <Card>
                 <CardHeader>
-                  <CardTitle>4. Ghi chú & Điều phối</CardTitle>
+                  <CardTitle>{t('createNotesCardTitle')}</CardTitle>
                   <CardDescription>
-                    Ghi chú thêm về đơn gửi, yêu cầu bảo quản hoặc mã theo dõi nội bộ
+                    {t('createNotesCardDesc')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <FieldRoot>
-                    <FieldLabel>Ghi chú đơn gửi hàng (tùy chọn)</FieldLabel>
+                    <FieldLabel>{t('cargoItemNoteLabel')}</FieldLabel>
                     <Textarea
                       disabled={submitting}
                       onChange={(e) => setShipmentNote(e.target.value)}
-                      placeholder="Ghi chú thêm về đơn gửi, số hiệu bưu cục..."
+                      placeholder={t('createNotesPlaceholder')}
                       rows={3}
                       value={shipmentNote}
                     />
@@ -1137,11 +1146,11 @@ export function ShipmentCreateView() {
               <Card className="border-primary/20 shadow-sm">
                 <CardHeader className="bg-muted/30 border-b pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold">Tóm tắt cước & Thanh toán</CardTitle>
+                    <CardTitle className="text-base font-semibold">{t('createSummaryCardTitle')}</CardTitle>
                     {quoting && (
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <LoaderCircle className="size-3 animate-spin text-primary" />
-                        Đang tính…
+                        {t('createCalculating')}
                       </span>
                     )}
                   </div>
@@ -1157,17 +1166,17 @@ export function ShipmentCreateView() {
                     ) : quote ? (
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between text-muted-foreground">
-                          <span>Cước chính:</span>
+                          <span>{t('quoteMainFee')}:</span>
                           <span>{formatCurrency(quote.baseFee)}</span>
                         </div>
                         {quote.serviceFee > 0 && (
                           <div className="flex justify-between text-muted-foreground">
-                            <span>Phụ phí dịch vụ:</span>
+                            <span>{t('quoteServiceFee')}:</span>
                             <span>{formatCurrency(quote.serviceFee)}</span>
                           </div>
                         )}
                         <div className="flex items-baseline justify-between pt-2 border-t">
-                          <span className="font-semibold text-foreground">Tổng cước:</span>
+                          <span className="font-semibold text-foreground">{t('quoteTotal')}:</span>
                           <span className="text-xl font-bold text-primary">
                             {formatCurrency(quote.totalFee)}
                           </span>
@@ -1175,7 +1184,7 @@ export function ShipmentCreateView() {
                       </div>
                     ) : (
                       <div className="py-3 text-center text-xs text-muted-foreground">
-                        Điền tuyến đường và thông tin kiện hàng để tự động tính cước theo bảng giá nhà xe.
+                        {t('createQuoteHelp')}
                       </div>
                     )}
                   </div>
@@ -1183,7 +1192,7 @@ export function ShipmentCreateView() {
                   {/* Payment and Counter Toggles */}
                   <div className="space-y-3 pt-2">
                     <FieldRoot>
-                      <FieldLabel>Người thanh toán cước *</FieldLabel>
+                      <FieldLabel>{t('payerLabel')} *</FieldLabel>
                       <Select
                         disabled={submitting}
                         onValueChange={(val) => setFreightPayer(val as 'NGUOI_GUI' | 'NGUOI_NHAN')}
@@ -1192,14 +1201,14 @@ export function ShipmentCreateView() {
                         <SelectTrigger className="w-full">
                           <SelectValue>
                             {freightPayer === 'NGUOI_GUI'
-                              ? 'Người gửi thanh toán tại quầy'
-                              : 'Người nhận thanh toán khi lấy hàng'}
+                              ? t('payerRadioSender')
+                              : t('payerRadioReceiver')}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="NGUOI_GUI">Người gửi thanh toán tại quầy</SelectItem>
-                            <SelectItem value="NGUOI_NHAN">Người nhận thanh toán khi lấy hàng</SelectItem>
+                            <SelectItem value="NGUOI_GUI">{t('payerRadioSender')}</SelectItem>
+                            <SelectItem value="NGUOI_NHAN">{t('payerRadioReceiver')}</SelectItem>
                           </SelectGroup>
                         </SelectContent>
                       </Select>
@@ -1214,9 +1223,9 @@ export function ShipmentCreateView() {
                           className="mt-0.5"
                         />
                         <div>
-                          <span>Tiếp nhận & chốt cước tại quầy</span>
+                          <span>{t('createAcceptAtCounterTitle')}</span>
                           <p className="text-xs text-muted-foreground font-normal">
-                            Ghi nhận trạng thái Đã tiếp nhận và chốt số đo thực tế
+                            {t('createAcceptAtCounterDesc')}
                           </p>
                         </div>
                       </label>
@@ -1229,9 +1238,9 @@ export function ShipmentCreateView() {
                           className="mt-0.5"
                         />
                         <div>
-                          <span>Đã thu tiền mặt cước gửi tại quầy</span>
+                          <span>{t('createCollectCashAtCounterTitle')}</span>
                           <p className="text-xs text-muted-foreground font-normal">
-                            Tạo giao dịch Đã thanh toán (tiền mặt tại bến)
+                            {t('createCollectCashAtCounterDesc')}
                           </p>
                         </div>
                       </label>
@@ -1243,9 +1252,9 @@ export function ShipmentCreateView() {
                     <div ref={errorSummaryRef} className="pt-2">
                       <Alert variant="destructive">
                         <AlertCircle className="size-4" />
-                        <AlertTitle>Thông tin chưa hợp lệ</AlertTitle>
+                        <AlertTitle>{t('createFormInvalidTitle')}</AlertTitle>
                         <AlertDescription className="text-xs">
-                          Vui lòng kiểm tra và sửa {errorCount} trường thông tin chưa hợp lệ trong biểu mẫu.
+                          {t('createFormInvalidDesc', { count: errorCount })}
                         </AlertDescription>
                       </Alert>
                     </div>
@@ -1254,7 +1263,7 @@ export function ShipmentCreateView() {
                   {submitError && (
                     <Alert variant="destructive">
                       <AlertCircle className="size-4" />
-                      <AlertTitle>Không thể tạo đơn</AlertTitle>
+                      <AlertTitle>{t('createSubmitFailedTitle')}</AlertTitle>
                       <AlertDescription className="text-xs">{submitError}</AlertDescription>
                     </Alert>
                   )}
@@ -1270,10 +1279,10 @@ export function ShipmentCreateView() {
                       {submitting ? (
                         <>
                           <LoaderCircle className="size-4 animate-spin" />
-                          Đang tạo đơn…
+                          {t('createBtnSubmitting')}
                         </>
                       ) : (
-                        'Xác nhận tạo đơn tại quầy'
+                        t('createBtnSubmit')
                       )}
                     </Button>
 
@@ -1284,7 +1293,7 @@ export function ShipmentCreateView() {
                         className: 'w-full text-center',
                       })}
                     >
-                      Hủy / Quay lại danh sách
+                      {t('createBtnCancel')}
                     </Link>
                   </div>
                 </CardContent>
@@ -1303,10 +1312,10 @@ export function ShipmentCreateView() {
             </div>
             <DialogHeader className="text-center">
               <DialogTitle className="text-xl font-bold text-center">
-                Tạo đơn gửi hàng thành công!
+                {t('createSuccessTitle')}
               </DialogTitle>
               <DialogDescription className="text-center text-sm">
-                Đơn hàng đã được lưu trữ và ghi nhận vào hệ thống nhà xe.
+                {t('createSuccessDesc')}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -1316,7 +1325,7 @@ export function ShipmentCreateView() {
               {/* Waybill Code Banner */}
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-3.5 text-center space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  MÃ VẬN ĐƠN CỦA BẠN
+                  {t('createWaybillBanner')}
                 </p>
                 <p className="admin-data-mono text-base font-bold text-primary break-all select-all">
                   {createdShipment.waybillCode}
@@ -1329,7 +1338,7 @@ export function ShipmentCreateView() {
                     className="h-7 text-xs gap-1.5"
                   >
                     {copiedCode ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
-                    {copiedCode ? 'Đã sao chép' : 'Sao chép mã'}
+                    {copiedCode ? t('createBtnCopied') : t('createBtnCopyCode')}
                   </Button>
                 </div>
               </div>
@@ -1337,25 +1346,25 @@ export function ShipmentCreateView() {
               {/* Summary Details */}
               <div className="rounded-lg border bg-muted/20 p-3 text-xs space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Người gửi:</span>
+                  <span className="text-muted-foreground">{t('senderColon')}</span>
                   <span className="font-medium text-foreground">{senderName} ({senderPhone})</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Người nhận:</span>
+                  <span className="text-muted-foreground">{t('receiver')}:</span>
                   <span className="font-medium text-foreground">{receiverName} ({receiverPhone})</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tổng cước:</span>
+                  <span className="text-muted-foreground">{t('quoteTotal')}:</span>
                   <span className="font-semibold text-primary">
                     {formatCurrency(createdShipment.pricing.totalFee)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-1 border-t">
-                  <span className="text-muted-foreground">Trạng thái:</span>
+                  <span className="text-muted-foreground">{t('tableHeaderStatus')}:</span>
                   <div className="flex gap-1.5">
-                    <Badge variant="success">Đã tiếp nhận</Badge>
+                    <Badge variant="success">{t('createStatusReceived')}</Badge>
                     {createdShipment.paymentStatus === 'DA_THANH_TOAN' && (
-                      <Badge variant="success">Đã thanh toán</Badge>
+                      <Badge variant="success">{t('createStatusPaid')}</Badge>
                     )}
                   </div>
                 </div>
@@ -1364,7 +1373,7 @@ export function ShipmentCreateView() {
               {/* Print Tools */}
               <div className="space-y-2 pt-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Công cụ in phiếu tại quầy:
+                  {t('createPrintToolsTitle')}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
@@ -1373,7 +1382,7 @@ export function ShipmentCreateView() {
                     className="gap-2 text-xs"
                   >
                     <Printer className="size-4" />
-                    In tem kiện (100×150)
+                    {t('createBtnPrintLabel')}
                   </Button>
                   <Button
                     onClick={() => handleOpenPrint(createdShipment.shipmentId, 'receipt')}
@@ -1381,7 +1390,7 @@ export function ShipmentCreateView() {
                     className="gap-2 text-xs"
                   >
                     <FileText className="size-4" />
-                    In biên nhận (K80)
+                    {t('createBtnPrintReceipt')}
                   </Button>
                 </div>
               </div>
@@ -1394,14 +1403,14 @@ export function ShipmentCreateView() {
                   className="w-full gap-2"
                 >
                   <PackagePlus className="size-4" />
-                  Tạo tiếp đơn mới
+                  {t('createBtnCreateNext')}
                 </Button>
                 <Button
                   onClick={() => router.push('/shipments')}
                   variant="ghost"
                   className="w-full text-muted-foreground"
                 >
-                  Về danh sách phiếu gửi
+                  {t('createBtnBackToList')}
                 </Button>
               </div>
             </div>

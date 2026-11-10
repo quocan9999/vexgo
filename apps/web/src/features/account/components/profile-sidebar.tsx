@@ -5,12 +5,15 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserCircle, Ticket, Package, Lock, LogOut } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { ACCOUNT_NAVIGATION_ITEMS, isAccountNavigationItemActive } from '@/components/layout/customer-navigation';
 
 export const ProfileSidebar: React.FC = () => {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useTranslations('account.sidebar');
+  const locale = useLocale();
   const { signOut } = useAuthSession();
 
   const menuIcons = {
@@ -25,6 +28,8 @@ export const ProfileSidebar: React.FC = () => {
       <nav className="flex flex-col space-y-1">
         {ACCOUNT_NAVIGATION_ITEMS.map((item) => {
           const isActive = isAccountNavigationItemActive(item, pathname);
+          const label = t(item.id as 'profile' | 'history' | 'shipments' | 'security');
+
           return (
             <Link
               key={item.id}
@@ -39,7 +44,7 @@ export const ProfileSidebar: React.FC = () => {
               <div className={`${isActive ? 'text-accent' : 'text-slate-400'}`}>
                 {menuIcons[item.id]}
               </div>
-              <span>{item.label}</span>
+              <span>{label}</span>
             </Link>
           );
         })}
@@ -48,14 +53,14 @@ export const ProfileSidebar: React.FC = () => {
           type="button"
           onClick={() => {
             signOut();
-            router.push('/');
+            router.push(`/${locale}`);
           }}
-          className="flex items-center gap-3 px-4 py-3.5 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 transition-all w-full text-left mt-2"
+          className="flex items-center gap-3 px-4 py-3.5 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 transition-all w-full text-left mt-2 cursor-pointer"
         >
           <div className="text-rose-500">
             <LogOut className="w-5 h-5 ml-0.5" />
           </div>
-          <span>Đăng xuất</span>
+          <span>{t('logout')}</span>
         </button>
       </nav>
     </div>

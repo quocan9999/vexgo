@@ -560,12 +560,12 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         data: {
           soDienThoai: customerPhone,
           matKhau: '$2b$10$hashedpasswordforexampletest',
-          hoTen: `Booking Customer ${suffix}`,
           trangThai: 'HOAT_DONG',
           daXacThucSoDienThoai: true,
           khachHang: {
             create: {
               maKhachHang: `KH-BK-${suffix}`,
+              hoTen: `Booking Customer ${suffix}`,
             },
           },
         },
@@ -1286,7 +1286,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     ).toBe(0);
   });
 
-  it('still charges SePay for cargo when tickets are free', async () => {
+  it('settles a free ticket booking immediately even when cargo fee is payable at station', async () => {
     const promotion = await createPromotion({ amount: 300_000 });
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
@@ -1310,19 +1310,16 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     expect(response.body.data).toMatchObject({
-      status: 'CHO_THANH_TOAN',
+      status: 'DA_THANH_TOAN',
       ticketSubtotal: 0,
       shippingFee: 60_000,
-      totalAmount: 60_000,
+      totalAmount: 0,
     });
-    const payment = await prisma.thanhToan.findFirstOrThrow({
-      where: { donGiaoDichId: response.body.data.orderId },
-    });
-    expect(payment).toMatchObject({
-      phuongThuc: 'SEPAY',
-      trangThai: 'DANG_XU_LY',
-    });
-    expect(Number(payment.soTien)).toBe(60_000);
+    expect(
+      await prisma.thanhToan.count({
+        where: { donGiaoDichId: response.body.data.orderId },
+      }),
+    ).toBe(0);
   });
 
   async function guardedCargoFixture(free = true, seatCount = 1, paid = true) {
@@ -1344,7 +1341,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     const booking = response.body.data as { bookingId: number; orderId: number; orderCode: string; totalAmount: number };
-    if (paid) await settleSePayOrder(booking.orderCode, booking.totalAmount);
+    if (paid && booking.totalAmount > 0) await settleSePayOrder(booking.orderCode, booking.totalAmount);
     const shipment = await prisma.phieuGuiHang.findFirstOrThrow({ where: { donGiaoDichId: booking.orderId } });
     const tickets = await prisma.ve.findMany({ where: { phieuDatVeId: booking.bookingId }, orderBy: { veId: 'asc' } });
     return { booking, promotion, shipment, tickets };
@@ -1398,7 +1395,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       expect(result.body.data.refundAmount).toBe(free ? 0 : 108000);
       expect(enqueue).toHaveBeenCalledTimes(free ? 0 : 1);
       const payments = await prisma.thanhToan.findMany({ where: { donGiaoDichId: f.booking.orderId } });
-      expect(payments).toHaveLength(free ? 1 : 2);
+      expect(payments).toHaveLength(free ? 0 : 2);
       expect(payments.filter(p => p.loaiGiaoDich === 'HOAN_TIEN')).toHaveLength(free ? 0 : 1);
       expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: f.tickets[0].gheChuyenXeId } })).trangThai).toBe('TRONG');
       expect(await prisma.suDungKhuyenMai.findMany({ where: { phieuDatVeId: f.booking.bookingId } })).toEqual(usage);
@@ -1440,7 +1437,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   });
 
   it.each(['status', 'payment'] as const)('serializes cancellation against concurrent $0 writes on the shared order', async (writer) => {
-    const f = await guardedCargoFixture(true, 1, writer !== 'payment');
+    const f = await guardedCargoFixture(false, 1, writer !== 'payment');
     let release!: () => void;
     let acquired!: () => void;
     const locked = new Promise<void>(resolve => { acquired = resolve; });
@@ -1479,7 +1476,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   });
 
   it('still expires unpaid cargo bookings and releases seats/capacity without restoring promotion usage', async () => {
-    const f = await guardedCargoFixture(true, 1, false);
+    const f = await guardedCargoFixture(false, 1, false);
     expect(await app.get(PaymentsService).expireBookingIfExpired(f.booking.bookingId, new Date(Date.now() + 11 * 60_000))).toBe(true);
     const [order, promo, capacity] = await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId);
     expect(order.trangThai).toBe('DA_HUY');
@@ -1537,7 +1534,8 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         status: 'HUY',
         cancelFee: 15_000,
         refundAmount: 135_000,
-        message: 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+        message:
+          'Hủy vé thành công. Quý khách vui lòng liên hệ nhà xe để được hỗ trợ hoàn tiền.',
       });
 
       const payments = await prisma.thanhToan.findMany({
@@ -2248,7 +2246,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       discountAmount: 30_000,
       ticketSubtotal: 120_000,
       shippingFee: 60_000,
-      totalAmount: 180_000,
+      totalAmount: 120_000,
     });
     const shipment = await prisma.phieuGuiHang.findFirstOrThrow({
       where: { donGiaoDichId: response.body.data.orderId },
@@ -2519,7 +2517,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(standaloneShipment.donGiaoDich.phieuDatVe).toBeNull();
     expect(standaloneShipment.donGiaoDich.thanhToans).toHaveLength(1);
     expect(standaloneShipment.donGiaoDich.thanhToans[0]).toMatchObject({
-      phuongThuc: 'SEPAY',
+      phuongThuc: 'TAI_BEN',
       loaiGiaoDich: 'THANH_TOAN',
       trangThai: 'DANG_XU_LY',
     });
@@ -2580,7 +2578,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     expect(response.body.data).toMatchObject({
       shippingFee: 90_000,
-      totalAmount: 240_000,
+      totalAmount: 150_000,
     });
     const shipmentId = response.body.data.shipment.shipmentId as number;
     const shipment = await prisma.phieuGuiHang.findUniqueOrThrow({

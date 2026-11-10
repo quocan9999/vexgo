@@ -85,8 +85,8 @@ export function useFarePrices() {
         if (current && !controller.signal.aborted) {
           setError(
             requestError instanceof Error && requestError.name === 'TypeError'
-              ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-              : 'Không thể tải danh sách bảng giá.',
+              ? 'Cannot connect to API server. Please try again.'
+              : 'Failed to load fare prices.',
           );
         }
       })

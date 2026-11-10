@@ -1,5 +1,5 @@
-/* eslint-disable */
-// /src/modules/client/my-posts/components/MyPostCard.tsx
+'use client';
+
 import React from 'react';
 import {
   Calendar,
@@ -21,6 +21,7 @@ import {
   FileEdit,
   History,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { CustomerActivity } from '@/features/account/types/customer-activity';
 
 interface MyPostCardProps {
@@ -42,6 +43,8 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
   onMarkCompleted,
   onRenew,
 }) => {
+  const t = useTranslations('account.activity');
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-slate-300 transition-all p-5 flex flex-col justify-between space-y-4">
       <div className="space-y-3">
@@ -60,50 +63,50 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
               ) : (
                 <PackageCheck className="w-3.5 h-3.5" />
               )}
-              <span>{post.needType === 'BUY' ? 'ĐẶT VÉ' : 'GỬI HÀNG'}</span>
+              <span>{post.needType === 'BUY' ? t('ticketBooking') : t('freightShipping')}</span>
             </span>
 
             {/* Status Badges */}
             {post.status === 'APPROVED' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-brand border border-emerald-200/80">
                 <ShieldCheck className="w-3 h-3" />
-                <span>Đã thanh toán</span>
+                <span>{t('statusPaid')}</span>
               </span>
             )}
             {post.status === 'PENDING' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
                 <Clock className="w-3 h-3" />
-                <span>Chờ thanh toán</span>
+                <span>{t('statusPending')}</span>
               </span>
             )}
             {post.status === 'REJECTED' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/80">
                 <XCircle className="w-3 h-3" />
-                <span>Thanh toán lỗi</span>
+                <span>{t('statusFailed')}</span>
               </span>
             )}
             {post.status === 'HIDDEN' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                 <EyeOff className="w-3 h-3" />
-                <span>Đã hủy</span>
+                <span>{t('statusCancelled')}</span>
               </span>
             )}
             {post.status === 'COMPLETED' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
                 <CheckCheck className="w-3 h-3" />
-                <span>Đã sử dụng</span>
+                <span>{t('statusUsed')}</span>
               </span>
             )}
             {post.status === 'EXPIRED' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-orange-700 border border-orange-200">
                 <History className="w-3 h-3" />
-                <span>Quá hạn</span>
+                <span>{t('statusExpired')}</span>
               </span>
             )}
             {post.status === 'DRAFT' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
                 <FileEdit className="w-3 h-3" />
-                <span>Bản nháp</span>
+                <span>{t('statusDraft')}</span>
               </span>
             )}
           </div>
@@ -116,7 +119,7 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
             {post.viewsCount !== undefined && (
               <span className="flex items-center gap-1 text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-full text-[11px]">
                 <Eye className="w-3 h-3 text-slate-400" />
-                <span>{post.viewsCount} lượt tra cứu</span>
+                <span>{post.viewsCount} {t('viewsCount')}</span>
               </span>
             )}
           </div>
@@ -133,13 +136,13 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
             <span className="inline-flex items-center gap-1.5">
               <Coins className="w-4 h-4 text-amber-600 flex-shrink-0" />
               <span>
-                Giá/cước: <strong className="text-brand-dark font-extrabold">{post.priceRange}</strong>
+                {t('priceFareLabel')} <strong className="text-brand-dark font-extrabold">{post.priceRange}</strong>
               </span>
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Armchair className="w-4 h-4 text-slate-400 flex-shrink-0" />
               <span>
-                Ghế/kg: <strong className="text-slate-800 font-bold">{post.areaRange}</strong>
+                {t('seatWeightLabel')} <strong className="text-slate-800 font-bold">{post.areaRange}</strong>
               </span>
             </span>
           </div>
@@ -150,12 +153,12 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
           </div>
         </div>
 
-        {/* Reject Reason Alert Banner (If Rejected) */}
+        {/* Reject Reason Alert Banner */}
         {post.status === 'REJECTED' && post.rejectReason && (
           <div className="p-3.5 bg-rose-50 border border-rose-200/90 rounded-xl text-xs text-rose-800 space-y-1">
             <div className="flex items-center gap-1.5 font-extrabold text-rose-900">
               <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
-              <span>Lý do thanh toán lỗi:</span>
+              <span>{t('paymentFailureReason')}</span>
             </div>
             <p className="font-medium leading-relaxed pl-5 text-rose-700">{post.rejectReason}</p>
           </div>
@@ -170,7 +173,7 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 hover:text-emerald-800 hover:bg-emerald-50 transition-colors cursor-pointer"
         >
           <Eye className="w-3.5 h-3.5" />
-          <span>Chi tiết</span>
+          <span>{t('viewDetail')}</span>
         </button>
 
         <div className="flex items-center flex-wrap gap-1.5">
@@ -180,10 +183,10 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
               type="button"
               onClick={() => onToggleHide(post)}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-              title="Hủy vé hoặc vận đơn"
+              title={t('cancelAction')}
             >
               <EyeOff className="w-3.5 h-3.5" />
-              <span>Hủy</span>
+              <span>{t('cancelAction')}</span>
             </button>
           )}
 
@@ -192,10 +195,10 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
               type="button"
               onClick={() => onToggleHide(post)}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-brand hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-              title="Khôi phục yêu cầu"
+              title={t('restoreAction')}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Khôi phục</span>
+              <span>{t('restoreAction')}</span>
             </button>
           )}
 
@@ -205,10 +208,10 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
               type="button"
               onClick={() => onMarkCompleted(post)}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-sky-700 hover:bg-sky-50 border border-sky-200 transition-colors cursor-pointer"
-              title="Đánh dấu đã dùng xong"
+              title={t('completeAction')}
             >
               <CheckCheck className="w-3.5 h-3.5" />
-              <span>Hoàn tất</span>
+              <span>{t('completeAction')}</span>
             </button>
           )}
 
@@ -218,10 +221,10 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
               type="button"
               onClick={() => onRenew(post)}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-orange-700 hover:bg-amber-50 border border-orange-200 transition-colors cursor-pointer"
-              title="Thanh toán lại yêu cầu quá hạn"
+              title={t('repayAction')}
             >
               <RotateCw className="w-3.5 h-3.5" />
-              <span>Thanh toán lại</span>
+              <span>{t('repayAction')}</span>
             </button>
           )}
 
@@ -233,7 +236,7 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-800 hover:bg-emerald-50 border border-emerald-200/80 transition-colors cursor-pointer"
             >
               <Edit className="w-3.5 h-3.5" />
-              <span>Sửa</span>
+              <span>{t('edit')}</span>
             </button>
           )}
 
@@ -244,7 +247,7 @@ export const MyPostCard: React.FC<MyPostCardProps> = ({
             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Xóa</span>
+            <span>{t('deleteAction')}</span>
           </button>
         </div>
       </div>

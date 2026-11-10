@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export interface PaginationProps {
@@ -17,6 +18,13 @@ export const Pagination: React.FC<PaginationProps> = ({
   onPageChange,
   className = '',
 }) => {
+  let t: (key: string) => string = (k) => (k === 'previousPage' ? 'Trang trước' : k === 'nextPage' ? 'Trang sau' : k);
+  try {
+    const intlT = useTranslations('common');
+    t = intlT;
+  } catch {
+    // fallback
+  }
   const safeTotalPages = Math.max(1, totalPages);
 
   const getPageNumbers = () => {
@@ -45,7 +53,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         disabled={currentPage <= 1}
         onClick={() => onPageChange(currentPage - 1)}
         className="flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-        aria-label="Trang trước"
+        aria-label={t('previousPage')}
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -87,7 +95,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         disabled={currentPage >= safeTotalPages}
         onClick={() => onPageChange(currentPage + 1)}
         className="flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-        aria-label="Trang sau"
+        aria-label={t('nextPage')}
       >
         <ChevronRight className="w-4 h-4" />
       </button>

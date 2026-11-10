@@ -169,10 +169,10 @@ describe('Admin promotion management permissions and actions', () => {
     fireEvent.change(within(drawer).getByLabelText('Tên chương trình *'), { target: { value: 'Mùa hè mới' } });
     fireEvent.change(within(drawer).getByLabelText(/Mức giảm/), { target: { value: '12' } });
     fireEvent.change(within(drawer).getByLabelText('Giảm tối đa (VND) *'), { target: { value: '60.000' } });
-    fireEvent.change(within(drawer).getByLabelText('Giá trị vé tối thiểu (VND)'), { target: { value: '100.000' } });
-    fireEvent.change(within(drawer).getByLabelText('Bắt đầu *'), { target: { value: '2026-02-01' } });
-    fireEvent.change(within(drawer).getByLabelText('Kết thúc *'), { target: { value: '2028-12-31' } });
-    fireEvent.change(within(drawer).getByLabelText('Số lượt tối đa *'), { target: { value: '200' } });
+    fireEvent.change(within(drawer).getByLabelText(/(Giá trị vé|Đơn) tối thiểu \(VND\)/i), { target: { value: '100.000' } });
+    fireEvent.change(within(drawer).getByLabelText(/(Ngày )?bắt đầu \*/i), { target: { value: '2026-02-01' } });
+    fireEvent.change(within(drawer).getByLabelText(/(Ngày )?kết thúc \*/i), { target: { value: '2028-12-31' } });
+    fireEvent.change(within(drawer).getByLabelText(/(Số lượt tối đa|Giới hạn lượt dùng) \*/i), { target: { value: '200' } });
     fireEvent.click(within(drawer).getByRole('button', { name: 'Lưu thay đổi' }));
 
     await waitFor(() => expect(state.updatePromotion).toHaveBeenCalledWith(15, {
@@ -201,9 +201,9 @@ describe('Admin promotion management permissions and actions', () => {
     await selectCanonicalOption(within(dialog).getByLabelText('Loại giảm giá *'), "Phần trăm");
     fireEvent.change(within(dialog).getByLabelText(/Mức giảm/), { target: { value: '10' } });
     fireEvent.change(within(dialog).getByLabelText('Giảm tối đa (VND) *'), { target: { value: '50000' } });
-    fireEvent.change(within(dialog).getByLabelText('Bắt đầu *'), { target: { value: '2026-12-01' } });
-    fireEvent.change(within(dialog).getByLabelText('Kết thúc *'), { target: { value: '2027-01-31' } });
-    fireEvent.change(within(dialog).getByLabelText('Số lượt tối đa *'), { target: { value: '200' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Ngày )?bắt đầu \*/i), { target: { value: '2026-12-01' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Ngày )?kết thúc \*/i), { target: { value: '2027-01-31' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Số lượt tối đa|Giới hạn lượt dùng) \*/i), { target: { value: '200' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo khuyến mãi' }));
 
     await waitFor(() => expect(state.createPromotion).toHaveBeenCalledWith({
@@ -230,9 +230,9 @@ describe('Admin promotion management permissions and actions', () => {
     fireEvent.change(within(dialog).getByLabelText('Mã khuyến mãi *'), { target: { value: 'DAUNAM' } });
     await selectCanonicalOption(within(dialog).getByLabelText('Loại giảm giá *'), "Số tiền cố định");
     fireEvent.change(within(dialog).getByLabelText(/Mức giảm/), { target: { value: '25000' } });
-    fireEvent.change(within(dialog).getByLabelText('Bắt đầu *'), { target: { value: '2026-12-01' } });
-    fireEvent.change(within(dialog).getByLabelText('Kết thúc *'), { target: { value: '2027-01-31' } });
-    fireEvent.change(within(dialog).getByLabelText('Số lượt tối đa *'), { target: { value: '200' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Ngày )?bắt đầu \*/i), { target: { value: '2026-12-01' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Ngày )?kết thúc \*/i), { target: { value: '2027-01-31' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Số lượt tối đa|Giới hạn lượt dùng) \*/i), { target: { value: '200' } });
     expect(within(dialog).queryByLabelText('Giảm tối đa (VND) *')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo khuyến mãi' }));
 
@@ -260,8 +260,8 @@ describe('Admin promotion management permissions and actions', () => {
     setEmployeeAdminTestSession(['promotion:read', 'promotion:update']);
     render(<PromotionsManagement />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Tạm ngưng SUMMER10' })[0]!);
-    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng khuyến mãi?' });
-    fireEvent.click(within(confirm).getByRole('button', { name: 'Hủy' }));
+    const confirm = await screen.findByRole('alertdialog', { name: /Tạm ngưng khuyến mãi/i });
+    fireEvent.click(within(confirm).getByRole('button', { name: /Hủy/ }));
     expect(state.updatePromotionStatus).not.toHaveBeenCalled();
   });
 
@@ -270,7 +270,7 @@ describe('Admin promotion management permissions and actions', () => {
     render(<PromotionsManagement />);
     expect(screen.queryByRole('button', { name: 'Thêm khuyến mãi' })).toBeNull();
     fireEvent.click(screen.getAllByRole('button', { name: 'Tạm ngưng SUMMER10' })[0]!);
-    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng khuyến mãi?' });
+    const confirm = await screen.findByRole('alertdialog', { name: /Tạm ngưng khuyến mãi/i });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng' }));
 
     await waitFor(() => expect(state.updatePromotionStatus).toHaveBeenCalledWith(15, 'TAM_NGUNG'));
@@ -284,7 +284,7 @@ describe('Admin promotion management permissions and actions', () => {
     ));
     render(<PromotionsManagement />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Tạm ngưng SUMMER10' })[0]!);
-    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng khuyến mãi?' });
+    const confirm = await screen.findByRole('alertdialog', { name: /Tạm ngưng khuyến mãi/i });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng' }));
 
     await expectOperationToast('error', 'Khuyến mãi vừa thay đổi.');
@@ -315,9 +315,9 @@ describe('Admin promotion management permissions and actions', () => {
     await selectCanonicalOption(within(dialog).getByLabelText('Loại giảm giá *'), "Phần trăm");
     fireEvent.change(within(dialog).getByLabelText(/Mức giảm/), { target: { value: '10' } });
     fireEvent.change(within(dialog).getByLabelText('Giảm tối đa (VND) *'), { target: { value: '50000' } });
-    fireEvent.change(within(dialog).getByLabelText('Bắt đầu *'), { target: { value: '2026-12-01' } });
-    fireEvent.change(within(dialog).getByLabelText('Kết thúc *'), { target: { value: '2027-01-31' } });
-    fireEvent.change(within(dialog).getByLabelText('Số lượt tối đa *'), { target: { value: '200' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Ngày )?bắt đầu \*/i), { target: { value: '2026-12-01' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Ngày )?kết thúc \*/i), { target: { value: '2027-01-31' } });
+    fireEvent.change(within(dialog).getByLabelText(/(Số lượt tối đa|Giới hạn lượt dùng) \*/i), { target: { value: '200' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo khuyến mãi' }));
 
     await waitFor(() => expect(state.createPromotion).toHaveBeenCalledTimes(1));

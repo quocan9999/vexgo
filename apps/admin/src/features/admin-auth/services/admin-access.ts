@@ -67,6 +67,11 @@ export const ADMIN_OPERATION_SECTIONS = [
     href: '/revenue-reports',
     readPermission: 'revenue:read',
   },
+  {
+    section: 'ai-knowledge',
+    href: '/ai-knowledge',
+    readPermission: 'chat:read',
+  },
 ] as const;
 
 export type AdminPermission =
@@ -210,6 +215,19 @@ export function canAccessSupportChat(session: AdminSession | null): boolean {
   );
 }
 
+export function canAccessAiKnowledge(session: AdminSession | null): boolean {
+  if (session === null) return false;
+  const scope = getAdminAccessScope(session);
+  if (scope === 'platform') return true;
+  if (scope === 'tenant') {
+    return (
+      session.permissions.includes('chat:read') ||
+      session.permissions.includes('chat:manage')
+    );
+  }
+  return false;
+}
+
 export function canAccessShipmentRates(session: AdminSession | null): boolean {
   return (
     session !== null &&
@@ -236,6 +254,9 @@ export function canAccessTenantPath(
   }
   if (matchesPath(pathname, '/support-chat')) {
     return canAccessSupportChat(session);
+  }
+  if (matchesPath(pathname, '/ai-knowledge')) {
+    return canAccessAiKnowledge(session);
   }
   if (matchesPath(pathname, '/shipments/rates')) {
     return canAccessShipmentRates(session);
@@ -276,6 +297,7 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/shipments')) return ['shipment:read'];
   if (matchesPath(pathname, '/revenue-reports')) return ['revenue:read'];
   if (matchesPath(pathname, '/reviews')) return ['review:read'];
+  if (matchesPath(pathname, '/ai-knowledge')) return ['chat:read'];
   return null;
 }
 
@@ -288,6 +310,9 @@ export function getFirstAccessibleAdminPath(
     ADMIN_OPERATION_SECTIONS.find((item) => {
       if (item.section === 'support-chat') {
         return canAccessSupportChat(session);
+      }
+      if (item.section === 'ai-knowledge') {
+        return canAccessAiKnowledge(session);
       }
       return hasAdminPermission(session, item.readPermission);
     })?.href ?? (canReadTenantRbac(session) ? '/tenant-rbac' : null)

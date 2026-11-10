@@ -91,14 +91,14 @@ function getErrorMessage(body: unknown, status: number, resource: string) {
     return body.message;
   }
 
-  return `Không thể tải ${resource} (HTTP ${status}).`;
+  return `Failed to load ${resource} (HTTP ${status}).`;
 }
 
 function getWriteError(body: unknown, status: number, action: string) {
   const message =
     isRecord(body) && typeof body.message === 'string'
       ? body.message
-      : `Không thể ${action} xe (HTTP ${status}).`;
+      : `Failed to ${action} vehicle (HTTP ${status}).`;
   const code =
     isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
 
@@ -107,7 +107,7 @@ function getWriteError(body: unknown, status: number, action: string) {
 
 function parseVehicleResponse(body: unknown) {
   if (!isRecord(body) || !isVehicleDetail(body.data)) {
-    throw new Error('API trả về thông tin xe không hợp lệ.');
+    throw new Error('API returned invalid vehicle details.');
   }
   return body.data;
 }
@@ -123,7 +123,7 @@ export async function createVehicle(
   });
   const body: unknown = await response.json().catch(() => null);
 
-  if (!response.ok) throw getWriteError(body, response.status, 'tạo');
+  if (!response.ok) throw getWriteError(body, response.status, 'create');
   return parseVehicleResponse(body);
 }
 
@@ -142,7 +142,7 @@ export async function updateVehicle(
   );
   const body: unknown = await response.json().catch(() => null);
 
-  if (!response.ok) throw getWriteError(body, response.status, 'cập nhật');
+  if (!response.ok) throw getWriteError(body, response.status, 'update');
   return parseVehicleResponse(body);
 }
 
@@ -161,7 +161,7 @@ export async function updateVehicleStatus(
   );
   const body: unknown = await response.json().catch(() => null);
 
-  if (!response.ok) throw getWriteError(body, response.status, 'cập nhật');
+  if (!response.ok) throw getWriteError(body, response.status, 'update status of');
   return parseVehicleResponse(body);
 }
 
@@ -172,7 +172,7 @@ export async function deleteVehicle(vehicleId: number): Promise<void> {
   );
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
-    throw getWriteError(body, response.status, 'xóa');
+    throw getWriteError(body, response.status, 'delete');
   }
 }
 
@@ -202,10 +202,10 @@ export async function getVehicles(
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(body, response.status, 'danh sách xe'));
+    throw new Error(getErrorMessage(body, response.status, 'vehicle list'));
   }
   if (!isPaginatedVehicles(body)) {
-    throw new Error('API trả về danh sách xe không hợp lệ.');
+    throw new Error('API returned invalid vehicle list.');
   }
 
   return body;
@@ -222,10 +222,10 @@ export async function getVehicleById(
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(body, response.status, 'thông tin xe'));
+    throw new Error(getErrorMessage(body, response.status, 'vehicle details'));
   }
   if (!isRecord(body) || !isVehicleDetail(body.data)) {
-    throw new Error('API trả về thông tin xe không hợp lệ.');
+    throw new Error('API returned invalid vehicle details.');
   }
 
   return body.data;
@@ -241,7 +241,7 @@ async function collectAllPages<T>(
 ) {
   const { totalPages } = firstPage.meta;
   if (!Number.isSafeInteger(totalPages) || totalPages < 0) {
-    throw new Error('API trả về thông tin phân trang bộ lọc không hợp lệ.');
+    throw new Error('API returned invalid filter pagination meta.');
   }
 
   const remainingPages = await Promise.all(
@@ -314,7 +314,7 @@ export async function getVehicleSeats(
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(body, response.status, 'danh sách ghế'));
+    throw new Error(getErrorMessage(body, response.status, 'seat list'));
   }
   if (
     !isRecord(body) ||
@@ -324,7 +324,7 @@ export async function getVehicleSeats(
     !Number.isSafeInteger(body.meta.totalItems) ||
     body.meta.totalItems !== body.data.length
   ) {
-    throw new Error('API trả về danh sách ghế không hợp lệ.');
+    throw new Error('API returned invalid seat list.');
   }
   return body.data;
 }
@@ -337,7 +337,7 @@ function getVehicleSeatWriteError(
   const message =
     isRecord(body) && typeof body.message === 'string'
       ? body.message
-      : `Không thể ${action} ghế (HTTP ${status}).`;
+      : `Failed to ${action} seat (HTTP ${status}).`;
   const code =
     isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
   return new VehicleApiError(message, code);
@@ -345,7 +345,7 @@ function getVehicleSeatWriteError(
 
 function parseVehicleSeatResponse(body: unknown): VehicleSeat {
   if (!isRecord(body) || !isVehicleSeat(body.data)) {
-    throw new Error('API trả về thông tin ghế không hợp lệ.');
+    throw new Error('API returned invalid seat data.');
   }
   return body.data;
 }
@@ -364,7 +364,7 @@ export async function createVehicleSeat(
     },
   );
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw getVehicleSeatWriteError(body, response.status, 'thêm');
+  if (!response.ok) throw getVehicleSeatWriteError(body, response.status, 'add');
   return parseVehicleSeatResponse(body);
 }
 
@@ -383,7 +383,7 @@ export async function updateVehicleSeat(
     },
   );
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw getVehicleSeatWriteError(body, response.status, 'sửa');
+  if (!response.ok) throw getVehicleSeatWriteError(body, response.status, 'update');
   return parseVehicleSeatResponse(body);
 }
 
@@ -402,7 +402,7 @@ export async function updateVehicleSeatLayout(
   );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw getVehicleSeatWriteError(body, response.status, 'lưu sơ đồ ghế');
+    throw getVehicleSeatWriteError(body, response.status, 'save seat layout');
   }
   if (
     !isRecord(body) ||
@@ -412,7 +412,7 @@ export async function updateVehicleSeatLayout(
     !isSafeInteger(body.meta.totalItems) ||
     body.meta.totalItems !== body.data.length
   ) {
-    throw new Error('API trả về sơ đồ ghế không hợp lệ.');
+    throw new Error('API returned invalid seat layout.');
   }
   return body.data;
 }
@@ -427,7 +427,7 @@ export async function deleteVehicleSeat(
   );
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
-    throw getVehicleSeatWriteError(body, response.status, 'xóa');
+    throw getVehicleSeatWriteError(body, response.status, 'delete');
   }
 }
 
@@ -441,7 +441,7 @@ export async function deleteVehicleSeatFloor(
   );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw getVehicleSeatWriteError(body, response.status, 'xóa tầng ghế');
+    throw getVehicleSeatWriteError(body, response.status, 'delete seat deck');
   }
   if (
     !isRecord(body) ||
@@ -450,7 +450,7 @@ export async function deleteVehicleSeatFloor(
     !isSafeInteger(body.data.deletedSeats) ||
     body.data.deletedSeats < 0
   ) {
-    throw new Error('API trả về kết quả xóa tầng không hợp lệ.');
+    throw new Error('API returned invalid deck deletion response.');
   }
   return body.data.deletedSeats;
 }

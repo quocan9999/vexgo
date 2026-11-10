@@ -70,6 +70,8 @@ describe('Admin permission defaults', () => {
       'shipment:update',
       'chat:read',
       'chat:manage',
+      'review:read',
+      'review:moderate',
     ]);
   });
 
@@ -145,6 +147,8 @@ describe('Admin permission defaults', () => {
       'admin-account:update',
       'chat:read',
       'chat:manage',
+      'review:read',
+      'review:moderate',
     ]);
     expect(new Set(permissionKeys).size).toBe(permissionKeys.length);
   });
@@ -186,6 +190,8 @@ describe('Admin permission defaults', () => {
       'shipment:update',
       'chat:read',
       'chat:manage',
+      'review:read',
+      'review:moderate',
     ];
     const platformPermissionKeys = [
       'bus-company:read',
@@ -236,6 +242,7 @@ describe('Admin permission defaults', () => {
       'chat:read',
       'chat:manage',
       'customer:read',
+      'review:read',
     ]);
   });
 

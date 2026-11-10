@@ -74,13 +74,13 @@ export async function getShipmentRates(
   const response = await request(
     `${getApiBaseUrl()}${SHIPMENT_RATES_API_PATH}?${params.toString()}`,
     { cache: 'no-store', signal },
-    'Không thể tải danh sách bảng cước gửi hàng.',
+    'Unable to load shipment rates list.',
   );
 
   return parsePaginatedShipmentRatesResponse(
     await readJson(
       response,
-      'Dữ liệu danh sách bảng cước gửi hàng không hợp lệ.',
+      'Invalid shipment rates response data.',
     ),
   );
 }
@@ -92,11 +92,11 @@ export async function getShipmentRateById(
   const response = await request(
     `${getApiBaseUrl()}${SHIPMENT_RATES_API_PATH}/${rateId}`,
     { cache: 'no-store', signal },
-    'Không thể tải chi tiết mức cước gửi hàng.',
+    'Unable to load shipment rate details.',
   );
 
   return parseShipmentRateResponse(
-    await readJson(response, 'Dữ liệu mức cước gửi hàng không hợp lệ.'),
+    await readJson(response, 'Invalid shipment rate details response data.'),
   );
 }
 
@@ -110,11 +110,11 @@ export async function createShipmentRate(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     },
-    'Không thể tạo mức cước gửi hàng mới.',
+    'Unable to create new shipment rate.',
   );
 
   return parseShipmentRateResponse(
-    await readJson(response, 'Dữ liệu mức cước mới không hợp lệ.'),
+    await readJson(response, 'Invalid new shipment rate response data.'),
   );
 }
 
@@ -129,11 +129,11 @@ export async function updateShipmentRate(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     },
-    'Không thể cập nhật mức cước gửi hàng.',
+    'Unable to update shipment rate.',
   );
 
   return parseShipmentRateResponse(
-    await readJson(response, 'Dữ liệu mức cước cập nhật không hợp lệ.'),
+    await readJson(response, 'Invalid updated shipment rate response data.'),
   );
 }
 
@@ -148,11 +148,11 @@ export async function updateShipmentRateStatus(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     },
-    'Không thể cập nhật trạng thái mức cước gửi hàng.',
+    'Unable to update shipment rate status.',
   );
 
   return parseShipmentRateResponse(
-    await readJson(response, 'Dữ liệu trạng thái mức cước không hợp lệ.'),
+    await readJson(response, 'Invalid shipment rate status response data.'),
   );
 }
 
@@ -170,7 +170,7 @@ export async function getShipmentRateRouteOptions(
       if (options.activeOnly) params.set('status', 'HOAT_DONG');
       return `${getApiBaseUrl()}${ROUTES_API_PATH}?${params.toString()}`;
     },
-    'Không thể tải danh sách tuyến xe.',
+    'Unable to load bus routes list.',
     options.signal,
   );
 
@@ -188,12 +188,12 @@ export async function getShipmentRateCargoTypeOptions(
   const response = await request(
     `${getApiBaseUrl()}${CATEGORIES_API_PATH}`,
     { cache: 'no-store', signal },
-    'Không thể tải danh mục loại hàng hóa.',
+    'Unable to load cargo categories list.',
   );
 
   const payload = (await readJson(
     response,
-    'Dữ liệu danh mục loại hàng hóa không hợp lệ.',
+    'Invalid cargo categories response data.',
   )) as {
     data?: Array<{
       categoryId: number;
@@ -205,7 +205,7 @@ export async function getShipmentRateCargoTypeOptions(
 
   if (!Array.isArray(payload?.data)) {
     throw new ShipmentRateApiError(
-      'Dữ liệu danh mục loại hàng hóa không hợp lệ.',
+      'Invalid cargo categories response data.',
     );
   }
 
@@ -257,7 +257,7 @@ async function request(
       throw error;
     }
     throw new ShipmentRateApiError(
-      'Không thể kết nối máy chủ VexGo. Vui lòng thử lại.',
+      'Unable to connect to VexGo server. Please try again.',
       { statusCode: 0, code: 'NETWORK_ERROR' },
     );
   }
@@ -292,7 +292,7 @@ function parseShipmentRateResponse(payload: unknown): ShipmentRate {
   ) {
     return (payload as ApiShipmentRateResponse).data;
   }
-  throw new ShipmentRateApiError('Dữ liệu mức cước gửi hàng không hợp lệ.', {
+  throw new ShipmentRateApiError('Invalid shipment rate response data.', {
     code: 'INVALID_RESPONSE',
   });
 }
@@ -302,11 +302,11 @@ function parsePaginatedShipmentRatesResponse(
 ): PaginatedShipmentRates {
   const parsed = parsePaginatedItemsResponse<ShipmentRate>(
     payload,
-    'Dữ liệu danh sách bảng cước gửi hàng không hợp lệ.',
+    'Invalid shipment rates response data.',
   );
   if (!parsed.data.every(isShipmentRate)) {
     throw new ShipmentRateApiError(
-      'Dữ liệu danh sách bảng cước gửi hàng không hợp lệ.',
+      'Invalid shipment rates response data.',
       { code: 'INVALID_RESPONSE' },
     );
   }

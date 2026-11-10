@@ -68,13 +68,13 @@ async function writeRoute(path: string, method: 'POST' | 'PATCH', input: unknown
             ? [{ field: detail.field, message: detail.message }] : [])
       : [];
     throw new RouteApiError(
-      isRecord(body) && typeof body.message === 'string' ? body.message : `Không thể lưu tuyến xe (HTTP ${response.status}).`,
+      isRecord(body) && typeof body.message === 'string' ? body.message : `Failed to save route (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
       details,
     );
   }
   if (!isRecord(body) || !isRoute(body.data)) {
-    throw new Error('API trả về thông tin tuyến xe không hợp lệ.');
+    throw new Error('Invalid route data returned by API.');
   }
   return body.data;
 }
@@ -114,7 +114,7 @@ async function readResponse(response: Response, resource: string): Promise<unkno
     throw new Error(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải ${resource} (HTTP ${response.status}).`,
+        : `Failed to load ${resource} (HTTP ${response.status}).`,
     );
   }
   return body;
@@ -130,9 +130,9 @@ export async function getRoutes(query: RouteListQuery, signal?: AbortSignal): Pr
   const body = await readResponse(await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/routes?${params.toString()}`,
     { cache: 'no-store', signal },
-  ), 'danh sách tuyến xe');
+  ), 'routes list');
   if (!isPaginatedRoutes(body)) {
-    throw new Error('API trả về danh sách tuyến xe không hợp lệ.');
+    throw new Error('Invalid routes list returned by API.');
   }
   return body;
 }
@@ -140,9 +140,9 @@ export async function getRoutes(query: RouteListQuery, signal?: AbortSignal): Pr
 export async function getRouteById(routeId: number, signal?: AbortSignal): Promise<Route> {
   const body = await readResponse(await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/routes/${routeId}`, { cache: 'no-store', signal },
-  ), 'thông tin tuyến xe');
+  ), 'route details');
   if (!isRecord(body) || !isRoute(body.data)) {
-    throw new Error('API trả về thông tin tuyến xe không hợp lệ.');
+    throw new Error('Invalid route details returned by API.');
   }
   return body.data;
 }

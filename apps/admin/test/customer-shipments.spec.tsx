@@ -208,7 +208,7 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     ).toBeNull();
     expect(screen.queryByText('Hình thức')).toBeNull();
     expect(screen.queryByText(/—\s*→\s*—/)).toBeNull();
-    expect(screen.getAllByText('85.000 đ').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(85\.000\s*[đ₫])/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Đang vận chuyển').length).toBeGreaterThan(0);
   });
 
@@ -227,7 +227,7 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     const shipmentsTab = await screen.findByRole('tab', { name: 'Gửi hàng' });
     fireEvent.click(shipmentsTab);
 
-    const createdBadges = await screen.findAllByText('Mới tạo');
+    const createdBadges = await screen.findAllByText(/(Mới tạo|Chờ mang hàng đến gửi)/i);
     const acceptedBadges = await screen.findAllByText('Đã tiếp nhận');
     const transportingBadges = await screen.findAllByText('Đang vận chuyển');
     const deliveredBadges = await screen.findAllByText('Đã giao hàng');
@@ -290,7 +290,7 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     const shipmentsTab = await screen.findByRole('tab', { name: 'Gửi hàng' });
     fireEvent.click(shipmentsTab);
 
-    const searchInput = await screen.findByLabelText('Tìm kiếm đơn gửi hàng');
+    const searchInput = await screen.findByPlaceholderText(/(Tìm mã vận đơn|Tìm kiếm đơn gửi hàng)/i);
     fireEvent.change(searchInput, { target: { value: 'VD000301' } });
 
     // Wait a moment for debounced search

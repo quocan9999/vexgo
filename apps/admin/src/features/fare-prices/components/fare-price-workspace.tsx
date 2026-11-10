@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/action-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   FarePriceApiError,
   getFarePriceById,
@@ -40,8 +41,8 @@ function formatPrice(listedPrice: number) {
   return `${new Intl.NumberFormat('vi-VN').format(listedPrice)} ₫`;
 }
 
-function formatDateOnly(value: string | null) {
-  if (value === null) return 'Không giới hạn';
+function formatDateOnly(value: string | null, unlimitedLabel = 'N/A') {
+  if (value === null) return unlimitedLabel;
   return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
@@ -64,20 +65,20 @@ function formatTimestamp(value: string) {
     .replaceAll('/', '-');
 }
 
-function statusLabel(status: FarePrice['status']) {
-  return status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng';
+function getStatusLabel(status: FarePrice['status'], tFare: (key: string) => string) {
+  return status === 'HOAT_DONG' ? tFare('statusActive') : tFare('statusSuspended');
 }
 
-function effectiveStateLabel(state: FarePrice['effectiveState']) {
+function getEffectiveStateLabel(state: FarePrice['effectiveState'], tFare: (key: string) => string) {
   switch (state) {
     case 'CHUA_HIEU_LUC':
-      return 'Chưa hiệu lực';
+      return tFare('statePending');
     case 'DANG_HIEU_LUC':
-      return 'Đang hiệu lực';
+      return tFare('stateActive');
     case 'HET_HIEU_LUC':
-      return 'Hết hiệu lực';
+      return tFare('stateExpired');
     case 'TAM_NGUNG':
-      return 'Tạm ngưng';
+      return tFare('statusSuspended');
   }
 }
 
@@ -104,6 +105,8 @@ export function FarePriceWorkspace({
   onUpdated,
   onNotFound,
 }: FarePriceWorkspaceProps) {
+  const tFare = useTranslations('farePrices');
+  const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canUpdate = can('fare-price:update');
 
@@ -157,7 +160,7 @@ export function FarePriceWorkspace({
     !initialFarePrice && (!requestMatches || request.status === 'loading');
   const error =
     requestMatches && request.status === 'error'
-      ? 'Không thể tải thông tin bảng giá.'
+      ? tFare('errors.loadDetailsFailed')
       : null;
   const farePrice =
     request.farePrice ??
@@ -169,7 +172,7 @@ export function FarePriceWorkspace({
     setRequest({ key: requestKey, status: 'success', farePrice: updated });
     setEditDialogOpen(false);
     onUpdated?.(updated);
-    toast.success('Đã cập nhật bảng giá vé.');
+    toast.success(tFare('updatedSuccess'));
   }
 
   const targetStatus: FarePriceStatus | null = farePrice
@@ -193,13 +196,13 @@ export function FarePriceWorkspace({
       setRequest({ key: requestKey, status: 'success', farePrice: updated });
       setStatusDialogOpen(false);
       onUpdated?.(updated);
-      toast.success('Đã cập nhật bảng giá vé.');
+      toast.success(tFare('updatedSuccess'));
     } catch (requestError: unknown) {
       if (
         requestError instanceof FarePriceApiError &&
         requestError.code === 'FARE_PRICE_NOT_FOUND'
       ) {
-        toast.error('Bảng giá không còn tồn tại.');
+        toast.error(tFare('errors.notFound'));
         onNotFoundRef.current?.();
       } else if (
         requestError instanceof FarePriceApiError &&
@@ -207,22 +210,22 @@ export function FarePriceWorkspace({
         targetStatus === 'HOAT_DONG'
       ) {
         toast.error(
-          'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+          tFare('errors.overlapActive'),
         );
       } else if (
         requestError instanceof FarePriceApiError &&
         requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION'
       ) {
         toast.error(
-          'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+          tFare('errors.concurrentModification'),
         );
       } else {
         toast.error(
           requestError instanceof TypeError
-            ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+            ? tFare('networkError')
             : requestError instanceof Error
               ? requestError.message
-              : 'Không thể cập nhật trạng thái bảng giá.',
+              : tFare('errors.updateStatusFailed'),
         );
       }
     } finally {
@@ -246,7 +249,7 @@ export function FarePriceWorkspace({
           requestError instanceof FarePriceApiError &&
           requestError.code === 'FARE_PRICE_NOT_FOUND'
         ) {
-          toast.error('Bảng giá không còn tồn tại.');
+          toast.error(tFare('errors.notFound'));
           onNotFoundRef.current?.();
           setRequest({ key, status: 'error' });
           return;
@@ -264,12 +267,12 @@ export function FarePriceWorkspace({
     <SuperAdminLayout
       activeSection="fare-prices"
       breadcrumbs={[
-        { label: 'Vận hành', href: '/fare-prices' },
-        { label: 'Bảng giá vé', href: '/fare-prices' },
+        { label: tFare('eyebrow'), href: '/fare-prices' },
+        { label: tFare('farePricesTitle'), href: '/fare-prices' },
         {
           label: farePrice
             ? `${farePrice.route.code} (${farePrice.vehicleType.name})`
-            : `Bảng giá #${farePriceId}`,
+            : `${tFare('resourceLabel')} #${farePriceId}`,
         },
       ]}
     >
@@ -288,17 +291,17 @@ export function FarePriceWorkspace({
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Danh sách bảng giá
+                {tFare('backToList')}
               </Button>
 
               {canUpdate && farePrice && (
                 <>
                   <Button onClick={openStatusDialog} variant="outline">
-                    {farePrice.status === 'HOAT_DONG' ? 'Tạm ngưng' : 'Kích hoạt'}
+                    {farePrice.status === 'HOAT_DONG' ? tFare('suspendAction') : tFare('activateAction')}
                   </Button>
                   <Button onClick={() => setEditDialogOpen(true)}>
                     <Pencil aria-hidden="true" />
-                    Chỉnh sửa
+                    {tCommon('edit')}
                   </Button>
                 </>
               )}
@@ -309,13 +312,13 @@ export function FarePriceWorkspace({
               />
             </div>
           }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
-          title="Chi tiết bảng giá"
+          eyebrow={tFare('eyebrow')}
+          title={tFare('farePriceDetails')}
           titleId="fare-price-workspace-title"
         />
 
         {loading && (
-          <ResourceState loading>Đang tải thông tin bảng giá…</ResourceState>
+          <ResourceState loading>{tCommon('loading')}</ResourceState>
         )}
 
         {error && (
@@ -326,10 +329,10 @@ export function FarePriceWorkspace({
                 onClick={() => setRetryCount((count) => count + 1)}
                 variant="outline"
               >
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button nativeButton={false} render={<Link href="/fare-prices" />}>
-                Về danh sách bảng giá
+                {tFare('backToList')}
               </Button>
             </div>
           </ResourceState>
@@ -366,7 +369,7 @@ export function FarePriceWorkspace({
                   <ResourceStatusBadge
                     tone={farePrice.status === 'HOAT_DONG' ? 'active' : 'muted'}
                   >
-                    {statusLabel(farePrice.status)}
+                    {getStatusLabel(farePrice.status, tFare)}
                   </ResourceStatusBadge>
                   <ResourceStatusBadge
                     tone={
@@ -375,7 +378,7 @@ export function FarePriceWorkspace({
                         : 'muted'
                     }
                   >
-                    {effectiveStateLabel(farePrice.effectiveState)}
+                    {getEffectiveStateLabel(farePrice.effectiveState, tFare)}
                   </ResourceStatusBadge>
                 </div>
               </div>
@@ -383,11 +386,11 @@ export function FarePriceWorkspace({
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Giá niêm yết */}
+              {/* Card 1: Listed Price */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm border-primary/20 bg-primary/5">
                 <CardHeader className="p-0 pb-3">
                   <CardTitle className="text-sm font-semibold text-muted-foreground">
-                    Giá niêm yết chính thức
+                    {tFare('colListedPrice')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -395,95 +398,91 @@ export function FarePriceWorkspace({
                     {formatPrice(farePrice.listedPrice)}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Đơn vị tiền tệ: <strong className="text-foreground">{farePrice.currency}</strong>
+                    Currency: <strong className="text-foreground">{farePrice.currency}</strong>
                   </p>
                 </CardContent>
               </Card>
 
-              {/* Card 2: Thông tin hành trình & Loại xe */}
+              {/* Card 2: Route & Vehicle Type Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Compass className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Tuyến & Loại xe
+                      {tFare('infoRoute')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Điểm đi</dt>
-                      <dd>{farePrice.route.origin}</dd>
+                      <dt>{tFare('colRoute')}</dt>
+                      <dd>{farePrice.route.origin} → {farePrice.route.destination}</dd>
                     </div>
                     <div>
-                      <dt>Điểm đến</dt>
-                      <dd>{farePrice.route.destination}</dd>
-                    </div>
-                    <div>
-                      <dt>Loại xe áp dụng</dt>
+                      <dt>{tFare('colVehicleType')}</dt>
                       <dd>{farePrice.vehicleType.name}</dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
 
-              {/* Card 3: Thời gian hiệu lực */}
+              {/* Card 3: Validity Period */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Khoảng hiệu lực
+                      {tFare('colEffectiveDates')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Hiệu lực từ</dt>
+                      <dt>{tFare('colValidFrom')}</dt>
                       <dd className="admin-data-mono">
-                        {formatDateOnly(farePrice.validFrom)}
+                        {formatDateOnly(farePrice.validFrom, tFare('unlimitedDate'))}
                       </dd>
                     </div>
                     <div>
-                      <dt>Hiệu lực đến</dt>
+                      <dt>{tFare('colValidTo')}</dt>
                       <dd className="admin-data-mono">
-                        {formatDateOnly(farePrice.validTo)}
+                        {farePrice.validTo ? formatDateOnly(farePrice.validTo, tFare('unlimitedDate')) : tFare('unlimitedDate')}
                       </dd>
                     </div>
                     <div>
-                      <dt>Tình trạng áp dụng</dt>
-                      <dd>{effectiveStateLabel(farePrice.effectiveState)}</dd>
+                      <dt>{tFare('colCurrentEffective')}</dt>
+                      <dd>{getEffectiveStateLabel(farePrice.effectiveState, tFare)}</dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Thông tin hệ thống */}
+            {/* System Info */}
             <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
               <CardHeader className="p-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">
-                  Thông tin hệ thống
+                  {tFare('colStatus')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <dl className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
                   <div>
-                    <dt className="text-muted-foreground">Trạng thái cấu hình</dt>
+                    <dt className="text-muted-foreground">{tFare('colStatus')}</dt>
                     <dd className="mt-1 font-medium text-foreground">
-                      {statusLabel(farePrice.status)}
+                      {getStatusLabel(farePrice.status, tFare)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-muted-foreground">Ngày tạo</dt>
+                    <dt className="text-muted-foreground">Created</dt>
                     <dd className="mt-1 font-medium text-foreground tabular-nums">
                       {formatTimestamp(farePrice.createdAt)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-muted-foreground">Cập nhật lần cuối</dt>
+                    <dt className="text-muted-foreground">Updated</dt>
                     <dd className="mt-1 font-medium text-foreground tabular-nums">
                       {formatTimestamp(farePrice.updatedAt)}
                     </dd>
@@ -501,7 +500,7 @@ export function FarePriceWorkspace({
             onClose={() => setEditDialogOpen(false)}
             onNotFound={() => {
               setEditDialogOpen(false);
-              toast.error('Bảng giá không còn tồn tại.');
+              toast.error(tFare('errors.notFound'));
               onNotFound?.();
             }}
             onRetryRouteOptions={onRetryRouteOptions ?? (() => {})}
@@ -517,16 +516,16 @@ export function FarePriceWorkspace({
             busy={statusSubmitting}
             description={
               targetStatus === 'TAM_NGUNG'
-                ? 'Bảng giá này sẽ không còn được dùng để xác định giá áp dụng cho các vé mới. Lịch sử vé hiện có được giữ nguyên.'
-                : 'Bảng giá sẽ được kích hoạt nếu khoảng hiệu lực không trùng với bảng giá đang hoạt động khác.'
+                ? tFare('confirmSuspendDesc')
+                : tFare('confirmActivateDesc')
             }
             onClose={() => {
               if (!statusSubmittingRef.current) setStatusDialogOpen(false);
             }}
             title={
               targetStatus === 'TAM_NGUNG'
-                ? 'Tạm ngưng bảng giá?'
-                : 'Kích hoạt bảng giá?'
+                ? tFare('suspendAction')
+                : tFare('activateAction')
             }
           >
             <Button
@@ -538,10 +537,10 @@ export function FarePriceWorkspace({
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
               {statusSubmitting
-                ? 'Đang cập nhật…'
+                ? tCommon('saving')
                 : targetStatus === 'TAM_NGUNG'
-                  ? 'Tạm ngưng bảng giá'
-                  : 'Kích hoạt bảng giá'}
+                  ? tFare('suspendAction')
+                  : tFare('activateAction')}
             </Button>
           </ResourceConfirmation>
         )}

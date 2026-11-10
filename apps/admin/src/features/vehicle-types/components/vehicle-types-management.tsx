@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import type { VehicleTypeSortKey } from '../types/vehicle-type';
 import { useVehicleTypes } from '../hooks/use-vehicle-types';
 import { VehicleTypeFormDialog } from './vehicle-type-form-dialog';
@@ -62,6 +63,8 @@ function sortLabel(
 }
 
 export function VehicleTypesManagement() {
+  const tVehicleTypes = useTranslations('vehicleTypes');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { can } = useAdminPermissions();
   const canCreate = can('vehicle-type:create');
@@ -84,7 +87,7 @@ export function VehicleTypesManagement() {
   function sortButton(label: string, field: VehicleTypeSortKey) {
     return (
       <Button
-        aria-label={`Sắp xếp theo ${label}`}
+        aria-label={`${tCommon('sortBy')} ${label}`}
         className="-ml-3"
         variant="ghost"
         size="sm"
@@ -99,18 +102,22 @@ export function VehicleTypesManagement() {
     <SuperAdminLayout activeSection="vehicle-types">
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
-          eyebrow="DANH MỤC PHƯƠNG TIỆN"
-          title="Quản lý loại xe"
+          eyebrow={tVehicleTypes('eyebrow')}
+          title={tVehicleTypes('vehicleTypesTitle')}
           titleId="vehicle-types-title"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {canCreate && (
                 <ResourceCreateAction
-                  label="Thêm loại xe"
+                  label={tVehicleTypes('createVehicleType')}
                   onClick={() => setCreateDialogOpen(true)}
                 />
               )}
-              <ResourceRefreshAction loading={loading} onClick={refresh} />
+              <ResourceRefreshAction
+                loading={loading}
+                onClick={refresh}
+                label={tCommon('refresh')}
+              />
             </div>
           }
         />
@@ -118,20 +125,21 @@ export function VehicleTypesManagement() {
           <Card className="gap-0 py-0 ring-0">
             <FilterToolbar>
               <SearchInput
-                label="Tìm kiếm loại xe"
-                placeholder="Tìm tên loại xe, mô tả…"
+                label={tVehicleTypes('searchLabel')}
+                placeholder={tVehicleTypes('searchPlaceholder')}
                 value={searchInput}
                 onChange={updateSearch}
+                clearLabel={tCommon('clearSearch')}
               />
             </FilterToolbar>
             {loading && !vehicleTypePage && (
-              <ResourceTableSkeleton resourceLabel="loại xe" />
+              <ResourceTableSkeleton resourceLabel={tVehicleTypes('resourceLabel')} />
             )}
             {error && (
               <ResourceState error>
                 <p>{error}</p>
                 <Button variant="outline" onClick={retry}>
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             )}
@@ -139,12 +147,12 @@ export function VehicleTypesManagement() {
               <ResourceState>
                 <p>
                   {searchInput.trim()
-                    ? 'Không tìm thấy loại xe phù hợp.'
-                    : 'Chưa có loại xe trong danh mục.'}
+                    ? tVehicleTypes('noMatch')
+                    : tVehicleTypes('emptyList')}
                 </p>
                 {searchInput.trim() && (
                   <Button variant="outline" onClick={() => updateSearch('')}>
-                    Xóa tìm kiếm
+                    {tCommon('clearSearch')}
                   </Button>
                 )}
               </ResourceState>
@@ -156,16 +164,16 @@ export function VehicleTypesManagement() {
                     <div className="hidden md:block">
                       <Table className="min-w-[820px]">
                         <TableCaption className="sr-only">
-                          Danh sách loại xe
+                          {tVehicleTypes('tableCaption')}
                         </TableCaption>
                         <TableHeader>
                           <TableRow>
                             {(
                               [
-                                { key: 'name', label: 'Tên loại xe' },
-                                { key: null, label: 'Mô tả' },
-                                { key: 'createdAt', label: 'Ngày tạo' },
-                                { key: 'updatedAt', label: 'Cập nhật' },
+                                { key: 'name', label: tVehicleTypes('colName') },
+                                { key: null, label: tVehicleTypes('colDescription') },
+                                { key: 'createdAt', label: tVehicleTypes('colCreatedAt') },
+                                { key: 'updatedAt', label: tVehicleTypes('colUpdatedAt') },
                               ] as const
                             ).map((column) => (
                               <TableHead
@@ -187,7 +195,7 @@ export function VehicleTypesManagement() {
                               </TableHead>
                             ))}
                             <TableHead scope="col">
-                              <span className="sr-only">Thao tác</span>
+                              <span className="sr-only">{tCommon('actions')}</span>
                             </TableHead>
                           </TableRow>
                         </TableHeader>
@@ -201,7 +209,7 @@ export function VehicleTypesManagement() {
                                 {item.name}
                               </TableHead>
                               <TableCell className="max-w-80 whitespace-normal break-words text-muted-foreground">
-                                {item.description || 'Chưa có mô tả'}
+                                {item.description || tCommon('noDescription')}
                               </TableCell>
                               <TableCell className="whitespace-nowrap text-muted-foreground">
                                 {timestampFormat(item.createdAt)}
@@ -217,6 +225,7 @@ export function VehicleTypesManagement() {
                                       `/vehicle-types/${item.vehicleTypeId}`,
                                     )
                                   }
+                                  label={tCommon('viewDetails')}
                                   resourceName={`loại xe ${item.name}`}
                                 />
                               </TableCell>
@@ -228,12 +237,12 @@ export function VehicleTypesManagement() {
                     <div className="border-b p-4 md:hidden">
                       <div className="flex items-end gap-3">
                         <SelectFilter
-                          label="Sắp xếp theo"
+                          label={tCommon('sortBy')}
                           value={sortBy === 'name' ? '' : sortBy}
-                          allLabel="Tên loại xe"
+                          allLabel={tVehicleTypes('colName')}
                           options={[
-                            { value: 'createdAt', label: 'Ngày tạo' },
-                            { value: 'updatedAt', label: 'Cập nhật' },
+                            { value: 'createdAt', label: tVehicleTypes('colCreatedAt') },
+                            { value: 'updatedAt', label: tVehicleTypes('colUpdatedAt') },
                           ]}
                           onChange={(value) => {
                             const field = (value ||
@@ -244,14 +253,18 @@ export function VehicleTypesManagement() {
                         <Button
                           variant="outline"
                           onClick={() => sortVehicleTypes(sortBy)}
-                          aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                          aria-label={tCommon('toggleSortOrder', {
+                            order: sortDirection === 'asc' ? tCommon('ascending') : tCommon('descending'),
+                          })}
                         >
                           {sortDirection === 'asc' ? (
                             <ArrowUp aria-hidden />
                           ) : (
                             <ArrowDown aria-hidden />
                           )}
-                          {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                          {sortDirection === 'asc'
+                            ? tCommon('sortAscending')
+                            : tCommon('sortDescending')}
                         </Button>
                       </div>
                     </div>
@@ -270,18 +283,18 @@ export function VehicleTypesManagement() {
                             </p>
                           </div>
                           <p className="whitespace-pre-wrap break-words text-[13px] text-muted-foreground">
-                            {item.description || 'Chưa có mô tả'}
+                            {item.description || tCommon('noDescription')}
                           </p>
                           <dl className="grid grid-cols-2 gap-3 text-[13px]">
                             <div>
                               <dt className="mb-1 text-xs text-muted-foreground">
-                                Ngày tạo
+                                {tVehicleTypes('colCreatedAt')}
                               </dt>
                               <dd>{timestampFormat(item.createdAt)}</dd>
                             </div>
                             <div>
                               <dt className="mb-1 text-xs text-muted-foreground">
-                                Cập nhật
+                                {tVehicleTypes('colUpdatedAt')}
                               </dt>
                               <dd>{timestampFormat(item.updatedAt)}</dd>
                             </div>
@@ -294,6 +307,7 @@ export function VehicleTypesManagement() {
                                   `/vehicle-types/${item.vehicleTypeId}`,
                                 )
                               }
+                              label={tCommon('viewDetails')}
                               resourceName={`loại xe ${item.name}`}
                             />
                           </div>
@@ -307,9 +321,14 @@ export function VehicleTypesManagement() {
                   disabled={loading}
                   onPageChange={changePage}
                   pageSize={vehicleTypePage.meta.pageSize}
-                  summaryLabel="loại xe"
+                  summaryLabel={tVehicleTypes('resourceLabel')}
                   totalItems={vehicleTypePage.meta.totalItems}
                   totalPages={vehicleTypePage.meta.totalPages}
+                  showingLabel={tCommon('showing')}
+                  ofLabel={tCommon('of')}
+                  pageLabel={tCommon('page')}
+                  prevPageLabel={tCommon('prevPage')}
+                  nextPageLabel={tCommon('nextPage')}
                 />
               </>
             )}
@@ -321,7 +340,7 @@ export function VehicleTypesManagement() {
           onClose={() => setCreateDialogOpen(false)}
           onSaved={(item) => {
             setCreateDialogOpen(false);
-            toast.success(`Đã tạo loại xe ${item.name}.`);
+            toast.success(tVehicleTypes('createdSuccess', { name: item.name }));
             refresh();
           }}
         />

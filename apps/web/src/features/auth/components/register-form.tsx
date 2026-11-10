@@ -12,6 +12,7 @@ import {
   KeyRound,
   User,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuthSession } from '../auth-session';
@@ -21,6 +22,7 @@ import { sanitizeLoginRedirect } from '../services/login-redirect';
 export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('auth.register');
   const { signIn, isAuthenticated, isHydrated } = useAuthSession();
 
   const nextParam = searchParams.get('next') || searchParams.get('redirect');
@@ -81,7 +83,7 @@ export function RegisterForm() {
     let hasError = false;
 
     if (!fullName.trim()) {
-      setFullNameError('Vui lòng nhập họ và tên');
+      setFullNameError(t('fullNameRequired'));
       hasError = true;
     }
 
@@ -89,30 +91,30 @@ export function RegisterForm() {
     const isVietnamesePhone = /^(0|84)(3|5|7|8|9)\d{8}$/.test(cleanedPhone);
 
     if (!phone.trim()) {
-      setPhoneError('Vui lòng nhập số điện thoại');
+      setPhoneError(t('phoneRequired'));
       hasError = true;
     } else if (!isVietnamesePhone) {
-      setPhoneError('Số điện thoại không hợp lệ');
+      setPhoneError(t('phoneInvalid'));
       hasError = true;
     }
 
     const passwordBytes = new TextEncoder().encode(password).length;
     if (!password.trim()) {
-      setPasswordError('Vui lòng nhập mật khẩu');
+      setPasswordError(t('passwordRequired'));
       hasError = true;
     } else if (passwordBytes < 8) {
-      setPasswordError('Mật khẩu phải dài ít nhất 8 ký tự');
+      setPasswordError(t('passwordMinLength'));
       hasError = true;
     } else if (passwordBytes > 72) {
-      setPasswordError('Mật khẩu không được vượt quá 72 ký tự');
+      setPasswordError(t('passwordMaxLength'));
       hasError = true;
     }
 
     if (!confirmPassword.trim()) {
-      setConfirmPasswordError('Vui lòng xác nhận mật khẩu');
+      setConfirmPasswordError(t('confirmPasswordRequired'));
       hasError = true;
     } else if (password !== confirmPassword) {
-      setConfirmPasswordError('Mật khẩu xác nhận không khớp');
+      setConfirmPasswordError(t('passwordsDoNotMatch'));
       hasError = true;
     }
 
@@ -131,7 +133,7 @@ export function RegisterForm() {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Lỗi kết nối khi yêu cầu mã OTP');
+        setErrorMsg(t('otpRequestError'));
       }
     } finally {
       setIsLoading(false);
@@ -153,7 +155,7 @@ export function RegisterForm() {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Lỗi kết nối khi gửi lại mã OTP');
+        setErrorMsg(t('otpResendError'));
       }
     } finally {
       setIsLoading(false);
@@ -172,7 +174,7 @@ export function RegisterForm() {
       let proofToUse = cachedOtpProof;
       if (!proofToUse || cachedOtpChallengeId !== challengeId || cachedOtpPhone !== phone) {
         if (!otp.trim() || otp.length !== 6) {
-          setOtpError('Mã OTP phải bao gồm 6 chữ số');
+          setOtpError(t('otpMinLength'));
           setIsLoading(false);
           return;
         }
@@ -199,7 +201,7 @@ export function RegisterForm() {
       } else if (error instanceof Error) {
         setErrorMsg(error.message);
       } else {
-        setErrorMsg('Lỗi kết nối khi đăng ký');
+        setErrorMsg(t('registerError'));
       }
     } finally {
       setIsLoading(false);
@@ -210,7 +212,7 @@ export function RegisterForm() {
     return (
       <form className="space-y-4" onSubmit={handleVerifyOtpAndRegister}>
         <div className="text-sm text-slate-600 mb-4 text-center">
-          Mã xác thực (OTP) đã được gửi đến số điện thoại <b>{phone}</b>.<br />
+          {t('otpSentTo', { phone })}<br />
         </div>
 
         {errorMsg && (
@@ -220,9 +222,9 @@ export function RegisterForm() {
         )}
 
         <Input
-          label="Mã OTP"
+          label={t('otpLabel')}
           type="text"
-          placeholder="Nhập mã 6 số..."
+          placeholder={t('otpPlaceholder')}
           value={otp}
           error={otpError}
           onChange={(e) => {
@@ -235,14 +237,14 @@ export function RegisterForm() {
         />
 
         <div className="flex items-center justify-between text-sm pt-1">
-          <span className="text-slate-500">Chưa nhận được mã?</span>
+          <span className="text-slate-500">{t('didNotReceiveOtp')}</span>
           <button
             type="button"
             onClick={handleResendOtp}
             disabled={countdown > 0 || isLoading}
             className="font-semibold text-emerald-600 hover:text-emerald-800 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
           >
-            {countdown > 0 ? `Gửi lại sau (${countdown}s)` : 'Gửi lại mã OTP'}
+            {countdown > 0 ? t('resendIn', { countdown }) : t('resendOtp')}
           </button>
         </div>
 
@@ -258,7 +260,7 @@ export function RegisterForm() {
             }}
             disabled={isLoading}
           >
-            Quay lại
+            {t('backButton')}
           </Button>
           <Button
             type="submit"
@@ -266,7 +268,7 @@ export function RegisterForm() {
             className="w-full"
             isLoading={isLoading}
           >
-            Xác nhận
+            {t('confirmButton')}
           </Button>
         </div>
       </form>
@@ -282,9 +284,9 @@ export function RegisterForm() {
       )}
 
       <Input
-        label="Họ và tên"
+        label={t('fullNameLabel')}
         type="text"
-        placeholder="Nhập họ và tên..."
+        placeholder={t('fullNamePlaceholder')}
         value={fullName}
         error={fullNameError}
         onChange={(e) => {
@@ -296,9 +298,9 @@ export function RegisterForm() {
       />
 
       <Input
-        label="Số điện thoại"
+        label={t('phoneLabel')}
         type="tel"
-        placeholder="Nhập số điện thoại..."
+        placeholder={t('phonePlaceholder')}
         value={phone}
         error={phoneError}
         onChange={(e) => {
@@ -310,9 +312,9 @@ export function RegisterForm() {
       />
 
       <Input
-        label="Mật khẩu"
+        label={t('passwordLabel')}
         type={showPassword ? 'text' : 'password'}
-        placeholder="Nhập mật khẩu (tối thiểu 8 ký tự)..."
+        placeholder={t('passwordPlaceholder')}
         value={password}
         error={passwordError}
         onChange={(e) => {
@@ -337,9 +339,9 @@ export function RegisterForm() {
       />
 
       <Input
-        label="Xác nhận mật khẩu"
+        label={t('confirmPasswordLabel')}
         type={showConfirmPassword ? 'text' : 'password'}
-        placeholder="Nhập lại mật khẩu..."
+        placeholder={t('confirmPasswordPlaceholder')}
         value={confirmPassword}
         error={confirmPasswordError}
         onChange={(e) => {
@@ -372,7 +374,7 @@ export function RegisterForm() {
           isLoading={isLoading}
           leftIcon={<UserPlus className="w-5 h-5" />}
         >
-          Tiếp tục
+          {t('continueButton')}
         </Button>
       </div>
     </form>

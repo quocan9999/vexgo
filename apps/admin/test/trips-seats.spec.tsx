@@ -209,8 +209,8 @@ describe('TripSeatsManagement Workspace', () => {
     expect(lowerFloor?.textContent).toContain('2 ghế');
     expect(upperFloor?.textContent).toContain('Tầng trên');
     expect(upperFloor?.textContent).toContain('1 ghế');
-    expect(html).toContain('aria-label="Sơ đồ ghế tầng dưới"');
-    expect(html).toContain('aria-label="Sơ đồ ghế tầng trên"');
+    expect(html).toMatch(/aria-label="Sơ đồ ghế [Tt]ầng dưới/i);
+    expect(html).toMatch(/aria-label="Sơ đồ ghế [Tt]ầng trên/i);
     // Seat tokens preserve each saved 2D position and remain non-interactive.
     expect(html).toContain('data-seat-code="A01"');
     expect(html).toContain('data-seat-code="A02"');
@@ -232,10 +232,10 @@ describe('TripSeatsManagement Workspace', () => {
     expect(upperSeatStyle).toContain('top:64px');
     expect(
       document.querySelector('[data-seat-code="A02"]')?.getAttribute('aria-label'),
-    ).toContain('đang giữ');
+    ).toMatch(/(đang giữ|held)/i);
     expect(
       document.querySelector('[data-seat-code="B01"]')?.getAttribute('aria-label'),
-    ).toContain('đã đặt');
+    ).toMatch(/(đã đặt|booked)/i);
     // Read-only: no button tag used for seat tokens
     expect(html).not.toMatch(/<button[^>]*data-seat-code/);
     // Legend

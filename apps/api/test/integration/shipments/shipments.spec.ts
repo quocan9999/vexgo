@@ -155,7 +155,6 @@ describe('Shipment Read APIs (Phase 02)', () => {
 
     const customerAccount = await prisma.taiKhoan.create({
       data: {
-        hoTen: `F09 read customer ${token}`,
         email: `f09-read-customer-${token}@example.test`,
         soDienThoai: `+848${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
         matKhau: 'test-only-password-hash',
@@ -168,6 +167,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
     const customer = await prisma.khachHang.create({
       data: {
         maKhachHang: `F09-READ-KH-${token}`,
+        hoTen: `F09 read customer ${token}`,
         taiKhoanId: customerAccount.taiKhoanId,
       },
     });
@@ -483,7 +483,6 @@ describe('Shipment Read APIs (Phase 02)', () => {
   ) {
     const account = await prisma.taiKhoan.create({
       data: {
-        hoTen: `F09 read ${role} ${token}`,
         email: `f09-read-${role.toLowerCase()}-${token}@example.test`,
         soDienThoai: `+849${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
         matKhau: 'test-only-password-hash',
@@ -495,6 +494,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
     const employee = await prisma.nhanVien.create({
       data: {
         maNhanVien: `F09-READ-${role}-${token}`,
+        hoTen: `F09 read ${role} ${token}`,
         trangThaiLamViec: 'DANG_LAM',
         nhaXeId,
         taiKhoanId: account.taiKhoanId,
@@ -992,7 +992,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
         totalFee: 62500,
         freightPayer: 'NGUOI_GUI',
       });
-      expect(data.totalFee).toBe(62500);
+      expect(data.feeSummary.totalFee).toBe(62500);
 
       expect(Array.isArray(data.history)).toBe(true);
       expect(data.history).toHaveLength(sample.lichSuTrangThais.length);
@@ -1095,14 +1095,17 @@ describe('Shipment Read APIs (Phase 02)', () => {
       expect(order?.thanhToans).toHaveLength(1);
       const [payment] = order?.thanhToans ?? [];
       expect(payment?.thanhToanId).toBe(data.paymentId);
-      expect(payment?.phuongThuc).toBe('SEPAY');
+      expect(payment?.phuongThuc).toBe('TAI_BEN');
       expect(payment?.loaiGiaoDich).toBe('THANH_TOAN');
       expect(payment?.trangThai).toBe('DANG_XU_LY');
       expect(payment?.soTien.toNumber()).toBe(order?.tongTien.toNumber());
       expect(payment?.thoiGian.getTime()).toBe(order?.ngayTao.getTime());
-      expect(Date.parse(data.paymentExpiresAt)).toBe(
-        order!.ngayTao.getTime() + 10 * 60 * 1000,
-      );
+      expect(
+        Math.abs(
+          Date.parse(data.paymentExpiresAt) -
+            (order!.ngayTao.getTime() + 72 * 60 * 60 * 1000),
+        ),
+      ).toBeLessThanOrEqual(1000);
     });
 
     it('associates an authenticated shipment with its Customer and exposes its payment, list, and detail', async () => {
@@ -1204,8 +1207,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
         const expectedMinimumFee = await prisma.bangCuocGuiHang.aggregate({
           where: {
             trangThai: 'HOAT_DONG',
-            diemGuiId: tenant.diemGuiId,
-            diemNhanId: tenant.diemNhanId,
+            tuyenXeId: trip.tuyenXeId,
             tuNgay: { lte: new Date(`${dateIso}T00:00:00Z`) },
             OR: [
               { denNgay: null },
@@ -1227,7 +1229,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
             expect.objectContaining({
               routeId: trip.tuyenXeId,
               busCompany: expect.objectContaining({ id: tenantOneId }),
-              minimumEstimatedFee: Number(expectedMinimumFee._min.mucCuoc),
+              minimumEstimatedFee: Number(expectedMinimumFee._min?.mucCuoc ?? 0),
             }),
           ]),
         );

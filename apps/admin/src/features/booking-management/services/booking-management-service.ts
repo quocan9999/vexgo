@@ -266,7 +266,7 @@ async function readPage<T>(
 ): Promise<AdminPage<T>> {
   const body = await readEndpoint(path, resource, signal);
   if (!isPage(body, isItem)) {
-    throw new Error(`API trả về danh sách ${resource} không hợp lệ.`);
+    throw new Error(`API returned invalid ${resource} list.`);
   }
   return body;
 }
@@ -287,7 +287,7 @@ async function readEndpoint(
         isRecord(body) &&
         typeof body.message === 'string'
         ? body.message
-        : `Không thể tải ${resource} (HTTP ${response.status}).`,
+        : `Failed to load ${resource} (HTTP ${response.status}).`,
       response.status,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
@@ -302,7 +302,7 @@ export function getAdminBookings(
   return readPage(
     `/api/v1/admin/bookings?${queryParams(query).toString()}`,
     isBookingItem,
-    'phiếu đặt vé',
+    'bookings',
     signal,
   );
 }
@@ -314,7 +314,7 @@ export function getAdminTickets(
   return readPage(
     `/api/v1/admin/tickets?${queryParams(query).toString()}`,
     isTicketItem,
-    'vé',
+    'tickets',
     signal,
   );
 }
@@ -327,7 +327,7 @@ async function readDetail<T>(
 ): Promise<T> {
   const body = await readEndpoint(path, resource, signal);
   if (!isRecord(body) || !isItem(body.data)) {
-    throw new Error(`API trả về thông tin ${resource} không hợp lệ.`);
+    throw new Error(`API returned invalid ${resource} details.`);
   }
   return body.data;
 }
@@ -339,7 +339,7 @@ export function getAdminBookingDetail(
   return readDetail(
     `/api/v1/admin/bookings/${bookingId}`,
     isBookingDetail,
-    'phiếu đặt vé',
+    'booking',
     signal,
   );
 }
@@ -351,7 +351,7 @@ export function getAdminTicketDetail(
   return readDetail(
     `/api/v1/admin/tickets/${ticketId}`,
     isTicketDetail,
-    'vé',
+    'ticket',
     signal,
   );
 }
@@ -365,7 +365,7 @@ export function getAdminBookingHistory(
   return readPage(
     `/api/v1/admin/bookings/${bookingId}/history?page=${page}&pageSize=${pageSize}`,
     isHistoryEntry,
-    'lịch sử phiếu đặt vé',
+    'booking history',
     signal,
   );
 }
@@ -379,7 +379,7 @@ export function getAdminTicketHistory(
   return readPage(
     `/api/v1/admin/tickets/${ticketId}/history?page=${page}&pageSize=${pageSize}`,
     isHistoryEntry,
-    'lịch sử vé',
+    'ticket history',
     signal,
   );
 }

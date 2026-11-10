@@ -26,6 +26,7 @@ model NhaXe {
   cauHinhQuyenVaiTroNhaXes CauHinhQuyenVaiTroNhaXe[]
   cuocTroChuyens           CuocTroChuyen[]
   diemDonTras              DiemDonTra[]
+  aiKnowledgeDocuments     AiKnowledgeDocument[]
 }
 
 model LoaiXe {
@@ -301,6 +302,7 @@ model KhachHang {
   cuocTroChuyens     CuocTroChuyen[]
   phanHois           PhanHoi[]
   giuChos            GiuCho[]
+  aiChatSessions     AiChatSession[]
 }
 
 model NhanVien {
@@ -1101,3 +1103,102 @@ model PushThongBao {
 
   @@index([trangThai, createdAt])
 }
+
+model AiKnowledgeDocument {
+  id            Int                 @id @default(autoincrement()) @db.Int
+  documentCode  String              @unique @db.VarChar(100)
+  title         String              @db.VarChar(255)
+  category      String              @db.VarChar(50)
+  scope         String              @default("GLOBAL") @db.VarChar(20)
+  nhaXeId       Int?                @db.Int
+  hierarchyPath String              @db.VarChar(500)
+  rawContent    String              @db.Text
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now()) @db.DateTime(0)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe         NhaXe?              @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Cascade, onUpdate: Restrict)
+  chunks        AiKnowledgeChunk[]
+
+  @@index([nhaXeId])
+  @@index([category, scope, isActive])
+}
+
+model AiKnowledgeChunk {
+  id              Int                 @id @default(autoincrement()) @db.Int
+  documentId      Int                 @db.Int
+  chunkIndex      Int                 @db.Int
+  headerPrefix    String              @db.VarChar(500)
+  rawContent      String              @db.Text
+  groundedContent String              @db.Text
+  embedding       Json
+  embeddingModel  String              @default("jina-embeddings-v3") @db.VarChar(50)
+  createdAt       DateTime            @default(now()) @db.DateTime(0)
+  updatedAt       DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  document        AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+}
+
+model AiChatSession {
+  id           Int             @id @default(autoincrement()) @db.Int
+  sessionToken String          @unique @db.VarChar(64)
+  khachHangId  Int?            @db.Int
+  status       String          @default("ACTIVE") @db.VarChar(30)
+  createdAt    DateTime        @default(now()) @db.DateTime(0)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  khachHang    KhachHang?      @relation(fields: [khachHangId], references: [khachHangId], onDelete: SetNull, onUpdate: Restrict)
+  messages     AiChatMessage[]
+
+  @@index([khachHangId])
+  @@index([sessionToken])
+}
+
+model AiChatMessage {
+  id                   Int           @id @default(autoincrement()) @db.Int
+  sessionId            Int           @db.Int
+  role                 String        @db.VarChar(20)
+  content              String        @db.Text
+  intent               String?       @db.VarChar(50)
+  citations            Json?
+  toolCalls            Json?
+  requiresHumanHandoff Boolean       @default(false)
+  latencyMs            Int?          @db.Int
+  createdAt            DateTime      @default(now()) @db.DateTime(0)
+  session              AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@index([sessionId, createdAt])
+}
+
+model AiChatRequest {
+  id              Int       @id @default(autoincrement()) @db.Int
+  requestId       String    @unique @db.VarChar(64)
+  payloadHash     String    @db.Char(64)
+  status          String    @default("PROCESSING") @db.VarChar(30)
+  sessionToken    String?   @db.VarChar(64)
+  taiKhoanId      Int?      @db.Int
+  khachHangId     Int?      @db.Int
+  recoveryKeyHash String?   @db.Char(64)
+  responsePayload Json?
+  errorMessage    String?   @db.Text
+  errorCode       String?   @db.VarChar(50)
+  leaseUntil      DateTime? @db.DateTime(0)
+  createdAt       DateTime  @default(now()) @db.DateTime(0)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  expiresAt       DateTime  @db.DateTime(0)
+
+  @@index([taiKhoanId, status])
+  @@index([sessionToken])
+  @@index([expiresAt])
+}
+
+model AiChatbotSetting {
+  id                   Int      @id @default(1) @db.Int
+  idempotencyTtlDays   Int      @default(7) @db.Int
+  leaseDurationSeconds Int      @default(60) @db.Int
+  contextHistoryLimit  Int      @default(10) @db.Int
+  temperature          Decimal  @default(0.15) @db.Decimal(3, 2)
+  updatedAt            DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+

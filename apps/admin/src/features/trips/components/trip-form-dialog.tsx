@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 
 import { LoaderCircle } from 'lucide-react';
@@ -82,6 +84,8 @@ export function TripFormDialog({
   onSaved,
   trip,
 }: TripFormDialogProps) {
+  const tTrips = useTranslations('trips');
+  const tCommon = useTranslations('common');
   const editing = trip !== undefined;
   const idPrefix = editing ? `edit-trip-${trip.tripId}` : 'create-trip';
   const formRef = useRef<HTMLFormElement>(null);
@@ -125,7 +129,7 @@ export function TripFormDialog({
         !Number.isSafeInteger(Number(values.routeId)) ||
         Number(values.routeId) < 1
       ) {
-        errors.routeId = 'Vui lòng chọn tuyến xe.';
+        errors.routeId = tTrips('errorRouteRequired');
       }
 
       if (
@@ -133,22 +137,22 @@ export function TripFormDialog({
         !Number.isSafeInteger(Number(values.vehicleId)) ||
         Number(values.vehicleId) < 1
       ) {
-        errors.vehicleId = 'Vui lòng chọn xe phục vụ.';
+        errors.vehicleId = tTrips('errorVehicleRequired');
       }
     }
 
     if (!values.departureDate.trim()) {
-      errors.departureDate = 'Vui lòng chọn ngày khởi hành.';
+      errors.departureDate = tTrips('errorDepartureDateRequired');
     } else if (!/^\d{4}-\d{2}-\d{2}$/.test(values.departureDate.trim())) {
-      errors.departureDate = 'Ngày khởi hành không đúng định dạng YYYY-MM-DD.';
+      errors.departureDate = tTrips('errorDepartureDateFormat');
     }
 
     if (!values.departureTime.trim()) {
-      errors.departureTime = 'Vui lòng chọn giờ khởi hành.';
+      errors.departureTime = tTrips('errorDepartureTimeRequired');
     } else if (
       !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(values.departureTime.trim())
     ) {
-      errors.departureTime = 'Giờ khởi hành không hợp lệ (HH:mm).';
+      errors.departureTime = tTrips('errorDepartureTimeFormat');
     }
 
     return errors;
@@ -205,7 +209,7 @@ export function TripFormDialog({
     } catch (error: unknown) {
       if (error instanceof TripApiError) {
         if (error.code === 'TRIP_CODE_EXISTS') {
-          toast.error('Không thể cấp mã chuyến. Vui lòng thử tạo lại.');
+          toast.error(tTrips('errorTripCodeExists'));
         } else if (error.code === 'ROUTE_NOT_ACTIVE') {
           setFieldErrors((curr) => ({
             ...curr,
@@ -219,7 +223,7 @@ export function TripFormDialog({
         } else if (error.code === 'VEHICLE_HAS_NO_SEATS') {
           setFieldErrors((curr) => ({
             ...curr,
-            vehicleId: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến xe.',
+            vehicleId: tTrips('errorVehicleNoSeats'),
           }));
         } else if (error.details.length > 0) {
           const mapped = mappedErrors(error.details);
@@ -232,10 +236,10 @@ export function TripFormDialog({
       } else {
         toast.error(
           error instanceof TypeError
-            ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+            ? tTrips('errorCannotConnectApi')
             : error instanceof Error
               ? error.message
-              : 'Không thể lưu chuyến xe.',
+              : tTrips('errorCannotSaveTrip'),
         );
       }
     } finally {
@@ -260,14 +264,14 @@ export function TripFormDialog({
         <FieldLabel htmlFor={`${idPrefix}-${field}`}>{label}</FieldLabel>
         {options.status === 'loading' && (
           <p role="status" className="text-sm text-muted-foreground">
-            Đang tải {label.toLocaleLowerCase()}…
+            {tTrips('loadingRelation', { name: label })}
           </p>
         )}
         {options.status === 'error' && (
           <ResourceNotice kind="error">
             <span>{options.message}</span>
             <Button disabled={submitting} onClick={retry} variant="outline">
-              Thử tải lại
+              {tTrips('retryLoadingRelation')}
             </Button>
           </ResourceNotice>
         )}
@@ -290,8 +294,8 @@ export function TripFormDialog({
                   (option) => String(option.id) === values[field],
                 )?.label ??
                   (options.options.length
-                    ? `Chọn ${label.toLocaleLowerCase()}`
-                    : `Chưa có ${label.toLocaleLowerCase()}`)}
+                    ? tTrips('selectRelationPlaceholder', { name: label })
+                    : tTrips('noRelationPlaceholder', { name: label }))}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -314,11 +318,11 @@ export function TripFormDialog({
 
   return (
     <ResourceModalDialog
-      title={editing ? 'Chỉnh sửa chuyến xe' : 'Thêm chuyến xe'}
+      title={editing ? tTrips('formDialogEditTitle') : tTrips('formDialogAddTitle')}
       description={
         editing
-          ? 'Cập nhật ngày và giờ khởi hành của chuyến xe.'
-          : 'Chọn tuyến, xe phục vụ và thời gian khởi hành để tạo chuyến và khởi tạo ghế.'
+          ? tTrips('formDialogEditDesc')
+          : tTrips('formDialogAddDesc')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -332,7 +336,7 @@ export function TripFormDialog({
         footer={
           <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
             <Button disabled={submitting} onClick={closeDialog} variant="outline">
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button
               disabled={
@@ -351,10 +355,10 @@ export function TripFormDialog({
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
               {submitting
-                ? 'Đang lưu…'
+                ? tCommon('saving')
                 : editing
-                  ? 'Lưu thay đổi'
-                  : 'Tạo chuyến xe'}
+                  ? tCommon('saveChanges')
+                  : tTrips('createTrip')}
             </Button>
           </div>
         }
@@ -377,13 +381,13 @@ export function TripFormDialog({
 
             {relationField(
               'routeId',
-              'Tuyến xe',
+              tTrips('colRoute'),
               routeOptions,
               onRetryRouteOptions,
             )}
             {relationField(
               'vehicleId',
-              'Xe phục vụ',
+              tTrips('colVehicle'),
               vehicleOptions,
               onRetryVehicleOptions,
             )}
@@ -404,7 +408,7 @@ export function TripFormDialog({
                   }))
                 }
               />
-              Nhận gửi hàng
+              {tTrips('acceptsCargo')}
             </label>
             <label
               className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border p-3 text-[13px] font-semibold hover:bg-muted/50 transition-colors"
@@ -421,7 +425,7 @@ export function TripFormDialog({
                   }))
                 }
               />
-              Tự động sao chép lộ trình từ khuôn tuyến xe
+              {tTrips('autoCopyRouteTemplate')}
             </label>
           </>
         )}
@@ -429,7 +433,7 @@ export function TripFormDialog({
           {(['departureDate', 'departureTime'] as const).map((field) => (
             <FormField key={field} data-invalid={Boolean(fieldErrors[field])}>
               <FieldLabel htmlFor={`${idPrefix}-${field}`}>
-                {field === 'departureDate' ? 'Ngày khởi hành' : 'Giờ khởi hành'}
+                {field === 'departureDate' ? tTrips('departureDate') : tTrips('departureTime')}
               </FieldLabel>
               <Input
                 id={`${idPrefix}-${field}`}

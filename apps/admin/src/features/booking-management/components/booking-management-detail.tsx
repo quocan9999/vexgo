@@ -17,6 +17,7 @@ import { Button, buttonVariants } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import { useTranslations } from 'next-intl';
 import {
   getAdminBookingDetail,
   getAdminBookingHistory,
@@ -57,21 +58,21 @@ function getSessionKey(authState: ReturnType<typeof useAdminSession>) {
 function detailErrorMessage(error: unknown, kind: DetailKind) {
   if (error instanceof Error && error.message === 'INVALID_RESOURCE_ID') {
     return kind === 'bookings'
-      ? 'Mã phiếu đặt vé không hợp lệ.'
-      : 'Mã vé không hợp lệ.';
+      ? 'Invalid booking ID.'
+      : 'Invalid ticket ID.';
   }
   if (error instanceof BookingManagementApiError) {
     if (error.status === 401)
-      return 'Phiên quản trị đã hết hạn. Hãy đăng nhập lại.';
+      return 'Admin session expired. Please sign in again.';
     if (error.status === 403)
-      return 'Tài khoản hiện không có quyền xem dữ liệu này.';
+      return 'Account does not have permission to view this resource.';
     if (error.status === 404) {
       return kind === 'bookings'
-        ? 'Không tìm thấy phiếu đặt vé trong nhà xe.'
-        : 'Không tìm thấy vé trong nhà xe.';
+        ? 'Booking not found in operator scope.'
+        : 'Ticket not found in operator scope.';
     }
   }
-  return 'Không thể tải dữ liệu. Hãy thử lại.';
+  return 'Failed to load data. Please retry.';
 }
 
 function isAuthorizationError(error: unknown) {
@@ -81,11 +82,35 @@ function isAuthorizationError(error: unknown) {
   );
 }
 
-function sourceLabel(source: string) {
-  if (source === 'SYSTEM') return 'Hệ thống';
-  if (source === 'STAFF') return 'Nhân viên';
-  if (source === 'CUSTOMER') return 'Khách hàng';
+function sourceLabel(source: string, tBookings: (key: string) => string) {
+  if (source === 'SYSTEM') return tBookings('sourceSystem');
+  if (source === 'STAFF') return tBookings('sourceStaff');
+  if (source === 'CUSTOMER') return tBookings('sourceCustomer');
   return statusLabel(source);
+}
+
+function getBookingStatusDisplay(
+  status: string,
+  tBookings: (key: string) => string,
+) {
+  switch (status) {
+    case 'CHO_THANH_TOAN':
+    case 'CHO_THAN_TOAN':
+      return tBookings('statusPendingPayment');
+    case 'DA_THANH_TOAN':
+      return tBookings('statusPaid');
+    case 'HOAN_THANH':
+      return tBookings('statusCompleted');
+    case 'DA_HUY':
+    case 'HUY':
+      return tBookings('statusCancelled');
+    case 'DA_DAT':
+      return tBookings('statusConfirmed');
+    case 'THAT_BAI':
+      return tBookings('statusFailed');
+    default:
+      return statusLabel(status);
+  }
 }
 
 function InfoCard({
@@ -275,14 +300,16 @@ export function BookingManagementDetail({
     viewKey,
   ]);
 
+  const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   const pageTitle =
-    kind === 'bookings' ? 'Chi tiết phiếu đặt vé' : 'Chi tiết vé';
+    kind === 'bookings' ? tBookings('bookingDetails') : tBookings('ticketDetails');
 
   return (
     <SuperAdminLayout
       activeSection="booking-management"
       breadcrumbs={[
-        { label: 'Quản lý đặt vé & vé', href: '/booking-management' },
+        { label: tBookings('bookingsTitle'), href: '/booking-management' },
         { label: pageTitle },
       ]}
     >
@@ -294,9 +321,10 @@ export function BookingManagementDetail({
                 className={buttonVariants({ variant: 'outline' })}
                 href={backHref}
               >
-                Quay lại danh sách
+                {tCommon('backToList')}
               </Link>
               <ResourceRefreshAction
+                label={tCommon('refresh')}
                 loading={detailLoading}
                 onClick={() => {
                   setDetailRetry((retry) => retry + 1);
@@ -305,14 +333,14 @@ export function BookingManagementDetail({
               />
             </div>
           }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
+          eyebrow={tBookings('eyebrow')}
           title={pageTitle}
           titleId="booking-management-detail-title"
         />
 
         {detailLoading && !visibleDetail && !visibleDetailError && (
           <ResourceTableSkeleton
-            resourceLabel={kind === 'bookings' ? 'phiếu đặt vé' : 'vé'}
+            resourceLabel={kind === 'bookings' ? tBookings('resourceBookings') : tBookings('resourceTickets')}
           />
         )}
         {Boolean(visibleDetailError) && (
@@ -323,7 +351,7 @@ export function BookingManagementDetail({
               onClick={() => setDetailRetry((retry) => retry + 1)}
               type="button"
             >
-              Thử lại
+              {tCommon('retry')}
             </Button>
           </ResourceState>
         )}
@@ -376,6 +404,7 @@ function BookingDetailContent({
   onRetryHistory: () => void;
   onHistoryPageChange: (page: number) => void;
 }) {
+  const tBookings = useTranslations('bookings');
   return (
     <section
       aria-labelledby="booking-management-detail-title"
@@ -384,14 +413,14 @@ function BookingDetailContent({
       <header className="col-span-full flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5 [&_h2]:break-all [&_h2]:text-base [&_h2]:font-semibold">
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
-            PHIẾU ĐẶT VÉ
+            {tBookings('bookingBadge')}
           </p>
           <h2 className="admin-data-mono">{booking.bookingCode}</h2>
         </div>
         <ResourceStatusBadge
           tone={statusIsActive(booking.status) ? 'active' : 'muted'}
         >
-          {statusLabel(booking.status)}
+          {getBookingStatusDisplay(booking.status, tBookings)}
         </ResourceStatusBadge>
       </header>
 
@@ -403,45 +432,48 @@ function BookingDetailContent({
         </div>
       )}
 
-      <InfoCard title="Thông tin phiếu">
+      <InfoCard title={tBookings('cardBookingInfo')}>
         <InfoRows>
-          <InfoRow label="Ngày đặt">
+          <InfoRow label={tBookings('bookedDateLabel')}>
             {formatTimestamp(booking.bookedAt)}
           </InfoRow>
-          <InfoRow label="Khách hàng">{booking.customer.name}</InfoRow>
-          <InfoRow label="Điện thoại">{booking.customer.phoneNumber}</InfoRow>
-          <InfoRow label="Chuyến xe">
+          <InfoRow label={tBookings('colCustomer')}>{booking.customer.name}</InfoRow>
+          <InfoRow label={tBookings('customerPhone')}>{booking.customer.phoneNumber}</InfoRow>
+          <InfoRow label={tBookings('colTrip')}>
             {booking.trip
               ? `${booking.trip.origin} → ${booking.trip.destination}`
-              : 'Chưa xác định'}
+              : tBookings('unknownTrip')}
           </InfoRow>
-          <InfoRow label="Khởi hành">
+          <InfoRow label={tBookings('sortDepartureTime')}>
             {formatTimestamp(booking.trip?.departureAt)}
           </InfoRow>
-          <InfoRow label="Vé ban đầu">{booking.initialTicketCount}</InfoRow>
-          <InfoRow label="Vé đã hủy">{booking.cancelledTicketCount}</InfoRow>
-          <InfoRow label="Vé còn hiệu lực">{booking.activeTicketCount}</InfoRow>
+          <InfoRow label={tBookings('initialTickets')}>{booking.initialTicketCount}</InfoRow>
+          <InfoRow label={tBookings('cancelledTickets')}>{booking.cancelledTicketCount}</InfoRow>
+          <InfoRow label={tBookings('activeTickets')}>{booking.activeTicketCount}</InfoRow>
           {booking.isPartiallyCancelled && (
-            <InfoRow label="Hủy một phần">
-              Hủy {booking.cancelledTicketCount}/{booking.ticketCount} vé
+            <InfoRow label={tBookings('partialCancellation')}>
+              {tBookings('cancelledTicketCount', {
+                cancelled: booking.cancelledTicketCount,
+                total: booking.ticketCount,
+              })}
             </InfoRow>
           )}
-          <InfoRow label="Tổng tiền vé ban đầu">
+          <InfoRow label={tBookings('colInitialAmount')}>
             {formatVnd(booking.initialTicketAmount)}
           </InfoRow>
-          <InfoRow label="Tổng đơn giao dịch">
+          <InfoRow label={tBookings('totalTransactionAmount')}>
             {formatVnd(booking.transactionTotalAmount)}
           </InfoRow>
-          <InfoRow label="Trạng thái đơn">
-            {statusLabel(booking.transactionStatus)}
+          <InfoRow label={tBookings('orderStatus')}>
+            {getBookingStatusDisplay(booking.transactionStatus, tBookings)}
           </InfoRow>
         </InfoRows>
       </InfoCard>
 
-      <InfoCard title="Vé trong phiếu">
+      <InfoCard title={tBookings('cardTicketsInBooking')}>
         {booking.tickets.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
-            Phiếu chưa có vé để hiển thị.
+            {tBookings('noTicketsInBooking')}
           </p>
         ) : (
           <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:border-b [&>li]:pb-3 [&>li:last-child]:border-0 [&>li:last-child]:pb-0 [&>li>div]:min-w-0 [&>li>div]:flex-1 [&>li>div]:space-y-2 [&>li>div>span]:block [&>li>div>span]:text-[13px] [&>li>div>span]:text-muted-foreground">
@@ -461,7 +493,7 @@ function BookingDetailContent({
                 <ResourceStatusBadge
                   tone={statusIsActive(ticket.status) ? 'active' : 'muted'}
                 >
-                  {statusLabel(ticket.status)}
+                  {getBookingStatusDisplay(ticket.status, tBookings)}
                 </ResourceStatusBadge>
               </li>
             ))}
@@ -469,12 +501,12 @@ function BookingDetailContent({
         )}
       </InfoCard>
 
-      <InfoCard title="Thanh toán và hoàn tiền">
+      <InfoCard title={tBookings('cardPaymentRefund')}>
         <div className="space-y-3 border-b pb-4 last:border-0 last:pb-0 [&_h3]:text-[13px] [&_h3]:font-semibold">
-          <h3>Giao dịch thanh toán</h3>
+          <h3>{tBookings('paymentTransactions')}</h3>
           {booking.paymentSummary.originalPayments.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">
-              Chưa có thông tin thanh toán.
+              {tBookings('noPaymentInfo')}
             </p>
           ) : (
             <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:rounded-lg [&>li]:border [&>li]:p-3 [&>li>div]:grid [&>li>div]:min-w-0 [&>li>div]:gap-1 [&>li>div>span]:break-words [&>li>div>span]:text-xs [&>li>div>span]:text-muted-foreground">
@@ -485,14 +517,14 @@ function BookingDetailContent({
                     <span>
                       {payment.method
                         ? statusLabel(payment.method)
-                        : 'Chưa rõ phương thức'}{' '}
+                        : tBookings('paymentMethodUnknown')}{' '}
                       · {formatTimestamp(payment.occurredAt)}
                     </span>
                   </div>
                   <ResourceStatusBadge
                     tone={statusIsActive(payment.status) ? 'active' : 'muted'}
                   >
-                    {statusLabel(payment.status)}
+                    {getBookingStatusDisplay(payment.status, tBookings)}
                   </ResourceStatusBadge>
                 </li>
               ))}
@@ -503,10 +535,10 @@ function BookingDetailContent({
           const refunds = booking.paymentSummary.refunds[group];
           const groupLabel =
             group === 'pending'
-              ? 'Hoàn tiền đang xử lý'
+              ? tBookings('refundPending')
               : group === 'succeeded'
-                ? 'Hoàn tiền đã thành công'
-                : 'Hoàn tiền trạng thái khác';
+                ? tBookings('refundSucceeded')
+                : tBookings('refundOther');
           return (
             <div
               className="space-y-3 border-b pb-4 last:border-0 last:pb-0 [&_h3]:text-[13px] [&_h3]:font-semibold"
@@ -515,7 +547,7 @@ function BookingDetailContent({
               <h3>{groupLabel}</h3>
               {refunds.length === 0 ? (
                 <p className="text-[13px] text-muted-foreground">
-                  Không có giao dịch.
+                  {tBookings('noTransactions')}
                 </p>
               ) : (
                 <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:rounded-lg [&>li]:border [&>li]:p-3 [&>li>div]:grid [&>li>div]:min-w-0 [&>li>div]:gap-1 [&>li>div>span]:break-words [&>li>div>span]:text-xs [&>li>div>span]:text-muted-foreground">
@@ -525,8 +557,8 @@ function BookingDetailContent({
                         <strong>{formatVnd(refund.amountVnd)}</strong>
                         <span>
                           {refund.allocation === 'TICKET'
-                            ? 'Gắn với vé'
-                            : 'Chưa xác định phân bổ'}{' '}
+                            ? tBookings('refundAllocatedTicket')
+                            : tBookings('refundAllocatedUnknown')}{' '}
                           · {formatTimestamp(refund.occurredAt)}
                         </span>
                       </div>
@@ -535,7 +567,7 @@ function BookingDetailContent({
                           statusIsActive(refund.status) ? 'active' : 'muted'
                         }
                       >
-                        {statusLabel(refund.status)}
+                        {getBookingStatusDisplay(refund.status, tBookings)}
                       </ResourceStatusBadge>
                     </li>
                   ))}
@@ -547,7 +579,7 @@ function BookingDetailContent({
       </InfoCard>
 
       {booking.shipment && (
-        <InfoCard title="Phiếu gửi hàng cùng giao dịch">
+        <InfoCard title={tBookings('cardShipmentInTransaction')}>
           {booking.shipment.tripIntegrity !== 'CONSISTENT' && (
             <div className="col-span-full">
               <ResourceNotice kind="info">
@@ -556,28 +588,28 @@ function BookingDetailContent({
             </div>
           )}
           <InfoRows>
-            <InfoRow label="Mã vận đơn">
+            <InfoRow label={tBookings('trackingCode')}>
               <span className="admin-data-mono">
                 {booking.shipment.trackingCode}
               </span>
             </InfoRow>
-            <InfoRow label="Trạng thái gửi hàng">
+            <InfoRow label={tBookings('shipmentStatus')}>
               <ResourceStatusBadge
                 tone={
                   statusIsActive(booking.shipment.status) ? 'active' : 'muted'
                 }
               >
-                {statusLabel(booking.shipment.status)}
+                {getBookingStatusDisplay(booking.shipment.status, tBookings)}
               </ResourceStatusBadge>
             </InfoRow>
-            <InfoRow label="Chuyến xe">
+            <InfoRow label={tBookings('colTrip')}>
               {booking.shipment.tripId !== null
-                ? `Chuyến #${booking.shipment.tripId}`
-                : 'Chuyến chưa xác định'}
+                ? tBookings('shipmentTrip', { tripId: booking.shipment.tripId })
+                : tBookings('unknownTrip')}
             </InfoRow>
-            <InfoRow label="Hàng hóa">
+            <InfoRow label={tBookings('shipmentItems')}>
               {booking.shipment.items.length === 0
-                ? 'Chưa có thông tin hàng hóa'
+                ? tBookings('noShipmentItems')
                 : booking.shipment.items
                     .map(
                       (item) =>
@@ -592,7 +624,7 @@ function BookingDetailContent({
       <HistorySection
         error={historyError}
         history={history}
-        kind="phiếu"
+        kind="booking"
         loading={historyLoading}
         onRetry={onRetryHistory}
         onPageChange={onHistoryPageChange}
@@ -618,6 +650,7 @@ function TicketDetailContent({
   onRetryHistory: () => void;
   onHistoryPageChange: (page: number) => void;
 }) {
+  const tBookings = useTranslations('bookings');
   return (
     <section
       aria-labelledby="booking-management-detail-title"
@@ -625,13 +658,13 @@ function TicketDetailContent({
     >
       <header className="col-span-full flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5 [&_h2]:break-all [&_h2]:text-base [&_h2]:font-semibold">
         <div>
-          <p className="mb-2 text-xs font-medium text-muted-foreground">VÉ</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">{tBookings('ticketBadge')}</p>
           <h2 className="admin-data-mono">{ticket.ticketCode}</h2>
         </div>
         <ResourceStatusBadge
           tone={statusIsActive(ticket.status) ? 'active' : 'muted'}
         >
-          {statusLabel(ticket.status)}
+          {getBookingStatusDisplay(ticket.status, tBookings)}
         </ResourceStatusBadge>
       </header>
 
@@ -643,9 +676,9 @@ function TicketDetailContent({
         </div>
       )}
 
-      <InfoCard title="Thông tin vé">
+      <InfoCard title={tBookings('cardTicketInfo')}>
         <InfoRows>
-          <InfoRow label="Phiếu đặt">
+          <InfoRow label={tBookings('colBooking')}>
             <Link
               className="admin-data-mono inline-flex min-h-11 items-center break-all text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
               href={`/booking-management/bookings/${ticket.booking.bookingId}?from=${encodeURIComponent(backHref)}`}
@@ -653,42 +686,42 @@ function TicketDetailContent({
               {ticket.booking.bookingCode}
             </Link>
           </InfoRow>
-          <InfoRow label="Khách hàng">{ticket.customer.name}</InfoRow>
-          <InfoRow label="Điện thoại">{ticket.customer.phoneNumber}</InfoRow>
-          <InfoRow label="Tuyến xe">
+          <InfoRow label={tBookings('colCustomer')}>{ticket.customer.name}</InfoRow>
+          <InfoRow label={tBookings('customerPhone')}>{ticket.customer.phoneNumber}</InfoRow>
+          <InfoRow label={tBookings('routeLabel')}>
             {ticket.trip
               ? `${ticket.trip.origin} → ${ticket.trip.destination}`
-              : 'Chưa xác định'}
+              : tBookings('unknownTrip')}
           </InfoRow>
-          <InfoRow label="Chuyến xe">
+          <InfoRow label={tBookings('tripCodeLabel')}>
             <span className="admin-data-mono">
               {ticket.trip?.tripCode ?? '—'}
             </span>
           </InfoRow>
-          <InfoRow label="Khởi hành">
+          <InfoRow label={tBookings('sortDepartureTime')}>
             {formatTimestamp(ticket.trip?.departureAt)}
           </InfoRow>
-          <InfoRow label="Ghế">
+          <InfoRow label={tBookings('colSeat')}>
             <span className="admin-data-mono">{ticket.seatNumber ?? '—'}</span>
           </InfoRow>
-          <InfoRow label="Điểm đón">{ticket.pickup ?? '—'}</InfoRow>
-          <InfoRow label="Giá thực tế">{formatVnd(ticket.actualPrice)}</InfoRow>
-          <InfoRow label="Giá niêm yết">
+          <InfoRow label={tBookings('pickupPoint')}>{ticket.pickup ?? '—'}</InfoRow>
+          <InfoRow label={tBookings('colActualPrice')}>{formatVnd(ticket.actualPrice)}</InfoRow>
+          <InfoRow label={tBookings('listedPrice')}>
             {formatVnd(ticket.listedPrice)}
           </InfoRow>
-          <InfoRow label="Trạng thái phiếu">
-            {statusLabel(ticket.booking.status)}
+          <InfoRow label={tBookings('colBookingStatus')}>
+            {getBookingStatusDisplay(ticket.booking.status, tBookings)}
           </InfoRow>
-          <InfoRow label="Trạng thái đơn">
-            {statusLabel(ticket.booking.transactionStatus)}
+          <InfoRow label={tBookings('orderStatus')}>
+            {getBookingStatusDisplay(ticket.booking.transactionStatus, tBookings)}
           </InfoRow>
         </InfoRows>
       </InfoCard>
 
-      <InfoCard title="Hoàn tiền gắn với vé">
+      <InfoCard title={tBookings('cardTicketRefund')}>
         {ticket.refunds.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
-            Chưa có thông tin hoàn tiền gắn với vé này.
+            {tBookings('noTicketRefund')}
           </p>
         ) : (
           <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:rounded-lg [&>li]:border [&>li]:p-3 [&>li>div]:grid [&>li>div]:min-w-0 [&>li>div]:gap-1 [&>li>div>span]:break-words [&>li>div>span]:text-xs [&>li>div>span]:text-muted-foreground">
@@ -699,14 +732,14 @@ function TicketDetailContent({
                   <span>
                     {refund.method
                       ? statusLabel(refund.method)
-                      : 'Chưa rõ phương thức'}{' '}
+                      : tBookings('paymentMethodUnknown')}{' '}
                     · {formatTimestamp(refund.occurredAt)}
                   </span>
                 </div>
                 <ResourceStatusBadge
                   tone={statusIsActive(refund.status) ? 'active' : 'muted'}
                 >
-                  {statusLabel(refund.status)}
+                  {getBookingStatusDisplay(refund.status, tBookings)}
                 </ResourceStatusBadge>
               </li>
             ))}
@@ -717,7 +750,7 @@ function TicketDetailContent({
       <HistorySection
         error={historyError}
         history={history}
-        kind="vé"
+        kind="ticket"
         loading={historyLoading}
         onRetry={onRetryHistory}
         onPageChange={onHistoryPageChange}
@@ -736,20 +769,26 @@ function HistorySection({
 }: {
   error: unknown;
   history: AdminPage<AdminHistoryEntry> | null;
-  kind: string;
+  kind: 'booking' | 'ticket';
   loading: boolean;
   onRetry: () => void;
   onPageChange: (page: number) => void;
 }) {
+  const tBookings = useTranslations('bookings');
   return (
-    <InfoCard title={`Lịch sử trạng thái ${kind}`} className="lg:col-span-2">
+    <InfoCard
+      title={tBookings('historySectionTitle', {
+        kind: kind === 'booking' ? tBookings('kindBooking') : tBookings('kindTicket'),
+      })}
+      className="lg:col-span-2"
+    >
       {loading && !history && (
         <p
           aria-live="polite"
           className="text-[13px] text-muted-foreground"
           role="status"
         >
-          Đang tải lịch sử…
+          {tBookings('loadingHistory')}
         </p>
       )}
       {Boolean(error) && (
@@ -757,17 +796,17 @@ function HistorySection({
           <p>
             {detailErrorMessage(
               error,
-              kind === 'phiếu' ? 'bookings' : 'tickets',
+              kind === 'booking' ? 'bookings' : 'tickets',
             )}
           </p>
           <Button variant="outline" onClick={onRetry} type="button">
-            Tải lại lịch sử
+            {tBookings('reloadHistory')}
           </Button>
         </ResourceState>
       )}
       {!loading && !error && history && history.data.length === 0 && (
         <p className="text-[13px] text-muted-foreground">
-          Chưa có lịch sử trạng thái.
+          {tBookings('noHistory')}
         </p>
       )}
       {!error && history && history.data.length > 0 && (
@@ -787,12 +826,16 @@ function HistorySection({
                     {formatTimestamp(entry.occurredAt)}
                   </time>
                   <span>
-                    Nguồn: {sourceLabel(entry.source)}
-                    {entry.isOverride ? ' · Có ghi đè' : ''}
+                    {tBookings('sourceLabel', {
+                      source: sourceLabel(entry.source, tBookings),
+                    })}
+                    {entry.isOverride ? ` · ${tBookings('overrideLabel')}` : ''}
                   </span>
                   {entry.reason && <p>{entry.reason}</p>}
                   {entry.source !== 'SYSTEM' && entry.actorName && (
-                    <span>Người thao tác: {entry.actorName}</span>
+                    <span>
+                      {tBookings('operatorLabel', { name: entry.actorName })}
+                    </span>
                   )}
                 </div>
               </li>
@@ -804,7 +847,7 @@ function HistorySection({
               disabled={loading}
               onPageChange={onPageChange}
               pageSize={history.meta.pageSize}
-              summaryLabel="sự kiện lịch sử"
+              summaryLabel={tBookings('historyEvents')}
               totalItems={history.meta.totalItems}
               totalPages={history.meta.totalPages}
             />

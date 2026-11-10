@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Lock, AlertCircle, ShieldCheck } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { authApi, ApiError } from '@/features/auth/services/auth.api';
 import { AlertModal } from '@/components/ui/alert-modal';
@@ -15,6 +16,9 @@ interface FieldErrors {
 
 export const PasswordForm: React.FC = () => {
   const router = useRouter();
+  const t = useTranslations('account.password');
+  const tProfile = useTranslations('account.profile');
+  const locale = useLocale();
   const { user, accessToken, executeWithAuth } = useAuthSession();
 
   const [oldPassword, setOldPassword] = useState('');
@@ -58,21 +62,21 @@ export const PasswordForm: React.FC = () => {
     const errors: FieldErrors = {};
 
     if (!oldPassword) {
-      errors.oldPassword = 'Vui lòng nhập mật khẩu cũ.';
+      errors.oldPassword = t('oldPasswordRequired');
     }
 
     if (!newPassword) {
-      errors.newPassword = 'Vui lòng nhập mật khẩu mới.';
+      errors.newPassword = t('newPasswordRequired');
     } else if (newPassword.length < 8) {
-      errors.newPassword = 'Mật khẩu mới phải có tối thiểu 8 ký tự.';
+      errors.newPassword = t('newPasswordMinLength');
     } else if (newPassword === oldPassword) {
-      errors.newPassword = 'Mật khẩu mới không được trùng với mật khẩu cũ.';
+      errors.newPassword = t('samePassword');
     }
 
     if (!confirmPassword) {
-      errors.confirmPassword = 'Vui lòng xác nhận mật khẩu mới.';
+      errors.confirmPassword = t('confirmPasswordRequired');
     } else if (confirmPassword !== newPassword) {
-      errors.confirmPassword = 'Mật khẩu xác nhận không khớp.';
+      errors.confirmPassword = t('passwordMismatch');
     }
 
     setFieldErrors(errors);
@@ -88,7 +92,7 @@ export const PasswordForm: React.FC = () => {
     }
 
     if (!accessToken) {
-      router.replace('/auth/login?next=/account/profile/password');
+      router.replace(`/${locale}/login?next=/account/profile/password`);
       return;
     }
 
@@ -103,8 +107,8 @@ export const PasswordForm: React.FC = () => {
 
       handleResetForm();
       setModalConfig({
-        title: 'Đổi mật khẩu thành công',
-        message: 'Mật khẩu tài khoản của bạn đã được cập nhật thành công.',
+        title: t('updateSuccessTitle'),
+        message: t('updateSuccessMessage'),
         variant: 'success',
       });
       setModalOpen(true);
@@ -112,12 +116,12 @@ export const PasswordForm: React.FC = () => {
       if (error instanceof ApiError) {
         if (error.status === 401) {
           setModalConfig({
-            title: 'Phiên đăng nhập hết hạn',
-            message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+            title: tProfile('sessionExpiredTitle'),
+            message: tProfile('sessionExpiredMessage'),
             variant: 'error',
           });
           setModalOpen(true);
-          router.replace('/auth/login?next=/account/profile/password');
+          router.replace(`/${locale}/login?next=/account/profile/password`);
           return;
         }
 
@@ -125,7 +129,7 @@ export const PasswordForm: React.FC = () => {
         if (error.error === 'INVALID_OLD_PASSWORD') {
           setFieldErrors((prev) => ({
             ...prev,
-            oldPassword: 'Mật khẩu cũ không chính xác.',
+            oldPassword: t('invalidOldPassword'),
           }));
           return;
         }
@@ -133,17 +137,17 @@ export const PasswordForm: React.FC = () => {
         if (error.error === 'SAME_PASSWORD') {
           setFieldErrors((prev) => ({
             ...prev,
-            newPassword: 'Mật khẩu mới không được trùng với mật khẩu cũ.',
+            newPassword: t('samePassword'),
           }));
           return;
         }
 
-        setGeneralError(error.message || 'Không thể đổi mật khẩu lúc này.');
+        setGeneralError(error.message || t('updateFailed'));
         return;
       }
 
       setGeneralError(
-        error instanceof Error ? error.message : 'Không thể đổi mật khẩu lúc này.',
+        error instanceof Error ? error.message : t('updateFailed'),
       );
     } finally {
       setIsSubmitting(false);
@@ -154,7 +158,7 @@ export const PasswordForm: React.FC = () => {
     <>
       <div className="mb-6">
         <h2 className="text-xl md:text-2xl font-black text-[#0060c4] tracking-tight">
-          Đặt lại mật khẩu
+          {t('title')}
         </h2>
       </div>
 
@@ -165,7 +169,7 @@ export const PasswordForm: React.FC = () => {
               <ShieldCheck className="w-6 h-6 text-emerald-600" />
             </div>
             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Số điện thoại tài khoản
+              {t('accountPhone')}
             </div>
             <h3 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-wide font-mono">
               {user.phoneNumber}
@@ -185,7 +189,7 @@ export const PasswordForm: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-semibold text-slate-700">
-                <span className="text-rose-500 mr-1">*</span>Mật khẩu cũ
+                <span className="text-rose-500 mr-1">*</span>{t('oldPasswordLabel')}
               </label>
             </div>
             <div className="relative">
@@ -199,7 +203,7 @@ export const PasswordForm: React.FC = () => {
                   setOldPassword(e.target.value);
                   clearFieldError('oldPassword');
                 }}
-                placeholder="Nhập mật khẩu cũ"
+                placeholder={t('oldPasswordPlaceholder')}
                 className={`w-full pl-10 pr-11 py-3 bg-slate-50/70 border rounded-xl text-sm transition-all focus:outline-none focus:bg-white ${
                   fieldErrors.oldPassword
                     ? 'border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15 bg-rose-50/20 text-slate-900'
@@ -210,7 +214,7 @@ export const PasswordForm: React.FC = () => {
                 type="button"
                 onClick={() => setShowOldPassword(!showOldPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-md transition-colors"
-                aria-label={showOldPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                aria-label={showOldPassword ? t('hidePassword') : t('showPassword')}
               >
                 {showOldPassword ? (
                   <Eye className="w-4 h-4 text-slate-500" />
@@ -231,9 +235,9 @@ export const PasswordForm: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-semibold text-slate-700">
-                <span className="text-rose-500 mr-1">*</span>Mật khẩu mới
+                <span className="text-rose-500 mr-1">*</span>{t('newPasswordLabel')}
               </label>
-              <span className="text-[11px] text-slate-400 font-medium">Tối thiểu 8 ký tự</span>
+              <span className="text-[11px] text-slate-400 font-medium">{t('minChars')}</span>
             </div>
             <div className="relative">
               <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
@@ -246,7 +250,7 @@ export const PasswordForm: React.FC = () => {
                   setNewPassword(e.target.value);
                   clearFieldError('newPassword');
                 }}
-                placeholder="Nhập mật khẩu mới"
+                placeholder={t('newPasswordPlaceholder')}
                 className={`w-full pl-10 pr-11 py-3 bg-slate-50/70 border rounded-xl text-sm transition-all focus:outline-none focus:bg-white ${
                   fieldErrors.newPassword
                     ? 'border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15 bg-rose-50/20 text-slate-900'
@@ -257,7 +261,7 @@ export const PasswordForm: React.FC = () => {
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-md transition-colors"
-                aria-label={showNewPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                aria-label={showNewPassword ? t('hidePassword') : t('showPassword')}
               >
                 {showNewPassword ? (
                   <Eye className="w-4 h-4 text-slate-500" />
@@ -278,7 +282,7 @@ export const PasswordForm: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-semibold text-slate-700">
-                <span className="text-rose-500 mr-1">*</span>Xác nhận mật khẩu
+                <span className="text-rose-500 mr-1">*</span>{t('confirmPasswordLabel')}
               </label>
             </div>
             <div className="relative">
@@ -292,7 +296,7 @@ export const PasswordForm: React.FC = () => {
                   setConfirmPassword(e.target.value);
                   clearFieldError('confirmPassword');
                 }}
-                placeholder="Nhập lại mật khẩu mới"
+                placeholder={t('confirmPasswordPlaceholder')}
                 className={`w-full pl-10 pr-11 py-3 bg-slate-50/70 border rounded-xl text-sm transition-all focus:outline-none focus:bg-white ${
                   fieldErrors.confirmPassword
                     ? 'border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15 bg-rose-50/20 text-slate-900'
@@ -303,7 +307,7 @@ export const PasswordForm: React.FC = () => {
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-md transition-colors"
-                aria-label={showConfirmPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                aria-label={showConfirmPassword ? t('hidePassword') : t('showPassword')}
               >
                 {showConfirmPassword ? (
                   <Eye className="w-4 h-4 text-slate-500" />
@@ -328,7 +332,7 @@ export const PasswordForm: React.FC = () => {
               disabled={isSubmitting}
               className="px-7 py-2.5 border border-slate-300 rounded-full text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50 active:scale-[0.98]"
             >
-              Hủy
+              {t('cancel')}
             </button>
             <button
               type="submit"
@@ -338,10 +342,10 @@ export const PasswordForm: React.FC = () => {
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Đang xử lý...</span>
+                  <span>{t('processing')}</span>
                 </>
               ) : (
-                <span>Xác nhận</span>
+                <span>{t('confirm')}</span>
               )}
             </button>
           </div>

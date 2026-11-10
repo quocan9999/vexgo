@@ -204,7 +204,7 @@ describe('Fare Prices list and detail behavior', () => {
     ).toBeTruthy();
     expect((await screen.findAllByText('Limousine')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
-    const mobileList = screen.getByLabelText('Danh sách bảng giá dạng thẻ');
+    const mobileList = screen.getByLabelText(/(Danh sách bảng giá( vé)? dạng thẻ)/i);
     expect(mobileList.className).toContain('md:hidden');
     expect(mobileList.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
 
@@ -226,7 +226,7 @@ describe('Fare Prices list and detail behavior', () => {
 
     render(<FarePricesManagement />);
 
-    expect(await screen.findByText('Chưa có bảng giá nào.')).toBeTruthy();
+    expect(await screen.findByText(/(Chưa có bảng giá( vé)? nào)/i)).toBeTruthy();
   });
 
   it('shows a safe error and retries the list request', async () => {
@@ -256,7 +256,7 @@ describe('Fare Prices list and detail behavior', () => {
     render(<FarePricesManagement />);
 
     const search = await screen.findByRole('searchbox', {
-      name: 'Tìm bảng giá',
+      name: /(Tìm kiếm bảng giá vé|Tìm bảng giá)/i,
     });
     fireEvent.change(search, { target: { value: 'SG-DL' } });
 

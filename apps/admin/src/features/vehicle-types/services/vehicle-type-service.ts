@@ -71,14 +71,14 @@ function getErrorMessage(body: unknown, status: number, resource: string) {
     return body.message;
   }
 
-  return `Không thể tải ${resource} (HTTP ${status}).`;
+  return `Failed to load ${resource} (HTTP ${status}).`;
 }
 
 function getWriteError(body: unknown, status: number, action: string) {
   const message =
     isRecord(body) && typeof body.message === 'string'
       ? body.message
-      : `Không thể ${action} loại xe (HTTP ${status}).`;
+      : `Failed to ${action} vehicle type (HTTP ${status}).`;
   const code =
     isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
   const details =
@@ -97,7 +97,7 @@ function getWriteError(body: unknown, status: number, action: string) {
 
 function parseVehicleTypeResponse(body: unknown) {
   if (!isRecord(body) || !isVehicleType(body.data)) {
-    throw new Error('API trả về thông tin loại xe không hợp lệ.');
+    throw new Error('API returned invalid vehicle type details.');
   }
   return body.data;
 }
@@ -116,7 +116,7 @@ export async function createVehicleType(
   );
   const body: unknown = await response.json().catch(() => null);
 
-  if (!response.ok) throw getWriteError(body, response.status, 'tạo');
+  if (!response.ok) throw getWriteError(body, response.status, 'create');
   return parseVehicleTypeResponse(body);
 }
 
@@ -135,7 +135,7 @@ export async function updateVehicleType(
   );
   const body: unknown = await response.json().catch(() => null);
 
-  if (!response.ok) throw getWriteError(body, response.status, 'cập nhật');
+  if (!response.ok) throw getWriteError(body, response.status, 'update');
   return parseVehicleTypeResponse(body);
 }
 
@@ -158,11 +158,11 @@ export async function getVehicleTypes(
 
   if (!response.ok) {
     throw new Error(
-      getErrorMessage(body, response.status, 'danh sách loại xe'),
+      getErrorMessage(body, response.status, 'vehicle type list'),
     );
   }
   if (!isPaginatedVehicleTypes(body)) {
-    throw new Error('API trả về danh sách loại xe không hợp lệ.');
+    throw new Error('API returned invalid vehicle type list.');
   }
 
   return body;
@@ -180,11 +180,11 @@ export async function getVehicleTypeById(
 
   if (!response.ok) {
     throw new Error(
-      getErrorMessage(body, response.status, 'thông tin loại xe'),
+      getErrorMessage(body, response.status, 'vehicle type details'),
     );
   }
   if (!isRecord(body) || !isVehicleType(body.data)) {
-    throw new Error('API trả về thông tin loại xe không hợp lệ.');
+    throw new Error('API returned invalid vehicle type details.');
   }
 
   return body.data;

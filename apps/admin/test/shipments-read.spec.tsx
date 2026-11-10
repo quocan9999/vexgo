@@ -188,7 +188,7 @@ describe('ShipmentsManagement UI', () => {
     render(<ShipmentsManagement />);
 
     expect(
-      screen.getByRole('heading', { name: 'Danh sách phiếu gửi hàng' }),
+      screen.getAllByRole('heading', { name: 'Danh sách phiếu gửi hàng' })[0],
     ).toBeTruthy();
 
     const waybills = await screen.findAllByText('VD20261009001');
@@ -259,7 +259,7 @@ describe('ShipmentsManagement UI', () => {
     expect(await screen.findByText('Thùng trái cây sấy')).toBeTruthy();
     expect(screen.getByText('Lê Thị Nhận')).toBeTruthy();
     expect(screen.getByText('+84944555666')).toBeTruthy();
-    expect(screen.getAllByText('150.000 đ').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(150\.000\s*[đ₫])/).length).toBeGreaterThan(0);
     expect(screen.getByText('Hàng dễ vỡ, xin nhẹ tay')).toBeTruthy();
     expect(screen.getByText('Nhân viên Điều hành')).toBeTruthy();
     expect(screen.getByText(/Tạo phiếu gửi mới qua quầy/)).toBeTruthy();

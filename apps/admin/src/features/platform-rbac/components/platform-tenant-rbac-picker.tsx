@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Building2, ChevronRight, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -18,13 +20,15 @@ import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bu
 import type { BusCompanyFilterOption } from '@/features/bus-companies/services/bus-company-service';
 import { PlatformRbacScopeNavigation } from './platform-rbac-scope-navigation';
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(error: unknown, fallbackMessage: string): string {
   return error instanceof Error && error.message
     ? error.message
-    : 'Không thể tải danh sách nhà xe.';
+    : fallbackMessage;
 }
 
 export function PlatformTenantRbacPicker() {
+  const tRbac = useTranslations('rbac');
+  const tCommon = useTranslations('common');
   const [companies, setCompanies] = useState<BusCompanyFilterOption[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,7 +42,9 @@ export function PlatformTenantRbacPicker() {
         if (!controller.signal.aborted) setCompanies(options);
       })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setError(getErrorMessage(reason));
+        if (!controller.signal.aborted) {
+          setError(getErrorMessage(reason, tRbac('cannotLoadCompanies')));
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -70,8 +76,8 @@ export function PlatformTenantRbacPicker() {
     <SuperAdminLayout
       activeSection="rbac"
       breadcrumbs={[
-        { label: 'Phân quyền nền tảng', href: '/rbac' },
-        { label: 'Nhà xe đối tác' },
+        { label: tRbac('rbacTitle'), href: '/rbac' },
+        { label: tRbac('operatorsCount') },
       ]}
     >
       <div
@@ -79,8 +85,8 @@ export function PlatformTenantRbacPicker() {
         className="admin-page-content admin-ui space-y-6 [&>nav]:mt-0"
       >
         <AdminPageHeader
-          eyebrow="QUẢN TRỊ NỀN TẢNG"
-          title="Phân quyền theo nhà xe"
+          eyebrow={tRbac('eyebrowPlatform')}
+          title={tRbac('tenantTitle')}
           titleId="platform-tenant-rbac-title"
           actions={
             <ResourceRefreshAction loading={loading} onClick={retryLoading} />
@@ -96,24 +102,26 @@ export function PlatformTenantRbacPicker() {
             <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">
-                  CẤU HÌNH RIÊNG
+                  {tRbac('customConfig')}
                 </p>
                 <h2
                   id="tenant-rbac-picker-title"
                   className="text-base font-semibold"
                 >
-                  Chọn nhà xe
+                  {tRbac('selectBusCompany')}
                 </h2>
               </div>
               <Badge aria-live="polite" variant="secondary">
-                {loading ? 'Đang tải' : `${filteredCompanies.length} nhà xe`}
+                {loading
+                  ? tCommon('loading')
+                  : tRbac('operatorsCount', { count: filteredCompanies.length })}
               </Badge>
             </div>
 
             <div className="px-4 py-4 sm:px-5 sm:py-5">
               <Field>
                 <FieldLabel htmlFor="platform-tenant-rbac-search">
-                  Tìm nhà xe
+                  {tRbac('searchOperatorLabel')}
                 </FieldLabel>
                 <div className="relative">
                   <Search
@@ -124,7 +132,7 @@ export function PlatformTenantRbacPicker() {
                     autoComplete="off"
                     id="platform-tenant-rbac-search"
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Tìm theo tên hoặc mã nhà xe"
+                    placeholder={tRbac('searchOperatorPlaceholder')}
                     type="search"
                     value={search}
                     className="pl-10"
@@ -137,25 +145,25 @@ export function PlatformTenantRbacPicker() {
               <div className="border-t px-4 py-2 sm:px-5">
                 {loading && (
                   <ResourceState loading>
-                    Đang tải danh sách nhà xe…
+                    {tRbac('loadingConfig')}
                   </ResourceState>
                 )}
                 {!loading && error && (
                   <ResourceState error>
                     <div className="grid justify-items-center gap-3">
                       <h3 className="text-base font-semibold">
-                        Không thể tải danh sách nhà xe
+                        {tRbac('cannotLoadCompanies')}
                       </h3>
                       <p>{error}</p>
                       <Button onClick={retryLoading} variant="outline">
-                        Thử tải lại
+                        {tCommon('retry')}
                       </Button>
                     </div>
                   </ResourceState>
                 )}
                 {!loading && !error && companies.length === 0 && (
                   <ResourceState>
-                    Chưa có nhà xe để cấu hình phân quyền.
+                    {tRbac('noOperatorsToConfig')}
                   </ResourceState>
                 )}
                 {!loading &&
@@ -163,7 +171,7 @@ export function PlatformTenantRbacPicker() {
                   companies.length > 0 &&
                   filteredCompanies.length === 0 && (
                   <ResourceState>
-                    Không tìm thấy nhà xe phù hợp với “{search.trim()}”.
+                    {tRbac('noOperatorsMatch', { query: search.trim() })}
                   </ResourceState>
                   )}
               </div>
@@ -172,7 +180,7 @@ export function PlatformTenantRbacPicker() {
             {!loading && !error && filteredCompanies.length > 0 && (
               <CardContent className="border-t py-4 sm:py-5">
                 <ul
-                  aria-label="Danh sách nhà xe"
+                  aria-label={tRbac('operatorsListAriaLabel')}
                   className="grid list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 xl:grid-cols-3"
                 >
                   {filteredCompanies.map((company) => (

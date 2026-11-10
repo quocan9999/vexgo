@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   ResourcePagination,
   ResourceStatusBadge,
@@ -38,21 +39,26 @@ function formatDateTime(value?: string | null) {
     .replaceAll('/', '-');
 }
 
-function renderLinkedDoc(tx: {
-  booking: { code: string } | null;
-  shipment: { code: string } | null;
-}) {
+function renderLinkedDoc(
+  tx: {
+    booking: { code: string } | null;
+    shipment: { code: string } | null;
+  },
+  tBookings: (key: string) => string,
+  tCustomers: (key: string) => string,
+) {
   if (tx.booking) {
     return (
       <span>
-        Đặt vé: <strong className="admin-data-mono">{tx.booking.code}</strong>
+        {tBookings('tabBookings')}:{' '}
+        <strong className="admin-data-mono">{tx.booking.code}</strong>
       </span>
     );
   }
   if (tx.shipment) {
     return (
       <span>
-        Gửi hàng:{' '}
+        {tCustomers('tabShipments')}:{' '}
         <strong className="admin-data-mono">{tx.shipment.code}</strong>
       </span>
     );
@@ -70,18 +76,18 @@ function statusTone(status: string): 'active' | 'muted' {
   return 'muted';
 }
 
-function formatStatus(status: string): string {
+function formatStatus(status: string, tBookings: (key: string) => string): string {
   switch (status) {
     case 'DA_THANH_TOAN':
-      return 'Đã thanh toán';
+      return tBookings('statusPaid');
     case 'THANH_CONG':
-      return 'Thành công';
+      return tBookings('statusCompleted');
     case 'CHO_THANH_TOAN':
-      return 'Chờ thanh toán';
+      return tBookings('statusPendingPayment');
     case 'THAT_BAI':
-      return 'Thất bại';
+      return tBookings('statusFailed');
     case 'DA_HUY':
-      return 'Đã hủy';
+      return tBookings('statusCancelled');
     default:
       return status;
   }
@@ -92,6 +98,9 @@ export function CustomerTransactionsTab({
 }: {
   customerId: number;
 }) {
+  const tCustomers = useTranslations('customers');
+  const tBookings = useTranslations('bookings');
+  const tCommon = useTranslations('common');
   const {
     transactions,
     meta,
@@ -115,18 +124,18 @@ export function CustomerTransactionsTab({
     >
       <FilterToolbar>
         <SearchInput
-          label="Tìm kiếm giao dịch"
+          label={tCustomers('tabTransactions')}
           onChange={setSearchInput}
-          placeholder="Tìm theo mã đơn giao dịch..."
+          placeholder={tBookings('searchPlaceholder')}
           value={searchInput}
         />
       </FilterToolbar>
       <ResourceSortControls
-        label="Sắp xếp giao dịch"
+        label={tCustomers('sortByLabel')}
         value={sortBy}
         options={[
-          { value: 'createdDate', label: 'Ngày tạo' },
-          { value: 'totalAmount', label: 'Tổng tiền' },
+          { value: 'createdDate', label: tCustomers('registeredAt') },
+          { value: 'totalAmount', label: tBookings('totalAmount') },
         ]}
         direction={sortDirection}
         onFieldChange={(value) =>
@@ -139,24 +148,24 @@ export function CustomerTransactionsTab({
         <ResourceState error>
           <p>{error}</p>
           <Button onClick={refresh} type="button" variant="outline">
-            Thử lại
+            {tCommon('retry')}
           </Button>
         </ResourceState>
       )}
 
       {!error &&
         (loading && transactions.length === 0 ? (
-          <ResourceTableSkeleton resourceLabel="giao dịch" />
+          <ResourceTableSkeleton resourceLabel={tCustomers('tabTransactions').toLowerCase()} />
         ) : transactions.length === 0 ? (
           <ResourceState>
             <p>
               {searchInput.trim()
-                ? 'Không tìm thấy giao dịch phù hợp.'
-                : 'Chưa có giao dịch với nhà xe này.'}
+                ? tCustomers('transactionsTabFilteredEmpty')
+                : tCustomers('transactionsTabNoData')}
             </p>
             {searchInput && (
               <Button variant="outline" onClick={() => setSearchInput('')}>
-                Xóa tìm kiếm
+                {tCustomers('clearSearch')}
               </Button>
             )}
           </ResourceState>
@@ -168,11 +177,11 @@ export function CustomerTransactionsTab({
             >
               <Table className="text-[13px]">
                 <TableCaption className="sr-only">
-                  Lịch sử giao dịch
+                  {tCustomers('tabTransactions')}
                 </TableCaption>
                 <TableHeader>
                   <TableRow>
-                    <TableHead scope="col">Mã giao dịch</TableHead>
+                    <TableHead scope="col">{tBookings('colBooking')}</TableHead>
                     <TableHead
                       aria-sort={
                         sortBy === 'createdDate'
@@ -190,7 +199,7 @@ export function CustomerTransactionsTab({
                         onClick={() => handleSort('createdDate')}
                         type="button"
                       >
-                        <span>Ngày tạo</span>
+                        <span>{tCustomers('registeredAt')}</span>
                         <span aria-hidden="true">
                           {sortBy === 'createdDate' ? (
                             sortDirection === 'asc' ? (
@@ -221,7 +230,7 @@ export function CustomerTransactionsTab({
                         onClick={() => handleSort('totalAmount')}
                         type="button"
                       >
-                        <span>Tổng tiền</span>
+                        <span>{tBookings('totalAmount')}</span>
                         <span aria-hidden="true">
                           {sortBy === 'totalAmount' ? (
                             sortDirection === 'asc' ? (
@@ -235,8 +244,8 @@ export function CustomerTransactionsTab({
                         </span>
                       </Button>
                     </TableHead>
-                    <TableHead scope="col">Trạng thái</TableHead>
-                    <TableHead scope="col">Chứng từ liên kết</TableHead>
+                    <TableHead scope="col">{tCustomers('colStatus')}</TableHead>
+                    <TableHead scope="col">{tBookings('paymentTransactions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -250,15 +259,15 @@ export function CustomerTransactionsTab({
                       <TableCell>{formatDateTime(tx.createdDate)}</TableCell>
                       <TableCell>
                         <strong>
-                          {tx.totalAmount.toLocaleString('vi-VN')} đ
+                          {tx.totalAmount.toLocaleString('vi-VN')} ₫
                         </strong>
                       </TableCell>
                       <TableCell>
                         <ResourceStatusBadge tone={statusTone(tx.status)}>
-                          {formatStatus(tx.status)}
+                          {formatStatus(tx.status, tBookings)}
                         </ResourceStatusBadge>
                       </TableCell>
-                      <TableCell>{renderLinkedDoc(tx)}</TableCell>
+                      <TableCell>{renderLinkedDoc(tx, tBookings, tCustomers)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -267,7 +276,7 @@ export function CustomerTransactionsTab({
 
             <div
               className="grid gap-4 p-4 min-[901px]:hidden"
-              aria-label="Danh sách giao dịch dạng thẻ"
+              aria-label={tCustomers('tabTransactions')}
               aria-busy={loading || refreshing}
             >
               {transactions.map((tx) => (
@@ -278,21 +287,21 @@ export function CustomerTransactionsTab({
                         {tx.code}
                       </span>
                       <h3 className="mt-1 text-base font-semibold">
-                        {tx.totalAmount.toLocaleString('vi-VN')} đ
+                        {tx.totalAmount.toLocaleString('vi-VN')} ₫
                       </h3>
                     </div>
                     <ResourceStatusBadge tone={statusTone(tx.status)}>
-                      {formatStatus(tx.status)}
+                      {formatStatus(tx.status, tBookings)}
                     </ResourceStatusBadge>
                   </div>
                   <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Ngày tạo</dt>
+                      <dt>{tCustomers('registeredAt')}</dt>
                       <dd>{formatDateTime(tx.createdDate)}</dd>
                     </div>
                     <div>
-                      <dt>Chứng từ liên kết</dt>
-                      <dd>{renderLinkedDoc(tx)}</dd>
+                      <dt>{tBookings('paymentTransactions')}</dt>
+                      <dd>{renderLinkedDoc(tx, tBookings, tCustomers)}</dd>
                     </div>
                   </dl>
                 </Card>
@@ -305,7 +314,7 @@ export function CustomerTransactionsTab({
                 disabled={loading}
                 onPageChange={setPage}
                 pageSize={meta.pageSize}
-                summaryLabel="giao dịch"
+                summaryLabel={tCustomers('tabTransactions').toLowerCase()}
                 totalItems={meta.totalItems}
                 totalPages={meta.totalPages}
               />

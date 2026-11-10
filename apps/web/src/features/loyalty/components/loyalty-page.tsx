@@ -5,23 +5,44 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Award, ChevronLeft, ChevronRight, History, Star, Shield, Gift } from 'lucide-react';
 import Link from 'next/link';
-
+import { useLocale, useTranslations } from 'next-intl';
 
 export default function LoyaltyPage() {
   const router = useRouter();
+  const t = useTranslations('loyalty');
+  const locale = useLocale();
+
   const currentPoints = 12500;
   const targetPoints = 20000;
   const progressPercent = (currentPoints / targetPoints) * 100;
+  const numberFormat = locale === 'en' ? 'en-US' : 'vi-VN';
 
   const history = [
-    { id: 1, date: '15/09/2026', type: 'EARN', points: '+500', desc: 'Chuyến đi Vũng Tàu - TP.HCM' },
-    { id: 2, date: '10/09/2026', type: 'SPEND', points: '-2000', desc: 'Đổi mã giảm giá 50k' },
-    { id: 3, date: '01/09/2026', type: 'EARN', points: '+1200', desc: 'Chuyến đi Đà Lạt - TP.HCM' },
+    {
+      id: 1,
+      date: locale === 'en' ? '09/15/2026' : '15/09/2026',
+      type: 'EARN',
+      points: '+500',
+      desc: locale === 'en' ? 'Trip Vũng Tàu - TP.HCM' : 'Chuyến đi Vũng Tàu - TP.HCM',
+    },
+    {
+      id: 2,
+      date: locale === 'en' ? '09/10/2026' : '10/09/2026',
+      type: 'SPEND',
+      points: '-2000',
+      desc: locale === 'en' ? 'Redeemed 50k discount voucher' : 'Đổi mã giảm giá 50k',
+    },
+    {
+      id: 3,
+      date: locale === 'en' ? '09/01/2026' : '01/09/2026',
+      type: 'EARN',
+      points: '+1200',
+      desc: locale === 'en' ? 'Trip Đà Lạt - TP.HCM' : 'Chuyến đi Đà Lạt - TP.HCM',
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8">
-      <div className="min-h-screen bg-[#F8FAF9] py-8">
+    <div className="min-h-screen bg-[#F8FAF9] py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
         <div className="mb-6">
           <button
@@ -30,7 +51,7 @@ export default function LoyaltyPage() {
             className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-brand transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span>Quay lại</span>
+            <span>{t('back')}</span>
           </button>
         </div>
 
@@ -44,15 +65,19 @@ export default function LoyaltyPage() {
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-8">
                   <div>
-                    <p className="text-amber-100 text-sm font-semibold uppercase tracking-wider mb-1">Hạng hiện tại</p>
-                    <h2 className="text-3xl font-black">VÀNG</h2>
+                    <p className="text-amber-100 text-sm font-semibold uppercase tracking-wider mb-1">
+                      {t('currentTier')}
+                    </p>
+                    <h2 className="text-3xl font-black">{t('tierGold')}</h2>
                   </div>
                   <Star className="w-8 h-8 text-amber-200 fill-amber-200" />
                 </div>
                 
                 <div className="mb-2">
-                  <p className="text-amber-100 text-xs font-semibold mb-1">Điểm tích lũy</p>
-                  <p className="text-3xl font-black">{currentPoints.toLocaleString('vi-VN')}</p>
+                  <p className="text-amber-100 text-xs font-semibold mb-1">
+                    {t('accumulatedPoints')}
+                  </p>
+                  <p className="text-3xl font-black">{currentPoints.toLocaleString(numberFormat)}</p>
                 </div>
               </div>
             </div>
@@ -60,12 +85,12 @@ export default function LoyaltyPage() {
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                 <Award className="w-5 h-5 text-brand" />
-                Tiến trình thăng hạng
+                {t('tierProgress')}
               </h3>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm font-semibold text-slate-600">
-                  <span>Hạng Vàng</span>
-                  <span>Hạng Kim Cương</span>
+                  <span>{t('tierGoldLabel')}</span>
+                  <span>{t('tierDiamondLabel')}</span>
                 </div>
                 <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
                   <div 
@@ -74,7 +99,9 @@ export default function LoyaltyPage() {
                   />
                 </div>
                 <p className="text-xs text-slate-500 text-right mt-1">
-                  Cần thêm <strong className="text-brand">{(targetPoints - currentPoints).toLocaleString('vi-VN')} điểm</strong>
+                  <strong className="text-brand">
+                    {t('pointsNeeded', { points: (targetPoints - currentPoints).toLocaleString(numberFormat) })}
+                  </strong>
                 </p>
               </div>
             </div>
@@ -86,7 +113,7 @@ export default function LoyaltyPage() {
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                 <History className="w-5 h-5 text-brand" />
-                Lịch sử điểm thưởng
+                {t('pointsHistory')}
               </h3>
               <div className="space-y-4">
                 {history.map((item) => (
@@ -106,8 +133,8 @@ export default function LoyaltyPage() {
                   </div>
                 ))}
               </div>
-              <button className="w-full mt-4 py-2.5 text-sm font-bold text-brand hover:bg-brand/5 rounded-lg transition-colors">
-                Xem tất cả lịch sử
+              <button className="w-full mt-4 py-2.5 text-sm font-bold text-brand hover:bg-brand/5 rounded-lg transition-colors cursor-pointer">
+                {t('viewAllHistory')}
               </button>
             </div>
             
@@ -115,27 +142,26 @@ export default function LoyaltyPage() {
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                 <Gift className="w-5 h-5 text-brand" />
-                Đặc quyền hạng Vàng
+                {t('goldPrivileges')}
               </h3>
               <ul className="space-y-3">
                 <li className="flex items-start gap-2">
                   <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
-                  <span className="text-sm text-slate-600">Hệ số tích lũy: <strong className="text-slate-800">1.5x</strong> điểm thưởng sau mỗi chuyến đi.</span>
+                  <span className="text-sm text-slate-600">{t('privilege1')}</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
-                  <span className="text-sm text-slate-600">Ưu tiên xếp chỗ ngồi trên tất cả các tuyến.</span>
+                  <span className="text-sm text-slate-600">{t('privilege2')}</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
-                  <span className="text-sm text-slate-600">Miễn phí đổi trả vé trước 12 tiếng.</span>
+                  <span className="text-sm text-slate-600">{t('privilege3')}</span>
                 </li>
               </ul>
             </div>
           </div>
         </div>
       </div>
-    </div>
     </div>
   );
 }

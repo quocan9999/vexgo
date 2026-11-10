@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useSyncExternalStore, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
 import { ArrowLeft, CheckCircle2, Info, ScanLine, X } from 'lucide-react';
 import {
   markPaymentDraftTerminal,
@@ -102,26 +103,27 @@ function readRetryAfterDelayMs(retryAfter: string | null): number | null {
   return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : null;
 }
 
-function getShipmentPaymentStatusPresentation(
+export function getShipmentPaymentStatusPresentation(
   hasVerifiedSnapshot: boolean,
   terminalStatus: PaymentReadSnapshot['terminalStatus'],
+  locale = 'vi',
 ): { label: string; className: string } {
   if (!hasVerifiedSnapshot || terminalStatus === 'verification-needed') {
-    return { label: 'Đang xác minh', className: 'text-slate-600' };
+    return { label: locale === 'en' ? 'Verifying' : 'Đang xác minh', className: 'text-slate-600' };
   }
   switch (terminalStatus) {
     case 'paid':
-      return { label: 'Đã thanh toán', className: 'text-emerald-700' };
+      return { label: locale === 'en' ? 'Paid' : 'Đã thanh toán', className: 'text-emerald-700' };
     case 'cancelled':
-      return { label: 'Đã hủy', className: 'text-rose-700' };
+      return { label: locale === 'en' ? 'Cancelled' : 'Đã hủy', className: 'text-rose-700' };
     case 'expired':
-      return { label: 'Hết hạn', className: 'text-rose-700' };
+      return { label: locale === 'en' ? 'Expired' : 'Hết hạn', className: 'text-rose-700' };
     case 'failed':
-      return { label: 'Thanh toán thất bại', className: 'text-rose-700' };
+      return { label: locale === 'en' ? 'Payment Failed' : 'Thanh toán thất bại', className: 'text-rose-700' };
     case 'reconciliation-required':
-      return { label: 'Cần đối soát', className: 'text-amber-700' };
+      return { label: locale === 'en' ? 'Needs Reconciliation' : 'Cần đối soát', className: 'text-amber-700' };
     default:
-      return { label: 'Chờ thanh toán', className: 'text-amber-700' };
+      return { label: locale === 'en' ? 'Pending Payment' : 'Chờ thanh toán', className: 'text-amber-700' };
   }
 }
 
@@ -168,7 +170,7 @@ type PaymentPriceBreakdownRowsProps = {
   showTotal?: boolean;
 };
 
-function PaymentPriceBreakdownRows({
+export function PaymentPriceBreakdownRows({
   originalTicketSubtotal,
   discountAmount,
   promotionCode,
@@ -181,62 +183,70 @@ function PaymentPriceBreakdownRows({
   formatConfirmedAmount,
   showTotal = true,
 }: PaymentPriceBreakdownRowsProps) {
+  const t = useTranslations('payments');
+  const locale = useLocale();
   const showDiscount = hasVerifiedPaymentAmount &&
     (discountAmount === null || discountAmount === undefined || discountAmount > 0);
 
   return (
     <div className="space-y-2.5 text-sm">
-      <div className="flex justify-between gap-3">
-        <span className="text-slate-500">Giá vé gốc</span>
-        <span className="font-bold text-slate-700 text-right">
-          {formatConfirmedAmount(originalTicketSubtotal)}
-        </span>
-      </div>
-      {promotionCode && (
+      {(() => {
+    return (
+      <>
         <div className="flex justify-between gap-3">
-          <span className="text-slate-500">Mã khuyến mãi</span>
-          <strong className="font-mono font-bold text-emerald-700 text-right">
-            {promotionCode}
-          </strong>
-        </div>
-      )}
-      {showDiscount && (
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">Giảm giá</span>
-          <span className="font-bold text-emerald-700 text-right">
-            {discountAmount === null || discountAmount === undefined
-              ? 'Chưa có dữ liệu từ máy chủ'
-              : `−${discountAmount.toLocaleString('vi-VN')}đ`}
+          <span className="text-slate-500">{t('originalFare') || (locale === 'en' ? 'Original Fare' : 'Giá vé gốc')}</span>
+          <span className="font-bold text-slate-700 text-right">
+            {formatConfirmedAmount(originalTicketSubtotal)}
           </span>
         </div>
-      )}
-      <div className="flex justify-between gap-3">
-        <span className="text-slate-500">Tổng tiền vé sau ưu đãi</span>
-        <span className="font-bold text-red-600 text-right">
-          {formatConfirmedAmount(ticketSubtotal)}
-        </span>
-      </div>
-      {showCargoFee && (
-        <div className="flex justify-between gap-3 text-xs sm:text-sm">
-          <span className="text-slate-500">
-            Cước hàng
-            <span className="block text-[11px] text-amber-600 font-normal">
-              (Thanh toán tại bến khi gửi, không cộng vào tiền vé)
+        {promotionCode && (
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">{t('promoCode') || (locale === 'en' ? 'Discount Code' : 'Mã khuyến mãi')}</span>
+            <strong className="font-mono font-bold text-emerald-700 text-right">
+              {promotionCode}
+            </strong>
+          </div>
+        )}
+        {showDiscount && (
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">{t('discount') || (locale === 'en' ? 'Discount' : 'Giảm giá')}</span>
+            <span className="font-bold text-emerald-700 text-right">
+              {discountAmount === null || discountAmount === undefined
+                ? 'Chưa có dữ liệu từ máy chủ'
+                : `−${discountAmount.toLocaleString('vi-VN')}đ`}
             </span>
-          </span>
-          <span className={`font-bold text-right ${cargoFeeClassName}`}>
-            {cargoFeeText}
-          </span>
-        </div>
-      )}
-      {showTotal && (
-        <div className="flex justify-between gap-3 pt-3 border-t border-slate-200 text-base">
-          <span className="text-slate-500 font-bold">Tổng thanh toán</span>
-          <span className="font-bold text-red-600 text-lg">
-            {formatConfirmedAmount(totalAmount)}
+          </div>
+        )}
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">{t('fareAfterDiscount') || (locale === 'en' ? 'Fare after discount' : 'Tổng tiền vé sau ưu đãi')}</span>
+          <span className="font-bold text-red-600 text-right">
+            {formatConfirmedAmount(ticketSubtotal)}
           </span>
         </div>
-      )}
+        {showCargoFee && (
+          <div className="flex justify-between gap-3 text-xs sm:text-sm">
+            <span className="text-slate-500">
+              {t('cargoFee') || (locale === 'en' ? 'Cargo Fee' : 'Cước hàng')}
+              <span className="block text-[11px] text-amber-600 font-normal">
+                {t('cargoFeeNote') || (locale === 'en' ? '(Pay at station upon drop-off, not added to ticket fare)' : '(Thanh toán tại bến khi gửi, không cộng vào tiền vé)')}
+              </span>
+            </span>
+            <span className={`font-bold text-right ${cargoFeeClassName}`}>
+              {cargoFeeText}
+            </span>
+          </div>
+        )}
+        {showTotal && (
+          <div className="flex justify-between gap-3 pt-3 border-t border-slate-200 text-base">
+            <span className="text-slate-500 font-bold">{t('totalPayableLabel') || (locale === 'en' ? 'Total Payable' : 'Tổng thanh toán')}</span>
+            <span className="font-bold text-red-600 text-lg">
+              {formatConfirmedAmount(totalAmount)}
+            </span>
+          </div>
+        )}
+      </>
+    );
+  })()}
     </div>
   );
 }
@@ -244,6 +254,9 @@ function PaymentPriceBreakdownRows({
 function PaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('payments');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
   const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
   const draftId = searchParams.get('draftId');
 
@@ -1029,7 +1042,7 @@ function PaymentContent() {
   const totalFareText = activePaymentReadSnapshot?.totalAmount === null ||
     activePaymentReadSnapshot?.totalAmount === undefined
       ? '—'
-      : `${activePaymentReadSnapshot.totalAmount.toLocaleString('vi-VN')}đ`;
+      : locale === 'en' ? `${activePaymentReadSnapshot.totalAmount.toLocaleString('en-US')} VND` : `${activePaymentReadSnapshot.totalAmount.toLocaleString('vi-VN')}đ`;
   const hasVerifiedPaymentAmount = Boolean(
     activePaymentReadSnapshot &&
     (!activePaymentReadSnapshot.terminalStatus || activePaymentReadSnapshot.terminalStatus === 'paid') &&
@@ -1037,29 +1050,29 @@ function PaymentContent() {
   );
   const formatConfirmedAmount = (amount: number | null | undefined) =>
     !hasVerifiedPaymentAmount
-      ? 'Đang xác minh từ máy chủ'
+      ? (locale === 'en' ? 'Verifying from server' : 'Đang xác minh từ máy chủ')
       : amount === null || amount === undefined
-        ? 'Chưa có dữ liệu từ máy chủ'
-        : `${amount.toLocaleString('vi-VN')}đ`;
+        ? (locale === 'en' ? 'No data from server' : 'Chưa có dữ liệu từ máy chủ')
+        : (locale === 'en' ? `${amount.toLocaleString('en-US')} VND` : `${amount.toLocaleString('vi-VN')}đ`);
   const confirmedCargoFee = activePaymentReadSnapshot?.cargoFee ?? null;
   const shouldShowCargoFeeBreakdown = Boolean(
     bookingDraft?.luggage ||
     (hasVerifiedPaymentAmount && confirmedCargoFee !== null && confirmedCargoFee > 0),
   );
   const cargoFeeText = !hasVerifiedPaymentAmount
-    ? 'Đang xác minh từ máy chủ'
+    ? (locale === 'en' ? 'Verifying from server' : 'Đang xác minh từ máy chủ')
     : confirmedCargoFee === null
-      ? 'Chưa có dữ liệu cước từ máy chủ'
+      ? (locale === 'en' ? 'Cargo fee pending confirmation' : 'Chưa có dữ liệu cước từ máy chủ')
       : confirmedCargoFee === 0
-        ? 'Miễn phí'
-        : `${confirmedCargoFee.toLocaleString('vi-VN')}đ`;
+        ? (locale === 'en' ? 'Free' : 'Miễn phí')
+        : (locale === 'en' ? `${confirmedCargoFee.toLocaleString('en-US')} VND` : `${confirmedCargoFee.toLocaleString('vi-VN')}đ`);
   const cargoFeeClassName = confirmedCargoFee === null
     ? 'text-slate-600'
     : confirmedCargoFee === 0
       ? 'text-emerald-600'
       : 'text-red-600';
   const cargoPackageCount = getCargoPackageCount(bookingDraft?.luggage?.items);
-  const paymentResourceLabel = shipmentDraft ? 'phiếu gửi hàng' : 'đơn đặt vé';
+  const paymentResourceLabel = shipmentDraft ? (locale === 'en' ? 'shipment waybill' : 'phiếu gửi hàng') : (locale === 'en' ? 'booking order' : 'đơn đặt vé');
   const priceBreakdownProps = {
     originalTicketSubtotal: activePaymentReadSnapshot?.originalTicketSubtotal,
     discountAmount: activePaymentReadSnapshot?.discountAmount,
@@ -1079,7 +1092,7 @@ function PaymentContent() {
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm font-semibold text-slate-600">
-            Đang tải thông tin thanh toán...
+            {locale === 'en' ? 'Loading payment information...' : 'Đang tải thông tin thanh toán...'}
           </p>
         </div>
       </div>
@@ -1094,11 +1107,10 @@ function PaymentContent() {
             <Info className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">
-            Không tìm thấy thông tin thanh toán
+            {locale === 'en' ? 'Payment Information Not Found' : 'Không tìm thấy thông tin thanh toán'}
           </h2>
           <p className="text-sm text-slate-600 leading-relaxed mb-6">
-            Thông tin đặt chỗ không tồn tại hoặc đã hết hạn. Vui lòng quay lại
-            tìm chuyến xe và chọn ghế để tiếp tục.
+            {locale === 'en' ? 'Booking information does not exist or has expired. Please return to find trips and select seats.' : 'Thông tin đặt chỗ không tồn tại hoặc đã hết hạn. Vui lòng quay lại tìm chuyến xe và chọn ghế để tiếp tục.'}
           </p>
           <button
             type="button"
@@ -1138,7 +1150,7 @@ function PaymentContent() {
           {/* Cột 1: Chọn phương thức thanh toán */}
           <div className="w-full lg:w-[300px] shrink-0">
             <h2 className="text-lg font-bold text-slate-900 mb-6">
-              Chọn phương thức thanh toán
+              {locale === 'en' ? 'Select Payment Method' : 'Chọn phương thức thanh toán'}
             </h2>
             <div className="space-y-4">
               {methods.map((method) => (
@@ -1167,7 +1179,7 @@ function PaymentContent() {
               {/* Hướng dẫn thanh toán */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-4">
                 <h3 className="font-bold text-slate-900 text-sm">
-                  Hướng dẫn thanh toán
+                  {locale === 'en' ? 'Payment Instructions' : 'Hướng dẫn thanh toán'}
                 </h3>
                 
                 <div className="space-y-3.5 text-xs text-slate-700">
@@ -1176,7 +1188,7 @@ function PaymentContent() {
                       1
                     </span>
                     <span className="font-medium">
-                      Mở ứng dụng Ngân hàng trên điện thoại
+                      {locale === 'en' ? 'Open Banking app on your phone' : 'Mở ứng dụng Ngân hàng trên điện thoại'}
                     </span>
                   </div>
 
@@ -1185,7 +1197,7 @@ function PaymentContent() {
                       2
                     </span>
                     <span className="font-medium flex items-center gap-1.5 flex-wrap">
-                      Dùng biểu tượng <ScanLine className="w-4 h-4 text-slate-900 inline-block shrink-0" /> để quét mã QR
+                      {locale === 'en' ? <>Tap the <ScanLine className="w-4 h-4 text-slate-900 inline-block shrink-0" /> icon to scan QR code</> : <>Dùng biểu tượng <ScanLine className="w-4 h-4 text-slate-900 inline-block shrink-0" /> để quét mã QR</>}
                     </span>
                   </div>
 
@@ -1194,7 +1206,7 @@ function PaymentContent() {
                       3
                     </span>
                     <span className="font-medium">
-                      Quét mã và hoàn tất chuyển khoản trong ứng dụng ngân hàng
+                      {locale === 'en' ? 'Scan the QR code and complete transfer in banking app' : 'Quét mã và hoàn tất chuyển khoản trong ứng dụng ngân hàng'}
                     </span>
                   </div>
                 </div>
@@ -1206,8 +1218,8 @@ function PaymentContent() {
           <div className="flex-1 flex flex-col items-center">
             <p className="text-sm font-semibold text-slate-500 mb-1">
               {isRoundTripBooking
-                ? 'Tổng thanh toán vé khứ hồi'
-                : 'Tổng thanh toán'}
+                ? (locale === 'en' ? 'Round-trip Total Payment' : 'Tổng thanh toán vé khứ hồi')
+                : (locale === 'en' ? 'Total Payment' : 'Tổng thanh toán')}
             </p>
             <h1 className="text-5xl font-bold text-red-600 mb-6 tracking-tight">
               {totalFareText}
@@ -1217,8 +1229,8 @@ function PaymentContent() {
               {paymentExpiresAt && !paymentTerminalStatus && (
                 <p className="text-sm font-semibold text-amber-600 mb-4">
                   {timeLeft === null
-                    ? 'Đang kiểm tra thời hạn thanh toán.'
-                    : `Thời gian thanh toán còn lại ${formatTime(timeLeft)}`}
+                    ? (locale === 'en' ? 'Checking payment expiration...' : 'Đang kiểm tra thời hạn thanh toán.')
+                    : (locale === 'en' ? `Time remaining: ${formatTime(timeLeft)}` : `Thời gian thanh toán còn lại ${formatTime(timeLeft)}`)}
                 </p>
               )}
 
@@ -1231,7 +1243,7 @@ function PaymentContent() {
                         <CheckCircle2 className="w-8 h-8" />
                       </div>
                       <p className="text-base font-bold text-emerald-800">
-                        Vé khứ hồi (cả 2 chặng) đã được thanh toán thành công!
+                        {locale === 'en' ? 'Round-trip ticket (both legs) paid successfully!' : 'Vé khứ hồi (cả 2 chặng) đã được thanh toán thành công!'}
                       </p>
                     </div>
                   ) : paymentTerminalStatus === 'paid' && shipmentDraft ? (
@@ -1244,11 +1256,11 @@ function PaymentContent() {
                         aria-live="polite"
                         className="text-base font-extrabold text-emerald-800"
                       >
-                        Thanh toán {paymentResourceLabel} đã được xác nhận.
+                        {locale === 'en' ? `Payment for ${paymentResourceLabel} confirmed.` : `Thanh toán ${paymentResourceLabel} đã được xác nhận.`}
                       </p>
                       <div className="w-full rounded-2xl bg-emerald-50/70 border border-emerald-200 px-3.5 py-2.5 text-xs">
                         <span className="block text-slate-500 font-semibold mb-1">
-                          Mã vận đơn của bạn
+                          {locale === 'en' ? 'Your Waybill Code' : 'Mã vận đơn của bạn'}
                         </span>
                         <div className="flex items-center justify-center gap-2 flex-wrap">
                           <strong className="font-mono text-xs text-slate-900 break-all">
@@ -1261,7 +1273,7 @@ function PaymentContent() {
                             }
                             className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-300 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
                           >
-                            {copiedField === 'waybill' ? 'Đã chép' : 'Sao chép mã'}
+                            {copiedField === 'waybill' ? (locale === 'en' ? 'Copied' : 'Đã chép') : (locale === 'en' ? 'Copy code' : 'Sao chép mã')}
                           </button>
                         </div>
                       </div>
@@ -1310,7 +1322,7 @@ function PaymentContent() {
                 ) : vietQrUrl ? (
                   <img
                     src={vietQrUrl}
-                    alt="Mã QR thanh toán VietQR"
+                    alt={locale === 'en' ? 'VietQR payment QR code' : 'Mã QR thanh toán VietQR'}
                     className="w-full h-full object-contain"
                   />
                 ) : !vietQrConfig ? (
@@ -1320,7 +1332,7 @@ function PaymentContent() {
                   >
                     <Info aria-hidden="true" className="h-6 w-6 shrink-0" />
                     <p>
-                      VietQR chưa được cấu hình đầy đủ nên chưa thể hiển thị mã thanh toán. Vui lòng liên hệ bộ phận hỗ trợ.
+                      {locale === 'en' ? 'VietQR not fully configured to display payment QR code. Please contact support.' : 'VietQR chưa được cấu hình đầy đủ nên chưa thể hiển thị mã thanh toán. Vui lòng liên hệ bộ phận hỗ trợ.'}
                     </p>
                   </div>
                 ) : !draft.orderCode?.trim() ? (
@@ -1331,7 +1343,7 @@ function PaymentContent() {
                   </div>
                 ) : (
                   <p role="status" aria-live="polite" className="px-5 text-center text-sm font-semibold text-slate-600">
-                    Đang xác minh đơn hàng với máy chủ. Mã QR sẽ hiển thị sau khi thông tin được xác nhận.
+                    {locale === 'en' ? 'Verifying order with server. QR code will display once confirmed.' : 'Đang xác minh đơn hàng với máy chủ. Mã QR sẽ hiển thị sau khi thông tin được xác nhận.'}
                   </p>
                 )}
               </div>
@@ -1342,7 +1354,7 @@ function PaymentContent() {
                   aria-live="polite"
                   className="w-full max-w-[420px] mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800"
                 >
-                  Đang chờ hệ thống xác nhận thanh toán từ ngân hàng.
+                  {locale === 'en' ? 'Awaiting payment confirmation from bank.' : 'Đang chờ hệ thống xác nhận thanh toán từ ngân hàng.'}
                 </p>
               )}
 
@@ -1350,15 +1362,15 @@ function PaymentContent() {
               {vietQrUrl && vietQrConfig && !paymentTerminalStatus && timeLeft !== 0 && (
                 <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-[13px] space-y-2.5">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Mã ngân hàng:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('bank')}:</span>
                     <span className="font-bold text-slate-900 text-right">{vietQrConfig.bankId}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Chủ tài khoản:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('accountName')}:</span>
                     <span className="font-bold text-slate-900 text-right uppercase">{vietQrConfig.accountName}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Số tài khoản:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('accountNumber')}:</span>
                     <div className="flex items-center gap-2 justify-end min-w-0">
                       <strong className="text-slate-950 font-black tracking-wide">
                         {vietQrConfig.accountNumber}
@@ -1368,12 +1380,12 @@ function PaymentContent() {
                         onClick={() => copyToClipboard(vietQrConfig.accountNumber, 'stk')}
                         className="w-[66px] text-[11px] text-accent font-bold py-0.5 rounded bg-accent/10 hover:bg-accent/20 active:scale-95 transition-all whitespace-nowrap shrink-0 text-center cursor-pointer"
                       >
-                        {copiedField === 'stk' ? 'Đã chép' : 'Sao chép'}
+                        {copiedField === 'stk' ? t('copied') : t('copy')}
                       </button>
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">Nội dung CK:</span>
+                    <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{t('transferContent')}:</span>
                     <div className="flex items-center gap-2 justify-end min-w-0">
                       <strong
                         className="text-emerald-700 font-black font-mono text-xs truncate max-w-[170px] sm:max-w-[210px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60"
@@ -1386,7 +1398,7 @@ function PaymentContent() {
                         onClick={() => copyToClipboard(transferContent, 'nd')}
                         className="w-[66px] text-[11px] text-accent font-bold py-0.5 rounded bg-accent/10 hover:bg-accent/20 active:scale-95 transition-all whitespace-nowrap shrink-0 text-center cursor-pointer"
                       >
-                        {copiedField === 'nd' ? 'Đã chép' : 'Sao chép'}
+                        {copiedField === 'nd' ? t('copied') : t('copy')}
                       </button>
                     </div>
                   </div>
@@ -1397,7 +1409,7 @@ function PaymentContent() {
                 {vietQrUrl && !paymentTerminalStatus && timeLeft !== 0 && (
                   <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center justify-center gap-1.5">
                     <ScanLine className="w-4 h-4 text-emerald-600 inline-block" />
-                    Quét mã qua bất kỳ App Ngân hàng
+                    {t('vietQrInstructions')}
                   </p>
                 )}
 
@@ -1430,18 +1442,18 @@ function PaymentContent() {
                   <div className="space-y-3 text-sm">
                     <div>
                       <span className="block text-xs font-semibold text-slate-500 mb-1">
-                        Mã vận đơn
+                        {locale === 'en' ? 'Waybill Code' : 'Mã vận đơn'}
                       </span>
                       <strong className="break-all text-brand">{shipmentDraft.waybillCode}</strong>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-500">Tuyến xe</span>
+                      <span className="text-slate-500">{locale === 'en' ? 'Route' : 'Tuyến xe'}</span>
                       <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">
                         {shipmentDraft.route.origin} → {shipmentDraft.route.destination}
                       </strong>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-500">Trạng thái thanh toán</span>
+                      <span className="text-slate-500">{locale === 'en' ? 'Payment Status' : 'Trạng thái thanh toán'}</span>
                       <strong className={`min-w-0 max-w-[65%] text-right ${shipmentPaymentStatusPresentation.className}`}>
                         {shipmentPaymentStatusPresentation.label}
                       </strong>
@@ -1450,14 +1462,14 @@ function PaymentContent() {
                 </section>
 
                 <section className="bg-white rounded-xl border border-slate-200 p-5">
-                  <h3 className="font-bold text-slate-900 text-base mb-4">Người gửi</h3>
+                  <h3 className="font-bold text-slate-900 text-base mb-4">{locale === 'en' ? 'Sender' : 'Người gửi'}</h3>
                   <div className="space-y-2.5 text-sm">
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-500">Họ và tên</span>
+                      <span className="text-slate-500">{locale === 'en' ? 'Full Name' : 'Họ và tên'}</span>
                       <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">{shipmentDraft.sender.fullName}</strong>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-slate-500">Số điện thoại</span>
+                      <span className="text-slate-500">{locale === 'en' ? 'Phone Number' : 'Số điện thoại'}</span>
                       <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">{shipmentDraft.sender.phoneNumber}</strong>
                     </div>
                     {shipmentDraft.sender.email && (
@@ -1470,7 +1482,7 @@ function PaymentContent() {
                 </section>
 
                 <section className="bg-white rounded-xl border border-slate-200 p-5">
-                  <h3 className="font-bold text-slate-900 text-base mb-4">Người nhận</h3>
+                  <h3 className="font-bold text-slate-900 text-base mb-4">{locale === 'en' ? 'Receiver' : 'Người nhận'}</h3>
                   <div className="space-y-2.5 text-sm">
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-500">Họ và tên</span>
@@ -1482,17 +1494,17 @@ function PaymentContent() {
                     </div>
                     {shipmentDraft.receiver.cccd && (
                       <div className="flex justify-between gap-3">
-                        <span className="text-slate-500">Số CCCD / CMND</span>
+                        <span className="text-slate-500">{locale === 'en' ? 'Citizen ID / Passport' : 'Số CCCD / CMND'}</span>
                         <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800 font-mono">{shipmentDraft.receiver.cccd}</strong>
                       </div>
                     )}
                     <div className="border-t border-slate-100 pt-3">
-                      <p className="text-xs font-semibold text-slate-500 mb-1">Điểm gửi</p>
+                      <p className="text-xs font-semibold text-slate-500 mb-1">{locale === 'en' ? 'Drop-off Station' : 'Điểm gửi'}</p>
                       <strong className="block break-words text-slate-800">{shipmentDraft.pickupPoint.name}</strong>
                       <p className="mt-1 break-words text-xs text-slate-600">{shipmentDraft.pickupPoint.address}</p>
                     </div>
                     <div className="border-t border-slate-100 pt-3">
-                      <p className="text-xs font-semibold text-slate-500 mb-1">Điểm nhận</p>
+                      <p className="text-xs font-semibold text-slate-500 mb-1">{locale === 'en' ? 'Pick-up Station' : 'Điểm nhận'}</p>
                       <strong className="block break-words text-slate-800">{shipmentDraft.dropoffPoint.name}</strong>
                       <p className="mt-1 break-words text-xs text-slate-600">{shipmentDraft.dropoffPoint.address}</p>
                     </div>
@@ -1500,9 +1512,9 @@ function PaymentContent() {
                 </section>
 
                 <section className="bg-white rounded-xl border border-slate-200 p-5">
-                  <h3 className="font-bold text-slate-900 text-base mb-4">Chi tiết giá</h3>
+                  <h3 className="font-bold text-slate-900 text-base mb-4">{locale === 'en' ? 'Price Breakdown' : 'Chi tiết giá'}</h3>
                   <div className="flex justify-between gap-3 text-sm">
-                    <span className="text-slate-500">Cước gửi hàng</span>
+                    <span className="text-slate-500">{locale === 'en' ? 'Freight Fee' : 'Cước gửi hàng'}</span>
                     <strong className="text-right text-slate-900">{formatConfirmedAmount(activePaymentReadSnapshot?.totalAmount)}</strong>
                   </div>
                 </section>
@@ -1512,17 +1524,17 @@ function PaymentContent() {
             {/* Thông tin hành khách */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <h3 className="font-bold text-slate-900 text-base mb-4">
-                Thông tin hành khách
+                {t('passengerInfo')}
               </h3>
               <div className="space-y-2.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Họ và tên</span>
+                  <span className="text-slate-500">{t('passengerInfo')}</span>
                   <span className="font-bold text-slate-800">
                     {bookingDraft.passenger.fullName}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Số điện thoại</span>
+                  <span className="text-slate-500">Phone</span>
                   <span className="font-bold text-slate-800">
                     {bookingDraft.passenger.phoneNumber}
                   </span>
@@ -1540,7 +1552,7 @@ function PaymentContent() {
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                  Thông tin chuyến đi
+                  {t('tripInfo')}
                   <Info className="w-4 h-4 text-rose-500" />
                 </h3>
                 <button
@@ -1548,7 +1560,7 @@ function PaymentContent() {
                   onClick={() => setShowTripDetailModal(true)}
                   className="text-xs text-rose-500 font-bold underline cursor-pointer"
                 >
-                  Chi tiết
+                  {tCommon('details')}
                 </button>
               </div>
 
@@ -1562,7 +1574,7 @@ function PaymentContent() {
                   >
                     {bookingDraft.legs.length > 1 && (
                       <p className="text-xs font-black uppercase text-accent mb-2.5">
-                        {index === 0 ? 'Lượt đi' : 'Lượt về'}
+                        {index === 0 ? (locale === 'en' ? 'Outbound' : 'Lượt đi') : (locale === 'en' ? 'Inbound' : 'Lượt về')}
                       </p>
                     )}
                     <div className="space-y-2">
@@ -1573,31 +1585,31 @@ function PaymentContent() {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Thời gian xuất bến</span>
+                        <span className="text-slate-500">{locale === 'en' ? 'Departure Time' : 'Thời gian xuất bến'}</span>
                         <span className="font-bold text-brand text-right">
                           {leg.departureTime}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Số lượng ghế</span>
+                        <span className="text-slate-500">{locale === 'en' ? 'Seats Count' : 'Số lượng ghế'}</span>
                         <span className="font-bold text-slate-800 text-right">
-                          {leg.seats.length} Ghế
+                          {locale === 'en' ? `${leg.seats.length} Seat(s)` : `${leg.seats.length} Ghế`}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Số ghế</span>
+                        <span className="text-slate-500">{locale === 'en' ? 'Seat Number(s)' : 'Số ghế'}</span>
                         <span className="font-bold text-brand text-right">
                           {leg.seats.join(', ')}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Điểm lên xe</span>
+                        <span className="text-slate-500">{locale === 'en' ? 'Boarding Point' : 'Điểm lên xe'}</span>
                         <span className="font-bold text-slate-800 text-right">
                           {leg.pickup}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Điểm trả khách</span>
+                        <span className="text-slate-500">{locale === 'en' ? 'Drop-off Point' : 'Điểm trả khách'}</span>
                         <span className="font-bold text-slate-800 text-right">
                           {leg.dropoff}
                         </span>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/action-button';
 import { ResourceState } from '@/components/admin/resource-ui';
@@ -17,6 +18,7 @@ interface ShipmentPrintViewProps {
 }
 
 export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
+  const t = useTranslations('shipments');
   const searchParams = useSearchParams();
   const initialType =
     searchParams?.get('type') === 'receipt' ? 'receipt' : 'label';
@@ -38,7 +40,7 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
       })
       .catch((err: unknown) => {
         if (active && (err as Error)?.name !== 'AbortError') {
-          setError((err as Error)?.message || 'Không thể tải thông tin phiếu gửi hàng.');
+          setError((err as Error)?.message || t('cannotLoadShipment'));
           setLoading(false);
         }
       });
@@ -47,12 +49,12 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
       active = false;
       controller.abort();
     };
-  }, [shipmentId]);
+  }, [shipmentId, t]);
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <ResourceState loading>Đang tải dữ liệu in ấn...</ResourceState>
+        <ResourceState loading>{t('loadingPrintData')}</ResourceState>
       </div>
     );
   }
@@ -61,12 +63,12 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-slate-50 p-6">
         <ResourceState error>
-          {error || 'Không tìm thấy thông tin đơn gửi hàng.'}
+          {error || t('shipmentNotFound')}
         </ResourceState>
         <Link href="/shipments">
           <Button variant="outline">
             <ArrowLeft className="mr-2 size-4" />
-            Quay lại danh sách gửi hàng
+            {t('backToShipmentsList')}
           </Button>
         </Link>
       </div>
@@ -78,21 +80,21 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
 
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900">
-      {/* Thanh điều khiển trên cùng - Ẩn hoàn toàn khi in */}
+      {/* Top control bar - Hidden when printing */}
       <header className="print:hidden sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur px-4 py-3 shadow-xs">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/shipments">
-              <Button variant="ghost" size="sm" aria-label="Quay lại">
+              <Button variant="ghost" size="sm" aria-label={t('backToShipmentsList')}>
                 <ArrowLeft className="size-4 mr-1 sm:mr-1.5" />
-                <span className="hidden sm:inline">Quay lại</span>
+                <span className="hidden sm:inline">{t('backToShipmentsList')}</span>
               </Button>
             </Link>
             <div className="h-4 w-px bg-slate-200" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500 font-medium">
-                  Vận đơn:
+                  {t('waybillPrefix')}
                 </span>
                 <span className="admin-data-mono font-bold text-sm text-slate-900">
                   {shipment.waybillCode}
@@ -101,7 +103,7 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
             </div>
           </div>
 
-          {/* Chọn khổ in */}
+          {/* Select print format */}
           <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1">
             <button
               type="button"
@@ -112,7 +114,7 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Tem dán kiện (100×150)
+              {t('tabLabel')}
             </button>
             <button
               type="button"
@@ -123,11 +125,11 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Biên nhận (K80)
+              {t('tabReceipt')}
             </button>
           </div>
 
-          {/* Nút bấm in */}
+          {/* Print button */}
           <div className="flex items-center gap-2">
             <Button
               variant="default"
@@ -137,18 +139,17 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
               className="gap-1.5 font-semibold"
             >
               <Printer className="size-4" />
-              In ngay
+              {t('printNow')}
             </Button>
           </div>
         </div>
 
-        {/* Cảnh báo trạng thái */}
+        {/* Status warning */}
         {isCancelled && (
           <div className="mx-auto mt-2.5 max-w-4xl rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 flex items-center gap-2">
             <AlertTriangle className="size-4 text-rose-600 shrink-0" />
             <span>
-              <strong>Đơn hàng đã bị hủy.</strong> Không hỗ trợ in tem kiện hoặc
-              biên nhận đối với đơn đã hủy.
+              {t('cancelledWarning')}
             </span>
           </div>
         )}
@@ -157,21 +158,18 @@ export function ShipmentPrintView({ shipmentId }: ShipmentPrintViewProps) {
           <div className="mx-auto mt-2.5 max-w-4xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-center gap-2">
             <AlertTriangle className="size-4 text-amber-600 shrink-0" />
             <span>
-              <strong>Lưu ý:</strong> Đơn hàng đang ở trạng thái{' '}
-              <em>Mới tạo</em> (chưa được nhân viên tiếp nhận chính thức). Phiếu
-              in sẽ hiển thị hình mờ (watermark){' '}
-              <em>&quot;CƯỚC DỰ KIẾN – CHƯA TIẾP NHẬN&quot;</em>.
+              {t('preAcceptanceWarning')}
             </span>
           </div>
         )}
       </header>
 
-      {/* Vùng xem trước và in ấn */}
+      {/* Preview and print viewport */}
       <main className="py-8 px-4 flex justify-center print:p-0 print:m-0">
         {isCancelled ? (
           <div className="my-16 text-center text-slate-500">
             <p className="font-medium">
-              Đơn hàng đã hủy, không thể xuất bản in.
+              {t('cancelledNoPrint')}
             </p>
           </div>
         ) : printType === 'label' ? (

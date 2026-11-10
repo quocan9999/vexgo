@@ -4,6 +4,7 @@ import { ResourceModalForm } from '@/components/admin/resource-modal-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { AdminMoneyInput } from '@/components/admin/admin-money-input';
 import { ResourceModalDialog } from '@/components/admin/resource-ui';
 import { Field, FieldLabel, FieldError } from '@/components/ui/field';
@@ -83,53 +84,51 @@ function compareMinorUnits(left: string, right: string): number {
   return left === right ? 0 : left < right ? -1 : 1;
 }
 
-function validate(values: FormValues): FieldErrors {
+function validate(values: FormValues, tPromotions: (key: string) => string): FieldErrors {
   const errors: FieldErrors = {};
   const name = values.name.trim();
   const code = values.code.trim().toUpperCase();
-  if (!name) errors.name = 'Vui lòng nhập tên chương trình.';
+  if (!name) errors.name = tPromotions('errors.nameRequired');
   else if (name.length > 150)
-    errors.name = 'Tên chương trình không vượt quá 150 ký tự.';
+    errors.name = tPromotions('errors.nameMaxLength');
   if (!/^[A-Z0-9][A-Z0-9_-]{2,49}$/.test(code))
-    errors.code = 'Mã gồm 3–50 ký tự A–Z, 0–9, gạch dưới hoặc gạch ngang.';
+    errors.code = tPromotions('errors.codeFormat');
   if (
     values.discountType !== 'PHAN_TRAM' &&
     values.discountType !== 'SO_TIEN'
   ) {
-    errors.discountType = 'Vui lòng chọn loại giảm giá.';
+    errors.discountType = tPromotions('errors.discountTypeRequired');
   }
   const discountValue = cents(values.discountValue);
   if (discountValue === null || compareMinorUnits(discountValue, '0') <= 0)
-    errors.discountValue =
-      'Mức giảm phải là số dương, tối đa 2 chữ số thập phân.';
+    errors.discountValue = tPromotions('errors.discountValuePositive');
   else if (
     values.discountType === 'PHAN_TRAM' &&
     compareMinorUnits(discountValue, '10000') > 0
   )
-    errors.discountValue = 'Phần trăm giảm không được vượt quá 100.';
+    errors.discountValue = tPromotions('errors.discountPercentMax');
   if (values.discountType === 'PHAN_TRAM') {
     const maxDiscount = cents(values.maxDiscount);
     if (maxDiscount === null || compareMinorUnits(maxDiscount, '0') <= 0)
-      errors.maxDiscount = 'Giảm tối đa bắt buộc và phải lớn hơn 0.';
+      errors.maxDiscount = tPromotions('errors.maxDiscountRequired');
   }
   if (values.minimumTicketAmount.trim()) {
     const minimum = cents(values.minimumTicketAmount);
     if (minimum === null)
-      errors.minimumTicketAmount =
-        'Giá trị tối thiểu phải là số không âm, tối đa 2 chữ số thập phân.';
+      errors.minimumTicketAmount = tPromotions('errors.minOrderNonNegative');
   }
   if (!isDateOnly(values.startsOn))
-    errors.startsOn = 'Vui lòng chọn ngày bắt đầu hợp lệ.';
+    errors.startsOn = tPromotions('errors.startsOnRequired');
   if (!isDateOnly(values.endsOn))
-    errors.endsOn = 'Vui lòng chọn ngày kết thúc hợp lệ.';
+    errors.endsOn = tPromotions('errors.endsOnRequired');
   else if (isDateOnly(values.startsOn) && values.endsOn < values.startsOn)
-    errors.endsOn = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
+    errors.endsOn = tPromotions('errors.endsOnAfterStartsOn');
   if (
     !/^\d+$/.test(values.usageLimit) ||
     !Number.isSafeInteger(Number(values.usageLimit)) ||
     Number(values.usageLimit) < 1
   ) {
-    errors.usageLimit = 'Số lượt tối đa phải là số nguyên dương.';
+    errors.usageLimit = tPromotions('errors.usageLimitPositive');
   }
   return errors;
 }
@@ -144,6 +143,8 @@ function mapServerFieldErrors(details: PromotionApiErrorDetail[]): FieldErrors {
 }
 
 export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
+  const tPromotions = useTranslations('promotions');
+  const tCommon = useTranslations('common');
   const submittingRef = useRef(false);
   const [codeLocked, setCodeLocked] = useState(
     Boolean(promotion && promotion.usageCount > 0),
@@ -179,7 +180,9 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
   const idPrefix = promotion
     ? `edit-promotion-${promotion.id}`
     : 'create-promotion';
-  const formTitle = promotion ? 'Chỉnh sửa khuyến mãi' : 'Thêm khuyến mãi';
+  const formTitle = promotion
+    ? tPromotions('formEditTitle')
+    : tPromotions('formCreateTitle');
 
   function focusFirstInvalidField(errors: FieldErrors) {
     const field = FIELD_NAMES.find((name) => errors[name]);
@@ -212,10 +215,10 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submittingRef.current) return;
-    const errors = validate(values);
+    const errors = validate(values, tPromotions);
     if (promotion && Number(values.usageLimit) < promotion.usageCount) {
       errors.usageLimit =
-        'Số lượt tối đa không được nhỏ hơn số lượt đã sử dụng.';
+        tPromotions('errors.usageLimitLessThanUsed');
     }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
@@ -257,18 +260,18 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           focusFirstInvalidField(serverErrors);
         } else if (requestError.code === 'PROMOTION_CODE_EXISTS') {
           const errors: FieldErrors = {
-            code: 'Mã khuyến mãi đã tồn tại trong nhà xe này.',
+            code: tPromotions('errors.codeExists'),
           };
           setFieldErrors(errors);
           focusFirstInvalidField(errors);
         } else {
           toast.error(
             requestError.message ||
-              'Không thể lưu khuyến mãi. Vui lòng thử lại.',
+              tPromotions('errors.saveFailed'),
           );
         }
       } else {
-        toast.error('Không thể kết nối hoặc lưu khuyến mãi. Vui lòng thử lại.');
+        toast.error(tPromotions('networkError'));
       }
       submittingRef.current = false;
       setSubmitting(false);
@@ -286,8 +289,8 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
       title={formTitle}
       description={
         promotion
-          ? 'Cập nhật điều kiện áp dụng của chương trình.'
-          : 'Thiết lập mã giảm giá và thời hạn áp dụng.'
+          ? tPromotions('editPromotion')
+          : tPromotions('createPromotion')
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -305,7 +308,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
               type="button"
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button disabled={submitting} aria-busy={submitting} type="submit">
               {submitting && (
@@ -316,12 +319,10 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
                 />
               )}
               {submitting
-                ? promotion
-                  ? 'Đang lưu…'
-                  : 'Đang tạo…'
+                ? tCommon('saving')
                 : promotion
-                  ? 'Lưu thay đổi'
-                  : 'Tạo khuyến mãi'}
+                  ? tPromotions('formSubmitEdit')
+                  : tPromotions('formSubmitCreate')}
             </Button>
           </div>
         }
@@ -329,7 +330,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field className="sm:col-span-2">
             <FieldLabel htmlFor={`${idPrefix}-name`}>
-              Tên chương trình *
+              {tPromotions('formNameLabel')} *
           </FieldLabel>
           <Input
             id={`${idPrefix}-name`}
@@ -346,7 +347,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('name', `${idPrefix}-name-error`)}
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-code`}>Mã khuyến mãi *</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-code`}>{tPromotions('formCodeLabel')} *</FieldLabel>
           <Input
             autoCapitalize="characters"
             autoComplete="off"
@@ -365,13 +366,13 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('code', `${idPrefix}-code-error`)}
           {codeLocked && (
             <span className="text-xs text-muted-foreground">
-              Mã đã phát sinh sử dụng nên không thể thay đổi.
+              {tPromotions('formCodeLocked')}
             </span>
           )}
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-discountType`}>
-            Loại giảm giá *
+            {tPromotions('formDiscountType')} *
           </FieldLabel>
           <Select
             value={values.discountType || null}
@@ -387,24 +388,27 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
                   : undefined
               }
             >
-              <SelectValue placeholder="Chọn loại giảm giá">
+              <SelectValue placeholder={tPromotions('formDiscountType')}>
                 {values.discountType === 'PHAN_TRAM'
-                  ? 'Phần trăm'
+                  ? tPromotions('discountTypePercentage')
                   : values.discountType === 'SO_TIEN'
-                    ? 'Số tiền cố định'
+                    ? tPromotions('discountTypeFixed')
                     : null}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="PHAN_TRAM">Phần trăm</SelectItem>
-              <SelectItem value="SO_TIEN">Số tiền cố định</SelectItem>
+              <SelectItem value="PHAN_TRAM">{tPromotions('discountTypePercentage')}</SelectItem>
+              <SelectItem value="SO_TIEN">{tPromotions('discountTypeFixed')}</SelectItem>
             </SelectContent>
           </Select>
           {fieldError('discountType', `${idPrefix}-discountType-error`)}
         </Field>
         <Field className={values.discountType === 'PHAN_TRAM' ? '' : 'sm:col-span-2'}>
           <FieldLabel htmlFor={`${idPrefix}-discountValue`}>
-            Mức giảm {values.discountType === 'PHAN_TRAM' ? '(%)' : '(VND)'} *
+            {values.discountType === 'PHAN_TRAM'
+              ? tPromotions('formDiscountValuePercent')
+              : tPromotions('formDiscountValueFixed')}{' '}
+            *
           </FieldLabel>
           {values.discountType === 'SO_TIEN' ? (
             <AdminMoneyInput
@@ -446,7 +450,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         {values.discountType === 'PHAN_TRAM' && (
           <Field>
             <FieldLabel htmlFor={`${idPrefix}-maxDiscount`}>
-              Giảm tối đa (VND) *
+              {tPromotions('formMaxDiscount')} *
             </FieldLabel>
             <AdminMoneyInput
               appearance="resource"
@@ -468,7 +472,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         )}
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-minimumTicketAmount`}>
-            Giá trị vé tối thiểu (VND)
+            {tPromotions('formMinOrder')}
           </FieldLabel>
           <AdminMoneyInput
             appearance="resource"
@@ -490,7 +494,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           )}
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-startsOn`}>Bắt đầu *</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-startsOn`}>{tPromotions('formStartsOn')} *</FieldLabel>
           <Input
             id={`${idPrefix}-startsOn`}
             type="date"
@@ -506,7 +510,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('startsOn', `${idPrefix}-startsOn-error`)}
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-endsOn`}>Kết thúc *</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-endsOn`}>{tPromotions('formEndsOn')} *</FieldLabel>
           <Input
             id={`${idPrefix}-endsOn`}
             min={values.startsOn || undefined}
@@ -524,7 +528,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-usageLimit`}>
-            Số lượt tối đa *
+            {tPromotions('formUsageLimit')} *
           </FieldLabel>
           <Input
             id={`${idPrefix}-usageLimit`}
@@ -546,8 +550,7 @@ export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
           {fieldError('usageLimit', `${idPrefix}-usageLimit-error`)}
           {promotion && (
             <span className="text-xs text-muted-foreground">
-              Đã sử dụng: {promotion.usageCount.toLocaleString('vi-VN')} lượt.
-              Số lượt đã dùng được ghi nhận tự động.
+              {tPromotions('usedCount')}: {promotion.usageCount.toLocaleString('vi-VN')}
             </span>
           )}
         </Field>

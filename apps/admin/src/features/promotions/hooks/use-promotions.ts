@@ -60,8 +60,8 @@ export function usePromotions() {
         if (current && !controller.signal.aborted) {
           setError(
             requestError instanceof TypeError
-              ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-              : 'Không thể tải danh sách khuyến mãi.',
+              ? 'Unable to connect to API server. Please try again.'
+              : 'Failed to load promotion list.',
           );
         }
       })

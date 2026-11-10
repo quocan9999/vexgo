@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
+import { formatCurrency } from '@/lib/format';
 import {
   Package,
   X,
@@ -35,15 +37,15 @@ function formatCategoryDisplayName(name: string | null | undefined): string {
   return name.toLowerCase().replace(/(^|\s)\S/g, (l) => l.toUpperCase());
 }
 
-function formatTimelineNote(note: string | null | undefined): string {
+function formatTimelineNote(note: string | null | undefined, t: (key: string) => string): string {
   if (!note) return '';
   if (note.trim() === 'Tạo phiếu gửi hàng độc lập') {
-    return 'Khởi tạo đơn gửi hàng';
+    return t('statusNew');
   }
   return note;
 }
 
-function formatDeparture(isoString: string | null) {
+function formatDeparture(isoString: string | null, locale = 'vi') {
   if (!isoString) return 'N/A';
   try {
     const date = new Date(isoString);
@@ -65,22 +67,22 @@ function formatPrice(amount: string | number) {
   return `${num.toLocaleString('vi-VN')} đ`;
 }
 
-function formatPaymentStatusLabel(status: string) {
+function formatPaymentStatusLabel(status: string, t: (key: string) => string) {
   switch (status) {
     case 'DA_THANH_TOAN':
     case 'THANH_CONG':
-      return 'Đã thanh toán tại bến';
+      return t('paymentPaid');
     case 'CHO_THANH_TOAN':
-      return 'Thanh toán tại bến';
+      return t('paymentPending');
     case 'DA_HUY':
-      return 'Đã hủy';
+      return t('paymentCancelled');
     default:
       return status;
   }
 }
 
-function renderPaymentStatusBadge(status: string) {
-  const label = formatPaymentStatusLabel(status);
+function renderPaymentStatusBadge(status: string, t: (key: string) => string) {
+  const label = formatPaymentStatusLabel(status, t);
   if (status === 'DA_THANH_TOAN' || status === 'THANH_CONG') {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
@@ -102,56 +104,59 @@ function renderPaymentStatusBadge(status: string) {
   );
 }
 
-function formatShipmentStatusLabel(status: string) {
+function formatShipmentStatusLabel(status: string, t: (key: string) => string) {
   switch (status) {
     case 'MOI_TAO':
-      return 'Chờ mang hàng đến gửi';
+      return t('statusNew');
     case 'DA_TIEP_NHAN':
-      return 'Đã tiếp nhận';
+      return t('statusReceived');
     case 'DANG_VAN_CHUYEN':
-      return 'Đang vận chuyển';
+      return t('statusInTransit');
     case 'DA_DEN_DIEM_NHAN':
-      return 'Đã đến bưu cục nhận';
+      return t('statusArrived');
     case 'DA_GIAO':
-      return 'Đã giao hàng';
+      return t('statusDelivered');
     case 'DA_HUY':
-      return 'Đã hủy';
+      return t('statusCancelled');
     default:
       return status;
   }
 }
 
-function renderShipmentStatusBadge(status: string) {
+function renderShipmentStatusBadge(status: string, t: (key: string) => string) {
   if (status === 'DA_GIAO') {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 whitespace-nowrap">
-        {formatShipmentStatusLabel(status)}
+        {formatShipmentStatusLabel(status, t)}
       </span>
     );
   }
   if (status === 'DA_HUY') {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 whitespace-nowrap">
-        {formatShipmentStatusLabel(status)}
+        {formatShipmentStatusLabel(status, t)}
       </span>
     );
   }
   if (status === 'DANG_VAN_CHUYEN' || status === 'DA_DEN_DIEM_NHAN') {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-700 whitespace-nowrap">
-        {formatShipmentStatusLabel(status)}
+        {formatShipmentStatusLabel(status, t)}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 whitespace-nowrap">
-      {formatShipmentStatusLabel(status)}
+      {formatShipmentStatusLabel(status, t)}
     </span>
   );
 }
 
 export default function CustomerShipmentsPage() {
   const router = useRouter();
+  const t = useTranslations('shipments');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
   const { accessToken, isHydrated, executeWithAuth } = useAuthSession();
 
   const [shipments, setShipments] = useState<CustomerShipmentListItem[]>([]);
@@ -254,7 +259,7 @@ export default function CustomerShipmentsPage() {
           setShipmentsError(
             err instanceof Error && err.message.trim()
               ? err.message
-              : 'Không thể tải danh sách đơn gửi hàng. Vui lòng thử lại.',
+              : t('cannotLoadShipments'),
           );
         }
       } finally {
@@ -294,7 +299,7 @@ export default function CustomerShipmentsPage() {
         setShipmentDetailError(
           err instanceof Error && err.message.trim()
             ? err.message
-            : 'Không thể tải chi tiết vận đơn.',
+            : t('cannotLoadShipmentDetail'),
         );
       } finally {
         setIsLoadingShipmentDetail(false);
@@ -350,7 +355,7 @@ export default function CustomerShipmentsPage() {
       setCancelError(
         err instanceof Error && err.message.trim()
           ? err.message
-          : 'Không thể hủy đơn gửi hàng.',
+          : t('cannotCancelShipment'),
       );
     } finally {
       setIsCancelling(false);
@@ -403,18 +408,17 @@ export default function CustomerShipmentsPage() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-                    Đơn gửi hàng
+                    {t('pageTitle')}
                   </h2>
                   <p className="text-sm text-slate-500 mt-1 font-medium">
-                    Theo dõi trạng thái vận chuyển và lịch sử các kiện hàng bạn
-                    đã gửi
+                    {t('pageDesc')}
                   </p>
                 </div>
                 <Link
                   href="/send-freight"
                   className="bg-accent hover:bg-accent-hover text-white px-5 py-2 rounded-full text-sm font-black shadow-sm transition-colors shrink-0"
                 >
-                  Gửi hàng mới
+                  {t('newShipmentBtn')}
                 </Link>
               </div>
 
@@ -425,11 +429,11 @@ export default function CustomerShipmentsPage() {
               >
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Mã vận đơn / Người nhận
+                    {t('filterSearchLabel')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Nhập mã vận đơn VG-VD-..."
+                    placeholder={t('filterSearchPlaceholder')}
                     value={shipmentSearchFilter}
                     onChange={(e) => setShipmentSearchFilter(e.target.value)}
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-accent transition-colors"
@@ -437,19 +441,19 @@ export default function CustomerShipmentsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Trạng thái vận chuyển
+                    {t('filterStatusLabel')}
                   </label>
                   <select
                     value={shipmentStatusFilter}
                     onChange={(e) => setShipmentStatusFilter(e.target.value)}
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-accent bg-white text-slate-600 transition-colors"
                   >
-                    <option value="">Tất cả trạng thái</option>
-                    <option value="MOI_TAO">Chờ mang hàng đến gửi</option>
-                    <option value="DA_TIEP_NHAN">Đã tiếp nhận</option>
-                    <option value="DANG_VAN_CHUYEN">Đang vận chuyển</option>
-                    <option value="DA_GIAO">Đã giao hàng</option>
-                    <option value="DA_HUY">Đã hủy</option>
+                    <option value="">{t('allStatuses')}</option>
+                    <option value="MOI_TAO">{t('statusNew')}</option>
+                    <option value="DA_TIEP_NHAN">{t('statusReceived')}</option>
+                    <option value="DANG_VAN_CHUYEN">{t('statusInTransit')}</option>
+                    <option value="DA_GIAO">{t('statusDelivered')}</option>
+                    <option value="DA_HUY">{t('statusCancelled')}</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -457,7 +461,7 @@ export default function CustomerShipmentsPage() {
                     type="submit"
                     className="w-full sm:w-auto px-6 py-2 border border-slate-300 rounded-full text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors h-[38px] cursor-pointer"
                   >
-                    Tìm
+                    {t('searchBtn')}
                   </button>
                 </div>
               </form>
@@ -468,28 +472,28 @@ export default function CustomerShipmentsPage() {
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
-                        Mã vận đơn
+                        {t('colWaybill')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Tuyến gửi
+                        {t('colRoute')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Người nhận
+                        {t('colReceiver')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Ngày tạo
+                        {t('colCreated')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Tổng cước
+                        {t('colTotalFee')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Trạng thái giao
+                        {t('colStatus')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Thanh toán
+                        {t('colPayment')}
                       </th>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
-                        Thao tác
+                        {t('colActions')}
                       </th>
                     </tr>
                   </thead>
@@ -501,7 +505,7 @@ export default function CustomerShipmentsPage() {
                           className="px-4 py-10 text-center text-slate-500 font-medium whitespace-nowrap"
                         >
                           <div className="w-7 h-7 border-3 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                          Đang tải danh sách đơn gửi hàng...
+                          {t('loadingList')}
                         </td>
                       </tr>
                     ) : shipmentsError ? (
@@ -515,7 +519,7 @@ export default function CustomerShipmentsPage() {
                             onClick={handleRetry}
                             className="mt-3 rounded-full border border-red-200 px-5 py-2 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 cursor-pointer"
                           >
-                            Thử lại
+                            {tCommon('retry')}
                           </button>
                         </td>
                       </tr>
@@ -527,17 +531,16 @@ export default function CustomerShipmentsPage() {
                               <Package className="w-7 h-7" />
                             </div>
                             <h3 className="text-base font-bold text-slate-800 mb-1.5">
-                              Bạn chưa có đơn gửi hàng nào
+                              {t('emptyTitle')}
                             </h3>
                             <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-                              Các vận đơn gửi hàng bạn tạo khi đăng nhập sẽ hiển
-                              thị tại đây để tiện theo dõi hành trình giao nhận.
+                              {t('emptyDesc')}
                             </p>
                             <Link
                               href="/send-freight"
                               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-accent text-white text-xs font-black hover:bg-accent-hover transition-colors shadow-2xs"
                             >
-                              <span>Tạo đơn gửi hàng ngay</span>
+                              <span>{t('createNow')}</span>
                             </Link>
                           </div>
                         </td>
@@ -571,8 +574,8 @@ export default function CustomerShipmentsPage() {
                                   onClick={(e) =>
                                     handleCopyWaybill(item.waybillCode, e)
                                   }
-                                  title="Sao chép mã vận đơn"
-                                  aria-label={`Sao chép mã vận đơn ${item.waybillCode}`}
+                                  title={t('copyWaybillCode')}
+                                  aria-label={t('copyWaybillCodeAria', { code: item.waybillCode })}
                                   className="p-1 rounded-md text-slate-400 hover:text-accent hover:bg-orange-50 transition-colors cursor-pointer"
                                 >
                                   {isCopied ? (
@@ -583,7 +586,7 @@ export default function CustomerShipmentsPage() {
                                 </button>
                               </div>
                               <span className="block text-[11px] font-normal text-slate-400">
-                                {item.itemsCount} kiện hàng
+                                {t('packagesCount', { count: item.itemsCount })}
                               </span>
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
@@ -594,12 +597,12 @@ export default function CustomerShipmentsPage() {
                                 {item.trip.busCompany}
                                 {!item.trip.tripId && (
                                   <span className="block">
-                                    Chưa phân chuyến
+                                    {t('unassignedTrip')}
                                   </span>
                                 )}
                                 {item.dropoffDeadline && (
                                   <span className="block">
-                                    Hạn gửi:{' '}
+                                    {t('dropoffDeadlinePrefix')}
                                     {new Date(
                                       item.dropoffDeadline,
                                     ).toLocaleString('vi-VN')}
@@ -616,16 +619,16 @@ export default function CustomerShipmentsPage() {
                               </span>
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
-                              {formatDeparture(item.sentAt)}
+                              {formatDeparture(item.sentAt, locale)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-slate-900 border-l border-slate-100 whitespace-nowrap">
-                              {formatPrice(item.totalFee)}
+                              {formatCurrency(Number(item.totalFee), locale)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
-                              {renderShipmentStatusBadge(item.status)}
+                              {renderShipmentStatusBadge(item.status, t)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
-                              {renderPaymentStatusBadge(item.paymentStatus)}
+                              {renderPaymentStatusBadge(item.paymentStatus, t)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5">
@@ -637,7 +640,7 @@ export default function CustomerShipmentsPage() {
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                                 >
                                   <Eye className="w-3.5 h-3.5 text-amber-400" />
-                                  <span>Chi tiết</span>
+                                  <span>{t('detailBtn')}</span>
                                 </button>
                               </div>
                             </td>
@@ -663,7 +666,7 @@ export default function CustomerShipmentsPage() {
                   </select>
                 </div>
                 <div className="text-sm font-medium text-slate-600">
-                  Tổng số: {shipmentsMeta.totalItems}
+                  {t('totalCount', { count: shipmentsMeta.totalItems })}
                 </div>
                 <div className="flex gap-1">
                   <button
@@ -731,12 +734,12 @@ export default function CustomerShipmentsPage() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
               <div className="min-w-0 pr-3">
                 <h3 className="text-lg font-black text-slate-900">
-                  Chi tiết vận đơn gửi hàng
+                  {t('modalDetailTitle')}
                 </h3>
                 {selectedShipmentDetail && (
                   <div className="flex items-center gap-2 flex-wrap mt-1">
                     <p className="text-xs font-bold text-accent font-mono break-all">
-                      Mã vận đơn: {selectedShipmentDetail.waybillCode}
+                      {t('colWaybill')}: {selectedShipmentDetail.waybillCode}
                     </p>
                     <button
                       type="button"
@@ -749,12 +752,12 @@ export default function CustomerShipmentsPage() {
                       selectedShipmentDetail.waybillCode ? (
                         <>
                           <Check className="w-3 h-3 text-emerald-600" />
-                          <span className="text-emerald-700">Đã chép</span>
+                          <span className="text-emerald-700">{t('copied')}</span>
                         </>
                       ) : (
                         <>
                           <Copy className="w-3 h-3" />
-                          <span>Sao chép</span>
+                          <span>{t('copyCode')}</span>
                         </>
                       )}
                     </button>
@@ -776,7 +779,7 @@ export default function CustomerShipmentsPage() {
             {isLoadingShipmentDetail ? (
               <div className="py-12 text-center text-slate-500 text-sm">
                 <div className="w-7 h-7 border-3 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                Đang tải chi tiết vận đơn...
+                {t('loadingDetail')}
               </div>
             ) : shipmentDetailError ? (
               <div className="py-8 text-center text-red-600 text-sm font-semibold">
@@ -792,15 +795,15 @@ export default function CustomerShipmentsPage() {
                       {selectedShipmentDetail.trip.route.destination}
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      Nhà xe: {selectedShipmentDetail.trip.busCompany.name}
+                      {t('busCompanyPrefix')}{selectedShipmentDetail.trip.busCompany.name}
                       <div>
                         {selectedShipmentDetail.trip.tripId
-                          ? `Chuyến ${selectedShipmentDetail.trip.code}`
-                          : 'Chưa phân chuyến'}
+                          ? `${t('tripPrefix')}${selectedShipmentDetail.trip.code}`
+                          : t('unassignedTrip')}
                       </div>
                       {selectedShipmentDetail.dropoffDeadline && (
                         <div>
-                          Hạn mang hàng đến:{' '}
+                          {t('dropoffDeadlineLabel')}{' '}
                           {new Date(
                             selectedShipmentDetail.dropoffDeadline,
                           ).toLocaleString('vi-VN')}
@@ -809,9 +812,10 @@ export default function CustomerShipmentsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {renderShipmentStatusBadge(selectedShipmentDetail.status)}
+                    {renderShipmentStatusBadge(selectedShipmentDetail.status, t)}
                     {renderPaymentStatusBadge(
                       selectedShipmentDetail.paymentStatus,
+                      t,
                     )}
                   </div>
                 </div>
@@ -821,7 +825,7 @@ export default function CustomerShipmentsPage() {
                   <div className="p-3.5 rounded-xl border border-slate-200">
                     <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5 mb-1">
                       <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Bưu cục gửi</span>
+                      <span>{t('pickupStation')}</span>
                     </div>
                     <div className="font-bold text-slate-900">
                       {selectedShipmentDetail.pickupPoint.name}
@@ -830,7 +834,7 @@ export default function CustomerShipmentsPage() {
                       {selectedShipmentDetail.pickupPoint.address}
                     </div>
                     <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
-                      Người gửi:{' '}
+                      {t('senderPrefix')}{' '}
                       <strong>{selectedShipmentDetail.sender.fullName}</strong>{' '}
                       ({selectedShipmentDetail.sender.phoneNumber})
                     </div>
@@ -839,7 +843,7 @@ export default function CustomerShipmentsPage() {
                   <div className="p-3.5 rounded-xl border border-slate-200">
                     <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5 mb-1">
                       <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Bưu cục nhận</span>
+                      <span>{t('dropoffStation')}</span>
                     </div>
                     <div className="font-bold text-slate-900">
                       {selectedShipmentDetail.dropoffPoint.name}
@@ -848,7 +852,7 @@ export default function CustomerShipmentsPage() {
                       {selectedShipmentDetail.dropoffPoint.address}
                     </div>
                     <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
-                      Người nhận:{' '}
+                      {t('receiverPrefix')}{' '}
                       <strong>
                         {selectedShipmentDetail.receiver.fullName}
                       </strong>{' '}
@@ -865,7 +869,7 @@ export default function CustomerShipmentsPage() {
                 {/* Danh sách kiện hàng */}
                 <div className="rounded-xl border border-slate-200 p-3.5">
                   <div className="text-xs font-bold text-slate-700 uppercase mb-2">
-                    Danh sách kiện hàng ({selectedShipmentDetail.items.length})
+                    {t('itemsList')} ({selectedShipmentDetail.items.length})
                   </div>
                   <div className="divide-y divide-slate-100">
                     {selectedShipmentDetail.items.map((itm) => (
@@ -882,12 +886,12 @@ export default function CustomerShipmentsPage() {
                           </span>
                           {itm.note && (
                             <span className="block text-slate-400">
-                              Ghi chú: {itm.note}
+                              {t('packageNotePrefix')}{itm.note}
                             </span>
                           )}
                         </div>
                         <div className="text-right font-semibold text-slate-700">
-                          {itm.quantity} kiện · {itm.weight} kg
+                          {t('itemsCount', { count: itm.quantity })} · {itm.weight} kg
                           {itm.dimensions ? ` (${itm.dimensions})` : ''}
                         </div>
                       </div>
@@ -895,22 +899,23 @@ export default function CustomerShipmentsPage() {
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold text-slate-600">
-                      Tổng cước vận chuyển:
+                      {t('totalFee')}:
                     </span>
                     <div className="flex items-center gap-2 flex-wrap">
                       {selectedShipmentDetail.status !== 'DA_HUY' &&
                         renderPaymentStatusBadge(
                           selectedShipmentDetail.paymentStatus,
+                          t,
                         )}
                       <span className="text-base font-black text-accent">
-                        {formatPrice(selectedShipmentDetail.pricing.totalFee)}
+                        {formatCurrency(Number(selectedShipmentDetail.pricing.totalFee), locale)}
                       </span>
                     </div>
                   </div>
                   <div className="mt-2 text-[11px] text-slate-500 font-medium">
                     {selectedShipmentDetail.freightPayer === 'NGUOI_NHAN'
-                      ? '• Người nhận thanh toán cước phí bằng tiền mặt khi đến nhận hàng tại bến.'
-                      : '• Người gửi thanh toán cước phí bằng tiền mặt tại quầy bến xe khi bàn giao kiện hàng.'}
+                      ? t('receiverPaysDesc')
+                      : t('senderPaysDesc')}
                   </div>
                 </div>
 
@@ -920,7 +925,7 @@ export default function CustomerShipmentsPage() {
                     <div className="rounded-xl border border-slate-200 p-3.5">
                       <div className="text-xs font-bold text-slate-700 uppercase mb-2 flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Lịch sử trạng thái vận đơn</span>
+                        <span>{t('timelineTitle')}</span>
                       </div>
                       <div className="space-y-2">
                         {selectedShipmentDetail.timeline.map((step) => {
@@ -943,14 +948,14 @@ export default function CustomerShipmentsPage() {
                                       : 'text-slate-800'
                                   }`}
                                 >
-                                  {formatShipmentStatusLabel(step.status)}
+                                  {formatShipmentStatusLabel(step.status, t)}
                                 </span>{' '}
                                 <span className="text-slate-400">
-                                  · {formatDeparture(step.time)}
+                                  · {formatDeparture(step.time, locale)}
                                 </span>
                                 {step.note && (
                                   <p className="text-slate-500 mt-0.5">
-                                    {formatTimelineNote(step.note)}
+                                    {formatTimelineNote(step.note, t)}
                                   </p>
                                 )}
                               </div>
@@ -967,8 +972,8 @@ export default function CustomerShipmentsPage() {
                     {!showCancelConfirm ? (
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="text-xs text-slate-600">
-                          <strong className="text-slate-800">Bạn muốn hủy đơn gửi hàng?</strong>{' '}
-                          Đơn hàng đang ở trạng thái Mới tạo (chưa bàn giao tại bến) nên có thể hủy trực tuyến.
+                          <strong className="text-slate-800">{t('cancelOrderQuestion')}</strong>{' '}
+                          {t('cancelOrderOnlineNotice')}
                         </div>
                         <button
                           type="button"
@@ -979,13 +984,13 @@ export default function CustomerShipmentsPage() {
                           className="px-3.5 py-2 rounded-lg border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          <span>Hủy đơn gửi hàng</span>
+                          <span>{t('cancelShipment')}</span>
                         </button>
                       </div>
                     ) : (
                       <div className="space-y-2.5">
                         <div className="text-xs font-bold text-slate-800">
-                          Chọn lý do hủy đơn gửi hàng:
+                          {t('cancelReasonLabel')}
                         </div>
                         <select
                           value={cancelReason}
@@ -993,13 +998,13 @@ export default function CustomerShipmentsPage() {
                           className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:border-rose-500"
                         >
                           <option value="Đặt nhầm thông tin người gửi/nhận">
-                            Đặt nhầm thông tin người gửi/nhận
+                            {t('cancelReasonWrongInfo')}
                           </option>
                           <option value="Thay đổi kế hoạch gửi hàng">
-                            Thay đổi kế hoạch gửi hàng
+                            {t('cancelReasonChangePlan')}
                           </option>
                           <option value="Muốn đổi nhà xe hoặc điểm gửi khác">
-                            Muốn đổi nhà xe hoặc điểm gửi khác
+                            {t('cancelReasonChangeCompany')}
                           </option>
                         </select>
                         {cancelError && (
@@ -1014,7 +1019,7 @@ export default function CustomerShipmentsPage() {
                             disabled={isCancelling}
                             className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs cursor-pointer"
                           >
-                            Quay lại
+                            {t('cancelBack')}
                           </button>
                           <button
                             type="button"
@@ -1022,7 +1027,7 @@ export default function CustomerShipmentsPage() {
                             disabled={isCancelling}
                             className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs cursor-pointer"
                           >
-                            {isCancelling ? 'Đang hủy...' : 'Xác nhận hủy đơn'}
+                            {isCancelling ? t('cancelling') : t('cancelConfirmBtn')}
                           </button>
                         </div>
                       </div>
@@ -1033,8 +1038,7 @@ export default function CustomerShipmentsPage() {
                 {(selectedShipmentDetail.status === 'DA_TIEP_NHAN' ||
                   selectedShipmentDetail.status === 'DANG_VAN_CHUYEN') && (
                   <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-xs text-slate-700">
-                    <strong>Lưu ý:</strong> Kiện hàng đã được tiếp nhận tại bến nên không thể hủy trực tuyến. Vui lòng liên hệ nhà xe{' '}
-                    <strong>{selectedShipmentDetail.trip.busCompany.name}</strong> tại điểm gửi nếu cần hỗ trợ.
+                    <strong>{t('noticePrefix')}</strong> {t('cannotCancelStationNotice', { name: selectedShipmentDetail.trip.busCompany.name })}
                   </div>
                 )}
               </div>

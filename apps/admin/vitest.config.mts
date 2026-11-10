@@ -10,6 +10,7 @@ const testRendererRequire = createRequire(
 export default defineConfig({
   resolve: {
     alias: [
+      { find: /^next\/navigation$/, replacement: 'next/navigation.js' },
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ...['react-dom/client', 'react-dom/server', 'react-dom/test-utils', 'react-dom',
         'react/jsx-runtime', 'react/jsx-dev-runtime', 'react'].map((dependency) => ({
@@ -19,6 +20,11 @@ export default defineConfig({
     ],
   },
   test: {
+    server: {
+      deps: {
+        inline: ['next-intl'],
+      },
+    },
     css: false,
     environment: 'node',
     include: ['test/**/*.spec.tsx'],

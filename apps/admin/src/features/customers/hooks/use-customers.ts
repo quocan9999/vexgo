@@ -80,7 +80,7 @@ export function useCustomers() {
         setError(
           err instanceof Error
             ? err.message
-            : 'Không thể tải danh sách khách hàng.',
+            : 'Failed to load customer list.',
         );
       })
       .finally(() => {

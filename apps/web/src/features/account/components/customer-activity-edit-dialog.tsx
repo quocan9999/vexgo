@@ -1,7 +1,8 @@
-/* eslint-disable */
-// /src/modules/client/my-posts/components/MyPostEditModal.tsx
+'use client';
+
 import React, { useState } from 'react';
 import { X, Save } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { CustomerActivity } from '@/features/account/types/customer-activity';
 
 interface MyPostEditModalProps {
@@ -15,6 +16,8 @@ export const MyPostEditModal: React.FC<MyPostEditModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const t = useTranslations('account.activity');
+  const tCommon = useTranslations('common');
   const [formData, setFormData] = useState<Partial<CustomerActivity>>(post ? { ...post } : {});
 
   if (!post) return null;
@@ -26,7 +29,6 @@ export const MyPostEditModal: React.FC<MyPostEditModalProps> = ({
       return;
     }
 
-    // If payment failed, editing and saving returns it to pending payment.
     const updatedStatus = post.status === 'REJECTED' ? 'PENDING' : post.status;
 
     onSave({
@@ -43,12 +45,13 @@ export const MyPostEditModal: React.FC<MyPostEditModalProps> = ({
         {/* Header Modal */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <h3 className="text-base font-bold text-slate-900">
-            Chỉnh Sửa Vé / Vận Đơn - <span className="text-emerald-800 font-extrabold">{post.id}</span>
+            {t('editModalTitle')} - <span className="text-emerald-800 font-extrabold">{post.id}</span>
           </h3>
           <button
             type="button"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200/60 cursor-pointer transition-colors"
+            aria-label={tCommon('close')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -58,21 +61,21 @@ export const MyPostEditModal: React.FC<MyPostEditModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs text-slate-700">
           {post.status === 'REJECTED' && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 font-medium">
-              <strong>Lưu ý:</strong> Sau khi cập nhật, yêu cầu sẽ chuyển về trạng thái <strong>Chờ thanh toán</strong>.
+              {t('editNoticePending')}
             </div>
           )}
 
           {/* Title */}
           <div className="space-y-1.5">
             <label className="font-bold text-slate-900 block">
-              Tuyến / dịch vụ <span className="text-rose-500">*</span>
+              {t('colRouteService')} <span className="text-rose-500">*</span>
             </label>
             <textarea
               rows={2}
               value={formData.title || ''}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 text-xs font-medium"
-              placeholder="Nhập tiêu đề..."
+              placeholder={t('colRouteService')}
               required
             />
           </div>
@@ -81,27 +84,27 @@ export const MyPostEditModal: React.FC<MyPostEditModalProps> = ({
             {/* Price */}
             <div className="space-y-1.5">
               <label className="font-bold text-slate-900 block">
-                Giá vé / cước phí <span className="text-rose-500">*</span>
+                {t('priceFare')} <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 value={formData.priceRange || ''}
                 onChange={(e) => setFormData({ ...formData, priceRange: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 text-xs font-medium"
-                placeholder="Ví dụ: 420.000 VNĐ"
+                placeholder={t('priceFare')}
                 required
               />
             </div>
 
             {/* Area */}
             <div className="space-y-1.5">
-              <label className="font-bold text-slate-900 block">Ghế / khối lượng</label>
+              <label className="font-bold text-slate-900 block">{t('seatWeight')}</label>
               <input
                 type="text"
                 value={formData.areaRange || ''}
                 onChange={(e) => setFormData({ ...formData, areaRange: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 text-xs font-medium"
-                placeholder="Ví dụ: Ghế A05 hoặc 12 kg"
+                placeholder={t('seatWeight')}
               />
             </div>
           </div>
@@ -109,27 +112,27 @@ export const MyPostEditModal: React.FC<MyPostEditModalProps> = ({
           {/* Location */}
           <div className="space-y-1.5">
             <label className="font-bold text-slate-900 block">
-              Tuyến đường <span className="text-rose-500">*</span>
+              {t('routeLabel')} <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
               value={formData.location || ''}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 text-xs font-medium"
-              placeholder="Nhập điểm đi - điểm đến"
+              placeholder={t('routeLabel')}
               required
             />
           </div>
 
           {/* Description */}
           <div className="space-y-1.5">
-            <label className="font-bold text-slate-900 block">Ghi chú chi tiết</label>
+            <label className="font-bold text-slate-900 block">{t('detailedNote')}</label>
             <textarea
               rows={4}
               value={formData.description || ''}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 text-xs font-medium"
-              placeholder="Điểm đón, điểm trả, hành khách, hàng hóa, người nhận..."
+              placeholder={t('detailedNote')}
             />
           </div>
 
@@ -140,14 +143,14 @@ export const MyPostEditModal: React.FC<MyPostEditModalProps> = ({
               onClick={onClose}
               className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-all cursor-pointer"
             >
-              Hủy
+              {tCommon('cancel')}
             </button>
             <button
               type="submit"
               className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-brand-dark hover:bg-brand-hover text-white font-bold text-xs shadow-md transition-all cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>Lưu thay đổi</span>
+              <span>{t('saveChanges')}</span>
             </button>
           </div>
         </form>

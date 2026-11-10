@@ -24,6 +24,62 @@ const mockAdminSession = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 
+import viMessages from '../src/messages/vi.json';
+import enMessages from '../src/messages/en.json';
+
+let currentTestLocale = 'vi';
+
+if (!process.env.NEXT_PUBLIC_API_URL) {
+  process.env.NEXT_PUBLIC_API_URL = 'http://localhost:4002';
+}
+
+export function setTestLocale(locale: 'vi' | 'en') {
+  currentTestLocale = locale;
+}
+
+export function getTestLocale() {
+  return currentTestLocale;
+}
+
+vi.mock('next-intl', () => ({
+  useTranslations: (namespace?: string) => {
+    const t = (key: string, values?: Record<string, unknown>) => {
+      const keys = namespace ? `${namespace}.${key}`.split('.') : key.split('.');
+      const messages = currentTestLocale === 'en' ? enMessages : viMessages;
+      let val: unknown = messages;
+      for (const k of keys) {
+        val = (val as Record<string, unknown>)?.[k];
+      }
+      if (typeof val === 'string') {
+        if (values) {
+          return Object.entries(values).reduce(
+            (acc, [k, v]) => acc.replace(`{${k}}`, String(v)),
+            val,
+          );
+        }
+        return val;
+      }
+      return key;
+    };
+    t.rich = (key: string, values?: Record<string, unknown>) => t(key, values);
+    t.markup = (key: string, values?: Record<string, unknown>) => t(key, values);
+    return t;
+  },
+  useLocale: () => currentTestLocale,
+  NextIntlClientProvider: ({
+    locale,
+    children,
+  }: {
+    locale?: string;
+    children: React.ReactNode;
+  }) => {
+    if (locale === 'en' || locale === 'vi') {
+      currentTestLocale = locale;
+    }
+    return children;
+  },
+}));
+
 vi.mock('@/features/admin-auth/hooks/use-admin-session', () => {
   return {
     useAdminSession: () =>
@@ -44,6 +100,7 @@ function publishAdminTestSession(state: TestSessionState) {
 }
 
 export function resetAdminTestSession() {
+  currentTestLocale = 'vi';
   publishAdminTestSession({
     status: 'authenticated',
     session: platformSession,

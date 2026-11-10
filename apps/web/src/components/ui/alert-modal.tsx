@@ -3,6 +3,7 @@
 import React, { useId } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, XCircle, AlertCircle, Info, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 export interface AlertModalProps {
   isOpen: boolean;
@@ -17,12 +18,20 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   isOpen,
   title,
   message,
-  confirmText = 'Đóng',
+  confirmText,
   variant = 'info',
   onClose,
 }) => {
+  let t: (key: string) => string = (k) => (k === 'close' ? 'Đóng' : k);
+  try {
+    const intlT = useTranslations('common');
+    t = intlT;
+  } catch {
+    // fallback outside provider
+  }
   const titleId = useId();
   if (!isOpen) return null;
+  const effectiveConfirmText = confirmText ?? t('close');
 
   const renderIcon = () => {
     switch (variant) {
@@ -97,7 +106,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
             onClick={onClose}
             className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer ${getButtonClass()}`}
           >
-            {confirmText}
+            {effectiveConfirmText}
           </button>
         </div>
       </div>

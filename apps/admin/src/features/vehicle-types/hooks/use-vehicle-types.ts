@@ -12,11 +12,11 @@ const PAGE_SIZE = 10;
 
 function requestErrorMessage(error: unknown) {
   if (error instanceof TypeError) {
-    return 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.';
+    return 'Cannot connect to API server. Please try again.';
   }
   return error instanceof Error
     ? error.message
-    : 'Không thể tải danh sách loại xe.';
+    : 'Failed to load vehicle types.';
 }
 
 export function useVehicleTypes() {

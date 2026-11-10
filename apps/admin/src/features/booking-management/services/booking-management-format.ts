@@ -22,23 +22,23 @@ export function formatVnd(value: string | null | undefined) {
 
 export function statusLabel(status: string) {
   const known: Record<string, string> = {
-    CHO_THANH_TOAN: 'Chờ thanh toán',
-    CHO_THAN_TOAN: 'Chờ thanh toán',
-    DA_THANH_TOAN: 'Đã thanh toán',
-    HOAN_THANH: 'Hoàn thành',
-    DA_HUY: 'Đã hủy',
-    DA_DAT: 'Đã đặt',
-    HUY: 'Đã hủy',
-    DANG_XU_LY: 'Đang xử lý',
-    DANG_GUI: 'Đang gửi',
-    THANH_CONG: 'Thành công',
-    THAT_BAI: 'Thất bại',
-    DA_HOAN_TIEN: 'Đã hoàn tiền',
-    CHO_XAC_NHAN: 'Chờ xác nhận',
-    MOI_TAO: 'Mới tạo',
-    DA_TIEP_NHAN: 'Đã tiếp nhận',
-    DANG_VAN_CHUYEN: 'Đang vận chuyển',
-    DA_GIAO: 'Đã giao',
+    CHO_THANH_TOAN: 'Pending Payment',
+    CHO_THAN_TOAN: 'Pending Payment',
+    DA_THANH_TOAN: 'Paid',
+    HOAN_THANH: 'Completed',
+    DA_HUY: 'Cancelled',
+    DA_DAT: 'Confirmed',
+    HUY: 'Cancelled',
+    DANG_XU_LY: 'Processing',
+    DANG_GUI: 'Sending',
+    THANH_CONG: 'Success',
+    THAT_BAI: 'Failed',
+    DA_HOAN_TIEN: 'Refunded',
+    CHO_XAC_NHAN: 'Pending Confirmation',
+    MOI_TAO: 'New',
+    DA_TIEP_NHAN: 'Received',
+    DANG_VAN_CHUYEN: 'In Transit',
+    DA_GIAO: 'Delivered',
   };
   return known[status] ?? status.replaceAll('_', ' ');
 }
@@ -52,21 +52,21 @@ export function statusIsActive(status: string) {
 export function tripIntegrityMessage(integrity: string) {
   switch (integrity) {
     case 'MULTIPLE_TRIPS':
-      return 'Dữ liệu phiếu có vé thuộc nhiều chuyến; thông tin chuyến không được xác định.';
+      return 'Tickets belong to multiple trips; trip information cannot be determined.';
     case 'NO_TICKETS':
-      return 'Phiếu hiện chưa có vé để xác định chuyến.';
+      return 'Booking currently has no tickets to identify the trip.';
     case 'TRIP_UNAVAILABLE':
-      return 'Không thể xác định chuyến trong phạm vi nhà xe.';
+      return 'Trip not available within operator scope.';
     case 'TRIP_MISMATCH':
-      return 'Chuyến của hàng gửi không khớp với chuyến của phiếu.';
+      return 'Shipment trip does not match booking trip.';
     default:
-      return 'Chuyến xe chưa có thông tin.';
+      return 'Trip information not available.';
   }
 }
 
 export function historyStatusText(oldStatus: string | null, newStatus: string) {
   if (oldStatus === null) {
-    return `Trạng thái được ghi nhận khi khởi tạo lịch sử: ${statusLabel(newStatus)}`;
+    return `Recorded on history initialization: ${statusLabel(newStatus)}`;
   }
   return oldStatus === newStatus
     ? statusLabel(newStatus)

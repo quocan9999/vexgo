@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { getVehicleTypeById } from '../services/vehicle-type-service';
 import type { VehicleType } from '../types/vehicle-type';
 import { VehicleTypeFormDialog } from './vehicle-type-form-dialog';
@@ -50,6 +51,8 @@ function timestampFormat(value: string) {
 export function VehicleTypeWorkspace({
   vehicleTypeId,
 }: VehicleTypeWorkspaceProps) {
+  const tVehicleTypes = useTranslations('vehicleTypes');
+  const tCommon = useTranslations('common');
   const authState = useAdminSession();
   const session = authState.status === 'authenticated' ? authState.session : null;
   const canUpdate = hasAdminPermission(session, 'vehicle-type:update');
@@ -74,10 +77,10 @@ export function VehicleTypeWorkspace({
             status: 'error',
             message:
               error instanceof TypeError
-                ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+                ? tVehicleTypes('networkError')
                 : error instanceof Error
                   ? error.message
-                  : 'Không thể tải thông tin loại xe.',
+                  : tVehicleTypes('errorLoading'),
           });
         }
       });
@@ -86,7 +89,7 @@ export function VehicleTypeWorkspace({
       current = false;
       controller.abort();
     };
-  }, [retryCount, vehicleTypeId]);
+  }, [retryCount, vehicleTypeId, tVehicleTypes]);
 
   function retry() {
     setDetailState({ status: 'loading' });
@@ -96,7 +99,7 @@ export function VehicleTypeWorkspace({
   function handleVehicleTypeUpdated(vehicleType: VehicleType) {
     setDetailState({ status: 'success', vehicleType });
     setEditDialogOpen(false);
-    toast.success('Cập nhật loại xe thành công.');
+    toast.success(tVehicleTypes('updatedSuccess'));
   }
 
   const vehicleType =
@@ -106,8 +109,8 @@ export function VehicleTypeWorkspace({
     <SuperAdminLayout
       activeSection="vehicle-types"
       breadcrumbs={[
-        { label: 'Quản lý loại xe', href: '/vehicle-types' },
-        { label: vehicleType ? vehicleType.name : 'Chi tiết loại xe' },
+        { label: tVehicleTypes('vehicleTypesTitle'), href: '/vehicle-types' },
+        { label: vehicleType ? vehicleType.name : tVehicleTypes('workspaceTitle') },
       ]}
     >
       <div className="admin-page-content space-y-6">
@@ -120,31 +123,32 @@ export function VehicleTypeWorkspace({
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Quay lại danh sách
+                {tCommon('backToList')}
               </Button>
               {canUpdate && vehicleType && (
                 <Button onClick={() => setEditDialogOpen(true)}>
                   <Pencil aria-hidden="true" />
-                  Chỉnh sửa
+                  {tCommon('edit')}
                 </Button>
               )}
               <ResourceRefreshAction
                 loading={detailState.status === 'loading'}
                 onClick={retry}
+                label={tCommon('refresh')}
               />
             </div>
           }
-          eyebrow="DANH MỤC PHƯƠNG TIỆN"
+          eyebrow={tVehicleTypes('eyebrow')}
           title={
             vehicleType
-              ? `Chi tiết loại xe ${vehicleType.name}`
-              : 'Chi tiết loại xe'
+              ? `${tVehicleTypes('workspaceTitle')} ${vehicleType.name}`
+              : tVehicleTypes('workspaceTitle')
           }
           titleId="vehicle-type-workspace-title"
         />
 
         {detailState.status === 'loading' && (
-          <ResourceState loading>Đang tải thông tin loại xe…</ResourceState>
+          <ResourceState loading>{tVehicleTypes('loadingDetails')}</ResourceState>
         )}
 
         {detailState.status === 'error' && (
@@ -152,13 +156,13 @@ export function VehicleTypeWorkspace({
             <p>{detailState.message}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={retry} variant="outline">
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button
                 nativeButton={false}
                 render={<Link href="/vehicle-types" />}
               >
-                Về danh sách loại xe
+                {tVehicleTypes('backToList')}
               </Button>
             </div>
           </ResourceState>
@@ -180,7 +184,7 @@ export function VehicleTypeWorkspace({
                     {vehicleType.name}
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Mã loại xe:{' '}
+                    {tVehicleTypes('typeCode')}{' '}
                     <strong className="admin-data-mono">
                       #{vehicleType.vehicleTypeId}
                     </strong>
@@ -191,13 +195,13 @@ export function VehicleTypeWorkspace({
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Card 1: Sức chứa hàng mặc định */}
+              {/* Card 1: Default cargo capacity */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <Boxes className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Sức chứa hàng mặc định
+                      {tVehicleTypes('defaultCargoCapacity')}
                     </CardTitle>
                   </div>
                 </CardHeader>
@@ -205,9 +209,9 @@ export function VehicleTypeWorkspace({
                   <dl className="grid grid-cols-3 gap-3 rounded-[var(--admin-radius-panel)] border bg-muted/40 p-4">
                     {(
                       [
-                        ['Xe máy', vehicleType.motorbikeCapacityDefault],
-                        ['Hàng cồng kềnh', vehicleType.bulkyCargoCapacityDefault],
-                        ['Hàng nhẹ', vehicleType.lightCargoCapacityDefault],
+                        [tVehicleTypes('motorbike'), vehicleType.motorbikeCapacityDefault],
+                        [tVehicleTypes('bulkyCargo'), vehicleType.bulkyCargoCapacityDefault],
+                        [tVehicleTypes('lightCargo'), vehicleType.lightCargoCapacityDefault],
                       ] as const
                     ).map(([label, value]) => (
                       <div key={label}>
@@ -223,29 +227,29 @@ export function VehicleTypeWorkspace({
                 </CardContent>
               </Card>
 
-              {/* Card 2: Thông tin mô tả & Hồ sơ */}
+              {/* Card 2: Description & record */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <div className="flex items-center gap-2">
                     <FileText className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base font-semibold">
-                      Mô tả & Thời gian
+                      {tVehicleTypes('descAndTime')}
                     </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                     <div>
-                      <dt>Mô tả quy cách</dt>
+                      <dt>{tVehicleTypes('specDescription')}</dt>
                       <dd className="whitespace-pre-wrap text-foreground">
-                        {vehicleType.description || 'Chưa có mô tả'}
+                        {vehicleType.description || tCommon('noDescription')}
                       </dd>
                     </div>
                     <div className="grid grid-cols-2 gap-4 border-t pt-3">
                       <div>
                         <dt className="flex items-center gap-1.5">
                           <Calendar className="size-3.5" />
-                          Ngày tạo
+                          {tVehicleTypes('colCreatedAt')}
                         </dt>
                         <dd className="text-muted-foreground tabular-nums">
                           {timestampFormat(vehicleType.createdAt)}
@@ -254,7 +258,7 @@ export function VehicleTypeWorkspace({
                       <div>
                         <dt className="flex items-center gap-1.5">
                           <Clock className="size-3.5" />
-                          Cập nhật lần cuối
+                          {tVehicleTypes('lastUpdated')}
                         </dt>
                         <dd className="text-muted-foreground tabular-nums">
                           {timestampFormat(vehicleType.updatedAt)}

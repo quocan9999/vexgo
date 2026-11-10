@@ -12,7 +12,7 @@ export function buildAcceptanceItems(items: MeasurementDraft[]) {
   return items.map((item) => {
     const weight = Number(item.weight);
     if (!Number.isFinite(weight) || weight <= 0)
-      throw new Error('Nhập khối lượng thực tế lớn hơn 0 cho từng kiện.');
+      throw new Error('Enter actual weight greater than 0 for each package.');
     const dimensions = [item.length, item.width, item.height];
     if (
       dimensions.some(Boolean) &&
@@ -20,7 +20,7 @@ export function buildAcceptanceItems(items: MeasurementDraft[]) {
         (value) => Number.isFinite(Number(value)) && Number(value) > 0,
       )
     )
-      throw new Error('Nhập đủ ba kích thước thực tế lớn hơn 0.');
+      throw new Error('Enter all three actual dimensions greater than 0.');
     return {
       cargoId: item.cargoId,
       weight,
@@ -75,7 +75,7 @@ export async function shipmentOperation<T>(
   const body = await response.json();
   if (!response.ok)
     throw new ShipmentOperationError(
-      body.message || 'Không thể thực hiện thao tác.',
+      body.message || 'Unable to perform operation.',
       body.error,
       body.previousFee,
       body.totalFee,

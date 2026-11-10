@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import { register } from 'node:module';
 import { JSDOM } from 'jsdom';
 import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 // Register ESM ts-loader for resolving @/... paths and transpiling .tsx
@@ -42,6 +44,13 @@ const { render, screen, fireEvent, cleanup, waitFor, act } =
 const { mockSockets } = await import('../../helpers/mock-socket-client.mjs');
 
 // Import REAL components and real APIs (F-NEW-06)
+const { NextIntlClientProvider } = await import('next-intl');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const viMessages = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, '../../../src/messages/vi.json'), 'utf8')
+);
+
 const { CustomerSupportChat, reconcileMessages } =
   await import('@/features/support-chat/components/customer-support-chat');
 const { SupportWidget } = await import('@/components/layout/support-widget');
@@ -71,7 +80,13 @@ function seedAuthStorage(token = 'test-customer-token') {
 }
 
 function renderWithAuth(ui) {
-  return render(React.createElement(AuthSessionProvider, null, ui));
+  return render(
+    React.createElement(
+      NextIntlClientProvider,
+      { locale: 'vi', messages: viMessages },
+      React.createElement(AuthSessionProvider, null, ui)
+    )
+  );
 }
 
 describe('Customer displayed-message read receipts', () => {

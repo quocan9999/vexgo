@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Armchair, ArrowLeft, BusFront, Layers3, LoaderCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -45,13 +46,6 @@ type WorkspaceState =
   | { status: 'error'; message: string }
   | { status: 'success'; vehicle: VehicleDetail; seats: VehicleSeat[] };
 
-function requestErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof TypeError) {
-    return 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.';
-  }
-  return error instanceof Error ? error.message : fallback;
-}
-
 function VehicleSeatEditDialog({
   vehicleId,
   seat,
@@ -63,6 +57,8 @@ function VehicleSeatEditDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const tVehicles = useTranslations('vehicles');
+  const tCommon = useTranslations('common');
   const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
   const [seatNumber, setSeatNumber] = useState(seat.seatNumber);
@@ -92,12 +88,12 @@ function VehicleSeatEditDialog({
     const cleanSeatNumber = seatNumber.trim();
     const cleanPosition = position.trim();
     const nextSeatNumberError = !cleanSeatNumber
-      ? 'Vui lòng nhập số ghế.'
+      ? tVehicles('errors.seatNumberRequired')
       : cleanSeatNumber.length > 10
-        ? 'Số ghế không được vượt quá 10 ký tự.'
+        ? tVehicles('errors.seatNumberMaxLength')
         : null;
     const nextPositionError = cleanPosition.length > 50
-      ? 'Vị trí không được vượt quá 50 ký tự.'
+      ? tVehicles('errors.positionMaxLength')
       : null;
     setSeatNumberError(nextSeatNumberError);
     setPositionError(nextPositionError);
@@ -118,7 +114,13 @@ function VehicleSeatEditDialog({
       await updateVehicleSeat(vehicleId, seat.seatId, input);
       await onSaved();
     } catch (error: unknown) {
-      setFormError(requestErrorMessage(error, 'Không thể cập nhật thông tin ghế.'));
+      setFormError(
+        error instanceof TypeError
+          ? tVehicles('networkError')
+          : error instanceof Error
+            ? error.message
+            : tVehicles('updateSeatError'),
+      );
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -128,10 +130,10 @@ function VehicleSeatEditDialog({
   return (
     <ResourceModalDialog
       busy={submitting}
-      description="Cập nhật số ghế và ghi chú vị trí đã lưu cho xe."
+      description={tVehicles('editSeatDesc')}
       onClose={closeDialog}
       preventDismiss={submitting}
-      title={'Chỉnh sửa ghế ' + seat.seatNumber}
+      title={`${tVehicles('editSeat')} ${seat.seatNumber}`}
       size="md"
     >
       <ResourceModalForm
@@ -146,20 +148,20 @@ function VehicleSeatEditDialog({
               type="button"
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button disabled={submitting} type="submit">
               {submitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-              {submitting ? 'Đang lưu…' : 'Lưu thay đổi'}
+              {submitting ? tVehicles('saving') : tCommon('saveChanges')}
             </Button>
           </div>
         }
       >
         <Field data-invalid={Boolean(seatNumberError)}>
           <FieldLabel htmlFor={idPrefix + '-number'}>
-            Số ghế <span aria-hidden="true">*</span>
+            {tVehicles('seatNumberLabel')} <span aria-hidden="true">*</span>
           </FieldLabel>
           <Input
             autoComplete="off"
@@ -183,7 +185,9 @@ function VehicleSeatEditDialog({
           </FieldError>
         </Field>
         <Field data-invalid={Boolean(positionError)}>
-          <FieldLabel htmlFor={idPrefix + '-position'}>Vị trí</FieldLabel>
+          <FieldLabel htmlFor={idPrefix + '-position'}>
+            {tVehicles('positionLabel')}
+          </FieldLabel>
           <Input
             autoComplete="off"
             aria-describedby={
@@ -197,7 +201,7 @@ function VehicleSeatEditDialog({
               setPosition(event.target.value);
               setPositionError(null);
             }}
-            placeholder="Ví dụ: Dãy trái, gần cửa"
+            placeholder={tVehicles('positionPlaceholder')}
             value={position}
           />
           <FieldError id={idPrefix + '-position-error'}>
@@ -219,20 +223,22 @@ function VehicleSummary({
   seatCount: number;
   floorCount: number;
 }) {
+  const tVehicles = useTranslations('vehicles');
+
   return (
-    <section aria-label="Tóm tắt xe và cấu hình ghế" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <section aria-label={tVehicles('summaryAriaLabel')} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <Card className="h-auto gap-0 border-primary/20 bg-primary/5 py-0">
         <CardContent className="flex min-h-28 items-start gap-4 p-4 sm:p-5">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
             <BusFront aria-hidden="true" size={19} />
           </span>
           <div className="min-w-0">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Xe đang cấu hình</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">{tVehicles('configuringVehicle')}</p>
             <p className="m-0 break-all font-mono text-lg font-semibold leading-snug text-foreground">
               {vehicle.licensePlate}
             </p>
             <p className="mt-1 mb-0 text-xs text-muted-foreground">
-              Mã xe <span className="font-mono">#{vehicle.vehicleId}</span>
+              {tVehicles('vehicleCodeLabel')} <span className="font-mono">#{vehicle.vehicleId}</span>
             </p>
           </div>
         </CardContent>
@@ -244,11 +250,11 @@ function VehicleSummary({
             <Layers3 aria-hidden="true" size={19} />
           </span>
           <div className="min-w-0">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Loại xe</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">{tVehicles('vehicleType')}</p>
             <p className="m-0 break-words text-lg font-semibold leading-snug text-foreground">
               {vehicle.vehicleType.name}
             </p>
-            <p className="mt-1 mb-0 text-xs text-muted-foreground">Danh mục phương tiện</p>
+            <p className="mt-1 mb-0 text-xs text-muted-foreground">{tVehicles('vehicleCategoryLabel')}</p>
           </div>
         </CardContent>
       </Card>
@@ -259,12 +265,12 @@ function VehicleSummary({
             <Armchair aria-hidden="true" size={19} />
           </span>
           <div className="min-w-0">
-            <p className="mb-1 text-xs font-medium text-white/75">Tổng số ghế</p>
+            <p className="mb-1 text-xs font-medium text-white/75">{tVehicles('totalSeatsLabel')}</p>
             <p className="m-0 text-3xl font-semibold leading-none text-white">
-              {seatCount.toLocaleString('vi-VN')}
+              {seatCount.toLocaleString()}
             </p>
             <p className="mt-2 mb-0 text-xs text-white/75">
-              {floorCount.toLocaleString('vi-VN')} tầng có ghế
+              {tVehicles('decksWithSeats', { count: floorCount })}
             </p>
           </div>
         </CardContent>
@@ -274,9 +280,11 @@ function VehicleSummary({
 }
 
 function VehicleSeatsLoading() {
+  const tVehicles = useTranslations('vehicles');
+
   return (
-    <div aria-busy="true" aria-label="Đang tải cấu hình ghế xe" className="space-y-4" role="status">
-      <span className="sr-only">Đang tải thông tin xe và sơ đồ ghế…</span>
+    <div aria-busy="true" aria-label={tVehicles('loadingSeats')} className="space-y-4" role="status">
+      <span className="sr-only">{tVehicles('loadingSeats')}</span>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 3 }, (_, index) => (
           <Card className="h-auto gap-3 py-4" key={index}>
@@ -304,6 +312,7 @@ function VehicleSeatsLoading() {
 }
 
 export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
+  const tVehicles = useTranslations('vehicles');
   const { can } = useAdminPermissions();
   const canCreate = can('seat:create');
   const canUpdate = can('seat:update');
@@ -342,7 +351,12 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
         if (current && !controller.signal.aborted) {
           setWorkspace({
             status: 'error',
-            message: requestErrorMessage(error, 'Không thể tải cấu hình ghế.'),
+            message:
+              error instanceof TypeError
+                ? tVehicles('networkError')
+                : error instanceof Error
+                  ? error.message
+                  : tVehicles('loadSeatsError'),
           });
         }
       });
@@ -350,7 +364,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
       current = false;
       controller.abort();
     };
-  }, [refreshCount, retryCount, validVehicleId, vehicleId]);
+  }, [refreshCount, retryCount, validVehicleId, vehicleId, tVehicles]);
 
   function retry() {
     setWorkspace({ status: 'loading' });
@@ -359,7 +373,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
 
   async function handleSeatUpdated() {
     setEditingSeat(null);
-    toast.success('Đã cập nhật thông tin ghế.');
+    toast.success(tVehicles('updateSeatSuccess'));
     setWorkspace({ status: 'loading' });
     setRefreshCount((count) => count + 1);
   }
@@ -403,9 +417,14 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
           ? { ...current, seats: savedSeats }
           : current,
       );
-      toast.success('Đã lưu sơ đồ ghế.');
+      toast.success(tVehicles('saveLayoutSuccess'));
     } catch (error: unknown) {
-      const message = requestErrorMessage(error, 'Không thể lưu sơ đồ ghế.');
+      const message =
+        error instanceof TypeError
+          ? tVehicles('networkError')
+          : error instanceof Error
+            ? error.message
+            : tVehicles('saveLayoutError');
       setLayoutError(message);
       toast.error(message);
     } finally {
@@ -414,7 +433,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
   }
 
   async function deleteUpperFloor() {
-    if (!canDelete) throw new Error('Bạn không có quyền xóa tầng ghế.');
+    if (!canDelete) throw new Error(tVehicles('noDeckDeletePermission'));
     try {
       const deletedSeatCount = await deleteVehicleSeatFloor(vehicleId, 2);
       setWorkspace((current) =>
@@ -431,11 +450,16 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
       setRefreshCount((count) => count + 1);
       toast.success(
         deletedSeatCount > 0
-          ? 'Đã xóa tầng trên và ' + deletedSeatCount + ' ghế.'
-          : 'Đã xóa tầng trên.',
+          ? tVehicles('deletedUpperDeckWithSeats', { count: deletedSeatCount })
+          : tVehicles('deletedUpperDeck'),
       );
     } catch (error: unknown) {
-      const message = requestErrorMessage(error, 'Không thể xóa tầng trên.');
+      const message =
+        error instanceof TypeError
+          ? tVehicles('networkError')
+          : error instanceof Error
+            ? error.message
+            : tVehicles('cannotRemoveUpperDeck');
       toast.error(message);
       throw new Error(message);
     }
@@ -465,9 +489,15 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
       setLayoutDirty(false);
       setLayoutError(null);
       setRefreshCount((count) => count + 1);
-      toast.success('Đã xóa ghế ' + deletingSeat.seatNumber + '.');
+      toast.success(tVehicles('deleteSeatSuccess', { seatNumber: deletingSeat.seatNumber }));
     } catch (error: unknown) {
-      setDeleteError(requestErrorMessage(error, 'Không thể xóa ghế.'));
+      setDeleteError(
+        error instanceof TypeError
+          ? tVehicles('networkError')
+          : error instanceof Error
+            ? error.message
+            : tVehicles('deleteSeatError'),
+      );
     } finally {
       deleteSubmittingRef.current = false;
       setDeleteSubmitting(false);
@@ -483,8 +513,8 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
     <SuperAdminLayout
       activeSection="vehicles"
       breadcrumbs={[
-        { label: 'Danh sách xe', href: '/vehicles' },
-        { label: 'Cấu hình ghế xe' },
+        { label: tVehicles('vehiclesTitle'), href: '/vehicles' },
+        { label: tVehicles('manageSeats') },
       ]}
     >
       <div className="admin-page-content admin-ui space-y-6 vehicle-seats-page">
@@ -496,11 +526,11 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
               variant="outline"
             >
               <ArrowLeft aria-hidden="true" />
-              Danh sách xe
+              {tVehicles('backToVehicles')}
             </Button>
           }
-          eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
-          title="Cấu hình ghế xe"
+          eyebrow={tVehicles('eyebrow')}
+          title={tVehicles('manageSeats')}
           titleId="vehicle-seats-title"
         />
 
@@ -510,12 +540,12 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
             <p>
               {validVehicleId && workspace.status === 'error'
                 ? workspace.message
-                : 'ID xe không hợp lệ.'}
+                : tVehicles('invalidVehicleId')}
             </p>
             {validVehicleId && (
               <Button onClick={retry} variant="outline">
                 <RefreshCw aria-hidden="true" />
-                Thử tải lại
+                {tVehicles('retryFilterOptions')}
               </Button>
             )}
           </ResourceState>
@@ -568,8 +598,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
 
             {layoutDirty && (
               <ResourceNotice kind="info">
-                Lưu sơ đồ ghế trước khi xóa ghế hoặc tầng để giữ lại vị trí vừa
-                thay đổi.
+                {tVehicles('dirtyLayoutNotice')}
               </ResourceNotice>
             )}
           </>
@@ -587,14 +616,14 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
       {deletingSeat && canDelete && (
         <ResourceConfirmation
           busy={deleteSubmitting}
-          description="Ghế sẽ bị xóa khỏi cấu hình của xe. Chỉ xóa được khi ghế chưa được sử dụng trong chuyến xe."
+          description={tVehicles('deleteSeatConfirmDesc', { seatNumber: deletingSeat.seatNumber })}
           onClose={() => {
             if (!deleteSubmittingRef.current) {
               setDeletingSeat(null);
               setDeleteError(null);
             }
           }}
-          title={'Xóa ghế ' + deletingSeat.seatNumber + '?'}
+          title={tVehicles('deleteSeatConfirmTitle', { seatNumber: deletingSeat.seatNumber })}
         >
           {deleteError && <ResourceNotice kind="error">{deleteError}</ResourceNotice>}
           <Button
@@ -606,7 +635,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
             {deleteSubmitting && (
               <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
             )}
-            {deleteSubmitting ? 'Đang xóa…' : 'Xóa ghế'}
+            {deleteSubmitting ? tVehicles('deletingSeat') : tVehicles('removeSeat')}
           </Button>
         </ResourceConfirmation>
       )}

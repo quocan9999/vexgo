@@ -14,6 +14,7 @@ import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-s
 import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { PlatformRbacScopeNavigation } from './platform-rbac-scope-navigation';
 import {
   getDefaultRolePermissions,
@@ -39,6 +40,8 @@ function hasSameKeys(left: readonly string[], right: readonly string[]): boolean
 }
 
 export function PlatformRbacManagement() {
+  const tRbac = useTranslations('rbac');
+  const tCommon = useTranslations('common');
   const [config, setConfig] = useState<DefaultAdminRbacConfig | null>(null);
   const [drafts, setDrafts] = useState<RoleDrafts>({});
   const [selectedRoleName, setSelectedRoleName] =
@@ -72,7 +75,7 @@ export function PlatformRbacManagement() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setLoadError(getErrorMessage(error, 'Không thể tải cấu hình quyền.'));
+        setLoadError(getErrorMessage(error, tRbac('cannotLoadPermissions')));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -165,9 +168,9 @@ export function PlatformRbacManagement() {
         [savedRole.roleName]: [...savedRole.permissionKeys],
       }));
       setConfirmOpen(false);
-      toast.success(`Quyền mặc định của ${savedRole.roleName} đã được lưu.`);
+      toast.success(tRbac('saveSuccessRole', { role: savedRole.roleName }));
     } catch (error) {
-      setSaveError(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
+      setSaveError(getErrorMessage(error, tRbac('cannotSavePermissions')));
     } finally {
       setSaving(false);
     }
@@ -189,8 +192,8 @@ export function PlatformRbacManagement() {
         className="admin-page-content admin-ui space-y-6 [&>nav]:mt-0"
       >
         <AdminPageHeader
-          eyebrow="QUẢN TRỊ NỀN TẢNG"
-          title="Phân quyền vai trò"
+          eyebrow={tRbac('eyebrowPlatform')}
+          title={tRbac('rbacTitle')}
           titleId="platform-rbac-title"
           actions={
             <ResourceRefreshAction
@@ -204,7 +207,7 @@ export function PlatformRbacManagement() {
 
         {loading && (
           <Card>
-            <ResourceState loading>Đang tải danh mục quyền…</ResourceState>
+            <ResourceState loading>{tRbac('loadingCatalog')}</ResourceState>
           </Card>
         )}
 
@@ -213,11 +216,11 @@ export function PlatformRbacManagement() {
             <ResourceState error>
               <div className="grid justify-items-center gap-3">
                 <h2 className="text-base font-semibold">
-                  Không thể tải cấu hình quyền
+                  {tRbac('loadErrorTitle')}
                 </h2>
                 <p>{loadError}</p>
                 <Button onClick={retryLoading} variant="outline">
-                  Thử tải lại
+                  {tRbac('reloadConfig')}
                 </Button>
               </div>
             </ResourceState>
@@ -234,7 +237,7 @@ export function PlatformRbacManagement() {
               radioName="platform-rbac-role"
               roles={config.roles}
               selectedRoleName={selectedRoleName}
-              title="Chọn vai trò cần cấu hình"
+              title={tRbac('selectRoleTitle')}
               titleId="rbac-roles-title"
             />
 
@@ -247,7 +250,7 @@ export function PlatformRbacManagement() {
                       aria-live="polite"
                       className="text-xs text-muted-foreground"
                     >
-                      {isDirty ? 'Có thay đổi chưa lưu cho vai trò này.' : 'Cấu hình đã đồng bộ.'}
+                      {isDirty ? tRbac('hasUnsavedChanges') : tRbac('configSynced')}
                     </p>
                     <div>
                       <Button
@@ -256,7 +259,7 @@ export function PlatformRbacManagement() {
                         variant="outline"
                       >
                         <RotateCcw aria-hidden="true" size={16} />
-                        Hoàn tác
+                        {tRbac('undo')}
                       </Button>
                       <Button
                         disabled={!isDirty || saving}
@@ -265,7 +268,7 @@ export function PlatformRbacManagement() {
                           setConfirmOpen(true);
                         }}
                       >
-                        Lưu thay đổi
+                        {tRbac('saveChanges')}
                       </Button>
                     </div>
                   </div>
@@ -284,8 +287,8 @@ export function PlatformRbacManagement() {
 
         {confirmOpen && selectedRole && (
           <ResourceConfirmation
-            title="Xác nhận thay thế quyền mặc định"
-            description={`Bạn sắp thay thế toàn bộ quyền mặc định của vai trò ${selectedRole.roleName}. Thay đổi sẽ áp dụng cho mọi tài khoản mang vai trò này, trên toàn hệ thống; thao tác này không tạo cấu hình riêng cho từng nhà xe.`}
+            title={tRbac('confirmPlatformTitle')}
+            description={tRbac('confirmPlatformDesc', { role: selectedRole.roleName })}
             busy={saving}
             onClose={() => setConfirmOpen(false)}
           >
@@ -294,7 +297,7 @@ export function PlatformRbacManagement() {
             )}
             {selectedDraft.length === 0 && (
               <ResourceNotice kind="info">
-                Vai trò sẽ không còn quyền nào sau khi lưu.
+                {tRbac('emptyPermissionsWarning')}
               </ResourceNotice>
             )}
             <Button
@@ -302,7 +305,7 @@ export function PlatformRbacManagement() {
               disabled={saving}
               onClick={() => void saveSelectedRole()}
             >
-              {saving ? 'Đang lưu…' : 'Xác nhận lưu'}
+              {saving ? tRbac('saving') : tRbac('confirmSaveButton')}
             </Button>
           </ResourceConfirmation>
         )}

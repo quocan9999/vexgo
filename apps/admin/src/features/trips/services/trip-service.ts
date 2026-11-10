@@ -143,7 +143,7 @@ async function readResponse(
     const message =
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải ${resource} (HTTP ${response.status}).`;
+        : `Failed to load ${resource} (HTTP ${response.status}).`;
     const code =
       isRecord(body) && typeof body.error === 'string'
         ? body.error
@@ -213,11 +213,11 @@ export async function getTrips(
       `${getApiBaseUrl()}/api/v1/trips?${params.toString()}`,
       { cache: 'no-store', signal },
     ),
-    'danh sách chuyến xe',
+    'trip list',
   );
 
   if (!isPaginatedTrips(body)) {
-    throw new Error('API trả về danh sách chuyến xe không hợp lệ.');
+    throw new Error('API returned invalid trip list payload.');
   }
 
   return body;
@@ -232,11 +232,11 @@ export async function getTripById(
       `${getApiBaseUrl()}/api/v1/trips/${tripId}/operational-detail`,
       { cache: 'no-store', signal },
     ),
-    'thông tin chuyến xe',
+    'trip information',
   );
 
   if (!isRecord(body) || !isTrip(body.data)) {
-    throw new Error('API trả về thông tin chuyến xe không hợp lệ.');
+    throw new Error('API returned invalid trip payload.');
   }
 
   return body.data;
@@ -271,13 +271,13 @@ async function writeTrip(
     throw new TripApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể lưu chuyến xe (HTTP ${response.status}).`,
+        : `Failed to save trip (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
       details,
     );
   }
   if (!isRecord(body) || !isTrip(body.data)) {
-    throw new Error('API trả về thông tin chuyến xe không hợp lệ.');
+    throw new Error('API returned invalid trip payload.');
   }
   return body.data;
 }
@@ -312,7 +312,7 @@ export async function deleteTrip(
       method: 'DELETE',
       cache: 'no-store',
     }),
-    'chuyến xe',
+    'trip',
   );
 
   if (
@@ -321,7 +321,7 @@ export async function deleteTrip(
     !isPositiveInteger(body.data.tripId) ||
     typeof body.data.code !== 'string'
   ) {
-    throw new Error('API trả về thông tin xóa chuyến xe không hợp lệ.');
+    throw new Error('API returned invalid delete trip payload.');
   }
 
   return { tripId: body.data.tripId, code: body.data.code };
@@ -492,13 +492,13 @@ export async function getTripSeats(
     throw new TripApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải danh sách ghế chuyến (HTTP ${response.status}).`,
+        : `Failed to load trip seats (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
 
   if (!isTripSeatsResponse(body)) {
-    throw new Error('API trả về danh sách ghế chuyến không hợp lệ.');
+    throw new Error('API returned invalid trip seats payload.');
   }
 
   return body;
@@ -522,7 +522,7 @@ export async function getTripManifest(
     throw new TripApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải danh sách hành khách chuyến xe (HTTP ${response.status}).`,
+        : `Failed to load passenger manifest (HTTP ${response.status}).`,
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }

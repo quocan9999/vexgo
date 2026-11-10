@@ -72,7 +72,7 @@ export async function getBusCompanyLuggageRates(
   });
 
   if (!response.ok) {
-    let msg = 'Không thể tải cấu hình cước hành lý.';
+    let msg = 'Unable to load luggage rate configuration.';
     try {
       const err = await response.json();
       if (err?.message) msg = err.message;
@@ -103,7 +103,7 @@ export async function updateBusCompanyLuggageRates(
   });
 
   if (!response.ok) {
-    let msg = 'Không thể cập nhật cấu hình cước hành lý.';
+    let msg = 'Unable to update luggage rate configuration.';
     try {
       const err = await response.json();
       if (err?.message) msg = err.message;

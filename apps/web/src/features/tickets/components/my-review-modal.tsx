@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import {
   AlertCircle,
   Calendar,
@@ -49,6 +50,10 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
   onUpdated,
   onDeleted,
 }) => {
+  const t = useTranslations('tickets');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
+
   let authContext: ReturnType<typeof useAuthSession> | null = null;
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -95,15 +100,15 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
   const getRatingLabel = (r: number) => {
     switch (r) {
       case 1:
-        return 'Rất tệ';
+        return t('ratingVeryBad');
       case 2:
-        return 'Tệ';
+        return t('ratingBad');
       case 3:
-        return 'Bình thường';
+        return t('ratingNormal');
       case 4:
-        return 'Tốt';
+        return t('ratingGood');
       case 5:
-        return 'Tuyệt vời';
+        return t('ratingExcellent');
       default:
         return '';
     }
@@ -112,16 +117,16 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
   const handleUpdate = async () => {
     if (!canEdit) {
       setErrorMessage(
-        'Đã quá thời hạn 3 ngày kể từ khi gửi đánh giá, bạn không thể chỉnh sửa nhận xét này nữa.',
+        t('editExpiredNotice'),
       );
       return;
     }
     if (editRating === 0) {
-      setErrorMessage('Vui lòng chọn số sao đánh giá (1-5 sao).');
+      setErrorMessage(t('ratingPrompt'));
       return;
     }
     if (!isAuthenticated || !executeWithAuth) {
-      setErrorMessage('Vui lòng đăng nhập để thực hiện cập nhật.');
+      setErrorMessage(t('loginToReviewPrompt', { phone: '' }));
       return;
     }
 
@@ -136,7 +141,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
         }),
       );
 
-      setSuccessToast('Đã cập nhật đánh giá thành công!');
+      setSuccessToast(t('reviewUpdatedSuccess'));
       setIsEditing(false);
       onUpdated?.({
         tripId: review.tripId,
@@ -149,7 +154,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
       }, 3000);
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : 'Không thể cập nhật đánh giá.';
+        err instanceof Error ? err.message : t('reviewSaveError');
       setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
@@ -158,7 +163,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
 
   const handleDelete = async () => {
     if (!isAuthenticated || !executeWithAuth) {
-      setErrorMessage('Vui lòng đăng nhập để thực hiện xóa đánh giá.');
+      setErrorMessage(t('loginToReviewPrompt', { phone: '' }));
       return;
     }
 
@@ -173,7 +178,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
       onClose();
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : 'Không thể xóa đánh giá.';
+        err instanceof Error ? err.message : t('reviewDeleteError');
       setErrorMessage(msg);
       setIsDeleting(false);
     }
@@ -183,7 +188,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
     if (!isoString) return '';
     try {
       const d = new Date(isoString);
-      return d.toLocaleDateString('vi-VN', {
+      return d.toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
@@ -209,10 +214,10 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
             </div>
             <div>
               <h2 className="font-black text-slate-900 text-base">
-                {isEditing ? 'Chỉnh sửa đánh giá' : 'Đánh giá của bạn'}
+                {isEditing ? t('editReviewModalTitle') : t('viewReviewModalTitle')}
               </h2>
               <p className="text-xs text-slate-500 font-medium">
-                {review.busBrand || 'Chuyến xe VexGo'}
+                {review.busBrand || 'VexGo'}
               </p>
             </div>
           </div>
@@ -220,6 +225,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
             type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer"
+            aria-label={tCommon('close')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -230,15 +236,15 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
           {/* Thông tin chuyến xe */}
           <div className="mb-5 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
             <div className="text-xs font-semibold text-slate-500 mb-1">
-              Hành trình chuyến đi:
+              {t('routeJourney')}:
             </div>
             <div className="text-sm font-bold text-slate-900">
-              {review.routeName || 'Chuyến xe đã trải nghiệm'}
+              {review.routeName || ''}
             </div>
             {review.date && (
               <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 font-medium">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span>Khởi hành: {review.date}</span>
+                <span>{t('departurePrefix')} {review.date}</span>
               </div>
             )}
           </div>
@@ -264,7 +270,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
               {/* Điểm đánh giá sao */}
               <div className="flex flex-col items-center justify-center p-4 bg-amber-50/60 rounded-2xl border border-amber-100">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">
-                  Điểm đánh giá
+                  {t('ratingScore')}
                 </span>
                 <div className="flex items-center gap-1.5 mb-1.5">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -289,9 +295,9 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
                 </div>
                 {review.createdAt && (
                   <span className="text-[11px] text-slate-400 mt-1 font-medium">
-                    Gửi lúc {formatDate(review.createdAt)}
+                    {t('submittedAtLabel', { date: formatDate(review.createdAt) })}
                     {review.isEdited && (
-                      <span className="italic ml-1">· (Đã chỉnh sửa)</span>
+                      <span className="italic ml-1">· {t('editedNotice')}</span>
                     )}
                   </span>
                 )}
@@ -301,14 +307,14 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                   <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Nội dung bạn đã nhận xét:</span>
+                  <span>{t('yourComment')}</span>
                 </div>
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm leading-relaxed whitespace-pre-wrap">
                   {review.comment ? (
                     `“${review.comment}”`
                   ) : (
                     <span className="text-slate-400 italic">
-                      Bạn không để lại nhận xét bằng chữ cho chuyến đi này.
+                      {t('noTextComment')}
                     </span>
                   )}
                 </div>
@@ -320,7 +326,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
                   <div className="flex items-center justify-between gap-2 font-bold text-blue-900 mb-1">
                     <span className="flex items-center gap-1.5">
                       <MessageSquare className="w-3.5 h-3.5 text-[#0060c4]" />
-                      Phản hồi từ {review.reply.responderName || review.busBrand || 'Nhà xe'}:
+                      {t('operatorReplyFrom', { responder: review.reply.responderName || review.busBrand || 'Nhà xe' })}
                     </span>
                     {review.reply.createdAt && (
                       <span className="text-[11px] text-slate-400 font-normal">
@@ -340,28 +346,28 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors cursor-pointer"
-                  title="Xóa đánh giá này"
+                  title={t('deleteReviewAction')}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Xóa đánh giá</span>
+                  <span>{t('deleteReviewAction')}</span>
                 </button>
                 {canEdit ? (
                   <button
                     type="button"
                     onClick={() => setIsEditing(true)}
                     className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm transition-colors cursor-pointer"
-                    title="Chỉnh sửa nội dung hoặc điểm sao (trong vòng 3 ngày)"
+                    title={t('editReviewAction')}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>Chỉnh sửa đánh giá</span>
+                    <span>{t('editReviewAction')}</span>
                   </button>
                 ) : (
                   <span
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-medium"
-                    title="Đã quá 3 ngày kể từ khi gửi đánh giá, không thể chỉnh sửa"
+                    title={t('editExpiredNotice')}
                   >
                     <Edit3 className="w-3.5 h-3.5 text-slate-300" />
-                    <span>Hết hạn chỉnh sửa (sau 3 ngày)</span>
+                    <span>{t('editExpiredNotice')}</span>
                   </span>
                 )}
               </div>
@@ -372,7 +378,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
               {/* Chọn lại số sao */}
               <div className="flex flex-col items-center">
                 <p className="text-sm font-bold text-slate-700 mb-2">
-                  Thay đổi mức đánh giá
+                  {t('changeRatingPrompt')}
                 </p>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -404,13 +410,13 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
               {/* Sửa lại nhận xét */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Chỉnh sửa nhận xét trải nghiệm
+                  {t('editCommentLabel')}
                 </label>
                 <textarea
                   rows={4}
                   value={editComment}
                   onChange={(e) => setEditComment(e.target.value)}
-                  placeholder="Chia sẻ trải nghiệm của bạn về tài xế, chất lượng xe, sự đúng giờ..."
+                  placeholder={t('commentPlaceholder')}
                   className="w-full p-3.5 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 text-sm resize-none"
                 />
               </div>
@@ -428,7 +434,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
                   disabled={isSubmitting}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  Hủy bỏ
+                  {tCommon('cancel')}
                 </button>
                 <button
                   type="button"
@@ -439,12 +445,12 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Đang lưu...</span>
+                      <span>{t('savingReview')}</span>
                     </>
                   ) : (
                     <>
                       <Check className="w-3.5 h-3.5" />
-                      <span>Lưu thay đổi</span>
+                      <span>{t('saveChanges')}</span>
                     </>
                   )}
                 </button>
@@ -457,15 +463,18 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
       {/* Confirmation Modal when Delete is clicked */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-100">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 flex flex-col items-center text-center">
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 flex flex-col items-center text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
               <Trash2 className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-slate-900 mb-1">
-              Xác nhận xóa đánh giá?
+              {t('deleteReviewConfirmTitle')}
             </h3>
             <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-              Bạn có chắc chắn muốn xóa đánh giá của mình cho chuyến đi này không? Sau khi xóa, bạn có thể thực hiện đánh giá lại bất kỳ lúc nào.
+              {t('deleteReviewConfirmDesc')}
             </p>
             <div className="flex items-center justify-end gap-3 w-full">
               <button
@@ -474,7 +483,7 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
                 disabled={isDeleting}
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
               >
-                Hủy
+                {tCommon('cancel')}
               </button>
               <button
                 type="button"
@@ -485,10 +494,10 @@ export const MyReviewModal: React.FC<MyReviewModalProps> = ({
                 {isDeleting ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Đang xóa...</span>
+                    <span>{t('deleting')}</span>
                   </>
                 ) : (
-                  <span>Xóa đánh giá</span>
+                  <span>{t('deleteReviewAction')}</span>
                 )}
               </button>
             </div>

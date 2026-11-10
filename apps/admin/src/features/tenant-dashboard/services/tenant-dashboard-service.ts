@@ -57,12 +57,12 @@ export async function getTenantDashboardOverview(
     throw new Error(
       record(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải tổng quan vận hành nhà xe (HTTP ${response.status}).`,
+        : `Failed to load bus company operations overview (HTTP ${response.status}).`,
     );
   }
 
   if (!record(body) || !isOverviewValid(body.data)) {
-    throw new Error('Dữ liệu tổng quan nhà xe trả về không hợp lệ. Vui lòng thử lại.');
+    throw new Error('Invalid bus company overview data returned. Please try again.');
   }
 
   return body.data;

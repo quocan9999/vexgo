@@ -130,8 +130,8 @@ describe('ShipmentCreateView', () => {
     });
 
     // Verify surcharges display explicit VND amounts matching backend & customer web
-    expect(screen.getByText('Hàng dễ vỡ (+20.000 đ)')).not.toBeNull();
-    expect(screen.getByText('Hàng có giá trị cao (+50.000 đ)')).not.toBeNull();
+    expect(screen.getByText(/Hàng dễ vỡ \(\+20\.000\s*[đ₫]\)/i)).not.toBeNull();
+    expect(screen.getByText(/Hàng có giá trị cao \(\+50\.000\s*[đ₫]\)/i)).not.toBeNull();
 
     // Verify freight payer shows human-readable Vietnamese, NEVER raw enum NGUOI_GUI
     expect(screen.getByText('Người gửi thanh toán tại quầy')).not.toBeNull();
@@ -149,16 +149,16 @@ describe('ShipmentCreateView', () => {
 
     // Verify matched route badge displays human-readable route information
     await waitFor(() => {
-      expect(screen.getByText(/Tuyến vận chuyển:/)).not.toBeNull();
-      expect(screen.getByText(/Cước tối thiểu: 50.000 đ/)).not.toBeNull();
+      expect(screen.getByText(/Tuyến (vận chuyển|xe áp dụng):/)).not.toBeNull();
+      expect(screen.getByText(/Cước tối thiểu: 50\.000\s*[đ₫]/)).not.toBeNull();
     });
 
     // Verify station comboboxes display human-readable names, NEVER raw IDs
     await waitFor(() => {
-      const senderPointCombobox = screen.getByRole('combobox', { name: /Điểm gửi hàng/i }) as HTMLInputElement;
+      const senderPointCombobox = screen.getByRole('combobox', { name: /Điểm.*gửi/i }) as HTMLInputElement;
       expect(senderPointCombobox.value).toBe('Bến xe Miền Đông');
 
-      const receiverPointCombobox = screen.getByRole('combobox', { name: /Điểm trả hàng/i }) as HTMLInputElement;
+      const receiverPointCombobox = screen.getByRole('combobox', { name: /Điểm.*(trả|nhận)/i }) as HTMLInputElement;
       expect(receiverPointCombobox.value).toBe('Bến xe Đà Lạt');
     });
 

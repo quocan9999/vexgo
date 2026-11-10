@@ -3,6 +3,7 @@
 import { Building2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { LegacyBadge } from '@/components/ui/status-badge';
+import { useTranslations } from 'next-intl';
 import {
   Table,
   TableBody,
@@ -18,14 +19,6 @@ import {
 } from '@/components/admin/resource-ui';
 import type { Station } from '../types/station';
 
-const TYPE_LABELS: Record<string, string> = {
-  BEN_XE: 'Bến xe',
-  VAN_PHONG: 'Văn phòng',
-  DIEM_DON_TRA: 'Điểm đón/trả',
-  TRUNG_CHUYEN: 'Trung chuyển',
-  TRAM_NGHI: 'Trạm nghỉ',
-};
-
 interface StationListTableProps {
   stations: Station[];
   onSelectStation?: (station: Station) => void;
@@ -35,13 +28,24 @@ export function StationListTable({
   stations,
   onSelectStation,
 }: StationListTableProps) {
+  const tStations = useTranslations('stations');
+  const tCommon = useTranslations('common');
+
+  const typeLabels: Record<string, string> = {
+    BEN_XE: tStations('typeTerminal'),
+    VAN_PHONG: tStations('typeOffice'),
+    DIEM_DON_TRA: tStations('typeStop'),
+    TRUNG_CHUYEN: tStations('typeTransit'),
+    TRAM_NGHI: tStations('typeRest'),
+  };
+
   if (stations.length === 0) {
     return (
       <div className="flex min-h-60 flex-col items-center justify-center p-8 text-center text-muted-foreground">
         <Building2 className="mb-2 size-8 text-muted-foreground/60" />
-        <p className="text-sm font-medium">Chưa có điểm đón trả nào được cấu hình.</p>
+        <p className="text-sm font-medium">{tStations('emptyList')}</p>
         <p className="mt-1 text-xs text-muted-foreground/80">
-          Nhấn vào nút &quot;Thêm điểm đón trả&quot; để tạo bến bãi hoặc văn phòng mới.
+          {tStations('emptyListSubtitle')}
         </p>
       </div>
     );
@@ -53,18 +57,18 @@ export function StationListTable({
       <div className="hidden md:block">
         <Table className="min-w-[960px]">
           <TableCaption className="sr-only">
-            Danh sách bến bãi và điểm đón trả
+            {tStations('tableCaption')}
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead scope="col">Mã điểm</TableHead>
-              <TableHead scope="col">Tên điểm</TableHead>
-              <TableHead scope="col">Loại</TableHead>
-              <TableHead scope="col">Khu vực (Cũ ➔ Mới)</TableHead>
-              <TableHead scope="col">Địa chỉ chi tiết</TableHead>
-              <TableHead scope="col">Hotline</TableHead>
+              <TableHead scope="col">{tStations('colCode')}</TableHead>
+              <TableHead scope="col">{tStations('colName')}</TableHead>
+              <TableHead scope="col">{tStations('colType')}</TableHead>
+              <TableHead scope="col">{tStations('colRegion')}</TableHead>
+              <TableHead scope="col">{tStations('colAddress')}</TableHead>
+              <TableHead scope="col">{tStations('colHotline')}</TableHead>
               <TableHead scope="col">
-                <span className="sr-only">Thao tác</span>
+                <span className="sr-only">{tCommon('actions')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -84,7 +88,7 @@ export function StationListTable({
                   <ResourceStatusBadge
                     tone={st.loaiDiem === 'BEN_XE' ? 'active' : 'muted'}
                   >
-                    {TYPE_LABELS[st.loaiDiem] ?? st.loaiDiem}
+                    {typeLabels[st.loaiDiem] ?? st.loaiDiem}
                   </ResourceStatusBadge>
                 </TableCell>
                 <TableCell>
@@ -110,7 +114,8 @@ export function StationListTable({
                   <ResourceDetailAction
                     href={`/stations/${st.diemDonTraId}`}
                     onClick={onSelectStation ? () => onSelectStation(st) : undefined}
-                    resourceName={`điểm ${st.tenDiem}`}
+                    label={tCommon('viewDetails')}
+                    resourceName={tStations('resourceNameWithName', { name: st.tenDiem })}
                   />
                 </TableCell>
               </TableRow>
@@ -133,22 +138,22 @@ export function StationListTable({
               <ResourceStatusBadge
                 tone={st.loaiDiem === 'BEN_XE' ? 'active' : 'muted'}
               >
-                {TYPE_LABELS[st.loaiDiem] ?? st.loaiDiem}
+                {typeLabels[st.loaiDiem] ?? st.loaiDiem}
               </ResourceStatusBadge>
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <strong className="text-foreground">Khu vực:</strong>{' '}
+                <strong className="text-foreground">{tStations('colRegion')}:</strong>{' '}
                 <span>{st.diaDiemCu?.tenDiaDiem ?? '—'}</span>
                 <LegacyBadge />
                 {st.diaDiemMoi && <span>➔ {st.diaDiemMoi.tenDiaDiem}</span>}
               </div>
               <p className="line-clamp-2">
-                <strong className="text-foreground">Địa chỉ:</strong> {st.diaChi}
+                <strong className="text-foreground">{tStations('address')}:</strong> {st.diaChi}
               </p>
               {st.soDienThoai && (
                 <p className="admin-data-mono">
-                  <strong className="text-foreground">Hotline:</strong> {st.soDienThoai}
+                  <strong className="text-foreground">{tStations('colHotline')}:</strong> {st.soDienThoai}
                 </p>
               )}
             </div>
@@ -156,7 +161,8 @@ export function StationListTable({
               <ResourceDetailAction
                 href={`/stations/${st.diemDonTraId}`}
                 onClick={onSelectStation ? () => onSelectStation(st) : undefined}
-                resourceName={`điểm ${st.tenDiem}`}
+                label={tCommon('viewDetails')}
+                resourceName={tStations('resourceNameWithName', { name: st.tenDiem })}
               />
             </div>
           </Card>

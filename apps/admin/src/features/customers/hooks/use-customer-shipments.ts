@@ -74,7 +74,7 @@ export function useCustomerShipments(customerId: number) {
         setError(
           err instanceof Error
             ? err.message
-            : 'Không thể tải lịch sử gửi hàng.',
+            : 'Failed to load shipment history.',
         );
       })
       .finally(() => {

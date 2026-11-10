@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -28,6 +30,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/status-badge';
 import { ResourceStatusBadge, ResourceState } from '@/components/admin/resource-ui';
+import { tripStatusLabel } from './trip-workspace';
 import { getTripManifest } from '../services/trip-service';
 import type {
   TripManifestData,
@@ -39,6 +42,8 @@ interface TripManifestViewProps {
 }
 
 export function TripManifestView({ tripId }: TripManifestViewProps) {
+  const tTrips = useTranslations('trips');
+  const tCommon = useTranslations('common');
   const [data, setData] = useState<TripManifestData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +58,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
         setError(null);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Không thể tải danh sách hành khách.');
+        setError(err instanceof Error ? err.message : tTrips('cannotLoadManifest'));
       })
       .finally(() => setLoading(false));
   }, [tripId]);
@@ -116,14 +121,14 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
 
     const headers = [
       'STT',
-      'Số ghế',
-      'Họ tên',
-      'Số điện thoại',
-      'Điểm đón',
-      'Điểm trả',
-      'Giá vé',
-      'Mã vé',
-      'Trạng thái',
+      tTrips('seatCol'),
+      tTrips('passengerNameCol'),
+      tTrips('phoneCol'),
+      tTrips('expectedPickupCol'),
+      tTrips('expectedDropoffCol'),
+      tTrips('ticketPriceCol'),
+      tTrips('ticketCodeCol'),
+      tTrips('ticketStatusCol'),
     ];
 
     const rows = allPassengers.map((p, idx) => [
@@ -141,10 +146,10 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
     const csvContent =
       '\uFEFF' +
       [
-        `"BẢNG DANH SÁCH HÀNH KHÁCH - CHUYẾN XE ${data.trip.maChuyenXe}"`,
-        `"Tuyến: ${data.trip.tuyenXe.diemDi} - ${data.trip.tuyenXe.diemDen}"`,
-        `"Khởi hành: ${data.trip.gioKhoiHanh} ngày ${data.trip.ngayKhoiHanh} | Biển số: ${data.trip.xe.bienSoXe} (${data.trip.xe.tenLoaiXe})"`,
-        `"Tổng số khách: ${allPassengers.length}"`,
+        `"${tTrips('csvTitle', { code: data.trip.maChuyenXe })}"`,
+        `"${tTrips('csvRoute', { origin: data.trip.tuyenXe.diemDi, destination: data.trip.tuyenXe.diemDen })}"`,
+        `"${tTrips('csvDeparture', { time: data.trip.gioKhoiHanh, date: data.trip.ngayKhoiHanh, plate: data.trip.xe.bienSoXe, type: data.trip.xe.tenLoaiXe })}"`,
+        `"${tTrips('csvTotalPassengers', { count: allPassengers.length })}"`,
         '',
         headers.join(','),
         ...rows.map((r) => r.join(',')),
@@ -162,15 +167,15 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
   };
 
   if (loading) {
-    return <ResourceState loading>Đang tải danh sách hành khách chuyến xe…</ResourceState>;
+    return <ResourceState loading>{tTrips('loadingManifest')}</ResourceState>;
   }
 
   if (error || !data) {
     return (
       <ResourceState error>
-        <p>{error ?? 'Không thể tải danh sách hành khách.'}</p>
+        <p>{error ?? tTrips('cannotLoadManifest')}</p>
         <Link className={buttonVariants({ variant: 'outline' })} href="/trips">
-          Quay lại danh sách chuyến
+          {tTrips('backToTripManifest')}
         </Link>
       </ResourceState>
     );
@@ -190,14 +195,14 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
             href="/trips"
           >
             <ArrowLeft className="size-4 mr-1.5" />
-            Danh sách chuyến
+            {tTrips('backToTrips')}
           </Link>
           <div>
             <h1 className="text-xl font-bold tracking-tight">
-              Danh sách hành khách (Manifest)
+              {tTrips('manifestTitle')}
             </h1>
             <p className="text-xs text-muted-foreground">
-              Mã chuyến: <span className="font-mono font-semibold">{trip.maChuyenXe}</span>
+              {tTrips('manifestCode', { code: trip.maChuyenXe })}
             </p>
           </div>
         </div>
@@ -205,11 +210,11 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleExportCsv}>
             <Download className="size-4 mr-1.5" />
-            Xuất CSV
+            {tTrips('exportCsv')}
           </Button>
           <Button size="sm" onClick={handlePrint}>
             <Printer className="size-4 mr-1.5" />
-            In danh sách
+            {tTrips('printManifest')}
           </Button>
         </div>
       </div>
@@ -225,13 +230,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
               <ResourceStatusBadge
                 tone={trip.trangThai === 'DANG_CHAY' ? 'active' : 'muted'}
               >
-                {trip.trangThai === 'CHUA_KHOI_HANH'
-                  ? 'Chưa khởi hành'
-                  : trip.trangThai === 'DANG_CHAY'
-                    ? 'Đang chạy'
-                    : trip.trangThai === 'HOAN_THANH'
-                      ? 'Hoàn thành'
-                      : 'Đã hủy'}
+                {tripStatusLabel(trip.trangThai, tTrips)}
               </ResourceStatusBadge>
             </div>
             <p className="text-sm font-semibold mt-1">
@@ -243,19 +242,19 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
             <div className="flex items-center gap-1.5">
               <Clock className="size-4 text-primary" />
               <span>
-                Khởi hành: <strong className="text-foreground">{trip.gioKhoiHanh}</strong> ({trip.ngayKhoiHanh})
+                {tTrips('departureLabel')}: <strong className="text-foreground">{trip.gioKhoiHanh}</strong> ({trip.ngayKhoiHanh})
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <Bus className="size-4 text-primary" />
               <span>
-                Xe: <strong className="text-foreground">{trip.xe.bienSoXe}</strong> ({trip.xe.tenLoaiXe})
+                {tTrips('colVehicle')}: <strong className="text-foreground">{trip.xe.bienSoXe}</strong> ({trip.xe.tenLoaiXe})
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <Users className="size-4 text-primary" />
               <span>
-                Hành khách: <strong className="text-foreground">{allPassengers.length}</strong> người
+                {tTrips('passengersSummary', { count: allPassengers.length })}
               </span>
             </div>
           </div>
@@ -270,13 +269,13 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <TabsList>
               <TabsTrigger value="pickup">
-                Chiều Đón ({pickupTotalCount})
+                {tTrips('pickupTab', { count: pickupTotalCount })}
               </TabsTrigger>
               <TabsTrigger value="dropoff">
-                Chiều Trả ({dropoffTotalCount})
+                {tTrips('dropoffTab', { count: dropoffTotalCount })}
               </TabsTrigger>
               <TabsTrigger value="all">
-                Tất cả hành khách ({allPassengers.length})
+                {tTrips('allPassengersTab', { count: allPassengers.length })}
               </TabsTrigger>
             </TabsList>
 
@@ -287,14 +286,14 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
               />
               <Input
                 type="search"
-                placeholder="Tìm tên, SĐT, số ghế..."
+                placeholder={tTrips('searchManifestPlaceholder')}
                 className="pl-9 pr-9 text-xs h-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
                 <Button
-                  aria-label="Xóa nội dung tìm kiếm"
+                  aria-label={tTrips('clearSearch')}
                   className="absolute right-1 top-1/2 -translate-y-1/2 size-7 p-0"
                   onClick={() => setSearch('')}
                   size="icon-sm"
@@ -309,14 +308,14 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
           {/* 1. Tab Chiều Đón */}
           <TabsContent value="pickup" className="mt-6 space-y-6">
             <h2 className="text-sm font-semibold flex items-center gap-2 border-l-2 border-primary pl-2.5">
-              <span>CHIỀU ĐÓN HÀNH KHÁCH</span>
+              <span>{tTrips('pickupHeading')}</span>
               <span className="text-xs font-normal text-muted-foreground">
-                (Sắp theo giờ xe đến đón)
+                {tTrips('pickupSubheading')}
               </span>
             </h2>
 
             {pickupGroups.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">Chưa cấu hình điểm đón cho chuyến xe.</p>
+              <p className="text-xs text-muted-foreground italic">{tTrips('noPickupStops')}</p>
             ) : (
               pickupGroups.map((group) => {
                 const filteredList = group.passengers.filter(filterPass);
@@ -338,28 +337,28 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="font-mono font-semibold text-primary">
-                          Giờ đón: {group.gioThucTe}
+                          {tTrips('pickupTimeLabel', { time: group.gioThucTe })}
                         </span>
                         <Badge variant="secondary" className="text-xs font-semibold">
-                          {group.passengers.length} khách
+                          {tTrips('passengersCountBadge', { count: group.passengers.length })}
                         </Badge>
                       </div>
                     </div>
 
                     {filteredList.length === 0 ? (
                       <div className="p-4 text-center text-xs text-muted-foreground">
-                        Không có khách đón tại điểm này.
+                        {tTrips('noPassengersAtStop')}
                       </div>
                     ) : (
                       <Table className="text-[13px]">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-20">Số ghế</TableHead>
-                            <TableHead>Họ tên hành khách</TableHead>
-                            <TableHead>Số điện thoại</TableHead>
-                            <TableHead>Điểm trả dự kiến</TableHead>
-                            <TableHead className="w-32 text-right">Giá vé</TableHead>
-                            <TableHead className="w-28 text-center">Trạng thái</TableHead>
+                            <TableHead className="w-20">{tTrips('seatCol')}</TableHead>
+                            <TableHead>{tTrips('passengerNameCol')}</TableHead>
+                            <TableHead>{tTrips('phoneCol')}</TableHead>
+                            <TableHead>{tTrips('expectedDropoffCol')}</TableHead>
+                            <TableHead className="w-32 text-right">{tTrips('ticketPriceCol')}</TableHead>
+                            <TableHead className="w-28 text-center">{tTrips('ticketStatusCol')}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -372,7 +371,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                               <TableCell className="font-mono text-xs">{pass.soDienThoai}</TableCell>
                               <TableCell>{pass.diemTraTen}</TableCell>
                               <TableCell className="text-right font-mono text-xs">
-                                {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                                {pass.giaThucTe.toLocaleString('vi-VN')} ₫
                               </TableCell>
                               <TableCell className="text-center">
                                 <Badge variant="secondary" className="text-[10px] font-mono">
@@ -395,18 +394,18 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                 <div className="bg-muted/50 p-3.5 flex items-center justify-between border-b border-border">
                   <span className="font-semibold text-sm flex items-center gap-2">
                     <AlertCircle className="size-4 text-amber-600" />
-                    Khách chưa gán điểm đón cụ thể ({unassignedPassengers.length})
+                    {tTrips('unassignedPassengersTitle', { count: unassignedPassengers.length })}
                   </span>
                 </div>
                 <Table className="text-[13px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-20">Số ghế</TableHead>
-                      <TableHead>Họ tên hành khách</TableHead>
-                      <TableHead>Số điện thoại</TableHead>
-                      <TableHead>Điểm đón ghi chú</TableHead>
-                      <TableHead>Điểm trả</TableHead>
-                      <TableHead className="w-32 text-right">Giá vé</TableHead>
+                      <TableHead className="w-20">{tTrips('seatCol')}</TableHead>
+                      <TableHead>{tTrips('passengerNameCol')}</TableHead>
+                      <TableHead>{tTrips('phoneCol')}</TableHead>
+                      <TableHead>{tTrips('pickupNoteCol')}</TableHead>
+                      <TableHead>{tTrips('expectedDropoffCol')}</TableHead>
+                      <TableHead className="w-32 text-right">{tTrips('ticketPriceCol')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -418,7 +417,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                         <TableCell className="text-muted-foreground">{pass.diemDonTen}</TableCell>
                         <TableCell>{pass.diemTraTen}</TableCell>
                         <TableCell className="text-right font-mono text-xs">
-                          {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                          {pass.giaThucTe.toLocaleString('vi-VN')} ₫
                         </TableCell>
                       </TableRow>
                     ))}
@@ -431,14 +430,14 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
           {/* 2. Tab Chiều Trả */}
           <TabsContent value="dropoff" className="mt-6 space-y-6">
             <h2 className="text-sm font-semibold flex items-center gap-2 border-l-2 border-primary pl-2.5">
-              <span>CHIỀU TRẢ HÀNH KHÁCH</span>
+              <span>{tTrips('dropoffHeading')}</span>
               <span className="text-xs font-normal text-muted-foreground">
-                (Sắp theo giờ xe đến điểm trả)
+                {tTrips('dropoffSubheading')}
               </span>
             </h2>
 
             {dropoffGroups.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">Chưa cấu hình điểm trả cho chuyến xe.</p>
+              <p className="text-xs text-muted-foreground italic">{tTrips('noDropoffStops')}</p>
             ) : (
               dropoffGroups.map((group) => {
                 const filteredList = group.passengers.filter(filterPass);
@@ -458,28 +457,28 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="font-mono font-semibold text-primary">
-                          Giờ đến: {group.gioThucTe}
+                          {tTrips('dropoffTimeLabel', { time: group.gioThucTe })}
                         </span>
                         <Badge variant="secondary" className="text-xs font-semibold">
-                          {group.passengers.length} khách xuống
+                          {tTrips('passengersCountBadge', { count: group.passengers.length })}
                         </Badge>
                       </div>
                     </div>
 
                     {filteredList.length === 0 ? (
                       <div className="p-4 text-center text-xs text-muted-foreground">
-                        Không có khách xuống tại điểm này.
+                        {tTrips('noDropoffPassengersAtStop')}
                       </div>
                     ) : (
                       <Table className="text-[13px]">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-20">Số ghế</TableHead>
-                            <TableHead>Họ tên hành khách</TableHead>
-                            <TableHead>Số điện thoại</TableHead>
-                            <TableHead>Điểm đón đã lên xe</TableHead>
-                            <TableHead className="w-32 text-right">Giá vé</TableHead>
-                            <TableHead className="w-28 text-center">Trạng thái</TableHead>
+                            <TableHead className="w-20">{tTrips('seatCol')}</TableHead>
+                            <TableHead>{tTrips('passengerNameCol')}</TableHead>
+                            <TableHead>{tTrips('phoneCol')}</TableHead>
+                            <TableHead>{tTrips('expectedPickupCol')}</TableHead>
+                            <TableHead className="w-32 text-right">{tTrips('ticketPriceCol')}</TableHead>
+                            <TableHead className="w-28 text-center">{tTrips('ticketStatusCol')}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -492,7 +491,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                               <TableCell className="font-mono text-xs">{pass.soDienThoai}</TableCell>
                               <TableCell>{pass.diemDonTen}</TableCell>
                               <TableCell className="text-right font-mono text-xs">
-                                {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                                {pass.giaThucTe.toLocaleString('vi-VN')} ₫
                               </TableCell>
                               <TableCell className="text-center">
                                 <Badge variant="secondary" className="text-[10px] font-mono">
@@ -517,14 +516,14 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12">STT</TableHead>
-                    <TableHead className="w-20">Số ghế</TableHead>
-                    <TableHead>Họ tên hành khách</TableHead>
-                    <TableHead>Số điện thoại</TableHead>
-                    <TableHead>Điểm đón</TableHead>
-                    <TableHead>Điểm trả</TableHead>
-                    <TableHead className="w-32 text-right">Giá vé</TableHead>
-                    <TableHead className="w-32">Mã vé</TableHead>
-                    <TableHead className="w-28 text-center">Trạng thái</TableHead>
+                    <TableHead className="w-20">{tTrips('seatCol')}</TableHead>
+                    <TableHead>{tTrips('passengerNameCol')}</TableHead>
+                    <TableHead>{tTrips('phoneCol')}</TableHead>
+                    <TableHead>{tTrips('expectedPickupCol')}</TableHead>
+                    <TableHead>{tTrips('expectedDropoffCol')}</TableHead>
+                    <TableHead className="w-32 text-right">{tTrips('ticketPriceCol')}</TableHead>
+                    <TableHead className="w-32">{tTrips('ticketCodeCol')}</TableHead>
+                    <TableHead className="w-28 text-center">{tTrips('ticketStatusCol')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -539,7 +538,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
                       <TableCell>{pass.diemDonTen}</TableCell>
                       <TableCell>{pass.diemTraTen}</TableCell>
                       <TableCell className="text-right font-mono text-xs">
-                        {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                        {pass.giaThucTe.toLocaleString('vi-VN')} ₫
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {pass.maVe}

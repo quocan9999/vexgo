@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import {
   ArrowUpDown,
   Calendar,
@@ -60,6 +61,8 @@ export function TripReviewsModal({
   reviewsCount: propReviewsCount,
   route,
 }: TripReviewsModalProps) {
+  const t = useTranslations('trips');
+  const locale = useLocale();
   const [loading, setLoading] = useState(false);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [summaryRating, setSummaryRating] = useState<number | null>(
@@ -187,7 +190,7 @@ export function TripReviewsModal({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Đánh giá chất lượng dịch vụ
+                {t('reviewsTitle')}
               </span>
               <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-100 text-blue-700">
                 {operatorName}
@@ -204,7 +207,7 @@ export function TripReviewsModal({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-            aria-label="Đóng"
+            aria-label={t('close')}
           >
             <X size={20} />
           </button>
@@ -233,14 +236,14 @@ export function TripReviewsModal({
                 ))}
               </div>
               <p className="text-xs font-bold text-slate-600 mt-1.5">
-                Dựa trên {effectiveCount} lượt đánh giá
+                {t('basedOnReviews', { count: effectiveCount })}
               </p>
             </div>
 
             {/* Filter tags by star */}
             <div className="flex-1 w-full border-t sm:border-t-0 sm:border-l border-amber-200/60 pt-4 sm:pt-0 sm:pl-6">
               <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">
-                Lọc theo số sao:
+                {t('filterByStars')}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -252,7 +255,7 @@ export function TripReviewsModal({
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  <span className="whitespace-nowrap">Tất cả</span>
+                  <span className="whitespace-nowrap">{t('all')}</span>
                   <span className="text-[11px] opacity-80">({reviews.length})</span>
                 </button>
                 {[5, 4, 3].map((s) => (
@@ -315,7 +318,7 @@ export function TripReviewsModal({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5 pb-2 border-b border-slate-100">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 shrink-0">
                 <MessageSquare className="w-4 h-4 text-blue-600" />
-                <span>Nhận xét từ khách ({filteredReviews.length})</span>
+                <span>{t('customerReviews', { count: filteredReviews.length })}</span>
               </h3>
 
               <div className="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
@@ -331,7 +334,7 @@ export function TripReviewsModal({
                   title="Chỉ hiển thị các đánh giá có kèm lời nhận xét bằng chữ"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Có bình luận</span>
+                  <span>{t('withCommentsOnly')}</span>
                   <span className={`text-[11px] ${onlyWithComment ? 'text-blue-100' : 'text-slate-400'}`}>
                     ({hasCommentCount})
                   </span>
@@ -352,12 +355,12 @@ export function TripReviewsModal({
                       )
                     }
                     className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                    aria-label="Sắp xếp nhận xét"
+                    aria-label={t('sortReviewsAria')}
                   >
-                    <option value="newest">Mới nhất</option>
-                    <option value="oldest">Cũ nhất</option>
-                    <option value="rating_desc">Đánh giá cao nhất</option>
-                    <option value="rating_asc">Đánh giá thấp nhất</option>
+                    <option value="newest">{t('sortNewest')}</option>
+                    <option value="oldest">{t('sortOldest')}</option>
+                    <option value="rating_desc">{t('sortRatingDesc')}</option>
+                    <option value="rating_asc">{locale === 'vi' ? 'Đánh giá thấp nhất' : 'Lowest rating'}</option>
                   </select>
                 </div>
               </div>
@@ -366,17 +369,18 @@ export function TripReviewsModal({
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#0060c4]" />
-                <p className="text-sm font-semibold">Đang tải đánh giá...</p>
+                <p className="text-sm font-semibold">{locale === 'vi' ? 'Đang tải đánh giá...' : 'Loading reviews...'}</p>
               </div>
             ) : filteredReviews.length === 0 ? (
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center">
                 <MessageSquare className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                 <h4 className="font-bold text-slate-700 text-sm">
-                  Chưa có nhận xét nào phù hợp
+                  {locale === 'vi' ? 'Chưa có nhận xét nào phù hợp' : 'No matching reviews'}
                 </h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Hành khách sau khi hoàn thành chuyến đi trên hệ thống VexGo sẽ
-                  được gửi đánh giá và nhận xét trải nghiệm tại đây.
+                  {locale === 'vi'
+                    ? 'Hành khách sau khi hoàn thành chuyến đi trên hệ thống VexGo sẽ được gửi đánh giá và nhận xét trải nghiệm tại đây.'
+                    : 'Passengers who completed trips on VexGo can submit their reviews and feedback here.'}
                 </p>
               </div>
             ) : (
@@ -486,7 +490,7 @@ export function TripReviewsModal({
             onClick={onClose}
             className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
           >
-            Đóng
+            {t('close')}
           </button>
         </div>
       </div>

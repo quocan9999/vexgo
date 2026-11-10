@@ -153,7 +153,7 @@ function apiUrl(query: RevenueReportQuery): string {
   if (query.fromDate || query.toDate) {
     if (!query.fromDate || !query.toDate) {
       throw new RevenueReportApiError(
-        'Cần chọn đủ ngày bắt đầu và ngày kết thúc.',
+        'Both start date and end date must be selected.',
         undefined,
         false,
         false,
@@ -171,7 +171,7 @@ export async function getRevenueReport(
 ): Promise<RevenueReportResponse> {
   if (process.env.NEXT_PUBLIC_ADMIN_DATA_SOURCE?.toLowerCase() !== 'api') {
     throw new RevenueReportApiError(
-      'Báo cáo doanh thu chỉ khả dụng khi Admin dùng nguồn dữ liệu API.',
+      'Revenue reports are only available when Admin uses API data source.',
       undefined,
       false,
       false,
@@ -186,7 +186,7 @@ export async function getRevenueReport(
 
   if (response.status === 401 || response.status === 403) {
     throw new RevenueReportApiError(
-      'Bạn không có quyền truy cập báo cáo doanh thu. Hãy đăng nhập lại hoặc liên hệ quản trị viên.',
+      'You do not have permission to access revenue reports. Please sign in again or contact administrator.',
       response.status,
       true,
       false,
@@ -194,13 +194,13 @@ export async function getRevenueReport(
   }
   if (!response.ok) {
     throw new RevenueReportApiError(
-      'Không thể tải báo cáo doanh thu. Vui lòng thử lại.',
+      'Unable to load revenue report. Please try again.',
       response.status,
     );
   }
   if (!isRevenueReportResponse(body)) {
     throw new RevenueReportApiError(
-      'API trả về dữ liệu báo cáo doanh thu không hợp lệ.',
+      'API returned invalid revenue report data.',
       undefined,
       false,
       false,

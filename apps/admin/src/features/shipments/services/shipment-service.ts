@@ -44,7 +44,7 @@ export async function getShipments(
   });
 
   if (!response.ok) {
-    let errorMessage = 'Không thể tải danh sách phiếu gửi hàng.';
+    let errorMessage = 'Unable to load shipments list.';
     try {
       const errorData = await response.json();
       if (errorData?.message) {
@@ -53,7 +53,7 @@ export async function getShipments(
           : errorData.message;
       }
     } catch {
-      // Dùng default errorMessage
+      // Use default errorMessage
     }
     throw new Error(errorMessage);
   }
@@ -77,20 +77,20 @@ export async function getShipmentById(
   );
 
   if (!response.ok) {
-    let errorMessage = 'Không thể tải thông tin chi tiết phiếu gửi hàng.';
+    let errorMessage = 'Unable to load shipment details.';
     try {
       const errorData = await response.json();
       if (response.status === 404) {
-        errorMessage = 'Không tìm thấy phiếu gửi hàng.';
+        errorMessage = 'Shipment not found.';
       } else if (response.status === 403) {
-        errorMessage = 'Bạn không có quyền xem phiếu gửi hàng này.';
+        errorMessage = 'You do not have permission to view this shipment.';
       } else if (errorData?.message) {
         errorMessage = Array.isArray(errorData.message)
           ? errorData.message.join(', ')
           : errorData.message;
       }
     } catch {
-      // Dùng default errorMessage
+      // Use default errorMessage
     }
     throw new Error(errorMessage);
   }
@@ -145,36 +145,36 @@ export async function updateShipmentStatus(
   );
 
   if (!response.ok) {
-    let errorMessage = 'Không thể cập nhật trạng thái phiếu gửi hàng.';
+    let errorMessage = 'Unable to update shipment status.';
     let errorData: ShipmentStatusErrorResponse | null = null;
     try {
       errorData = (await response.json()) as ShipmentStatusErrorResponse;
       if (response.status === 409) {
-        if (errorData?.error === 'SHIPMENT_PAYMENT_NOT_CONFIRMED') {
-          errorMessage =
-            'Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.';
-        } else if (errorData?.error === 'CONCURRENT_STATUS_UPDATE') {
-          errorMessage =
-            'Trạng thái phiếu gửi đã được cập nhật bởi thao tác khác. Dữ liệu mới đã được tải lại; vui lòng kiểm tra trước khi tiếp tục.';
-        } else if (errorData?.error === 'INVALID_STATUS_TRANSITION') {
-          errorMessage =
-            'Trạng thái phiếu gửi đã thay đổi hoặc thao tác không còn hợp lệ. Dữ liệu mới đã được tải lại; vui lòng kiểm tra trước khi tiếp tục.';
-        } else if (errorData?.message) {
+        if (errorData?.message) {
           errorMessage = Array.isArray(errorData.message)
             ? errorData.message.join(', ')
             : errorData.message;
+        } else if (errorData?.error === 'SHIPMENT_PAYMENT_NOT_CONFIRMED') {
+          errorMessage =
+            'Shipment status can only be updated to in-transit after payment is confirmed.';
+        } else if (errorData?.error === 'CONCURRENT_STATUS_UPDATE') {
+          errorMessage =
+            'Shipment status was updated by another operation. Fresh data has been reloaded; please verify before continuing.';
+        } else if (errorData?.error === 'INVALID_STATUS_TRANSITION') {
+          errorMessage =
+            'Shipment status has changed or operation is invalid. Fresh data has been reloaded; please verify before continuing.';
         }
       } else if (response.status === 403) {
-        errorMessage = 'Bạn không có quyền cập nhật trạng thái phiếu gửi hàng.';
+        errorMessage = 'You do not have permission to update shipment status.';
       } else if (response.status === 404) {
-        errorMessage = 'Không tìm thấy phiếu gửi hàng.';
+        errorMessage = 'Shipment not found.';
       } else if (errorData?.message) {
         errorMessage = Array.isArray(errorData.message)
           ? errorData.message.join(', ')
           : errorData.message;
       }
     } catch {
-      // Dùng default errorMessage
+      // Use default errorMessage
     }
     throw new ShipmentStatusUpdateError(
       errorMessage,
@@ -317,7 +317,7 @@ export async function getAdminShipmentRouteOptions(
     },
   );
   if (!response.ok) {
-    throw new Error('Không thể tải danh sách tuyến nhận gửi hàng.');
+    throw new Error('Unable to load shipment routes list.');
   }
   const json = (await response.json()) as { data: AdminShipmentRouteOption[] };
   return json.data ?? [];
@@ -335,7 +335,7 @@ export async function getAdminShipmentCategories(
     },
   );
   if (!response.ok) {
-    throw new Error('Không thể tải danh mục loại hàng hóa.');
+    throw new Error('Unable to load cargo categories list.');
   }
   const json = (await response.json()) as { data: AdminCargoCategory[] };
   return json.data ?? [];
@@ -354,7 +354,7 @@ export async function getAdminRoutePointsByRoute(
     },
   );
   if (!response.ok) {
-    throw new Error('Không thể tải danh sách điểm giao nhận theo tuyến.');
+    throw new Error('Unable to load route points list.');
   }
   const json = (await response.json()) as { data: AdminRoutePointsResult };
   return json.data ?? { senderPoints: [], receiverPoints: [], rates: [] };
@@ -377,7 +377,7 @@ export async function quoteAdminShipment(
     },
   );
   if (!response.ok) {
-    let msg = 'Không thể tính báo giá cước vận chuyển.';
+    let msg = 'Unable to calculate freight quote.';
     try {
       const err = await response.json();
       if (err?.message) {
@@ -411,7 +411,7 @@ export async function createAdminShipment(
     },
   );
   if (!response.ok) {
-    let msg = 'Không thể tạo đơn gửi hàng tại quầy.';
+    let msg = 'Unable to create counter shipment.';
     try {
       const err = await response.json();
       if (err?.message) {

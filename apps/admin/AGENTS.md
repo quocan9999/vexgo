@@ -127,6 +127,28 @@ Domain callback, label resource, API call, validation và business state vẫn n
 - Khi extract shared component, MUST xóa dead/duplicate feature CSS tương ứng.
 - Chỉ xóa selector/token/adapter sau khi kiểm kê consumer. Không dùng global selector `.button`, `input`, `select`, `dialog` để ép style của primitive mới; không thêm `!important` để che xung đột legacy.
 
+### Base UI Select Label Resolution Contract
+
+- Thư viện `@base-ui/react/select` trong `src/components/ui/select.tsx` KHÔNG tự động trích xuất nhãn từ `<SelectItem>` khi render trigger đóng.
+- Developer/Agent MUST LUÔN truyền nhãn tiếng Việt đã được ánh xạ vào làm children của `<SelectValue>`:
+  ```tsx
+  // ĐÚNG:
+  <Select value={category} onValueChange={setCategory}>
+    <SelectTrigger>
+      <SelectValue placeholder="Chọn danh mục">
+        {KNOWLEDGE_CATEGORY_LABELS[category] ?? placeholder}
+      </SelectValue>
+    </SelectTrigger>
+    <SelectContent>...</SelectContent>
+  </Select>
+
+  // SAI (CẤM):
+  <SelectTrigger>
+    <SelectValue placeholder="Chọn danh mục" /> {/* Sẽ làm lộ chuỗi enum/raw db thô như CHINH_SACH_HOAN_HUY */}
+  </SelectTrigger>
+  ```
+- Tuyệt đối không để lộ mã enum kỹ thuật thô (`CHINH_SACH_HOAN_HUY`, `GLOBAL`, `PHAN_TRAM`, `SO_TIEN`, v.v.) trên bất kỳ dropdown, combobox hay badge nào của Admin UI; luôn ánh xạ sang nhãn tiếng Việt tự nhiên thân thiện.
+
 ### Visual regression
 
 Sau khi sửa shared CRUD UI hoặc tạo CRUD feature mới, MUST kiểm tra tối thiểu:

@@ -210,15 +210,15 @@ async function insertCustomer(
     .slice(-8);
   const phone = `09${phoneNumber}`;
   await client.$executeRaw`
-    INSERT INTO TaiKhoan (hoTen, soDienThoai, matKhau, daXacThucSoDienThoai, trangThai)
-    VALUES (${`Promotion test ${suffix}`}, ${phone}, 'test-password-hash', 1, 'HOAT_DONG')
+    INSERT INTO TaiKhoan (soDienThoai, matKhau, daXacThucSoDienThoai, trangThai)
+    VALUES (${phone}, 'test-password-hash', 1, 'HOAT_DONG')
   `;
   const [account] = await client.$queryRaw<
     Array<{ id: number }>
   >`SELECT LAST_INSERT_ID() AS id`;
   await client.$executeRaw`
-    INSERT INTO KhachHang (maKhachHang, taiKhoanId)
-    VALUES (${`PROMO-CUSTOMER-${suffix}`}, ${Number(account.id)})
+    INSERT INTO KhachHang (maKhachHang, hoTen, taiKhoanId)
+    VALUES (${`PROMO-CUSTOMER-${suffix}`}, ${`Promotion test ${suffix}`}, ${Number(account.id)})
   `;
   const [customer] = await client.$queryRaw<
     Array<{ id: number }>

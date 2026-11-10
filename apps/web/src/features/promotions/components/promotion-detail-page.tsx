@@ -18,10 +18,13 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { type Promotion, PROMOTIONS } from '../data/promotions.data';
 
 export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
   const router = useRouter();
+  const t = useTranslations('promotions');
+  const locale = useLocale();
 
   if (!promotion) {
     notFound();
@@ -50,7 +53,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
             className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#FF5722] transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span>Quay lại</span>
+            <span>{t('back')}</span>
           </button>
         </div>
       </div>
@@ -66,7 +69,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
               </span>
               <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-slate-400" />
-                Thời hạn: {promotion.startDate} - {promotion.endDate}
+                {t('durationLabel', { start: promotion.startDate, end: promotion.endDate })}
               </span>
             </div>
 
@@ -95,7 +98,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
                 <div>
                   <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-amber-800 mb-1">
                     <Sparkles className="w-3.5 h-3.5 text-[#FF5722]" />
-                    Mã ưu đãi độc quyền:
+                    {t('exclusiveVoucher')}
                   </span>
                   <div className="text-2xl sm:text-3xl font-black font-mono tracking-wider text-slate-900">
                     {promotion.code}
@@ -118,20 +121,20 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
                     {copied ? (
                       <>
                         <Check className="w-4 h-4" />
-                        <span>Đã sao chép!</span>
+                        <span>{t('copiedCodeExclamation')}</span>
                       </>
                     ) : (
                       <>
                         <Copy className="w-4 h-4" />
-                        <span>Sao chép mã</span>
+                        <span>{t('copyCode')}</span>
                       </>
                     )}
                   </button>
                   <Link
-                    href="/trips"
+                    href={`/${locale}/trips`}
                     className="px-5 py-3 rounded-xl border border-[#FF5722] text-[#FF5722] hover:bg-orange-50 text-sm font-bold transition-all text-center"
                   >
-                    Dùng ngay
+                    {t('useNow')}
                   </Link>
                 </div>
               </div>
@@ -141,7 +144,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
             <section className="mb-8">
               <h2 className="text-lg font-black text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
                 <Info className="w-5 h-5 text-[#FF5722]" />
-                Giới thiệu chương trình
+                {t('introTitle')}
               </h2>
               <div className="space-y-3 text-sm text-slate-600 leading-relaxed">
                 {promotion.description.map((paragraph, idx) => (
@@ -154,7 +157,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
             <section className="mb-8 pt-6 border-t border-slate-100">
               <h2 className="text-lg font-black text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-[#FF5722]" />
-                Điều kiện và điều khoản sử dụng
+                {t('termsTitle')}
               </h2>
               <ul className="space-y-2 text-sm text-slate-600 leading-relaxed list-disc list-inside bg-slate-50 p-5 rounded-xl border border-slate-100">
                 {promotion.conditions.map((item, idx) => (
@@ -167,7 +170,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
             <section className="mb-8 pt-6 border-t border-slate-100">
               <h2 className="text-lg font-black text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-[#FF5722]" />
-                Hướng dẫn áp dụng mã giảm giá
+                {t('guideTitle')}
               </h2>
               <div className="space-y-2.5 text-sm text-slate-600">
                 {promotion.guide.map((step, idx) => (
@@ -186,7 +189,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
               <section className="pt-6 border-t border-slate-100">
                 <h2 className="text-lg font-black text-slate-900 uppercase tracking-wide mb-4 flex items-center gap-2">
                   <Bus className="w-5 h-5 text-[#FF5722]" />
-                  Tuyến xe áp dụng nổi bật
+                  {t('applicableRoutesTitle')}
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {promotion.applicableRoutes.map((route, idx) => (
@@ -199,10 +202,10 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
                         <span className="text-xs font-semibold text-[#FF5722]">{route.price}</span>
                       </div>
                       <Link
-                        href={`/trips?from=${encodeURIComponent(route.origin)}&to=${encodeURIComponent(route.destination)}`}
+                        href={`/${locale}/trips?from=${encodeURIComponent(route.origin)}&to=${encodeURIComponent(route.destination)}`}
                         className="px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-[#FF5722] text-[#FF5722] hover:text-white text-xs font-bold transition-all shrink-0 flex items-center gap-1"
                       >
-                        Đặt vé <ChevronRight className="w-3.5 h-3.5" />
+                        {t('bookTicket')} <ChevronRight className="w-3.5 h-3.5" />
                       </Link>
                     </div>
                   ))}
@@ -219,16 +222,16 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
                 <Bus className="w-7 h-7" />
               </div>
               <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                Đặt vé chuyến xe của bạn
+                {t('bookYourTrip')}
               </h3>
               <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-                Áp dụng mã <strong>{promotion.code}</strong> ngay trong bước thanh toán để nhận ưu đãi.
+                {t('applyVoucherPrompt', { code: promotion.code })}
               </p>
               <Link
-                href="/trips"
+                href={`/${locale}/trips`}
                 className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white text-sm font-bold shadow-md hover:shadow-lg hover:brightness-105 transition-all flex items-center justify-center gap-2"
               >
-                <span>Tìm chuyến xe ngay</span>
+                <span>{t('findTripsNow')}</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -236,13 +239,13 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
             {/* Other Promotions list */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide mb-4">
-                Ưu đãi khác đang diễn ra
+                {t('otherPromosTitle')}
               </h3>
               <div className="space-y-4">
                 {otherPromos.map((item) => (
                   <Link
                     key={item.id}
-                    href={`/promotions/${item.id}`}
+                    href={`/${locale}/promotions/${item.id}`}
                     className="group block pb-4 border-b border-slate-100 last:border-b-0 last:pb-0"
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -257,7 +260,7 @@ export function PromotionDetailPage({ promotion }: { promotion?: Promotion }) {
                       {item.title}
                     </h4>
                     <span className="text-[11px] text-slate-400 mt-1 block">
-                      HSD: {item.endDate}
+                      {t('expiresOn', { date: item.endDate })}
                     </span>
                   </Link>
                 ))}

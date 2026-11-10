@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import {
   getAdminAccountById,
   updateAdminAccountStatus,
@@ -41,45 +42,36 @@ function formatTimestamp(value: string) {
   }).format(new Date(value));
 }
 
-function formatDate(value: string | null) {
-  if (!value) return 'Chưa cập nhật';
+function formatDate(value: string | null, fallback: string) {
+  if (!value) return fallback;
   return new Intl.DateTimeFormat('vi-VN', {
     dateStyle: 'medium',
     timeZone: 'UTC',
   }).format(new Date(value));
 }
 
-function statusLabel(status: AdminAccountStatus) {
-  switch (status) {
-    case 'HOAT_DONG':
-      return 'Hoạt động';
-    case 'TAM_KHOA':
-      return 'Tạm khóa';
-  }
-}
-
-function roleLabel(role: TenantRbacRoleName) {
+function getRoleLabel(role: TenantRbacRoleName, t: (key: string) => string) {
   switch (role) {
     case 'NHA_XE_ADMIN':
-      return 'Quản trị nhà xe';
+      return t('roleOperatorAdmin');
     case 'NHAN_VIEN_DIEU_HANH':
-      return 'Nhân viên điều hành';
+      return t('roleDispatcher');
     case 'NHAN_VIEN_BAN_VE':
-      return 'Nhân viên bán vé';
+      return t('roleTicketClerk');
     case 'NHAN_VIEN_CSKH':
-      return 'Nhân viên CSKH';
+      return t('roleSupportAgent');
     case 'NHAN_VIEN_PHU_XE':
-      return 'Nhân viên phụ xe';
+      return t('roleDriverAssistant');
     case 'NHAN_VIEN_KINH_DOANH':
-      return 'Nhân viên kinh doanh';
+      return t('roleSales');
   }
 }
 
-function RoleBadges({ roles }: { roles: TenantRbacRoleName[] }) {
+function RoleBadges({ roles, t }: { roles: TenantRbacRoleName[]; t: (key: string) => string }) {
   if (roles.length === 0) {
     return (
       <span className="text-xs text-muted-foreground">
-        Chưa được gán vai trò
+        {t('noRolesAssigned')}
       </span>
     );
   }
@@ -88,17 +80,17 @@ function RoleBadges({ roles }: { roles: TenantRbacRoleName[] }) {
     <div className="flex flex-wrap gap-1.5">
       {roles.map((role) => (
         <ResourceStatusBadge key={role} tone="muted">
-          {roleLabel(role)}
+          {getRoleLabel(role, t)}
         </ResourceStatusBadge>
       ))}
     </div>
   );
 }
 
-function AccountStatusBadge({ status }: { status: AdminAccountStatus }) {
+function AccountStatusBadge({ status, t }: { status: AdminAccountStatus; t: (key: string) => string }) {
   return (
     <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
-      {statusLabel(status)}
+      {status === 'HOAT_DONG' ? t('statusActive') : t('statusLocked')}
     </ResourceStatusBadge>
   );
 }
@@ -123,6 +115,8 @@ export function AdminAccountWorkspace({
   onAccountUpdated,
   onNotFound,
 }: AdminAccountWorkspaceProps) {
+  const tAccounts = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
   const authState = useAdminSession();
   const session =
     authState.status === 'authenticated' ? authState.session : null;
@@ -146,6 +140,7 @@ export function AdminAccountWorkspace({
   }, [onNotFound]);
 
   useEffect(() => {
+    if (initialAccount && retryCount === 0) return;
     const controller = new AbortController();
 
     getAdminAccountById(accountId, controller.signal)
@@ -167,13 +162,13 @@ export function AdminAccountWorkspace({
             message:
               error instanceof Error
                 ? error.message
-                : 'Không thể tải thông tin tài khoản.',
+                : tAccounts('loadErrorTitle'),
           });
         }
       });
 
     return () => controller.abort();
-  }, [accountId, retryCount]);
+  }, [accountId, retryCount, initialAccount]);
 
   async function handleConfirmStatusChange() {
     if (statusSubmittingRef.current || detail.status !== 'success') return;
@@ -192,17 +187,17 @@ export function AdminAccountWorkspace({
       setStatusDialogOpen(false);
       toast.success(
         nextStatus === 'TAM_KHOA'
-          ? 'Đã khóa tài khoản Admin.'
-          : 'Đã mở khóa tài khoản Admin.',
+          ? tAccounts('lockSuccess')
+          : tAccounts('unlockSuccess'),
       );
       onAccountUpdated?.(updatedAccount);
     } catch (requestError: unknown) {
       toast.error(
         requestError instanceof TypeError
-          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          ? tAccounts('networkError')
           : requestError instanceof Error
             ? requestError.message
-            : 'Không thể cập nhật trạng thái tài khoản.',
+            : tAccounts('cannotUpdateStatus'),
       );
     } finally {
       statusSubmittingRef.current = false;
@@ -216,9 +211,9 @@ export function AdminAccountWorkspace({
     <SuperAdminLayout
       activeSection="admin-accounts"
       breadcrumbs={[
-        { label: 'Hệ thống', href: '/admin-accounts' },
-        { label: 'Tài khoản quản trị', href: '/admin-accounts' },
-        { label: account ? account.fullName : `Tài khoản #${accountId}` },
+        { label: tCommon('system'), href: '/admin-accounts' },
+        { label: tAccounts('adminAccountsTitle'), href: '/admin-accounts' },
+        { label: account ? account.fullName : tAccounts('accountNumber', { id: accountId }) },
       ]}
     >
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
@@ -231,19 +226,19 @@ export function AdminAccountWorkspace({
                   <Link
                     href="/admin-accounts"
                     onClick={
-                      onClose
-                        ? (e) => {
-                            e.preventDefault();
-                            onClose();
-                          }
-                        : undefined
+                    onClose
+                      ? (e) => {
+                          e.preventDefault();
+                          onClose();
+                        }
+                      : undefined
                     }
                   />
                 }
                 variant="outline"
               >
                 <ArrowLeft aria-hidden="true" />
-                Danh sách tài khoản
+                {tAccounts('backToList')}
               </Button>
 
               {canUpdate && account && (
@@ -253,19 +248,19 @@ export function AdminAccountWorkspace({
                     variant="outline"
                   >
                     <ShieldCheck aria-hidden />
-                    Gán vai trò
+                    {tAccounts('assignRolesButton')}
                   </Button>
                   <Button
                     onClick={() => setStatusDialogOpen(true)}
                     variant="outline"
                   >
                     {account.status === 'HOAT_DONG'
-                      ? 'Khóa tài khoản'
-                      : 'Mở khóa tài khoản'}
+                      ? tAccounts('lockButton')
+                      : tAccounts('unlockButton')}
                   </Button>
                   <Button onClick={() => setEditOpen(true)}>
                     <Pencil aria-hidden />
-                    Chỉnh sửa
+                    {tCommon('edit')}
                   </Button>
                 </>
               )}
@@ -276,12 +271,12 @@ export function AdminAccountWorkspace({
               />
             </div>
           }
-          title="Thông tin tài khoản"
+          title={tAccounts('accountInfo')}
           titleId="admin-account-workspace-title"
         />
 
         {detail.status === 'loading' && (
-          <ResourceState loading>Đang tải thông tin tài khoản…</ResourceState>
+          <ResourceState loading>{tCommon('loading')}</ResourceState>
         )}
 
         {detail.status === 'error' && (
@@ -292,13 +287,13 @@ export function AdminAccountWorkspace({
                 onClick={() => setRetryCount((count) => count + 1)}
                 variant="outline"
               >
-                Thử lại
+                {tCommon('retry')}
               </Button>
               <Button
                 nativeButton={false}
                 render={<Link href="/admin-accounts" />}
               >
-                Về danh sách tài khoản
+                {tAccounts('backToList')}
               </Button>
             </div>
           </ResourceState>
@@ -325,72 +320,72 @@ export function AdminAccountWorkspace({
                     </p>
                   </div>
                 </div>
-                <AccountStatusBadge status={account.status} />
+                <AccountStatusBadge status={account.status} t={tAccounts} />
               </div>
             </Card>
 
             {/* Bento Grid */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Card 1: Thông tin định danh & nhân sự */}
+              {/* Card 1: Identity & Staff Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-base font-semibold">
-                    Thông tin định danh
+                    {tAccounts('identityInfo')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Số điện thoại</dt>
+                      <dt>{tAccounts('accountPhone')}</dt>
                       <dd>{account.phoneNumber}</dd>
                     </div>
                     <div>
-                      <dt>Email</dt>
-                      <dd>{account.email ?? 'Chưa cập nhật'}</dd>
+                      <dt>{tAccounts('accountEmail')}</dt>
+                      <dd>{account.email ?? tAccounts('notUpdated')}</dd>
                     </div>
                     <div>
-                      <dt>Chức vụ</dt>
-                      <dd>{account.employee.position || 'Chưa cập nhật'}</dd>
+                      <dt>{tAccounts('position')}</dt>
+                      <dd>{account.employee.position || tAccounts('notUpdated')}</dd>
                     </div>
                     <div>
-                      <dt>Ngày vào làm</dt>
-                      <dd>{formatDate(account.employee.joinedAt ?? null)}</dd>
+                      <dt>{tAccounts('joinedAt')}</dt>
+                      <dd>{formatDate(account.employee.joinedAt ?? null, tAccounts('notUpdated'))}</dd>
                     </div>
                     <div>
-                      <dt>Ngày sinh</dt>
-                      <dd>{formatDate(account.dateOfBirth)}</dd>
+                      <dt>{tAccounts('dateOfBirth')}</dt>
+                      <dd>{formatDate(account.dateOfBirth, tAccounts('notUpdated'))}</dd>
                     </div>
                     <div>
-                      <dt>CCCD</dt>
+                      <dt>{tAccounts('citizenId')}</dt>
                       <dd className="admin-data-mono">
-                        {account.citizenId ?? 'Chưa cập nhật'}
+                        {account.citizenId ?? tAccounts('notUpdated')}
                       </dd>
                     </div>
                     <div>
-                      <dt>Mã nhân viên</dt>
+                      <dt>{tAccounts('employeeCode')}</dt>
                       <dd className="admin-data-mono">
                         {account.employee.employeeCode}
                       </dd>
                     </div>
                     <div>
-                      <dt>Trạng thái nhân viên</dt>
+                      <dt>{tAccounts('employmentStatus')}</dt>
                       <dd>{account.employee.employmentStatus}</dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
 
-              {/* Card 2: Phạm vi và vai trò */}
+              {/* Card 2: Scope & Roles */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-base font-semibold">
-                    Phạm vi & Vai trò
+                    {tAccounts('scopeAndRoles')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Nhà xe</dt>
+                      <dt>{tAccounts('colCompany')}</dt>
                       <dd className="flex items-center gap-2">
                         <Building2 aria-hidden className="size-4 text-muted-foreground" />
                         <span>{account.busCompany.name}</span>
@@ -401,38 +396,38 @@ export function AdminAccountWorkspace({
                       </dd>
                     </div>
                     <div>
-                      <dt>Vai trò phân quyền</dt>
+                      <dt>{tAccounts('assignedRole')}</dt>
                       <dd className="mt-1">
-                        <RoleBadges roles={account.roles} />
+                        <RoleBadges roles={account.roles} t={tAccounts} />
                       </dd>
                     </div>
                   </dl>
                 </CardContent>
               </Card>
 
-              {/* Card 3: Thông tin bảo mật & hệ thống */}
+              {/* Card 3: Security & System Info */}
               <Card className="rounded-[var(--admin-radius-panel)] p-5 shadow-sm">
                 <CardHeader className="p-0 pb-4">
                   <CardTitle className="text-base font-semibold">
-                    Bảo mật & Hệ thống
+                    {tAccounts('securityAndSystem')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <dl className="grid gap-3 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-0.5 [&_dd]:font-medium [&_dd]:text-foreground">
                     <div>
-                      <dt>Xác minh số điện thoại</dt>
+                      <dt>{tAccounts('phoneVerified')}</dt>
                       <dd>
-                        {account.phoneVerified ? 'Đã xác minh' : 'Chưa xác minh'}
+                        {account.phoneVerified ? tAccounts('verified') : tAccounts('unverified')}
                       </dd>
                     </div>
                     <div>
-                      <dt>Ngày tạo</dt>
+                      <dt>{tAccounts('colCreatedAt')}</dt>
                       <dd className="tabular-nums">
                         {formatTimestamp(account.createdAt)}
                       </dd>
                     </div>
                     <div>
-                      <dt>Cập nhật lần cuối</dt>
+                      <dt>{tCommon('updatedAt')}</dt>
                       <dd className="tabular-nums">
                         {formatTimestamp(account.updatedAt)}
                       </dd>
@@ -474,16 +469,16 @@ export function AdminAccountWorkspace({
             busy={statusSubmitting}
             description={
               account.status === 'HOAT_DONG'
-                ? `Tài khoản "${account.fullName}" sẽ bị khóa và các phiên đăng nhập đang hoạt động sẽ bị thu hồi.`
-                : `Tài khoản "${account.fullName}" sẽ được mở khóa (không tạo phiên đăng nhập mới).`
+                ? tAccounts('confirmLockDesc', { name: account.fullName })
+                : tAccounts('confirmUnlockDesc', { name: account.fullName })
             }
             onClose={() => {
               if (!statusSubmittingRef.current) setStatusDialogOpen(false);
             }}
             title={
               account.status === 'HOAT_DONG'
-                ? 'Khóa tài khoản này?'
-                : 'Mở khóa tài khoản này?'
+                ? tAccounts('confirmLockTitle')
+                : tAccounts('confirmUnlockTitle')
             }
           >
             <Button
@@ -492,10 +487,10 @@ export function AdminAccountWorkspace({
               variant={account.status === 'HOAT_DONG' ? 'destructive' : 'default'}
             >
               {statusSubmitting
-                ? 'Đang cập nhật…'
+                ? tAccounts('savingRoles')
                 : account.status === 'HOAT_DONG'
-                  ? 'Khóa tài khoản'
-                  : 'Mở khóa tài khoản'}
+                  ? tAccounts('lockAccountAction')
+                  : tAccounts('unlockAccountAction')}
             </Button>
           </ResourceConfirmation>
         )}

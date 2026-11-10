@@ -78,7 +78,7 @@ export function useCustomerTransactions(customerId: number) {
         setError(
           err instanceof Error
             ? err.message
-            : 'Không thể tải lịch sử giao dịch.',
+            : 'Failed to load transaction history.',
         );
       })
       .finally(() => {

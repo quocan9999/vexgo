@@ -27,7 +27,7 @@ export async function getRouteStops(routeId: number): Promise<RouteStopItem[]> {
     throw new StopApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể tải lộ trình mẫu của tuyến xe.',
+        : 'Failed to load route pattern template.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -61,7 +61,7 @@ export async function updateRouteStops(
     throw new StopApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể cập nhật lộ trình mẫu của tuyến xe.',
+        : 'Failed to update route pattern template.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
       Array.isArray(body?.details) ? body.details : [],
     );
@@ -80,7 +80,7 @@ export async function getTripStops(tripId: number): Promise<TripPassengerPointIt
     throw new StopApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể tải danh sách điểm đón trả của chuyến xe.',
+        : 'Failed to load trip passenger points.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
@@ -114,7 +114,7 @@ export async function updateTripStops(
     throw new StopApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể cập nhật danh sách điểm đón trả của chuyến xe.',
+        : 'Failed to update trip passenger points.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
       Array.isArray(body?.details) ? body.details : [],
     );
@@ -137,10 +137,10 @@ export async function applyRouteTemplate(
     throw new StopApiError(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : 'Không thể áp dụng khuôn lộ trình cho chuyến xe.',
+        : 'Failed to apply route template to trip.',
       isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
     );
   }
 
-  return body?.data ?? { message: 'Đã áp dụng khuôn lộ trình thành công.', pointsCount: 0 };
+  return body?.data ?? { message: 'Route template applied successfully.', pointsCount: 0 };
 }

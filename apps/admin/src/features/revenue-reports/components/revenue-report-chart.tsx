@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import type {
   RevenueReportGroupBy,
   RevenueReportSeriesItem,
@@ -59,6 +60,8 @@ export function RevenueReportChart({
   groupBy,
   series,
 }: RevenueReportChartProps) {
+  const tReports = useTranslations('reports');
+  const locale = useLocale();
   const pointRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [activePointIndex, setActivePointIndex] = useState(0);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -163,7 +166,7 @@ export function RevenueReportChart({
           <polyline points={polyline} />
         </svg>
         {points.map(({ item, x, y }, index) => {
-          const tooltip = `${formatPeriod(item.period, groupBy)}: ${formatRevenueVnd(item.netRevenue)}`;
+          const tooltip = `${formatPeriod(item.period, groupBy, locale)}: ${formatRevenueVnd(item.netRevenue)}`;
           return (
             <button
               aria-label={tooltip}
@@ -202,11 +205,27 @@ export function RevenueReportChart({
                 : { top: `${tooltipPoint.y}%`, transform: 'translateY(16px)' }),
             }}
           >
-            <strong>{groupBy === 'day' ? 'Ngày ' : groupBy === 'month' ? 'Tháng ' : ''}{formatPeriod(tooltipPoint.item.period, groupBy)}</strong>
+            <strong>
+              {groupBy === 'day'
+                ? tReports('dayPrefix')
+                : groupBy === 'month'
+                  ? tReports('monthPrefix')
+                  : ''}
+              {formatPeriod(tooltipPoint.item.period, groupBy, locale)}
+            </strong>
             <dl>
-              <div><dt>Doanh thu ròng</dt><dd>{formatRevenueVnd(tooltipPoint.item.netRevenue)}</dd></div>
-              <div><dt>Tiền đã thu</dt><dd>{formatRevenueVnd(tooltipPoint.item.grossReceipts)}</dd></div>
-              <div><dt>Tiền hoàn</dt><dd>{formatRevenueVnd(tooltipPoint.item.refundAmount)}</dd></div>
+              <div>
+                <dt>{tReports('chartTooltipNet')}</dt>
+                <dd>{formatRevenueVnd(tooltipPoint.item.netRevenue)}</dd>
+              </div>
+              <div>
+                <dt>{tReports('chartTooltipGross')}</dt>
+                <dd>{formatRevenueVnd(tooltipPoint.item.grossReceipts)}</dd>
+              </div>
+              <div>
+                <dt>{tReports('chartTooltipRefund')}</dt>
+                <dd>{formatRevenueVnd(tooltipPoint.item.refundAmount)}</dd>
+              </div>
             </dl>
           </div>
         )}
@@ -228,12 +247,19 @@ export function RevenueReportChart({
             key={series[index].period}
             style={{ left: `${points[index].x}%` }}
           >
-            {formatPeriod(series[index].period, groupBy)}
+            {formatPeriod(series[index].period, groupBy, locale)}
           </span>
         ))}
       </div>
       <p className="sr-only">
-        Biểu đồ doanh thu ròng theo {groupBy === 'day' ? 'ngày' : groupBy === 'month' ? 'tháng' : 'quý'}. Dùng phím mũi tên trái và phải để xem từng kỳ; phím Home và End để đến kỳ đầu hoặc cuối. Bảng báo cáo bên dưới có đầy đủ dữ liệu.
+        {tReports('chartInstruction', {
+          unit:
+            groupBy === 'day'
+              ? tReports('dayUnit')
+              : groupBy === 'month'
+                ? tReports('monthUnit')
+                : tReports('quarterUnit'),
+        })}
       </p>
     </div>
   );

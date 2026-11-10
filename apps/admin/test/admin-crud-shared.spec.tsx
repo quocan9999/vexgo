@@ -59,7 +59,7 @@ describe('shared Admin CRUD patterns', () => {
   it('renders five accessible skeleton rows with twenty-five cells', () => {
     render(<ResourceTableSkeleton resourceLabel="loại xe" />);
     const status = screen.getByRole('status', {
-      name: 'Đang tải danh sách loại xe',
+      name: /Đang tải (dữ liệu|danh sách) loại xe/i,
     });
     expect(status.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(25);
     const rows = [...status.children].filter((row) =>

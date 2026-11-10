@@ -4,6 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Home, ChevronRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 export interface BreadcrumbItem {
   label: string;
@@ -21,6 +22,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({
   className = '',
   showHomeIcon = true,
 }) => {
+  const t = useTranslations('common');
   if (!items || items.length === 0) return null;
 
   return (
@@ -33,7 +35,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({
             className="inline-flex items-center gap-1 hover:text-emerald-800 transition-colors cursor-pointer"
           >
             {showHomeIcon && <Home className="w-3.5 h-3.5 text-slate-400" />}
-            <span>Trang chủ</span>
+            <span>{t('home')}</span>
           </Link>
         </li>
 

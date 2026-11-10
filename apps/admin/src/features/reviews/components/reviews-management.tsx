@@ -37,33 +37,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
 import { useReviews } from '../hooks/use-reviews';
 import type { AdminReviewSortKey, ReviewStatus } from '../types/review';
 import { ReviewStatsCards } from './review-stats-cards';
-
-const RATING_OPTIONS: FilterOption[] = [
-  { value: '5', label: '5 sao (Xuất sắc)' },
-  { value: '4', label: '4 sao (Tốt)' },
-  { value: '3', label: '3 sao (Bình thường)' },
-  { value: '2', label: '2 sao (Kém)' },
-  { value: '1', label: '1 sao (Rất tệ)' },
-];
-
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: 'HIEN_THI', label: 'Đang hiển thị' },
-  { value: 'DA_AN', label: 'Đã ẩn kiểm duyệt' },
-];
-
-const COMMENT_OPTIONS: FilterOption[] = [
-  { value: 'WITH_COMMENT', label: 'Có nhận xét viết kèm' },
-  { value: 'WITHOUT_COMMENT', label: 'Chỉ chấm sao (không chữ)' },
-];
-
-const TIME_RANGE_OPTIONS: FilterOption[] = [
-  { value: '7_DAYS', label: '7 ngày qua' },
-  { value: '30_DAYS', label: '30 ngày qua' },
-  { value: 'THIS_MONTH', label: 'Tháng này' },
-];
 
 function formatDate(isoString: string): string {
   try {
@@ -79,9 +56,9 @@ function formatDate(isoString: string): string {
   }
 }
 
-function StarRating({ rating }: { rating: number }) {
+function StarRating({ rating, title }: { rating: number; title: string }) {
   return (
-    <div className="flex items-center gap-1.5" title={`${rating} trên 5 sao`}>
+    <div className="flex items-center gap-1.5" title={title}>
       <div className="flex items-center text-amber-400">
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
@@ -102,6 +79,32 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export function ReviewsManagement() {
+  const tReviews = useTranslations('reviews');
+  const tCommon = useTranslations('common');
+
+  const ratingOptions: FilterOption[] = [
+    { value: '5', label: tReviews('star5Label') },
+    { value: '4', label: tReviews('star4Label') },
+    { value: '3', label: tReviews('star3Label') },
+    { value: '2', label: tReviews('star2Label') },
+    { value: '1', label: tReviews('star1Label') },
+  ];
+
+  const statusOptions: FilterOption[] = [
+    { value: 'HIEN_THI', label: tReviews('statusVisible') },
+    { value: 'DA_AN', label: tReviews('statusHidden') },
+  ];
+
+  const commentOptions: FilterOption[] = [
+    { value: 'WITH_COMMENT', label: tReviews('withCommentLabel') },
+    { value: 'WITHOUT_COMMENT', label: tReviews('withoutCommentLabel') },
+  ];
+
+  const timeRangeOptions: FilterOption[] = [
+    { value: '7_DAYS', label: tReviews('last7Days') },
+    { value: '30_DAYS', label: tReviews('last30Days') },
+    { value: 'THIS_MONTH', label: tReviews('thisMonth') },
+  ];
   const {
     reviews,
     stats,
@@ -183,8 +186,8 @@ export function ReviewsManagement() {
           actions={
             <ResourceRefreshAction loading={refreshing} onClick={refresh} />
           }
-          eyebrow="QUẢN TRỊ ĐÁNH GIÁ"
-          title="Quản lý đánh giá & phản hồi"
+          eyebrow={tReviews('eyebrow')}
+          title={tReviews('reviewsTitle')}
           titleId="reviews-page-title"
         />
 
@@ -198,27 +201,27 @@ export function ReviewsManagement() {
           aria-labelledby="reviews-table-heading"
         >
           <h2 id="reviews-table-heading" className="sr-only">
-            Danh sách đánh giá và phản hồi của khách hàng
+            {tReviews('reviewsListCaption')}
           </h2>
 
           <Card className="overflow-hidden border">
-            {/* Filter toolbar (chia 2 tầng gọn gàng, cân đối) */}
+            {/* Filter toolbar */}
             <div className="border-b border-border divide-y divide-border">
-              {/* Tầng 1: Tìm kiếm từ khóa, Lọc Nhà xe (cho Super Admin) và Tuyến xe */}
+              {/* Row 1: Search keyword, Bus Company & Route filters */}
               <div className="flex flex-wrap items-end gap-3 p-4 sm:p-5">
                 <SearchInput
                   className="min-w-0 flex-[3_1_260px]"
-                  label="Tìm kiếm đánh giá"
+                  label={tReviews('searchReviewsLabel')}
                   onChange={setSearchInput}
-                  placeholder="Tên khách hàng, số điện thoại hoặc từ khóa trong nhận xét..."
+                  placeholder={tReviews('searchPlaceholder')}
                   value={searchInput}
                 />
 
                 {isSuperAdmin && busCompanyOptions.length > 0 && (
                   <SelectFilter
                     className="min-w-0 flex-[2_1_200px]"
-                    allLabel="Tất cả nhà xe"
-                    label="Nhà xe"
+                    allLabel={tReviews('allStatuses')}
+                    label={tReviews('eyebrow')}
                     onChange={(val) =>
                       setBusCompanyFilter(val ? Number(val) : undefined)
                     }
@@ -234,8 +237,8 @@ export function ReviewsManagement() {
                 {routeOptions.length > 0 && (
                   <SelectFilter
                     className="min-w-0 flex-[2_1_200px]"
-                    allLabel="Tất cả tuyến xe"
-                    label="Tuyến xe"
+                    allLabel={tCommon('all')}
+                    label={tReviews('colTripRoute')}
                     onChange={(val) => setRouteFilter(val ? Number(val) : undefined)}
                     options={routeOptions}
                     value={routeFilter !== undefined ? String(routeFilter) : ''}
@@ -243,21 +246,21 @@ export function ReviewsManagement() {
                 )}
               </div>
 
-              {/* Tầng 2: 4 tiêu chí lọc đều nhau và Nút xóa bộ lọc */}
+              {/* Row 2: 4 filter controls & reset action */}
               <div className="flex flex-wrap items-end gap-3 p-4 sm:p-5 bg-muted/20">
                 <SelectFilter
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
-                  allLabel="Tất cả mức sao"
-                  label="Số sao đánh giá"
+                  allLabel={tReviews('allStarRatings')}
+                  label={tReviews('filterRating')}
                   onChange={(val) => setRatingFilter(val ? Number(val) : undefined)}
-                  options={RATING_OPTIONS}
+                  options={ratingOptions}
                   value={ratingFilter !== undefined ? String(ratingFilter) : ''}
                 />
 
                 <SelectFilter
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
-                  allLabel="Tất cả nhận xét"
-                  label="Nội dung nhận xét"
+                  allLabel={tReviews('allCommentTypes')}
+                  label={tReviews('filterComment')}
                   onChange={(val) =>
                     setHasCommentFilter(
                       val
@@ -265,14 +268,14 @@ export function ReviewsManagement() {
                         : undefined,
                     )
                   }
-                  options={COMMENT_OPTIONS}
+                  options={commentOptions}
                   value={hasCommentFilter ?? ''}
                 />
 
                 <SelectFilter
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
-                  allLabel="Tất cả thời gian"
-                  label="Thời gian gửi"
+                  allLabel={tReviews('allTimeRanges')}
+                  label={tReviews('filterTimeRange')}
                   onChange={(val) =>
                     setTimeRangeFilter(
                       val
@@ -280,18 +283,18 @@ export function ReviewsManagement() {
                         : undefined,
                     )
                   }
-                  options={TIME_RANGE_OPTIONS}
+                  options={timeRangeOptions}
                   value={timeRangeFilter ?? ''}
                 />
 
                 <SelectFilter
                   className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
-                  allLabel="Tất cả trạng thái"
-                  label="Trạng thái kiểm duyệt"
+                  allLabel={tReviews('allStatuses')}
+                  label={tReviews('filterStatus')}
                   onChange={(val) =>
                     setStatusFilter(val ? (val as ReviewStatus) : undefined)
                   }
-                  options={STATUS_OPTIONS}
+                  options={statusOptions}
                   value={statusFilter ?? ''}
                 />
 
@@ -304,7 +307,7 @@ export function ReviewsManagement() {
                       className="h-10 gap-1.5 whitespace-nowrap"
                     >
                       <FilterX size={14} />
-                      Xóa bộ lọc
+                      {tCommon('clearFilters')}
                     </Button>
                   </div>
                 )}
@@ -313,24 +316,24 @@ export function ReviewsManagement() {
 
             {/* Table Content */}
             {loading && !refreshing ? (
-              <ResourceTableSkeleton resourceLabel="đánh giá" />
+              <ResourceTableSkeleton resourceLabel={tReviews('unit')} />
             ) : error ? (
               <ResourceState error>
                 <p>{error}</p>
                 <Button onClick={refresh} size="sm" variant="outline">
-                  Thử lại
+                  {tCommon('retry')}
                 </Button>
               </ResourceState>
             ) : reviews.length === 0 ? (
               <ResourceState>
                 <p>
                   {isFiltered
-                    ? 'Không tìm thấy đánh giá nào phù hợp với bộ lọc hiện tại.'
-                    : 'Chưa có đánh giá nào từ hành khách.'}
+                    ? tReviews('emptyFiltered')
+                    : tReviews('emptyNoData')}
                 </p>
                 {isFiltered && (
                   <Button onClick={resetFilters} size="sm" variant="outline">
-                    Xóa bộ lọc
+                    {tCommon('clearFilters')}
                   </Button>
                 )}
               </ResourceState>
@@ -340,31 +343,31 @@ export function ReviewsManagement() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[180px]">Khách hàng</TableHead>
-                        <TableHead className="min-w-[200px]">Chuyến xe & Tuyến đường</TableHead>
+                        <TableHead className="w-[180px]">{tReviews('colCustomer')}</TableHead>
+                        <TableHead className="min-w-[200px]">{tReviews('colTripRoute')}</TableHead>
                         <TableHead
                           aria-sort={getAriaSort('mucDanhGia')}
                           className="w-[150px] cursor-pointer select-none"
                           onClick={() => handleSort('mucDanhGia')}
                         >
                           <div className="flex items-center gap-1">
-                            <span>Đánh giá</span>
+                            <span>{tReviews('colRating')}</span>
                             {renderSortIcon('mucDanhGia')}
                           </div>
                         </TableHead>
-                        <TableHead className="min-w-[260px]">Nội dung phản hồi</TableHead>
+                        <TableHead className="min-w-[260px]">{tReviews('colComment')}</TableHead>
                         <TableHead
                           aria-sort={getAriaSort('thoiGian')}
                           className="w-[170px] cursor-pointer select-none"
                           onClick={() => handleSort('thoiGian')}
                         >
                           <div className="flex items-center gap-1">
-                            <span>Thời gian</span>
+                            <span>{tReviews('colCreatedAt')}</span>
                             {renderSortIcon('thoiGian')}
                           </div>
                         </TableHead>
-                        <TableHead className="w-[130px]">Trạng thái</TableHead>
-                        <TableHead className="w-[110px] text-right">Thao tác</TableHead>
+                        <TableHead className="w-[130px]">{tReviews('colStatus')}</TableHead>
+                        <TableHead className="w-[110px] text-right">{tReviews('colActions')}</TableHead>
                       </TableRow>
                     </TableHeader>
 
@@ -408,20 +411,20 @@ export function ReviewsManagement() {
                                 </div>
                                 {isSuperAdmin && review.trip.busCompanyName && (
                                   <div className="text-xs text-muted-foreground">
-                                    Nhà xe: <span className="text-foreground">{review.trip.busCompanyName}</span>
+                                    {tReviews('eyebrow')}: <span className="text-foreground">{review.trip.busCompanyName}</span>
                                   </div>
                                 )}
                               </div>
                             ) : (
                               <span className="text-xs text-muted-foreground italic">
-                                Không có thông tin chuyến
+                                {tReviews('noTripInfo')}
                               </span>
                             )}
                           </TableCell>
 
                           {/* Rating */}
                           <TableCell className="align-top">
-                            <StarRating rating={review.rating} />
+                            <StarRating rating={review.rating} title={tReviews('starRatingHint', { rating: review.rating })} />
                           </TableCell>
 
                           {/* Comment & Reply */}
@@ -432,7 +435,7 @@ export function ReviewsManagement() {
                               </p>
                             ) : (
                               <span className="text-xs italic text-muted-foreground">
-                                (Không có nội dung nhận xét)
+                                {tReviews('noCommentText')}
                               </span>
                             )}
                             {review.reply && (
@@ -440,7 +443,7 @@ export function ReviewsManagement() {
                                 <div className="flex items-center justify-between gap-2 font-semibold text-blue-900 mb-1">
                                   <span className="flex items-center gap-1.5">
                                     <MessageSquare size={13} className="text-[#0060c4]" />
-                                    {review.reply.responderName || 'Nhà xe phản hồi'}:
+                                    {review.reply.responderName || tReviews('operatorReplied')}:
                                   </span>
                                   {review.reply.createdAt && (
                                     <span className="text-[10px] text-muted-foreground font-normal">
@@ -460,7 +463,7 @@ export function ReviewsManagement() {
                             <div>{formatDate(review.createdAt)}</div>
                             {review.isEdited && (
                               <div className="text-[11px] text-muted-foreground/75 italic">
-                                (Đã chỉnh sửa)
+                                {tReviews('editedLabel')}
                               </div>
                             )}
                           </TableCell>
@@ -469,11 +472,11 @@ export function ReviewsManagement() {
                           <TableCell className="align-top">
                             {review.status === 'HIEN_THI' ? (
                               <ResourceStatusBadge tone="active">
-                                Hiển thị
+                                {tReviews('statusVisible')}
                               </ResourceStatusBadge>
                             ) : (
                               <ResourceStatusBadge tone="muted">
-                                Đã ẩn
+                                {tReviews('statusHidden')}
                               </ResourceStatusBadge>
                             )}
                           </TableCell>
@@ -481,44 +484,48 @@ export function ReviewsManagement() {
                           {/* Actions */}
                           <TableCell className="align-top text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
-                              {/* Chỉ Admin Nhà xe mới được phản hồi đánh giá */}
                               {!isSuperAdmin && (
                                 <Button
-                                  aria-label={`Phản hồi đánh giá của ${review.customer.fullName}`}
+                                  aria-label={tReviews('replyToReview', {
+                                    name: review.customer.fullName,
+                                  })}
                                   onClick={() => openReplyModal(review)}
                                   size="sm"
                                   variant="ghost"
                                   className={`h-8 gap-1.5 ${review.reply ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
-                                  title={review.reply ? 'Xem hoặc chỉnh sửa phản hồi' : 'Gửi phản hồi từ nhà xe'}
+                                  title={review.reply ? tReviews('editReply') : tReviews('reply')}
                                 >
                                   <MessageSquareQuote size={14} />
-                                  {review.reply ? 'Sửa phản hồi' : 'Phản hồi'}
+                                  {review.reply ? tReviews('editReply') : tReviews('reply')}
                                 </Button>
                               )}
 
-                              {/* Chỉ Super Admin mới có quyền kiểm duyệt Ẩn/Hiện đánh giá */}
                               {isSuperAdmin && (
                                 review.status === 'HIEN_THI' ? (
                                   <Button
-                                    aria-label={`Ẩn đánh giá của ${review.customer.fullName}`}
+                                    aria-label={tReviews('hideReviewOf', {
+                                      name: review.customer.fullName,
+                                    })}
                                     onClick={() => setModeratingReview(review)}
                                     size="sm"
                                     variant="ghost"
                                     className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
                                   >
                                     <EyeOff size={14} />
-                                    Ẩn
+                                    {tReviews('hideReview')}
                                   </Button>
                                 ) : (
                                   <Button
-                                    aria-label={`Hiển thị lại đánh giá của ${review.customer.fullName}`}
+                                    aria-label={tReviews('unhideReviewOf', {
+                                      name: review.customer.fullName,
+                                    })}
                                     onClick={() => setModeratingReview(review)}
                                     size="sm"
                                     variant="ghost"
                                     className="h-8 gap-1.5 text-muted-foreground hover:text-primary"
                                   >
                                     <Eye size={14} />
-                                    Hiện lại
+                                    {tReviews('unhideReview')}
                                   </Button>
                                 )
                               )}
@@ -536,7 +543,7 @@ export function ReviewsManagement() {
                   disabled={loading || refreshing}
                   onPageChange={setPage}
                   pageSize={meta.pageSize}
-                  summaryLabel="đánh giá"
+                  summaryLabel={tReviews('unit')}
                   totalItems={meta.totalItems}
                   totalPages={meta.totalPages}
                 />
@@ -551,8 +558,14 @@ export function ReviewsManagement() {
             busy={modifyingStatus}
             description={
               moderatingReview.status === 'HIEN_THI'
-                ? `Đánh giá của "${moderatingReview.customer.fullName}" (${moderatingReview.rating} sao) sẽ bị ẩn khỏi hệ thống và khách hàng khác sẽ không nhìn thấy nhận xét này nữa. Bạn có chắc chắn muốn ẩn?`
-                : `Đánh giá của "${moderatingReview.customer.fullName}" (${moderatingReview.rating} sao) sẽ được công khai trở lại trên trang thông tin nhà xe/chuyến xe. Bạn có chắc chắn muốn bỏ ẩn?`
+                ? tReviews('confirmHideDesc', {
+                    name: moderatingReview.customer.fullName,
+                    rating: moderatingReview.rating,
+                  })
+                : tReviews('confirmUnhideDesc', {
+                    name: moderatingReview.customer.fullName,
+                    rating: moderatingReview.rating,
+                  })
             }
             footer={
               <div className="flex items-center justify-end gap-3">
@@ -561,7 +574,7 @@ export function ReviewsManagement() {
                   onClick={() => setModeratingReview(null)}
                   variant="outline"
                 >
-                  Hủy
+                  {tCommon('cancel')}
                 </Button>
                 <Button
                   disabled={modifyingStatus}
@@ -573,16 +586,16 @@ export function ReviewsManagement() {
                   }
                 >
                   {moderatingReview.status === 'HIEN_THI'
-                    ? 'Xác nhận ẩn'
-                    : 'Xác nhận hiển thị'}
+                    ? tReviews('confirmHide')
+                    : tReviews('confirmUnhide')}
                 </Button>
               </div>
             }
             onClose={() => setModeratingReview(null)}
             title={
               moderatingReview.status === 'HIEN_THI'
-                ? 'Ẩn đánh giá khỏi trang công khai'
-                : 'Mở lại hiển thị đánh giá'
+                ? tReviews('hideModalTitle')
+                : tReviews('unhideModalTitle')
             }
           >
             <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
@@ -591,7 +604,7 @@ export function ReviewsManagement() {
                 <span className="font-mono">{moderatingReview.customer.phoneNumber}</span>
               </div>
               <div className="flex items-center gap-1 text-amber-500 font-medium">
-                <span>{moderatingReview.rating} sao</span>
+                <span>{tReviews('starRatingHint', { rating: moderatingReview.rating })}</span>
               </div>
               {moderatingReview.comment && (
                 <p className="italic text-muted-foreground line-clamp-2">
@@ -618,7 +631,9 @@ export function ReviewsManagement() {
                     <MessageSquareQuote size={18} />
                   </div>
                   <h3 className="text-base font-bold text-slate-900">
-                    {replyingReview.reply ? 'Chỉnh sửa phản hồi' : 'Phản hồi đánh giá của khách'}
+                    {replyingReview.reply
+                      ? tReviews('replyDialogTitleEdit')
+                      : tReviews('replyDialogTitleCreate')}
                   </h3>
                 </div>
                 <button
@@ -642,29 +657,31 @@ export function ReviewsManagement() {
                 </div>
                 {replyingReview.trip?.routeName && (
                   <p className="text-slate-500">
-                    Tuyến: {replyingReview.trip.routeName}
+                    {tReviews('routeLabel', { route: replyingReview.trip.routeName })}
                   </p>
                 )}
                 <p className="text-slate-700 italic border-t border-slate-200/60 pt-1.5">
-                  {replyingReview.comment ? `“${replyingReview.comment}”` : '(Khách chỉ chấm sao, không để lại lời nhận xét)'}
+                  {replyingReview.comment
+                    ? `“${replyingReview.comment}”`
+                    : tReviews('onlyStarRatingNoComment')}
                 </p>
               </div>
 
               {/* Textarea */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">
-                  Nội dung phản hồi từ Nhà xe:
+                  {tReviews('replyContentLabel')}
                 </label>
                 <textarea
                   rows={4}
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   maxLength={1000}
-                  placeholder="Cảm ơn quý khách đã tin tưởng và góp ý cho nhà xe. Chúng tôi sẽ tiếp tục cải thiện chất lượng phục vụ..."
+                  placeholder={tReviews('replyPlaceholder')}
                   className="w-full p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 text-sm resize-none"
                 />
                 <div className="flex justify-end text-[11px] text-slate-400 font-medium">
-                  {replyText.length}/1000 ký tự
+                  {replyText.length}/1000 {tReviews('charCount')}
                 </div>
               </div>
 
@@ -679,7 +696,7 @@ export function ReviewsManagement() {
                     disabled={submittingReply}
                     className="text-rose-600 hover:bg-rose-50"
                   >
-                    Xóa phản hồi
+                    {tReviews('deleteReply')}
                   </Button>
                 ) : (
                   <div />
@@ -692,7 +709,7 @@ export function ReviewsManagement() {
                     onClick={closeReplyModal}
                     disabled={submittingReply}
                   >
-                    Hủy
+                    {tCommon('cancel')}
                   </Button>
                   <Button
                     type="button"
@@ -701,7 +718,7 @@ export function ReviewsManagement() {
                     disabled={submittingReply || !replyText.trim()}
                     className="bg-primary hover:bg-primary/90 text-white font-bold"
                   >
-                    {submittingReply ? 'Đang lưu...' : 'Lưu phản hồi'}
+                    {submittingReply ? tCommon('saving') : tReviews('saveReply')}
                   </Button>
                 </div>
               </div>

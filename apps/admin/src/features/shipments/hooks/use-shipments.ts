@@ -66,7 +66,7 @@ export function useShipments() {
         setError(
           err instanceof Error
             ? err.message
-            : 'Không thể tải danh sách phiếu gửi hàng.',
+            : 'Unable to load shipments list.',
         );
       })
       .finally(() => {

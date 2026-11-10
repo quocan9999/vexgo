@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Combobox } from '@base-ui/react/combobox';
+import { useTranslations } from 'next-intl';
 import { Bus, Check, ChevronDown, LoaderCircle, MapPin, X } from 'lucide-react';
 import { getLocations, type LocationOption } from '../services/locations.api';
 
@@ -18,7 +19,7 @@ export function LocationPicker({
   id,
   value,
   onChange,
-  placeholder = 'Chọn địa điểm',
+  placeholder,
   className = '',
   disabled = false,
   excludeValue,
@@ -33,6 +34,28 @@ export function LocationPicker({
   excludeValue?: string;
   onSelectOption?: (item: LocationOption | null) => void;
 }) {
+  let t: (key: string) => string = (k) => {
+    const map: Record<string, string> = {
+      placeholder: 'Chọn địa điểm',
+      loading: 'Đang tải địa điểm…',
+      notFound: 'Không tìm thấy. Thử tên tỉnh, thành phố hoặc bến xe khác.',
+      clearLocation: 'Xóa địa điểm',
+      openList: 'Mở danh sách địa điểm',
+      popularHeading: 'Địa điểm nổi bật',
+      provincesHeading: 'Tỉnh / Thành phố',
+      districtsHeading: 'Quận / Huyện / TP trực thuộc',
+      stationsHeading: 'Bến xe / Điểm đón trả',
+      retry: 'Thử lại',
+    };
+    return map[k] || k;
+  };
+  try {
+    const intlT = useTranslations('locations');
+    t = intlT;
+  } catch {
+    // fallback
+  }
+  const effectivePlaceholder = placeholder ?? t('placeholder');
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const [options, setOptions] = useState<LocationOption[]>([]);
@@ -206,17 +229,17 @@ export function LocationPicker({
           </span>
           <Combobox.Input
             id={inputId}
-            aria-label={placeholder}
+            aria-label={effectivePlaceholder}
             aria-busy={loading}
             aria-describedby={error ? `${inputId}-error` : undefined}
-            placeholder={loading ? 'Đang tải địa điểm…' : placeholder}
+            placeholder={loading ? t('loading') : effectivePlaceholder}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={`h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-20 text-sm font-semibold text-slate-900 shadow-xs outline-none transition-[border-color,box-shadow] placeholder:font-normal placeholder:text-slate-400 hover:border-brand/40 focus:border-brand focus:ring-4 focus:ring-brand/10 disabled:opacity-50 ${className}`}
           />
           <div className="absolute inset-y-0 right-1 flex items-center">
             {value && (
               <Combobox.Clear
-                aria-label="Xóa địa điểm"
+                aria-label={t('clearLocation')}
                 onClick={() => {
                   setSelectedId('');
                   onChange('');
@@ -229,7 +252,7 @@ export function LocationPicker({
               </Combobox.Clear>
             )}
             <Combobox.Trigger
-              aria-label="Mở danh sách địa điểm"
+              aria-label={t('openList')}
               className="group grid h-11 w-9 place-items-center rounded-lg text-slate-400 transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <ChevronDown
@@ -252,8 +275,8 @@ export function LocationPicker({
               <Combobox.Empty className="empty:hidden text-center text-sm leading-relaxed text-slate-500">
                 <div className="px-4 py-6">
                   {loading
-                    ? 'Đang tải địa điểm…'
-                    : 'Không tìm thấy. Thử tên tỉnh, thành phố hoặc bến xe khác.'}
+                    ? t('loading')
+                    : t('notFound')}
                 </div>
               </Combobox.Empty>
               <Combobox.List className="space-y-2.5">
@@ -262,7 +285,7 @@ export function LocationPicker({
                   <Combobox.Group>
                     <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-1.5 pb-1 text-sm font-bold text-brand">
                       <MapPin className="size-4" />
-                      Địa điểm nổi bật
+                      {t('popularHeading')}
                     </Combobox.GroupLabel>
                     <div className="mt-0.5 space-y-1">
                       {popularGroup.map((item) => renderOption(item, true))}
@@ -274,7 +297,7 @@ export function LocationPicker({
                 {provinceGroup.length > 0 && (
                   <Combobox.Group>
                     <Combobox.GroupLabel className="px-3 pt-1.5 pb-1 text-sm font-bold text-slate-600">
-                      Tỉnh / Thành phố
+                      {t('provincesHeading')}
                     </Combobox.GroupLabel>
                     <div className="mt-0.5 space-y-1">
                       {provinceGroup.map((item) => renderOption(item))}
@@ -286,7 +309,7 @@ export function LocationPicker({
                 {districtGroup.length > 0 && (
                   <Combobox.Group>
                     <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-sm font-bold text-slate-600">
-                      Quận / Huyện / TP trực thuộc
+                      {t('districtsHeading')}
                     </Combobox.GroupLabel>
                     <div className="mt-0.5 space-y-1">
                       {districtGroup.map((item) => renderOption(item))}
@@ -299,7 +322,7 @@ export function LocationPicker({
                   <Combobox.Group>
                     <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold text-amber-600">
                       <Bus className="size-4" />
-                      Bến xe / Điểm đón trả
+                      {t('stationsHeading')}
                     </Combobox.GroupLabel>
                     <div className="mt-0.5 space-y-1">
                       {stationGroup.map((item) => renderOption(item))}
@@ -328,7 +351,7 @@ export function LocationPicker({
               setAttempt((current) => current + 1);
             }}
           >
-            Thử lại
+            {t('retry')}
           </button>
         </p>
       )}

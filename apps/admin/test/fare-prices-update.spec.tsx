@@ -205,7 +205,7 @@ describe('Fare Price edit dialog behavior', () => {
     installApi();
     const { edit } = await openEditDialog();
 
-    expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
+    expect(within(edit).getByLabelText(/(Giá niêm yết \(VN[DĐ]\) \*)/i)).toHaveProperty(
       'value',
       '250000',
     );
@@ -237,7 +237,7 @@ describe('Fare Price edit dialog behavior', () => {
     const onUpdated = vi.fn();
     const { edit } = await openEditDialog({ onUpdated });
 
-    fireEvent.change(within(edit).getByLabelText('Giá niêm yết (VND) *'), {
+    fireEvent.change(within(edit).getByLabelText(/(Giá niêm yết \(VN[DĐ]\) \*)/i), {
       target: { value: '280000' },
     });
     const submit = within(edit).getByRole('button', { name: 'Lưu thay đổi' });
@@ -291,16 +291,16 @@ describe('Fare Price edit dialog behavior', () => {
     });
     const { edit } = await openEditDialog();
 
-    fireEvent.change(within(edit).getByLabelText('Giá niêm yết (VND) *'), {
+    fireEvent.change(within(edit).getByLabelText(/(Giá niêm yết \(VN[DĐ]\) \*)/i), {
       target: { value: '280000' },
     });
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
 
     await expectOperationToast(
       'error',
-      'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+      /khoảng hiệu lực.*trùng với một bảng giá đang hoạt động/i,
     );
-    expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
+    expect(within(edit).getByLabelText(/(Giá niêm yết \(VN[DĐ]\) \*)/i)).toHaveProperty(
       'value',
       '280000',
     );
@@ -322,7 +322,7 @@ describe('Fare Price edit dialog behavior', () => {
         ),
     });
     const { edit } = await openEditDialog();
-    fireEvent.change(within(edit).getByLabelText('Giá niêm yết (VND) *'), {
+    fireEvent.change(within(edit).getByLabelText(/(Giá niêm yết \(VN[DĐ]\) \*)/i), {
       target: { value: '280000' },
     });
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
@@ -331,7 +331,7 @@ describe('Fare Price edit dialog behavior', () => {
       'error',
       'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
     );
-    expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
+    expect(within(edit).getByLabelText(/(Giá niêm yết \(VN[DĐ]\) \*)/i)).toHaveProperty(
       'value',
       '280000',
     );
@@ -367,7 +367,7 @@ describe('Fare Price edit dialog behavior', () => {
     const api = installApi();
     const { edit } = await openEditDialog();
 
-    fireEvent.click(within(edit).getByRole('button', { name: 'Hủy' }));
+    fireEvent.click(within(edit).getByRole('button', { name: /Hủy/ }));
     await waitFor(() =>
       expect(
         screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),

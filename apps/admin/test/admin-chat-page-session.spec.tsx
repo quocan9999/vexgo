@@ -2,7 +2,7 @@
 import React from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import SupportChatPage from '../src/app/support-chat/page';
+import SupportChatPage from '../src/app/[locale]/support-chat/page';
 import * as adminAuth from '../src/features/admin-auth/services/admin-auth';
 import { setAdminTestSession, setEmployeeAdminTestSession } from './admin-auth-test-session';
 

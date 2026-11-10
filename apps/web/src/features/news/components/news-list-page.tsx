@@ -5,16 +5,19 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Newspaper, Calendar, Clock, ChevronLeft, ChevronRight, ArrowRight, User } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { NEWS_ARTICLES, type NewsArticle } from '../data/news.data';
 
 export function NewsListPage() {
   const router = useRouter();
+  const t = useTranslations('news');
+  const locale = useLocale();
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
   const categories = [
-    { id: 'ALL', label: 'Tất cả tin tức' },
-    { id: 'TIN_TUC', label: 'Tin vận tải & xe khách' },
-    { id: 'HUONG_DAN', label: 'Hướng dẫn đặt vé' },
+    { id: 'ALL', label: t('categoryAll') },
+    { id: 'TIN_TUC', label: t('categoryTransport') },
+    { id: 'HUONG_DAN', label: t('categoryGuide') },
   ];
 
   const filteredArticles =
@@ -36,7 +39,7 @@ export function NewsListPage() {
             className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#FF5722] transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span>Quay lại</span>
+            <span>{t('back')}</span>
           </button>
         </div>
       </div>
@@ -47,13 +50,13 @@ export function NewsListPage() {
           <div className="max-w-2xl">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#FF5722] text-white uppercase tracking-wider mb-4">
               <Newspaper className="w-3.5 h-3.5" />
-              Tin tức VexGo
+              {t('badge')}
             </span>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight uppercase leading-tight mb-3">
-              Tin tức & Cẩm nang xe khách
+              {t('title')}
             </h1>
             <p className="text-slate-300 text-sm md:text-base leading-relaxed">
-              Cập nhật thông tin tuyến xe mới, hướng dẫn đặt vé điện tử thông minh và cẩm nang di chuyển liên tỉnh an toàn.
+              {t('subtitle')}
             </p>
           </div>
         </div>
@@ -83,7 +86,7 @@ export function NewsListPage() {
         {selectedCategory === 'ALL' && featured && (
           <div className="mb-10">
             <Link
-              href={`/news/${featured.id}`}
+              href={`/${locale}/news/${featured.id}`}
               className="group bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 grid grid-cols-1 md:grid-cols-2 gap-6 items-center hover:-translate-y-1"
             >
               <div className="relative h-64 sm:h-80 md:h-full min-h-[260px] overflow-hidden bg-slate-100">
@@ -125,7 +128,7 @@ export function NewsListPage() {
                 </div>
 
                 <div className="flex items-center gap-1 text-sm font-bold text-[#FF5722] group-hover:underline">
-                  <span>Đọc toàn bộ bài viết</span>
+                  <span>{t('readFullArticle')}</span>
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </div>
               </div>
@@ -138,7 +141,7 @@ export function NewsListPage() {
           {rest.map((article) => (
             <Link
               key={article.id}
-              href={`/news/${article.id}`}
+              href={`/${locale}/news/${article.id}`}
               className="group bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col hover:-translate-y-1"
             >
               <div className="relative pt-[58%] overflow-hidden bg-slate-100">
@@ -177,7 +180,7 @@ export function NewsListPage() {
                 </div>
 
                 <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#FF5722]">
-                  <span>Chi tiết bài viết</span>
+                  <span>{t('viewArticle')}</span>
                   <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                 </div>
               </div>

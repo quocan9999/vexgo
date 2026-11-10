@@ -203,7 +203,7 @@ describe('Vehicle Type default cargo capacities', () => {
       target: { value: '18' },
     });
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Tạo loại xe' }),
+      within(dialog).getByRole('button', { name: /(Tạo|Thêm) loại xe/i }),
     );
 
     await waitFor(() => expect(mocks.adminApiFetch).toHaveBeenCalledOnce());
@@ -239,7 +239,7 @@ describe('Vehicle Type default cargo capacities', () => {
     });
     await fillCreateBasicsWhenReady(dialog);
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Tạo loại xe' }),
+      within(dialog).getByRole('button', { name: /(Tạo|Thêm) loại xe/i }),
     );
 
     await waitFor(() => expect(mocks.adminApiFetch).toHaveBeenCalledOnce());
@@ -332,7 +332,7 @@ describe('Vehicle Type default cargo capacities', () => {
         target: { value },
       });
       fireEvent.click(
-        within(dialog).getByRole('button', { name: 'Tạo loại xe' }),
+        within(dialog).getByRole('button', { name: /(Tạo|Thêm) loại xe/i }),
       );
 
       expect(
@@ -365,7 +365,7 @@ describe('Vehicle Type default cargo capacities', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Thêm loại xe' });
     await fillCreateBasicsWhenReady(dialog);
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Tạo loại xe' }),
+      within(dialog).getByRole('button', { name: /(Tạo|Thêm) loại xe/i }),
     );
 
     const capacityInput = within(dialog).getByLabelText('Xe máy');
@@ -396,7 +396,7 @@ describe('Vehicle Type default cargo capacities', () => {
         sortBy: 'name',
         sortDirection: 'asc',
       }),
-    ).rejects.toThrow('API trả về danh sách loại xe không hợp lệ.');
+    ).rejects.toThrow(/(API trả về danh sách loại xe không hợp lệ|API returned invalid vehicle type list)/);
   });
 
   it('parses all default capacities from list responses', async () => {

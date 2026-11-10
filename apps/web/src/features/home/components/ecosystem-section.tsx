@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import {
   BusFront,
   TicketCheck,
@@ -11,13 +12,15 @@ import {
 } from 'lucide-react';
 
 export const EcosystemSection: React.FC = () => {
+  const t = useTranslations('home.ecosystem');
+
   const ecosystemItems = [
     {
       id: 'network',
       icon: BusFront,
-      title: 'Kết nối nhiều nhà xe',
-      desc: 'Mạng lưới đối tác xe khách rộng khắp, đa dạng tuyến đường liên tỉnh và nhiều khung giờ di chuyển mỗi ngày.',
-      linkText: 'Xem lịch trình',
+      title: t('networkTitle'),
+      desc: t('networkDesc'),
+      linkText: t('networkAction'),
       href: '/trips',
       iconBg: 'bg-red-50 text-[#E60012] border-red-100',
       actionColor: 'text-[#E60012]',
@@ -25,9 +28,9 @@ export const EcosystemSection: React.FC = () => {
     {
       id: 'booking',
       icon: TicketCheck,
-      title: 'Đặt vé dễ dàng',
-      desc: 'Tra cứu giờ xe, chọn vị trí ngồi thực tế trên sơ đồ xe, thanh toán an toàn và nhận vé điện tử tức thì.',
-      linkText: 'Tìm chuyến ngay',
+      title: t('bookingTitle'),
+      desc: t('bookingDesc'),
+      linkText: t('bookingAction'),
       href: '/trips',
       iconBg: 'bg-orange-50 text-[#FF5722] border-orange-100',
       actionColor: 'text-[#FF5722]',
@@ -35,9 +38,9 @@ export const EcosystemSection: React.FC = () => {
     {
       id: 'shipping',
       icon: PackageCheck,
-      title: 'Gửi hàng liên tỉnh',
-      desc: 'Vận chuyển bưu phẩm, hàng hóa siêu tốc theo các tuyến xe khách chạy liên tục, giao nhận ngay trong ngày.',
-      linkText: 'Tạo đơn gửi hàng',
+      title: t('shippingTitle'),
+      desc: t('shippingDesc'),
+      linkText: t('shippingAction'),
       href: '/shipments/new',
       iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
       actionColor: 'text-amber-600',
@@ -45,9 +48,9 @@ export const EcosystemSection: React.FC = () => {
     {
       id: 'tracking',
       icon: ClipboardCheck,
-      title: 'Tra cứu và quản lý',
-      desc: 'Kiểm tra thông tin vé, theo dõi mã vận đơn bưu kiện và chủ động hủy vé hoàn tiền trực tuyến minh bạch.',
-      linkText: 'Tra cứu vé',
+      title: t('trackingTitle'),
+      desc: t('trackingDesc'),
+      linkText: t('trackingAction'),
       href: '/tickets/lookup',
       iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
       actionColor: 'text-blue-600',
@@ -55,15 +58,15 @@ export const EcosystemSection: React.FC = () => {
   ];
 
   const steps = [
-    { number: '01', title: 'Tìm chuyến xe', subtitle: 'Chọn điểm đi & ngày đi', color: 'bg-red-100 text-[#E60012]' },
-    { number: '02', title: 'Chọn chỗ ngồi', subtitle: 'Sơ đồ tầng trên & dưới', color: 'bg-orange-100 text-[#FF5722]' },
-    { number: '03', title: 'Thanh toán vé', subtitle: 'QR chuyển khoản / Ví', color: 'bg-amber-100 text-amber-700' },
-    { number: '04', title: 'Lên xe an toàn', subtitle: 'Xuất trình vé điện tử', color: 'bg-emerald-100 text-emerald-700' },
+    { number: '01', title: t('step1Title'), subtitle: t('step1Sub'), color: 'bg-red-100 text-[#E60012]' },
+    { number: '02', title: t('step2Title'), subtitle: t('step2Sub'), color: 'bg-orange-100 text-[#FF5722]' },
+    { number: '03', title: t('step3Title'), subtitle: t('step3Sub'), color: 'bg-amber-100 text-amber-700' },
+    { number: '04', title: t('step4Title'), subtitle: t('step4Sub'), color: 'bg-emerald-100 text-emerald-700' },
   ];
 
   return (
     <section
-      aria-label="Hệ sinh thái VexGo"
+      aria-label={t('badge')}
       className="py-12 md:py-16 bg-[#F8FAFC] border-t border-slate-200/70"
     >
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6">
@@ -71,13 +74,13 @@ export const EcosystemSection: React.FC = () => {
         <div className="text-center max-w-2xl mx-auto mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 text-[#E60012] border border-red-100 text-[11px] font-bold uppercase tracking-wider mb-2.5">
             <BusFront className="w-3.5 h-3.5 text-[#E60012]" />
-            Hệ sinh thái dịch vụ VexGo
+            {t('badge')}
           </div>
           <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
-            Không chỉ là đặt vé. Cả hành trình trong tay bạn.
+            {t('heading')}
           </h2>
           <p className="mt-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
-            VexGo kết nối hành khách với các nhà xe liên tỉnh uy tín, giúp việc tìm chuyến, đặt vé và gửi hàng trở nên đơn giản, tiện lợi trên cùng một nền tảng.
+            {t('subheading')}
           </p>
         </div>
 

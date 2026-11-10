@@ -1,12 +1,14 @@
 const INVALID_DURATION_MESSAGE =
-  'Thời gian chạy phải là số phút nguyên lớn hơn 0.';
+  'Duration must be a positive integer in minutes.';
 
 export function parseRouteDuration(
   input: string,
+  customErrorMessage?: string,
 ): { value: number } | { error: string } {
-  if (!/^\d+$/.test(input)) return { error: INVALID_DURATION_MESSAGE };
+  const errorMessage = customErrorMessage || INVALID_DURATION_MESSAGE;
+  if (!/^\d+$/.test(input)) return { error: errorMessage };
   const value = Number(input);
   return Number.isSafeInteger(value) && value > 0
     ? { value }
-    : { error: INVALID_DURATION_MESSAGE };
+    : { error: errorMessage };
 }

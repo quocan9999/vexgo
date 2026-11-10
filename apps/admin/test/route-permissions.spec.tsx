@@ -7,6 +7,7 @@ import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/routes',
 }));
 
 vi.mock('next/link', () => ({
@@ -143,11 +144,11 @@ describe('Admin route action permissions', () => {
     setEmployeeAdminTestSession(['route:read', 'route:create']);
     rerender(<RoutesManagement />);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm tuyến' }));
-    expect(await screen.findByRole('dialog', { name: 'Thêm tuyến xe' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: /Thêm tuyến( xe)?/i })).toBeTruthy();
 
     setEmployeeAdminTestSession(['route:read']);
     rerender(<RoutesManagement />);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thêm tuyến xe' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Thêm tuyến( xe)?/i })).toBeNull());
   });
 
   it('shows edit only with route:update and unmounts an open edit form when permission is revoked', async () => {

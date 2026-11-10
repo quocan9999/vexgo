@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import {
   ArrowDown,
   ArrowUp,
@@ -57,15 +58,19 @@ interface StopListEditorProps {
   mode: 'route' | 'trip';
   targetId: number;
   title?: string;
-  departureTime?: string; // Giờ khởi hành để tính preview, VD: "08:00:00"
+  departureTime?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function calculateClockTimePreview(departureTime: string = '08:00:00', phutLech: number): string {
+function calculateClockTimePreview(
+  departureTime: string = '08:00:00',
+  phutLech: number,
+  daysLabel: string = 'days',
+): string {
   try {
     const [h, m] = departureTime.split(':').map(Number);
-    if (isNaN(h) || isNaN(m)) return `${phutLech >= 0 ? '+' : ''}${phutLech}p`;
+    if (isNaN(h) || isNaN(m)) return `${phutLech >= 0 ? '+' : ''}${phutLech}m`;
 
     const totalMinutes = h * 60 + m + phutLech;
     const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440;
@@ -75,11 +80,11 @@ function calculateClockTimePreview(departureTime: string = '08:00:00', phutLech:
     const outM = normalizedMinutes % 60;
     const timeStr = `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
 
-    if (dayOffset > 0) return `${timeStr} (+${dayOffset} ngày)`;
-    if (dayOffset < 0) return `${timeStr} (${dayOffset} ngày)`;
+    if (dayOffset > 0) return `${timeStr} (+${dayOffset} ${daysLabel})`;
+    if (dayOffset < 0) return `${timeStr} (${dayOffset} ${daysLabel})`;
     return timeStr;
   } catch {
-    return `${phutLech >= 0 ? '+' : ''}${phutLech}p`;
+    return `${phutLech >= 0 ? '+' : ''}${phutLech}m`;
   }
 }
 
@@ -91,24 +96,24 @@ export function StopListEditor({
   onClose,
   onSaved,
 }: StopListEditorProps) {
+  const tStops = useTranslations('stops');
+  const tCommon = useTranslations('common');
   const [rows, setRows] = useState<EditableStopRow[]>([]);
   const [availableStations, setAvailableStations] = useState<Station[]>([]);
   const [selectedStationToAdd, setSelectedStationToAdd] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
 
-  // 1. Tải danh mục bến bãi của nhà xe
   useEffect(() => {
     getStations({ pageSize: 200 })
       .then((res) => {
         setAvailableStations(res.data.filter((s) => s.trangThai === 'HOAT_DONG'));
       })
       .catch(() => {
-        toast.error('Không thể tải danh sách bến bãi.');
+        toast.error(tStops('errors.loadStationsFailed'));
       });
-  }, []);
+  }, [tStops]);
 
-  // 2. Tải danh sách điểm dừng hiện tại của Tuyến hoặc Chuyến
   useEffect(() => {
     void Promise.resolve().then(() => setLoading(true));
     if (mode === 'route') {
@@ -130,7 +135,7 @@ export function StopListEditor({
           );
         })
         .catch((err) => {
-          toast.error(err instanceof Error ? err.message : 'Không thể tải lộ trình mẫu.');
+          toast.error(err instanceof Error ? err.message : tStops('errors.loadRouteStopsFailed'));
         })
         .finally(() => setLoading(false));
     } else {
@@ -153,13 +158,12 @@ export function StopListEditor({
           );
         })
         .catch((err) => {
-          toast.error(err instanceof Error ? err.message : 'Không thể tải điểm đón trả của chuyến.');
+          toast.error(err instanceof Error ? err.message : tStops('errors.loadTripStopsFailed'));
         })
         .finally(() => setLoading(false));
     }
-  }, [mode, targetId]);
+  }, [mode, targetId, tStops]);
 
-  // Map station details vào rows nếu thiếu
   const enrichedRows = useMemo(() => {
     const stationMap = new Map<number, Station>(availableStations.map((s) => [s.diemDonTraId, s]));
     return rows.map((r) => ({
@@ -168,7 +172,6 @@ export function StopListEditor({
     }));
   }, [rows, availableStations]);
 
-  // Validation realtime
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
     const pickupStops = enrichedRows.filter((r) => r.loaiDiem === 'DON');
@@ -176,33 +179,40 @@ export function StopListEditor({
 
     if (enrichedRows.length > 0) {
       if (pickupStops.length === 0) {
-        errors.push('Lộ trình phải có ít nhất 1 điểm ĐÓN.');
+        errors.push(tStops('errors.atLeastOnePickup'));
       }
       if (dropoffStops.length === 0) {
-        errors.push('Lộ trình phải có ít nhất 1 điểm TRẢ.');
+        errors.push(tStops('errors.atLeastOneDropoff'));
       }
       if (pickupStops.length > 0 && dropoffStops.length > 0) {
         const firstPickup = pickupStops.reduce((min, p) => (p.phutLech < min.phutLech ? p : min), pickupStops[0]);
         const lastDropoff = dropoffStops.reduce((max, p) => (p.phutLech > max.phutLech ? p : max), dropoffStops[0]);
         if (lastDropoff.phutLech <= firstPickup.phutLech) {
           errors.push(
-            `Điểm trả cuối cùng (${lastDropoff.phutLech}p) phải sau điểm đón đầu tiên (${firstPickup.phutLech}p).`,
+            tStops('errors.dropoffAfterPickup', {
+              last: lastDropoff.phutLech,
+              first: firstPickup.phutLech,
+            }),
           );
         }
       }
 
-      // Trùng lặp
       const seen = new Set<string>();
       for (const r of enrichedRows) {
         const pair = `${r.diemDonTraId}-${r.loaiDiem}`;
         if (seen.has(pair)) {
-          const name = r.station?.tenDiem ?? `Điểm #${r.diemDonTraId}`;
-          errors.push(`Trùng lặp điểm dừng: "${name}" với cùng vai trò ${r.loaiDiem}.`);
+          const name = r.station?.tenDiem ?? `#${r.diemDonTraId}`;
+          const roleLabel =
+            r.loaiDiem === 'DON'
+              ? tStops('rolePickup')
+              : r.loaiDiem === 'TRA'
+                ? tStops('roleDropoff')
+                : tStops('roleRest');
+          errors.push(tStops('errors.duplicateStop', { name, role: roleLabel }));
         }
         seen.add(pair);
       }
 
-      // Kiểm tra trung chuyển
       for (const r of enrichedRows) {
         if (r.station?.loaiDiem === 'TRUNG_CHUYEN' && r.station.benTrungChuyenId) {
           const targetStationId = r.station.benTrungChuyenId;
@@ -212,12 +222,22 @@ export function StopListEditor({
           if (targetInList) {
             if (r.loaiDiem === 'DON' && r.phutLech >= targetInList.phutLech) {
               errors.push(
-                `Điểm đón trung chuyển "${r.station.tenDiem}" (${r.phutLech}p) phải xuất phát TRƯỚC bến đích "${targetInList.station?.tenDiem}" (${targetInList.phutLech}p).`,
+                tStops('errors.transitPickupBefore', {
+                  name: r.station.tenDiem,
+                  stopOffset: r.phutLech,
+                  targetName: targetInList.station?.tenDiem ?? '',
+                  targetOffset: targetInList.phutLech,
+                }),
               );
             }
             if (r.loaiDiem === 'TRA' && r.phutLech <= targetInList.phutLech) {
               errors.push(
-                `Điểm trả trung chuyển "${r.station.tenDiem}" (${r.phutLech}p) phải đến SAU bến đích "${targetInList.station?.tenDiem}" (${targetInList.phutLech}p).`,
+                tStops('errors.transitDropoffAfter', {
+                  name: r.station.tenDiem,
+                  stopOffset: r.phutLech,
+                  targetName: targetInList.station?.tenDiem ?? '',
+                  targetOffset: targetInList.phutLech,
+                }),
               );
             }
           }
@@ -225,16 +245,14 @@ export function StopListEditor({
       }
     }
     return errors;
-  }, [enrichedRows]);
+  }, [enrichedRows, tStops]);
 
-  // Thêm điểm dừng
   const handleAddStop = () => {
     if (!selectedStationToAdd) return;
     const stationId = Number(selectedStationToAdd);
     const station = availableStations.find((s) => s.diemDonTraId === stationId);
     if (!station) return;
 
-    // Vai trò mặc định: nếu trạm nghỉ -> NGHI; nếu chưa có điểm đón -> DON; nếu đã có điểm đón -> TRA
     let defaultRole: StopPointRole = 'DON';
     if (station.loaiDiem === 'TRAM_NGHI') {
       defaultRole = 'NGHI';
@@ -261,18 +279,16 @@ export function StopListEditor({
     setSelectedStationToAdd('');
   };
 
-  // Cập nhật giá trị ô
   const handleUpdateRow = (index: number, patch: Partial<EditableStopRow>) => {
     const updated = [...rows];
     updated[index] = { ...updated[index], ...patch };
     setRows(updated);
   };
 
-  // Xóa dòng
   const handleDeleteRow = (index: number) => {
     const row = rows[index];
     if (mode === 'trip' && row.veCount && row.veCount > 0) {
-      toast.error(`Điểm dừng này đã có ${row.veCount} vé đặt. Không thể xóa.`);
+      toast.error(tStops('errors.cannotDeleteWithTickets', { count: row.veCount }));
       return;
     }
     const updated = rows.filter((_, i) => i !== index);
@@ -282,7 +298,6 @@ export function StopListEditor({
     setRows(updated);
   };
 
-  // Di chuyển dòng lên/xuống
   const handleMoveRow = (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === rows.length - 1) return;
@@ -299,7 +314,6 @@ export function StopListEditor({
     setRows(updated);
   };
 
-  // Sắp xếp tự động theo phutLech asc
   const handleSortByTime = () => {
     const updated = [...rows];
     updated.sort((a, b) => a.phutLech - b.phutLech);
@@ -307,10 +321,9 @@ export function StopListEditor({
       r.thuTu = idx + 1;
     });
     setRows(updated);
-    toast.info('Đã sắp xếp điểm dừng theo thứ tự thời gian.');
+    toast.info(tStops('sortedByTime'));
   };
 
-  // Lưu lộ trình
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validationErrors.length > 0) {
@@ -333,10 +346,10 @@ export function StopListEditor({
 
       if (mode === 'route') {
         await updateRouteStops(targetId, payload);
-        toast.success('Cập nhật khuôn lộ trình tuyến xe thành công.');
+        toast.success(tStops('saveRouteStopsSuccess'));
       } else {
         await updateTripStops(targetId, payload);
-        toast.success('Cập nhật điểm đón trả chuyến xe thành công.');
+        toast.success(tStops('saveTripStopsSuccess'));
       }
       onSaved();
       onClose();
@@ -344,7 +357,7 @@ export function StopListEditor({
       if (err instanceof StopApiError) {
         toast.error(err.message);
       } else {
-        toast.error('Có lỗi xảy ra khi lưu lộ trình.');
+        toast.error(tStops('errors.saveStopsFailed'));
       }
     } finally {
       setSaving(false);
@@ -353,11 +366,11 @@ export function StopListEditor({
 
   return (
     <ResourceModalDialog
-      title={title ?? (mode === 'route' ? 'Cấu hình khuôn lộ trình mẫu' : 'Điều chỉnh điểm đón / trả chuyến xe')}
+      title={title ?? (mode === 'route' ? tStops('defaultRouteTitle') : tStops('defaultTripTitle'))}
       description={
         mode === 'route'
-          ? 'Khuôn mẫu điểm dừng sẽ được tự động sao chép sang các chuyến xe khi tạo mới.'
-          : `Giờ khởi hành mốc: ${departureTime.slice(0, 5)}. Giờ đón trả thực tế được cộng trừ theo số phút lệch.`
+          ? tStops('routeModalDesc')
+          : tStops('tripModalDesc', { time: departureTime.slice(0, 5) })
       }
       busy={loading || saving}
       onClose={onClose}
@@ -374,21 +387,20 @@ export function StopListEditor({
               disabled={rows.length < 2 || saving}
             >
               <ArrowUpDown className="size-4 mr-1.5" />
-              Sắp xếp theo giờ
+              {tStops('sortByTimeBtn')}
             </Button>
             <div className="flex gap-3">
               <Button variant="outline" type="button" onClick={onClose} disabled={saving}>
-                Đóng
+                {tCommon('close')}
               </Button>
               <Button type="submit" disabled={saving || validationErrors.length > 0}>
-                {saving ? 'Đang lưu…' : 'Lưu lộ trình'}
+                {saving ? tCommon('saving') : tStops('saveRouteBtn')}
               </Button>
             </div>
           </div>
         }
       >
         <div className="space-y-4">
-          {/* Vùng thêm điểm dừng mới */}
           <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-muted/30 p-3 rounded-[var(--admin-radius-panel)] border border-border">
             <div className="flex-1">
               <Select
@@ -396,7 +408,7 @@ export function StopListEditor({
                 onValueChange={(val) => setSelectedStationToAdd(val ?? '')}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Chọn bến bãi, văn phòng hoặc điểm đón để thêm vào lộ trình" />
+                  <SelectValue placeholder={tStops('addStopSelectPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
                   {availableStations.map((s) => (
@@ -406,14 +418,14 @@ export function StopListEditor({
                         <span className="font-mono text-xs text-muted-foreground">({s.maDiem})</span>
                         <Badge variant="secondary" className="text-[10px]">
                           {s.loaiDiem === 'BEN_XE'
-                            ? 'Bến xe'
+                            ? tStops('typeTerminal')
                             : s.loaiDiem === 'VAN_PHONG'
-                              ? 'Văn phòng'
+                              ? tStops('typeOffice')
                               : s.loaiDiem === 'TRUNG_CHUYEN'
-                                ? 'Trung chuyển'
+                                ? tStops('typeTransit')
                                 : s.loaiDiem === 'TRAM_NGHI'
-                                  ? 'Trạm nghỉ'
-                                  : 'Dọc đường'}
+                                  ? tStops('typeRest')
+                                  : tStops('typeEnRoute')}
                         </Badge>
                       </div>
                     </SelectItem>
@@ -428,15 +440,14 @@ export function StopListEditor({
               className="shrink-0"
             >
               <Plus className="size-4 mr-1.5" />
-              Thêm điểm dừng
+              {tStops('addStopBtn')}
             </Button>
           </div>
 
-          {/* Cảnh báo validation nếu có */}
           {validationErrors.length > 0 && (
             <Alert variant="destructive">
               <AlertTriangle className="size-4" />
-              <AlertTitle>Cần điều chỉnh trước khi lưu</AlertTitle>
+              <AlertTitle>{tStops('validationAlertTitle')}</AlertTitle>
               <AlertDescription>
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   {validationErrors.map((err, i) => (
@@ -447,12 +458,11 @@ export function StopListEditor({
             </Alert>
           )}
 
-          {/* Danh sách các điểm dừng */}
           {rows.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground border rounded-[var(--admin-radius-panel)] border-dashed border-border">
               <Clock className="size-8 mx-auto mb-2 text-muted-foreground/60" />
-              <p className="text-sm font-medium">Chưa có điểm dừng nào trong lộ trình.</p>
-              <p className="text-xs mt-1">Chọn điểm ở ô phía trên và nhấn &quot;Thêm điểm dừng&quot;.</p>
+              <p className="text-sm font-medium">{tStops('emptyStopsTitle')}</p>
+              <p className="text-xs mt-1">{tStops('emptyStopsDesc')}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -460,7 +470,7 @@ export function StopListEditor({
                 const station = enrichedRows[index].station;
                 const isStationRestStop = station?.loaiDiem === 'TRAM_NGHI';
                 const hasTickets = mode === 'trip' && (row.veCount ?? 0) > 0;
-                const clockPreview = calculateClockTimePreview(departureTime, row.phutLech);
+                const clockPreview = calculateClockTimePreview(departureTime, row.phutLech, tStops('days'));
 
                 return (
                   <Card
@@ -474,20 +484,20 @@ export function StopListEditor({
                           {index + 1}
                         </span>
                         <span className="font-semibold text-[13px] truncate">
-                          {station?.tenDiem ?? `Điểm #${row.diemDonTraId}`}
+                          {station?.tenDiem ?? `#${row.diemDonTraId}`}
                         </span>
                         <span className="font-mono text-xs text-muted-foreground shrink-0">
                           ({station?.maDiem ?? '—'})
                         </span>
                         {station?.loaiDiem === 'TRUNG_CHUYEN' && (
                           <Badge variant="secondary" className="text-[10px]">
-                            Trung chuyển
+                            {tStops('transitBadge')}
                           </Badge>
                         )}
                         {hasTickets && (
                           <Badge variant="warning" className="text-[10px] gap-1">
                             <Lock className="size-3" />
-                            {row.veCount} vé đã chọn
+                            {tStops('ticketsSelectedBadge', { count: row.veCount ?? 0 })}
                           </Badge>
                         )}
                       </div>
@@ -499,7 +509,7 @@ export function StopListEditor({
                           type="button"
                           onClick={() => handleMoveRow(index, 'up')}
                           disabled={index === 0}
-                          aria-label="Di chuyển lên"
+                          aria-label={tStops('moveUpAria')}
                         >
                           <ArrowUp className="size-3.5" />
                         </Button>
@@ -509,7 +519,7 @@ export function StopListEditor({
                           type="button"
                           onClick={() => handleMoveRow(index, 'down')}
                           disabled={index === rows.length - 1}
-                          aria-label="Di chuyển xuống"
+                          aria-label={tStops('moveDownAria')}
                         >
                           <ArrowDown className="size-3.5" />
                         </Button>
@@ -520,7 +530,7 @@ export function StopListEditor({
                           className="text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteRow(index)}
                           disabled={hasTickets}
-                          aria-label={hasTickets ? 'Không thể xóa điểm đã có vé đặt' : 'Xóa điểm này'}
+                          aria-label={hasTickets ? tStops('cannotDeleteAria') : tStops('deleteStopAria')}
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
@@ -528,9 +538,9 @@ export function StopListEditor({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                      {/* Cột 1: Vai trò */}
+                      {/* Col 1: Role */}
                       <Field>
-                        <FieldLabel className="text-xs text-muted-foreground font-medium">Vai trò</FieldLabel>
+                        <FieldLabel className="text-xs text-muted-foreground font-medium">{tStops('roleCol')}</FieldLabel>
                         <Select
                           value={row.loaiDiem}
                           onValueChange={(val) =>
@@ -546,17 +556,17 @@ export function StopListEditor({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="DON">Đón khách</SelectItem>
-                            <SelectItem value="TRA">Trả khách</SelectItem>
-                            <SelectItem value="NGHI">Trạm nghỉ</SelectItem>
+                            <SelectItem value="DON">{tStops('rolePickup')}</SelectItem>
+                            <SelectItem value="TRA">{tStops('roleDropoff')}</SelectItem>
+                            <SelectItem value="NGHI">{tStops('roleRest')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </Field>
 
-                      {/* Cột 2: Phút lệch & Giờ thực tế */}
+                      {/* Col 2: Offset */}
                       <Field>
                         <div className="flex justify-between items-center">
-                          <FieldLabel className="text-xs text-muted-foreground font-medium">Lệch (phút)</FieldLabel>
+                          <FieldLabel className="text-xs text-muted-foreground font-medium">{tStops('offsetCol')}</FieldLabel>
                           <span className="font-semibold text-primary font-mono">{clockPreview}</span>
                         </div>
                         <Input
@@ -565,13 +575,13 @@ export function StopListEditor({
                           value={row.phutLech}
                           onChange={(e) => handleUpdateRow(index, { phutLech: Number(e.target.value) })}
                           disabled={hasTickets}
-                          placeholder="Số phút"
+                          placeholder={tStops('offsetPlaceholder')}
                         />
                       </Field>
 
-                      {/* Cột 3: Phụ phí (VNĐ) */}
+                      {/* Col 3: Surcharge */}
                       <Field>
-                        <FieldLabel className="text-xs text-muted-foreground font-medium">Phụ phí (đ)</FieldLabel>
+                        <FieldLabel className="text-xs text-muted-foreground font-medium">{tStops('surchargeCol')}</FieldLabel>
                         <Input
                           type="number"
                           min="0"
@@ -584,9 +594,9 @@ export function StopListEditor({
                         />
                       </Field>
 
-                      {/* Cột 4: Có mặt trước (phút) */}
+                      {/* Col 4: Presence */}
                       <Field>
-                        <FieldLabel className="text-xs text-muted-foreground font-medium">Có mặt trước (phút)</FieldLabel>
+                        <FieldLabel className="text-xs text-muted-foreground font-medium">{tStops('presenceCol')}</FieldLabel>
                         <Input
                           type="number"
                           min="0"
@@ -600,13 +610,12 @@ export function StopListEditor({
                       </Field>
                     </div>
 
-                    {/* Dòng ghi chú & nhận khách */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
                       <div className="flex-1">
                         <Input
                           type="text"
                           className="h-8 text-xs"
-                          placeholder="Ghi chú đón trả (VD: Cột B1 ga quốc tế, cổng bến xe...)"
+                          placeholder={tStops('notePlaceholder')}
                           value={row.ghiChu}
                           onChange={(e) => handleUpdateRow(index, { ghiChu: e.target.value })}
                         />
@@ -622,7 +631,7 @@ export function StopListEditor({
                           htmlFor={`nhan-khach-${row.key}`}
                           className="text-xs text-muted-foreground cursor-pointer select-none font-medium"
                         >
-                          Mở nhận khách
+                          {tStops('enableBoarding')}
                         </label>
                       </div>
                     </div>

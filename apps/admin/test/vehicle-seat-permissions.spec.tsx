@@ -64,7 +64,7 @@ beforeAll(() => {
 
 async function renderSeatWorkspace() {
   render(<VehicleSeatsManagement vehicleId={12} />);
-  await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
+  await screen.findByRole('heading', { name: /(Quản lý sơ đồ|Cấu hình) ghế/i });
   await screen.findByText('A1');
 }
 
@@ -79,7 +79,7 @@ describe('Vehicle seat action permissions', () => {
     ).toBe(true);
     expect(screen.queryByRole('button', { name: 'Lưu sơ đồ' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/i }));
     expect(screen.queryByRole('button', { name: 'Chỉnh sửa ghế đang chọn' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Xóa ghế đang chọn' })).toBeNull();
   });
@@ -87,12 +87,12 @@ describe('Vehicle seat action permissions', () => {
   it('renders only actions whose exact seat permission is present', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read', 'seat:create', 'seat:update']);
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
-    await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
+    await screen.findByRole('heading', { name: /(Quản lý sơ đồ|Cấu hình) ghế/i });
 
     expect(
       screen.getByRole('button', { name: 'Thêm ghế' }).hasAttribute('disabled'),
     ).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/i }));
     expect(screen.getByRole('button', { name: 'Chỉnh sửa ghế đang chọn' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Xóa ghế đang chọn' })).toBeNull();
 
@@ -108,9 +108,9 @@ describe('Vehicle seat action permissions', () => {
   it('unmounts an open edit form when seat:update is revoked', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read', 'seat:update']);
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
-    await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
+    await screen.findByRole('heading', { name: /(Quản lý sơ đồ|Cấu hình) ghế/i });
 
-    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa ghế đang chọn' }));
     expect(await screen.findByRole('dialog', { name: 'Chỉnh sửa ghế A1' })).toBeTruthy();
 
@@ -122,11 +122,11 @@ describe('Vehicle seat action permissions', () => {
   it('unmounts an open delete confirmation when seat:delete is revoked', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read', 'seat:delete']);
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
-    await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
+    await screen.findByRole('heading', { name: /(Quản lý sơ đồ|Cấu hình) ghế/i });
 
-    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Xóa ghế đang chọn' }));
-    const confirm = await screen.findByRole('alertdialog', { name: 'Xóa ghế A1?' });
+    const confirm = await screen.findByRole('alertdialog', { name: /(Bạn có chắc muốn xóa|Xóa) ghế A1/i });
     expect(within(confirm).getByRole('button', { name: 'Xóa ghế' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read']);

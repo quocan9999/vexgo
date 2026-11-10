@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Check, ChevronDown, Languages } from 'lucide-react';
 import { Button } from '@/components/ui/action-button';
 import {
@@ -40,21 +41,56 @@ const LANGUAGES: {
   },
 ];
 
+export function getLocalizedPath(pathname: string, newLocale: SupportedLocale): string {
+  const normalized = pathname || '/';
+  const match = normalized.match(/^\/(vi|en)(\/.*|$)/);
+  if (match) {
+    const rest = match[2] || '';
+    return `/${newLocale}${rest}`;
+  }
+  return `/${newLocale}${normalized === '/' ? '' : normalized}`;
+}
+
+function setLocaleCookie(code: SupportedLocale) {
+  if (typeof document !== 'undefined') {
+    document.cookie = `NEXT_LOCALE=${code}; path=/; max-age=31536000; SameSite=Lax`;
+  }
+}
+
 export function AdminLanguageSwitcher({
   className,
   value,
   onChange,
 }: AdminLanguageSwitcherProps) {
+  const router = useRouter();
+  const rawPathname = usePathname() || '/';
+
   const [internalLocale, setInternalLocale] = useState<SupportedLocale>('vi');
   const [open, setOpen] = useState(false);
 
-  const currentLocale = value ?? internalLocale;
+  const currentLocale =
+    value ??
+    (rawPathname.startsWith('/en')
+      ? 'en'
+      : rawPathname.startsWith('/vi')
+        ? 'vi'
+        : internalLocale);
+
   const currentLang =
     LANGUAGES.find((l) => l.code === currentLocale) ?? LANGUAGES[0];
 
   function handleSelect(code: SupportedLocale) {
     if (value === undefined) {
       setInternalLocale(code);
+    }
+    setLocaleCookie(code);
+    const localizedPath = getLocalizedPath(rawPathname, code);
+    const search = typeof window !== 'undefined' && window.location.search ? window.location.search : '';
+    const targetPath = `${localizedPath}${search}`;
+
+    router.replace(targetPath);
+    if (typeof router.refresh === 'function') {
+      router.refresh();
     }
     onChange?.(code);
     setOpen(false);

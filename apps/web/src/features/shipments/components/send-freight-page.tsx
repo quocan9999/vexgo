@@ -10,6 +10,8 @@ import React, {
   Suspense,
 } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
+import { formatCurrency } from '@/lib/format';
 import Link from 'next/link';
 import {
   AlertCircle,
@@ -64,11 +66,11 @@ function formatDisplayPhone(phone?: string | null): string {
   return phone.replace(/\D/g, '').slice(0, 11);
 }
 
-function formatCategoryName(name: string): string {
+function formatCategoryName(name: string, locale = 'vi'): string {
   if (!name) return '';
   const normalized = name.trim().toLocaleUpperCase('vi-VN');
   if (normalized === 'BƯU PHẨM') {
-    return 'Bưu Phẩm / Hàng Hóa Khác';
+    return locale === 'en' ? 'Parcel / General Cargo' : 'Bưu Phẩm / Hàng Hóa Khác';
   }
   if (name !== name.toUpperCase()) return name;
   return name.toLowerCase().replace(/(^|\s)\S/g, (l) => l.toUpperCase());
@@ -83,12 +85,18 @@ export function getCarrierDeliveryEstimate(
     } | null;
     busCompany?: { id?: number; name?: string } | null;
   } | null,
+  locale = 'vi',
 ): string {
   void _trip;
-  return 'Nhà xe điều phối sau khi tiếp nhận';
+  return locale === 'en'
+    ? 'Coordinated by operator upon receipt'
+    : 'Nhà xe điều phối sau khi tiếp nhận';
 }
 
 function SendFreightContent() {
+  const t = useTranslations('shipments');
+  const tCommon = useTranslations('common');
+  const locale = useLocale();
   const searchParams = useSearchParams();
   const { user, isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
 
@@ -332,7 +340,7 @@ function SendFreightContent() {
           setCargoCategories(categories);
           setCargoCategoriesError(
             categories.length === 0
-              ? 'Hệ thống chưa cấu hình danh mục loại hàng hóa.'
+              ? (locale === 'en' ? 'System has not configured cargo categories yet.' : 'Hệ thống chưa cấu hình danh mục loại hàng hóa.')
               : null,
           );
         }
@@ -342,7 +350,7 @@ function SendFreightContent() {
           setCargoCategoriesError(
             error instanceof Error
               ? error.message
-              : 'Không thể tải danh mục loại hàng hóa.',
+              : (locale === 'en' ? 'Failed to load cargo categories.' : 'Không thể tải danh mục loại hàng hóa.'),
           );
         }
       })
@@ -449,7 +457,7 @@ function SendFreightContent() {
           if (active) {
             setQuote(null);
             setQuoteError(
-              error instanceof Error ? error.message : 'Không thể báo cước.',
+              error instanceof Error ? error.message : (locale === 'en' ? 'Cannot calculate freight quote.' : 'Không thể báo cước.'),
             );
           }
         })
@@ -549,7 +557,7 @@ function SendFreightContent() {
         setOptionsError(
           error instanceof Error
             ? error.message
-            : 'Không thể tải nhà xe nhận hàng.',
+            : (locale === 'en' ? 'Failed to load operators for shipping.' : 'Không thể tải nhà xe nhận hàng.'),
         );
     } finally {
       if (tripRequestId.current === requestId) setLoadingTrips(false);
@@ -610,7 +618,7 @@ function SendFreightContent() {
             setRoutePointsError(
               error instanceof Error
                 ? error.message
-                : 'Không thể tải điểm gửi và điểm nhận của chuyến xe.',
+                : (locale === 'en' ? 'Failed to load departure and destination stations.' : 'Không thể tải điểm gửi và điểm nhận của chuyến xe.'),
             );
           }
         })
@@ -631,7 +639,7 @@ function SendFreightContent() {
 
     if (!isHydrated) {
       setErrorMessage(
-        'Đang xác minh phiên đăng nhập. Vui lòng thử lại sau giây lát.',
+        locale === 'en' ? 'Verifying session. Please try again shortly.' : 'Đang xác minh phiên đăng nhập. Vui lòng thử lại sau giây lát.',
       );
       return;
     }
@@ -656,27 +664,27 @@ function SendFreightContent() {
       addFieldError(
         'selectedTripId',
         'step-select-trip',
-        'Vui lòng chọn nhà xe / chuyến xe nhận vận chuyển',
+        t('errorSelectTrip'),
       );
     }
     if (!senderName.trim()) {
       addFieldError(
         'senderName',
         'input-sender-name',
-        'Vui lòng nhập họ và tên người gửi',
+        t('errorSenderName'),
       );
     }
     if (!senderPhone.trim()) {
       addFieldError(
         'senderPhone',
         'input-sender-phone',
-        'Vui lòng nhập số điện thoại người gửi',
+        t('errorSenderPhone'),
       );
     } else if (!/^0\d{9,10}$/.test(senderPhone.trim())) {
       addFieldError(
         'senderPhone',
         'input-sender-phone',
-        'Số điện thoại người gửi không hợp lệ (gồm 10–11 chữ số, bắt đầu bằng số 0)',
+        t('errorSenderPhoneInvalid'),
       );
     }
 
@@ -684,20 +692,20 @@ function SendFreightContent() {
       addFieldError(
         'receiverName',
         'input-receiver-name',
-        'Vui lòng nhập họ và tên người nhận',
+        t('errorReceiverName'),
       );
     }
     if (!receiverPhone.trim()) {
       addFieldError(
         'receiverPhone',
         'input-receiver-phone',
-        'Vui lòng nhập số điện thoại người nhận',
+        t('errorReceiverPhone'),
       );
     } else if (!/^0\d{9,10}$/.test(receiverPhone.trim())) {
       addFieldError(
         'receiverPhone',
         'input-receiver-phone',
-        'Số điện thoại người nhận không hợp lệ (gồm 10–11 chữ số, bắt đầu bằng số 0)',
+        t('errorReceiverPhoneInvalid'),
       );
     }
 
@@ -705,7 +713,7 @@ function SendFreightContent() {
       addFieldError(
         'receiverCccd',
         'input-receiver-cccd',
-        'Số CCCD / CMND người nhận phải gồm 9 hoặc 12 chữ số',
+        t('errorReceiverCccdInvalid'),
       );
     }
 
@@ -713,37 +721,37 @@ function SendFreightContent() {
       addFieldError(
         'senderPointId',
         'select-sender-point',
-        'Vui lòng chọn bưu cục / điểm gửi hàng',
+        t('errorSenderPoint'),
       );
     }
     if (!receiverPointId) {
       addFieldError(
         'receiverPointId',
         'select-receiver-point',
-        'Vui lòng chọn bưu cục / điểm nhận hàng',
+        t('errorReceiverPoint'),
       );
     } else if (senderPointId && senderPointId === receiverPointId) {
       addFieldError(
         'receiverPointId',
         'select-receiver-point',
-        'Điểm gửi và điểm nhận phải khác nhau',
+        t('errorSamePoint'),
       );
     }
 
     cargoItems.forEach((item, index) => {
-      const prefix = cargoItems.length > 1 ? `Kiện #${index + 1}: ` : '';
+      const prefix = cargoItems.length > 1 ? (locale === 'en' ? `Package #${index + 1}: ` : `Kiện #${index + 1}: `) : '';
       if (!item.name.trim()) {
         addFieldError(
           `itemName_${item.id}`,
           `input-item-name-${item.id}`,
-          `${prefix}Vui lòng nhập tên món hàng / kiện hàng`,
+          `${prefix}${t('errorItemName')}`,
         );
       }
       if (!item.categoryId) {
         addFieldError(
           `itemCategory_${item.id}`,
           `select-item-category-${item.id}`,
-          `${prefix}Vui lòng chọn danh mục loại hàng hóa`,
+          `${prefix}${t('errorItemCategory')}`,
         );
       }
 
@@ -758,14 +766,14 @@ function SendFreightContent() {
         addFieldError(
           `itemDimensions_${item.id}`,
           `input-item-length-${item.id}`,
-          `${prefix}Kích thước Dài, Rộng, Cao phải nhập đủ cả 3 hoặc để trống`,
+          `${prefix}${t('errorItemDimensions')}`,
         );
       }
       if (!(Number(item.weight) > 0) && !hasAllValidDimensions) {
         addFieldError(
           `itemWeight_${item.id}`,
           `input-item-weight-${item.id}`,
-          `${prefix}Khối lượng kiện hàng phải lớn hơn 0 kg`,
+          `${prefix}${t('errorItemWeight')}`,
         );
       }
     });
@@ -807,21 +815,21 @@ function SendFreightContent() {
     if (cargoCategoriesLoading || cargoCategoriesError) {
       setErrorMessage(
         cargoCategoriesError ||
-          'Danh mục loại hàng chưa sẵn sàng. Vui lòng thử lại sau.',
+          locale === 'en' ? 'Cargo categories not ready. Please try again later.' : 'Danh mục loại hàng chưa sẵn sàng. Vui lòng thử lại sau.',
       );
       return;
     }
 
     if (routePointsLoading || routePointsError) {
       setErrorMessage(
-        routePointsError || 'Đang tải điểm gửi và điểm nhận. Vui lòng thử lại.',
+        routePointsError || (locale === 'en' ? 'Loading stations. Please try again.' : 'Đang tải điểm gửi và điểm nhận. Vui lòng thử lại.'),
       );
       return;
     }
 
     if (!quote || quoteLoading || quoteError) {
       setErrorMessage(
-        quoteError || 'Vui lòng chờ báo cước trước khi tạo vận đơn.',
+        quoteError || (locale === 'en' ? 'Please wait for freight quote before creating waybill.' : 'Vui lòng chờ báo cước trước khi tạo vận đơn.'),
       );
       return;
     }
@@ -903,7 +911,7 @@ function SendFreightContent() {
         !Number.isFinite(Date.parse(data.paymentExpiresAt))
       ) {
         throw new Error(
-          'Đơn gửi đã được tạo nhưng chưa nhận đủ thông tin. Vui lòng tra cứu bằng mã vận đơn hoặc liên hệ hỗ trợ.',
+          locale === 'en' ? 'Shipment created but missing full details. Please look up using waybill code or contact support.' : 'Đơn gửi đã được tạo nhưng chưa nhận đủ thông tin. Vui lòng tra cứu bằng mã vận đơn hoặc liên hệ hỗ trợ.',
         );
       }
 
@@ -917,7 +925,7 @@ function SendFreightContent() {
         );
       setErrorMessage(
         (err instanceof Error ? err.message : '') ||
-          'Không thể tạo đơn gửi hàng. Vui lòng kiểm tra lại thông tin.',
+          locale === 'en' ? 'Cannot create shipment waybill. Please verify your details.' : 'Không thể tạo đơn gửi hàng. Vui lòng kiểm tra lại thông tin.',
       );
     } finally {
       submittingRef.current = false;
@@ -933,11 +941,11 @@ function SendFreightContent() {
     setCancelShipmentSuccess(null);
 
     if (!code.trim()) {
-      setLookupError('Vui lòng nhập mã vận đơn.');
+      setLookupError(locale === 'en' ? 'Please enter waybill code.' : 'Vui lòng nhập mã vận đơn.');
       return;
     }
     if (!phone.trim()) {
-      setLookupError('Vui lòng nhập số điện thoại người gửi hoặc người nhận.');
+      setLookupError(locale === 'en' ? 'Please enter sender or receiver phone number.' : 'Vui lòng nhập số điện thoại người gửi hoặc người nhận.');
       return;
     }
 
@@ -951,7 +959,7 @@ function SendFreightContent() {
     } catch (err: unknown) {
       setLookupError(
         (err instanceof Error ? err.message : '') ||
-          'Không tìm thấy thông tin vận đơn khớp với thông tin đã nhập.',
+          locale === 'en' ? 'No waybill found matching the provided information.' : 'Không tìm thấy thông tin vận đơn khớp với thông tin đã nhập.',
       );
     } finally {
       setIsLookingUp(false);
@@ -962,7 +970,7 @@ function SendFreightContent() {
     if (!lookupResult) return;
     const finalReason =
       cancelReason === 'OTHER'
-        ? customCancelReason.trim() || 'Khách hàng chủ động hủy đơn trực tuyến'
+        ? customCancelReason.trim() || (locale === 'en' ? 'Customer cancelled shipment online' : 'Khách hàng chủ động hủy đơn trực tuyến')
         : cancelReason;
 
     setIsCancellingShipment(true);
@@ -991,7 +999,7 @@ function SendFreightContent() {
     } catch (err: unknown) {
       setCancelShipmentError(
         (err instanceof Error ? err.message : '') ||
-          'Không thể hủy đơn gửi hàng. Vui lòng thử lại.',
+          locale === 'en' ? 'Cannot cancel shipment. Please try again.' : 'Không thể hủy đơn gửi hàng. Vui lòng thử lại.',
       );
     } finally {
       setIsCancellingShipment(false);
@@ -1024,7 +1032,7 @@ function SendFreightContent() {
   };
 
   const formatIsoDate = (isoStr: string | null | undefined) => {
-    if (!isoStr) return 'Chưa phân chuyến';
+    if (!isoStr) return locale === 'en' ? 'Trip unassigned' : 'Chưa phân chuyến';
     try {
       const d = new Date(isoStr);
       return d.toLocaleDateString('vi-VN', {
@@ -1038,7 +1046,7 @@ function SendFreightContent() {
   };
 
   const formatIsoTime = (isoStr: string | null | undefined) => {
-    if (!isoStr) return 'Chưa phân chuyến';
+    if (!isoStr) return locale === 'en' ? 'Trip unassigned' : 'Chưa phân chuyến';
     try {
       const d = new Date(isoStr);
       return d.toLocaleTimeString('vi-VN', {
@@ -1062,20 +1070,20 @@ function SendFreightContent() {
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
               {activeTab === 'lookup' ? (
                 <>
-                  Tra cứu vận đơn , <br className="hidden sm:inline" />
-                  <span className="text-[#FF7D42]">hành trình bưu kiện</span>
+                  {t('heroTitleLookup')} <br className="hidden sm:inline" />
+                  <span className="text-[#FF7D42]">{t('heroSubtitleLookup')}</span>
                 </>
               ) : (
                 <>
-                  Gửi hàng theo nhà xe , <br className="hidden sm:inline" />
-                  <span className="text-[#FF7D42]">nhanh – gọn – an toàn</span>
+                  {t('heroTitleCreate')} <br className="hidden sm:inline" />
+                  <span className="text-[#FF7D42]">{t('heroSubtitleCreate')}</span>
                 </>
               )}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
               {activeTab === 'lookup'
-                ? 'Theo dõi lộ trình di chuyển, vị trí bưu kiện và tình trạng giao nhận hàng hóa theo thời gian thực.'
-                : 'Giao nhận hàng trực tiếp tại bến xe và văn phòng nhà xe. Nhanh chóng, tiết kiệm và an toàn.'}
+                ? t('heroDescLookup')
+                : t('heroDescCreate')}
             </p>
           </div>
 
@@ -1086,14 +1094,14 @@ function SendFreightContent() {
                 className="px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all text-white/80 hover:text-white flex items-center gap-2"
               >
                 <Ticket className="w-4 h-4 text-[#60a5fa]" />
-                <span>Tra cứu vé xe</span>
+                <span>{t('tabTicketsLookup')}</span>
               </Link>
               <Link
                 href="/send-freight?tab=lookup"
                 className="px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all bg-white text-[#17223B] shadow-sm flex items-center gap-2"
               >
                 <Package className="w-4 h-4 text-orange-500" />
-                <span>Tra cứu vận đơn</span>
+                <span>{t('tabWaybillLookup')}</span>
               </Link>
             </div>
           )}
@@ -1114,19 +1122,16 @@ function SendFreightContent() {
                     <CheckCircle className="w-10 h-10" />
                   </div>
                   <h2 className="text-2xl font-black text-slate-900 mb-2">
-                    Tạo mã vận đơn gửi hàng thành công!
+                    {t('createdTitle')}
                   </h2>
                   <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                    Đơn gửi hàng của bạn đã được tiếp nhận vào hệ thống. Bạn vui
-                    lòng mang kiện hàng ra bưu cục đã chọn trong vòng{' '}
-                    <strong>72 giờ</strong> (3 ngày) kể từ khi tạo đơn. Sau thời
-                    gian này, mã vận đơn chưa tiếp nhận sẽ tự động hết hạn.
+                    {t('createdDesc')}
                   </p>
 
                   {/* Mã vận đơn nổi bật */}
                   <div className="bg-slate-50 border-2 border-emerald-500/30 rounded-2xl p-5 mb-6 text-center">
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                      Mã vận đơn của bạn
+                      {t('yourWaybillCode')}
                     </div>
                     <div className="text-2xl md:text-3xl font-black text-[#0060c4] tracking-wide flex items-center justify-center gap-3">
                       <span>{createdShipment.waybillCode}</span>
@@ -1135,18 +1140,18 @@ function SendFreightContent() {
                           copyToClipboard(createdShipment.waybillCode)
                         }
                         className="p-2 hover:bg-slate-200 rounded-lg text-slate-600 transition-colors"
-                        title="Sao chép mã"
+                        title={locale === 'en' ? 'Copy code' : 'Sao chép mã'}
                       >
                         <Copy className="w-5 h-5" />
                       </button>
                     </div>
                     {copiedCode && (
                       <div className="text-xs text-emerald-600 font-bold mt-1">
-                        Đã sao chép vào bộ nhớ tạm!
+                        {t('copiedToClipboard')}
                       </div>
                     )}
                     <div className="text-xs text-slate-500 mt-2">
-                      Mã đơn giao dịch:{' '}
+                      {t('orderCode')}{' '}
                       <strong className="text-slate-700">
                         {createdShipment.orderCode}
                       </strong>
@@ -1184,7 +1189,7 @@ function SendFreightContent() {
                       {createdShipment.dropoffPoint.address}
                     </div>
                     <div className="text-xs text-slate-600 font-semibold mt-2">
-                      Người nhận:{' '}
+                      {locale === 'en' ? 'Receiver: ' : 'Người nhận: '}
                       <strong>{createdShipment.receiver.fullName}</strong> (
                       {createdShipment.receiver.phoneNumber})
                       {createdShipment.receiver.cccd && (
@@ -1203,7 +1208,7 @@ function SendFreightContent() {
                 {/* Hàng hóa & Cước */}
                 <div className="max-w-2xl mx-auto mt-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex justify-between items-center text-sm">
                   <div>
-                    <span className="text-slate-600">Kiện hàng: </span>
+                    <span className="text-slate-600">{locale === 'en' ? 'Packages: ' : 'Kiện hàng: '}</span>
                     <strong className="text-slate-900">
                       {createdShipment.items
                         .map((i) => `${i.name} (${i.weight}kg)`)
@@ -1211,7 +1216,7 @@ function SendFreightContent() {
                     </strong>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs text-slate-500">Tổng cước phí</div>
+                    <div className="text-xs text-slate-500">{locale === 'en' ? 'Total Freight' : 'Tổng cước phí'}</div>
                     <div className="text-lg font-black text-rose-600">
                       {createdShipment.pricing.totalFee.toLocaleString('vi-VN')}
                       đ
@@ -1224,13 +1229,13 @@ function SendFreightContent() {
                   <div className="max-w-2xl mx-auto mt-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between gap-3 animate-in fade-in">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Đơn gửi hàng đã được tự động lưu vào tài khoản của bạn.</span>
+                      <span>{t('autoSavedNotice')}</span>
                     </div>
                     <Link
                       href="/account/shipments"
                       className="font-bold text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
                     >
-                      Đơn hàng của tôi →
+                      {locale === 'en' ? 'My Shipments →' : 'Đơn hàng của tôi →'}
                     </Link>
                   </div>
                 )}
@@ -1244,7 +1249,7 @@ function SendFreightContent() {
                     }}
                     className="w-full sm:w-auto px-5 py-3 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <RotateCcw className="w-4 h-4" /> Tạo đơn khác
+                    <RotateCcw className="w-4 h-4" /> {t('createNewOrder')}
                   </button>
 
                   <button
@@ -1260,7 +1265,7 @@ function SendFreightContent() {
                     }}
                     className="w-full sm:w-auto px-5 py-3 bg-[#0060c4] hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
-                    <Search className="w-4 h-4" /> Theo dõi hành trình ngay
+                    <Search className="w-4 h-4" /> {locale === 'en' ? 'Track Journey Now' : 'Theo dõi hành trình ngay'}
                   </button>
 
                   {isAuthenticated && (
@@ -1268,7 +1273,7 @@ function SendFreightContent() {
                       href="/account/shipments"
                       className="w-full sm:w-auto px-5 py-3 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
                     >
-                      <Package className="w-4 h-4 text-emerald-600" /> Quản lý trong tài khoản
+                      <Package className="w-4 h-4 text-emerald-600" /> {locale === 'en' ? 'Manage in Account' : 'Quản lý trong tài khoản'}
                     </Link>
                   )}
                 </div>
@@ -1290,7 +1295,7 @@ function SendFreightContent() {
                     <div className="inline-flex w-fit rounded-lg bg-slate-100 p-1">
                       <div className="h-10 px-4 rounded-md text-sm font-extrabold flex items-center gap-2 bg-brand text-white shadow-sm cursor-default">
                         <PackageCheck className="w-4 h-4" />
-                        Gửi hàng
+                        {t('tabCreate')}
                       </div>
                     </div>
                   </div>
@@ -1305,7 +1310,7 @@ function SendFreightContent() {
                           className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
                         >
                           <MapPin className="w-3.5 h-3.5 text-brand" />
-                          Nơi gửi
+                          {t('departureLocationText')}
                         </label>
                         <LocationPicker
                           id="shipment-origin"
@@ -1314,7 +1319,7 @@ function SendFreightContent() {
                             setOptionsPage(1);
                             setOrigin(value);
                           }}
-                          placeholder="Chọn nơi gửi"
+                          placeholder={t('originPlaceholder')}
                         />
                       </div>
 
@@ -1324,7 +1329,7 @@ function SendFreightContent() {
                           type="button"
                           onClick={handleSwapLocations}
                           className="w-11 h-11 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-brand flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                          title="Đổi chiều tuyến"
+                          title={t('swapRouteTitle')}
                         >
                           <ArrowRightLeft className="w-5 h-5" />
                         </button>
@@ -1337,7 +1342,7 @@ function SendFreightContent() {
                           className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
                         >
                           <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                          Nơi nhận
+                          {t('destinationLocationText')}
                         </label>
                         <LocationPicker
                           id="shipment-destination"
@@ -1347,19 +1352,19 @@ function SendFreightContent() {
                             setOptionsPage(1);
                             setDestination(value);
                           }}
-                          placeholder="Chọn nơi nhận"
+                          placeholder={t('destinationPlaceholder')}
                         />
                       </div>
                     </div>
 
-                    {/* Hàng dưới: Hướng dẫn gửi hàng & Tìm nhà xe */}
+                    {/* Hàng dưới: {t('shipmentGuide')} & Tìm nhà xe */}
                     <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <button
                         type="button"
                         onClick={() => setShowGuideModal(true)}
                         className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors cursor-pointer text-left"
                       >
-                        Hướng dẫn gửi hàng
+                        {t('shipmentGuide')}
                       </button>
                       <div>
                         <button
@@ -1378,12 +1383,12 @@ function SendFreightContent() {
                           {loadingTrips ? (
                             <>
                               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
-                              <span>Đang tìm...</span>
+                              <span>{t('findingBusCompany')}</span>
                             </>
                           ) : (
                             <>
                               <Search className="w-4 h-4 shrink-0" />
-                              <span>Tìm nhà xe</span>
+                              <span>{t('findBusCompany')}</span>
                             </>
                           )}
                         </button>
@@ -1417,19 +1422,18 @@ function SendFreightContent() {
                           </div>
                           <div>
                             <h2 className="text-base font-extrabold text-slate-900">
-                              Chọn nhà xe nhận vận chuyển
+                              {t('stepSelectTrip')}
                             </h2>
                             <p className="text-xs text-slate-400 mt-0.5">
-                              Thời gian giao và bảng cước theo từng nhà xe trên
-                              tuyến đường đã chọn
+                              {t('stepSelectTripDesc')}
                             </p>
                           </div>
                         </div>
 
                         <span className="px-3 py-1 bg-blue-50 text-blue-600 font-bold text-xs rounded-full">
                           {loadingTrips
-                            ? 'Đang tải...'
-                            : `${filteredTrips.length} lựa chọn`}
+                            ? t('loadingTrips')
+                            : t('optionsCount', { count: filteredTrips.length })}
                         </span>
                       </div>
 
@@ -1440,7 +1444,7 @@ function SendFreightContent() {
                           <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                             <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 uppercase tracking-wide">
                               <Filter className="w-3.5 h-3.5 text-slate-500" />
-                              <span>Bộ lọc tìm kiếm</span>
+                              <span>{t('filterHeader')}</span>
                             </div>
                             {selectedCompanyFilter !== 'all' && (
                               <button
@@ -1448,7 +1452,7 @@ function SendFreightContent() {
                                 onClick={() => setSelectedCompanyFilter('all')}
                                 className="text-[11px] text-[#0060c4] hover:underline font-semibold flex items-center gap-0.5"
                               >
-                                <RotateCcw className="w-3 h-3" /> Đặt lại
+                                <RotateCcw className="w-3 h-3" /> {t('clearFilter')}
                               </button>
                             )}
                           </div>
@@ -1457,7 +1461,7 @@ function SendFreightContent() {
                           <div>
                             <label className="block text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
                               <Building2 className="w-3 h-3 text-slate-400" />
-                              <span>Nhà xe vận chuyển</span>
+                              <span>{t('busCompanyLabel')}</span>
                             </label>
                             <div className="relative">
                               <select
@@ -1467,7 +1471,7 @@ function SendFreightContent() {
                                 }
                                 className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
                               >
-                                <option value="all">Tất cả nhà xe</option>
+                                <option value="all">{t('allCompanies')}</option>
                                 {availableCompanies.map((comp) => (
                                   <option key={comp.id} value={String(comp.id)}>
                                     {comp.name}
@@ -1483,7 +1487,7 @@ function SendFreightContent() {
                         <div className="flex-1 min-w-0 w-full">
                           {loadingTrips ? (
                             <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
-                              Đang tải danh sách nhà xe nhận hàng...
+                              {t('loadingTripsList')}
                             </div>
                           ) : optionsError ? (
                             <div role="alert">
@@ -1492,16 +1496,22 @@ function SendFreightContent() {
                                 type="button"
                                 onClick={() => void fetchTrips()}
                               >
-                                Thử lại
+                                {t('retry')}
                               </button>
                             </div>
                           ) : filteredTrips.length === 0 ? (
                             <div className="py-5 px-4 text-center text-slate-500 text-sm bg-slate-50 rounded-xl border border-slate-200">
                               {!origin || !destination
-                                ? 'Chọn nơi gửi và nơi nhận để xem nhà xe có nhận vận chuyển.'
+                                ? (locale === 'en'
+                                    ? 'Select origin and destination to see available operators.'
+                                    : 'Chọn nơi gửi và nơi nhận để xem nhà xe có nhận vận chuyển.')
                                 : trips.length > 0
-                                  ? 'Không tìm thấy nhà xe phù hợp.'
-                                  : 'Chưa có nhà xe nhận gửi trên tuyến này.'}
+                                  ? (locale === 'en'
+                                      ? 'No matching operators found.'
+                                      : 'Không tìm thấy nhà xe phù hợp.')
+                                  : (locale === 'en'
+                                      ? 'No operators available on this route.'
+                                      : 'Chưa có nhà xe nhận gửi trên tuyến này.')}
                             </div>
                           ) : (
                             /* Khung cuộn cố định chiều cao kèm nút Xem thêm */
@@ -1531,7 +1541,7 @@ function SendFreightContent() {
                                       <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 font-semibold mt-0.5 truncate">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
                                         <span className="truncate">
-                                          Tiếp nhận theo giờ mở cửa
+                                          {t('operatingHoursNote')}
                                         </span>
                                       </div>
                                     </div>
@@ -1539,12 +1549,16 @@ function SendFreightContent() {
                                     <div className="shrink-0 text-right">
                                       <div className="text-xs font-extrabold text-orange-600">
                                         {trip.minimumEstimatedFee == null
-                                          ? 'Chưa có giá tham khảo'
-                                          : `Cước từ ${trip.minimumEstimatedFee.toLocaleString('vi-VN')} đ`}
+                                          ? t('noReferencePrice')
+                                          : (locale === 'en'
+                                              ? `From ${trip.minimumEstimatedFee.toLocaleString('en-US')} VND`
+                                              : `Cước từ ${trip.minimumEstimatedFee.toLocaleString('vi-VN')} đ`)}
                                       </div>
                                       {trip.minimumEstimatedFee != null && (
                                         <div className="mt-0.5 text-[10px] text-slate-500">
-                                          Giá chính xác sau khi chọn bưu cục
+                                          {locale === 'en'
+                                            ? 'Exact fare after selecting stations'
+                                            : 'Giá chính xác sau khi chọn bưu cục'}
                                         </div>
                                       )}
                                     </div>
@@ -1562,18 +1576,20 @@ function SendFreightContent() {
                                     }
                                     className="w-full py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600 font-extrabold text-xs text-slate-700 shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                   >
-                                    <span>Xem thêm nhà xe</span>
+                                    <span>{t('viewMoreCompanies')}</span>
                                     <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                                   </button>
                                   <p className="text-[10px] text-slate-400">
-                                    Đang hiển thị {visibleTrips.length} /{' '}
-                                    {filteredTrips.length} chuyến
+                                    {locale === 'en'
+                                      ? `Showing ${visibleTrips.length} / ${filteredTrips.length} operators`
+                                      : `Đang hiển thị ${visibleTrips.length} / ${filteredTrips.length} chuyến`}
                                   </p>
                                 </div>
                               ) : filteredTrips.length > 8 ? (
                                 <div className="text-center pt-2 pb-1 text-[11px] text-slate-400 font-medium shrink-0">
-                                  ✓ Đã hiển thị tất cả {filteredTrips.length}{' '}
-                                  chuyến xe
+                                  {locale === 'en'
+                                    ? `✓ All ${filteredTrips.length} operators displayed`
+                                    : `✓ Đã hiển thị tất cả ${filteredTrips.length} chuyến xe`}
                                 </div>
                               ) : null}
                             </div>
@@ -1583,17 +1599,20 @@ function SendFreightContent() {
                     </div>
 
                     {/* STEP 3: THÔNG TIN NGƯỜI GỬI & NGƯỜI NHẬN */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <div
+                      id="step-sender-receiver"
+                      className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200"
+                    >
                       <div className="flex items-center gap-2.5 mb-1">
                         <div className="w-6 h-6 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-xs font-bold">
                           2
                         </div>
                         <h2 className="text-base font-extrabold text-slate-900">
-                          Thông tin người gửi & người nhận
+                          {t('stepSenderReceiver')}
                         </h2>
                       </div>
                       <p className="text-xs text-slate-400 mb-5 pl-8.5">
-                        Người nhận sẽ ra bến nhận hàng bằng CCCD/SĐT
+                        {t('stepSenderReceiverDesc')}
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
@@ -1605,17 +1624,17 @@ function SendFreightContent() {
                             </div>
                             <div>
                               <div className="font-extrabold text-slate-900 text-sm">
-                                Người gửi
+                                {t('senderTitle')}
                               </div>
                               <div className="text-[11px] text-slate-400">
-                                Bạn là người gửi hàng
+                                {t('senderSubtitle')}
                               </div>
                             </div>
                           </div>
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Họ và tên <span className="text-rose-500">*</span>
+                              {t('fullName')} <span className="text-rose-500">*</span>
                             </label>
                             <input
                               id="input-sender-name"
@@ -1626,7 +1645,7 @@ function SendFreightContent() {
                                 setSenderName(e.target.value);
                                 clearFieldError('senderName');
                               }}
-                              placeholder="Ví dụ: Nguyễn Văn A"
+                              placeholder={t('fullNamePlaceholder')}
                               className={`w-full h-11 px-3.5 rounded-xl border text-slate-800 text-sm focus:outline-none transition-colors ${
                                 fieldErrors.senderName
                                   ? 'border-rose-500 bg-rose-50/20 ring-1 ring-rose-500 focus:border-rose-500'
@@ -1643,7 +1662,7 @@ function SendFreightContent() {
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Số điện thoại{' '}
+                              {t('phoneNumber')}{' '}
                               <span className="text-rose-500">*</span>
                             </label>
                             <input
@@ -1660,7 +1679,7 @@ function SendFreightContent() {
                                 );
                                 clearFieldError('senderPhone');
                               }}
-                              placeholder="09xxxxxxxx"
+                              placeholder={t('phonePlaceholder')}
                               className={`w-full h-11 px-3.5 rounded-xl border text-slate-800 text-sm focus:outline-none transition-colors ${
                                 fieldErrors.senderPhone
                                   ? 'border-rose-500 bg-rose-50/20 ring-1 ring-rose-500 focus:border-rose-500'
@@ -1679,7 +1698,7 @@ function SendFreightContent() {
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
                               Email{' '}
                               <span className="text-slate-400 font-normal lowercase">
-                                (không bắt buộc)
+                                {locale === 'en' ? '(optional)' : '(không bắt buộc)'}
                               </span>
                             </label>
                             <input
@@ -1703,17 +1722,19 @@ function SendFreightContent() {
                             </div>
                             <div>
                               <div className="font-extrabold text-slate-900 text-sm">
-                                Người nhận
+                                {t('receiverTitle')}
                               </div>
                               <div className="text-[11px] text-slate-400">
-                                Ra bến nhận hàng
+                                {locale === 'en'
+                                  ? 'Receiver collects package at station with ID/phone number'
+                                  : t('receiverSubtitle')}
                               </div>
                             </div>
                           </div>
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Họ và tên người nhận{' '}
+                              {locale === 'en' ? 'Receiver Full Name' : t('receiverFullName')}{' '}
                               <span className="text-rose-500">*</span>
                             </label>
                             <input
@@ -1724,7 +1745,7 @@ function SendFreightContent() {
                                 setReceiverName(e.target.value);
                                 clearFieldError('receiverName');
                               }}
-                              placeholder="Ví dụ: Lê Thị B"
+                              placeholder={locale === 'en' ? 'e.g. Jane Doe' : 'Ví dụ: Lê Thị B'}
                               className={`w-full h-11 px-3.5 rounded-xl border text-slate-800 text-sm focus:outline-none transition-colors ${
                                 fieldErrors.receiverName
                                   ? 'border-rose-500 bg-rose-50/20 ring-1 ring-rose-500 focus:border-rose-500'
@@ -1741,7 +1762,7 @@ function SendFreightContent() {
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Số điện thoại người nhận{' '}
+                              {locale === 'en' ? 'Receiver Phone Number' : t('receiverPhone')}{' '}
                               <span className="text-rose-500">*</span>
                             </label>
                             <input
@@ -1757,7 +1778,7 @@ function SendFreightContent() {
                                 );
                                 clearFieldError('receiverPhone');
                               }}
-                              placeholder="09xxxxxxxx"
+                              placeholder={t('phonePlaceholder')}
                               className={`w-full h-11 px-3.5 rounded-xl border text-slate-800 text-sm focus:outline-none transition-colors ${
                                 fieldErrors.receiverPhone
                                   ? 'border-rose-500 bg-rose-50/20 ring-1 ring-rose-500 focus:border-rose-500'
@@ -1774,9 +1795,9 @@ function SendFreightContent() {
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Số CCCD / CMND người nhận{' '}
+                              {locale === 'en' ? 'Receiver Citizen ID / Passport' : t('receiverCccdLabel')}{' '}
                               <span className="text-slate-400 font-normal lowercase">
-                                (đối chiếu khi nhận)
+                                {locale === 'en' ? '(for verification on collection)' : '(đối chiếu khi nhận)'}
                               </span>
                             </label>
                             <input
@@ -1792,7 +1813,7 @@ function SendFreightContent() {
                                 );
                                 clearFieldError('receiverCccd');
                               }}
-                              placeholder="Ví dụ: 079xxxxxxxxxx"
+                              placeholder={locale === 'en' ? 'e.g. 079xxxxxxxxx' : 'Ví dụ: 079xxxxxxxxx'}
                               className={`w-full h-11 px-3.5 rounded-xl border text-slate-800 text-sm font-mono focus:outline-none transition-colors ${
                                 fieldErrors.receiverCccd
                                   ? 'border-rose-500 bg-rose-50/20 ring-1 ring-rose-500 focus:border-rose-500'
@@ -1813,7 +1834,7 @@ function SendFreightContent() {
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
                           <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
                             <Building2 className="w-4 h-4 text-orange-600" />
-                            <span>Bưu cục & Điểm giao nhận theo nhà xe</span>
+                            <span>{t('officesSectionTitle')}</span>
                           </h3>
                           {selectedTrip && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-200 self-start sm:self-auto">
@@ -1824,15 +1845,17 @@ function SendFreightContent() {
                         </div>
                         <p className="mt-0.5 text-xs text-slate-500">
                           {selectedTrip
-                            ? `Danh sách bưu cục và văn phòng tiếp nhận của nhà xe ${selectedTrip.busCompany.name}`
-                            : 'Vui lòng chọn nhà xe ở bước trên để chọn bưu cục'}
+                            ? (locale === 'en'
+                                ? `Pick-up and drop-off stations of ${selectedTrip.busCompany.name}`
+                                : `Danh sách bưu cục và văn phòng tiếp nhận của nhà xe ${selectedTrip.busCompany.name}`)
+                            : t('officesSectionDesc')}
                         </p>
                         {routePointsLoading ? (
                           <p
                             role="status"
                             className="mt-3 text-sm text-slate-500"
                           >
-                            Đang tải danh sách bưu cục và điểm tiếp nhận...
+                            {t('loadingOfficesNotice')}
                           </p>
                         ) : routePointsError ? (
                           <p
@@ -1847,14 +1870,14 @@ function SendFreightContent() {
                                 setPointsRetry((value) => value + 1)
                               }
                             >
-                              Thử lại bưu cục
+                              {t('retryOffices')}
                             </button>
                           </p>
                         ) : (
                           <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <label className="block">
                               <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
-                                Bưu cục / Điểm gửi{' '}
+                                {t('departureStationLabel')}{' '}
                                 <span className="text-rose-500">*</span>
                               </span>
                               <select
@@ -1878,8 +1901,10 @@ function SendFreightContent() {
                               >
                                 <option value="">
                                   {selectedTrip
-                                    ? `Chọn bưu cục / điểm gửi (${selectedTrip.busCompany.name})`
-                                    : 'Vui lòng chọn nhà xe trước'}
+                                    ? (locale === 'en'
+                                        ? `Select departure station (${selectedTrip.busCompany.name})`
+                                        : `Chọn bưu cục / điểm gửi (${selectedTrip.busCompany.name})`)
+                                    : t('selectOperatorFirstNotice')}
                                 </option>
                                 {routePoints?.senderPoints.map((point) => (
                                   <option key={point.id} value={point.id}>
@@ -1896,18 +1921,17 @@ function SendFreightContent() {
                               {!fieldErrors.senderPointId &&
                                 (!selectedTripId ? (
                                   <span className="mt-1 block text-xs text-amber-700">
-                                    Vui lòng chọn nhà xe trước.
+                                    {t('selectOperatorFirstNotice')}
                                   </span>
                                 ) : !routePoints?.senderPoints.length ? (
                                   <span className="mt-1 block text-xs text-amber-700">
-                                    Nhà xe chưa có điểm gửi hàng đang hoạt động
-                                    trên tuyến này.
+                                    {t('noActivePickupPoints')}
                                   </span>
                                 ) : null)}
                             </label>
                             <label className="block">
                               <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
-                                Bưu cục / Điểm nhận{' '}
+                                {t('destinationStationLabel')}{' '}
                                 <span className="text-rose-500">*</span>
                               </span>
                               <select
@@ -1928,8 +1952,10 @@ function SendFreightContent() {
                               >
                                 <option value="">
                                   {selectedTrip
-                                    ? `Chọn bưu cục / điểm nhận (${selectedTrip.busCompany.name})`
-                                    : 'Vui lòng chọn nhà xe trước'}
+                                    ? (locale === 'en'
+                                        ? `Select destination station (${selectedTrip.busCompany.name})`
+                                        : `Chọn bưu cục / điểm nhận (${selectedTrip.busCompany.name})`)
+                                    : t('selectOperatorFirstNotice')}
                                 </option>
                                 {routePoints?.receiverPoints.map((point) => (
                                   <option
@@ -1950,12 +1976,11 @@ function SendFreightContent() {
                               {!fieldErrors.receiverPointId &&
                                 (!selectedTripId ? (
                                   <span className="mt-1 block text-xs text-amber-700">
-                                    Vui lòng chọn nhà xe trước.
+                                    {t('selectOperatorFirstNotice')}
                                   </span>
                                 ) : !routePoints?.receiverPoints.length ? (
                                   <span className="mt-1 block text-xs text-amber-700">
-                                    Nhà xe chưa có điểm nhận hàng đang hoạt động
-                                    trên tuyến này.
+                                    {t('noActiveDropoffPoints')}
                                   </span>
                                 ) : null)}
                             </label>
@@ -1971,15 +1996,14 @@ function SendFreightContent() {
                           3
                         </div>
                         <h2 className="text-base font-extrabold text-slate-900">
-                          Thông tin kiện hàng{' '}
+                          {t('stepCargo')}{' '}
                           {cargoItems.length > 1
-                            ? `(${cargoItems.length} kiện)`
+                            ? `(${t('packagesCount', { count: cargoItems.length })})`
                             : ''}
                         </h2>
                       </div>
                       <p className="text-xs text-slate-400 mb-5 pl-8.5">
-                        Khai báo chính xác giúp nhà xe bảo quản hàng và tính
-                        cước chuẩn xác
+                        {t('stepCargoDesc')}
                       </p>
 
                       <div className="space-y-4">
@@ -2015,7 +2039,7 @@ function SendFreightContent() {
                                     className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 px-2 py-1 rounded hover:bg-rose-50 cursor-pointer transition-colors"
                                     title="Xóa kiện này"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" /> Xóa kiện
+                                    <Trash2 className="w-3.5 h-3.5" /> {t('removeCargoItem')}
                                   </button>
                                 </div>
                               )}
@@ -2474,14 +2498,14 @@ function SendFreightContent() {
                       {/* Card Header dark blue */}
                       <div className="bg-[#17223B] p-5 text-white">
                         <div className="text-[10px] font-bold tracking-wider text-slate-400 uppercase mb-3">
-                          DỰ TÍNH CƯỚC PHÍ · VẬN ĐƠN
+                          {locale === 'en' ? 'ESTIMATED FREIGHT · WAYBILL' : 'DỰ TÍNH CƯỚC PHÍ · VẬN ĐƠN'}
                         </div>
 
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-xl font-black">{origin}</div>
                             <div className="text-[11px] text-slate-400">
-                              Nơi gửi
+                              {t('departureLocationText')}
                             </div>
                           </div>
 
@@ -2494,7 +2518,7 @@ function SendFreightContent() {
                               {destination}
                             </div>
                             <div className="text-[11px] text-slate-400">
-                              Nơi nhận
+                              {t('destinationLocationText')}
                             </div>
                           </div>
                         </div>
@@ -2520,7 +2544,7 @@ function SendFreightContent() {
                                     ? date.includes('-')
                                       ? date.split('-').reverse().join('/')
                                       : date
-                                    : 'Gửi linh hoạt (Hạn 72h)'}
+                                    : (locale === 'en' ? 'Flexible dispatch (72h limit)' : 'Gửi linh hoạt (Hạn 72h)')}
                                 </span>
                               </div>
                             </div>
@@ -2548,7 +2572,7 @@ function SendFreightContent() {
                         {calculatedPricing.serviceFee > 0 && (
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-slate-500">
-                              Phụ phí bảo quản hàng
+                              {t('surchargePreservation')}
                             </span>
                             <span className="font-bold text-slate-900">
                               +
@@ -2562,7 +2586,7 @@ function SendFreightContent() {
 
                         <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between">
                           <span className="text-sm font-extrabold text-slate-900">
-                            Tổng cước phí:
+                            {t('provisionalFreightFee')}
                           </span>
                           <span className="text-xl font-black text-[#EF4444]">
                             {quote
@@ -2588,7 +2612,7 @@ function SendFreightContent() {
                             {senderPointId && (
                               <div className="flex items-start gap-1">
                                 <span className="font-bold text-slate-700 shrink-0">
-                                  Điểm gửi:
+                                  {t('dropoffStationColon')}
                                 </span>
                                 <span className="text-slate-600 truncate">
                                   {
@@ -2602,7 +2626,7 @@ function SendFreightContent() {
                             {receiverPointId && (
                               <div className="flex items-start gap-1">
                                 <span className="font-bold text-slate-700 shrink-0">
-                                  Điểm nhận:
+                                  {t('pickupStationColon')}
                                 </span>
                                 <span className="text-slate-600 truncate">
                                   {
@@ -2616,7 +2640,7 @@ function SendFreightContent() {
                             {receiverCccd.trim() && (
                               <div className="flex items-center gap-1">
                                 <span className="font-bold text-slate-700 shrink-0">
-                                  CCCD nhận:
+                                  {t('cccdReceiverColon')}
                                 </span>
                                 <span className="font-mono text-slate-800 font-semibold">
                                   {receiverCccd.trim()}
@@ -2628,7 +2652,7 @@ function SendFreightContent() {
                         {/* Hình thức thanh toán cước */}
                         <div className="pt-3 border-t border-slate-100 space-y-2">
                           <span className="text-xs font-bold text-slate-800 block">
-                            Hình thức thanh toán cước
+                            {t('paymentMethodHeading')}
                           </span>
                           <div className="space-y-1.5">
                             <label
@@ -2650,11 +2674,10 @@ function SendFreightContent() {
                               />
                               <div>
                                 <span className="font-bold text-slate-900">
-                                  Người gửi thanh toán
+                                  {t('senderPaysOption')}
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                                  Thanh toán trực tiếp tại quầy khi bàn giao
-                                  kiện hàng.
+                                  {t('senderPaysOptionDesc')}
                                 </p>
                               </div>
                             </label>
@@ -2678,11 +2701,10 @@ function SendFreightContent() {
                               />
                               <div>
                                 <span className="font-bold text-slate-900">
-                                  Người nhận thanh toán
+                                  {t('receiverPaysOption')}
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                                  Thu cước tại bến đích khi người nhận đến lấy
-                                  hàng.
+                                  {t('receiverPaysOptionDesc')}
                                 </p>
                               </div>
                             </label>
@@ -2701,14 +2723,13 @@ function SendFreightContent() {
                             className="w-full h-12 bg-[#FF7D42] hover:bg-[#F06A2D] text-white font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm cursor-pointer"
                           >
                             <span>
-                              {isSubmitting ? 'Đang tạo...' : 'Tạo mã vận đơn'}
+                              {isSubmitting ? t('creatingWaybill') : t('createWaybillButton')}
                             </span>
                             <ArrowRight className="w-4 h-4" />
                           </button>
 
                           <p className="text-[11px] text-center text-slate-400 mt-2.5 leading-tight">
-                            Sau khi tạo vận đơn, mang kiện hàng ra bưu cục nhà
-                            xe đã chọn để gửi.
+                            {t('createWaybillNotice')}
                           </p>
                         </div>
                       </div>
@@ -2727,12 +2748,10 @@ function SendFreightContent() {
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
               <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                <Search className="w-5 h-5 text-[#0060c4]" /> Tra cứu trạng thái
-                đơn gửi hàng
+                <Search className="w-5 h-5 text-[#0060c4]" /> {locale === 'en' ? 'Track Shipment Status' : 'Tra cứu trạng thái đơn gửi hàng'}
               </h2>
               <p className="text-xs text-slate-500 mb-6">
-                Nhập mã vận đơn (VD: FUTA-VD-...) và số điện thoại người gửi
-                hoặc người nhận để xem chi tiết bến nhận và trạng thái đơn hàng.
+                {locale === 'en' ? 'Enter waybill code (e.g. FUTA-VD-...) and sender/receiver phone number to view destination station and shipment status.' : 'Nhập mã vận đơn (VD: FUTA-VD-...) và số điện thoại người gửi hoặc người nhận để xem chi tiết bến nhận và trạng thái đơn hàng.'}
               </p>
 
               <form onSubmit={handleLookup} className="space-y-4">
@@ -2745,7 +2764,7 @@ function SendFreightContent() {
 
                 <div>
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
-                    Mã vận đơn <span className="text-rose-500">*</span>
+                    {t('lookupCodeLabel')} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -2760,7 +2779,7 @@ function SendFreightContent() {
 
                 <div>
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
-                    Số điện thoại người gửi hoặc người nhận{' '}
+                    {t('lookupPhoneLabel')}{' '}
                     <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -2791,7 +2810,7 @@ function SendFreightContent() {
                     className="w-full sm:w-auto px-10 h-12 bg-[#f05123] hover:bg-[#ea4a18] active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-full transition-all shadow-md shadow-[#f05123]/25 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Search className="w-4 h-4 shrink-0" />
-                    <span>{isLookingUp ? 'Đang tra cứu...' : 'Tra cứu vận đơn'}</span>
+                    <span>{isLookingUp ? t('lookingUp') : t('lookupButton')}</span>
                   </button>
                 </div>
               </form>
@@ -2811,7 +2830,7 @@ function SendFreightContent() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
                     <div>
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        Mã vận đơn bưu kiện
+                        {locale === 'en' ? 'Parcel Waybill Code' : 'Mã vận đơn bưu kiện'}
                       </span>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xl sm:text-2xl font-black font-mono text-[#0060c4]">
@@ -2821,7 +2840,7 @@ function SendFreightContent() {
                           type="button"
                           onClick={() => copyToClipboard(lookupResult.waybillCode)}
                           className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                          title="Sao chép mã vận đơn"
+                          title={locale === 'en' ? 'Copy waybill code' : 'Sao chép mã vận đơn'}
                         >
                           {copiedCode ? (
                             <Check className="w-4 h-4 text-emerald-600" />
@@ -2849,15 +2868,15 @@ function SendFreightContent() {
                           <Clock className="w-3.5 h-3.5 text-amber-700 animate-pulse" />
                         )}
                         {lookupResult.status === 'MOI_TAO'
-                          ? 'Chờ mang hàng ra bến'
+                          ? t('statusNew')
                           : lookupResult.status === 'DA_TIEP_NHAN'
-                            ? 'Đã tiếp nhận tại quầy bến xe'
+                            ? t('statusReceived')
                             : lookupResult.status === 'DANG_VAN_CHUYEN'
-                              ? 'Đang trên xe vận chuyển'
+                              ? t('statusInTransit')
                               : lookupResult.status === 'DA_GIAO'
-                                ? 'Đã giao hàng thành công'
+                                ? t('statusDelivered')
                                 : lookupResult.status === 'DA_HUY'
-                                  ? 'Đã hủy'
+                                  ? t('statusCancelled')
                                   : lookupResult.status}
                       </span>
                     </div>
@@ -3038,7 +3057,7 @@ function SendFreightContent() {
                       </div>
                       {currentShipment && (
                         <div className="mt-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700">
-                          <span className="font-bold">Người gửi: </span>
+                          <span className="font-bold">{locale === 'en' ? 'Sender: ' : 'Người gửi: '}</span>
                           <span>{currentShipment.sender.fullName} ({currentShipment.sender.phoneNumber})</span>
                         </div>
                       )}
@@ -3056,7 +3075,7 @@ function SendFreightContent() {
                       </div>
                       {currentShipment && (
                         <div className="mt-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700">
-                          <span className="font-bold">Người nhận: </span>
+                          <span className="font-bold">{locale === 'en' ? 'Receiver: ' : 'Người nhận: '}</span>
                           <span>{currentShipment.receiver.fullName} ({currentShipment.receiver.phoneNumber})</span>
                         </div>
                       )}
@@ -3066,14 +3085,14 @@ function SendFreightContent() {
                   {/* 6. Chuyến xe vận chuyển */}
                   <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-100 text-xs">
                     <span className="text-slate-500 font-semibold block mb-0.5">
-                      Chuyến xe vận chuyển:
+                      {locale === 'en' ? 'Bus Departure Trip:' : 'Chuyến xe vận chuyển:'}
                     </span>
                     <div className="font-extrabold text-slate-900 text-sm">
                       {lookupResult.carrier.name} • {lookupResult.route.origin} → {lookupResult.route.destination}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-1.5 text-slate-600">
                       <div>
-                        Khởi hành:{' '}
+                        {locale === 'en' ? 'Departure: ' : 'Khởi hành: '}
                         <strong>
                           {formatIsoTime(lookupResult.scheduledDepartureAt)} ngày{' '}
                           {formatIsoDate(lookupResult.scheduledDepartureAt)}
@@ -3081,7 +3100,7 @@ function SendFreightContent() {
                       </div>
                       {lookupResult.estimatedArrivalAt && (
                         <div>
-                          Dự kiến đến:{' '}
+                          {locale === 'en' ? 'Estimated Arrival: ' : 'Dự kiến đến: '}
                           <strong>
                             {formatIsoTime(lookupResult.estimatedArrivalAt)} ngày{' '}
                             {formatIsoDate(lookupResult.estimatedArrivalAt)}
@@ -3242,7 +3261,7 @@ function SendFreightContent() {
                 <div className="flex items-center gap-2 text-rose-600">
                   <Trash2 className="w-5 h-5" />
                   <h3 className="text-base font-black text-slate-900">
-                    Xác nhận hủy đơn gửi hàng
+                    {t('cancelWaybillTitle')}
                   </h3>
                 </div>
                 <button
@@ -3264,13 +3283,13 @@ function SendFreightContent() {
                   ({lookupResult.route.origin} → {lookupResult.route.destination}).
                 </p>
                 <p className="text-xs text-slate-500">
-                  Lưu ý: Sau khi hủy, mã vận đơn này sẽ không còn hiệu lực để mang hàng ra bến gửi.
+                  {t('cancelWaybillNotice')}
                 </p>
               </div>
 
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-slate-700 uppercase">
-                  Lý do hủy đơn:
+                  {t('cancelReasonPrompt')}
                 </label>
                 <div className="space-y-1.5">
                   {[
@@ -3296,7 +3315,7 @@ function SendFreightContent() {
                         className="accent-rose-600"
                       />
                       <span>
-                        {option === 'OTHER' ? 'Lý do khác' : option}
+                        {option === 'OTHER' ? t('cancelReasonOther') : (locale === 'en' ? (option === 'Đặt nhầm thông tin người gửi/nhận' ? 'Entered incorrect sender/receiver info' : option === 'Thay đổi kế hoạch gửi hàng' ? 'Change of shipping plans' : option === 'Muốn đổi nhà xe hoặc điểm gửi khác' ? 'Want to switch operator or station' : option) : option)}
                       </span>
                     </label>
                   ))}
@@ -3306,7 +3325,7 @@ function SendFreightContent() {
                     type="text"
                     value={customCancelReason}
                     onChange={(e) => setCustomCancelReason(e.target.value)}
-                    placeholder="Nhập lý do hủy đơn..."
+                    placeholder={t('cancelReasonPlaceholder')}
                     maxLength={200}
                     className="w-full mt-2 px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 focus:border-rose-500 focus:outline-none"
                   />
@@ -3396,33 +3415,33 @@ function SendFreightContent() {
                     {
                       step: '1',
                       icon: Receipt,
-                      title: 'Chuẩn bị Mã vận đơn & SĐT',
-                      desc: 'Lấy Mã vận đơn (VD: FUTA-VD-... được cấp khi tạo đơn gửi hàng) và Số điện thoại người gửi hoặc người nhận.',
-                      tag: 'Thông tin xác thực',
+                      title: locale === 'en' ? 'Prepare Waybill Code & Phone' : 'Chuẩn bị Mã vận đơn & SĐT',
+                      desc: locale === 'en' ? 'Have your Waybill code (e.g. FUTA-VD-... issued upon order creation) and sender/receiver phone number ready.' : 'Lấy Mã vận đơn (VD: FUTA-VD-... được cấp khi tạo đơn gửi hàng) và Số điện thoại người gửi hoặc người nhận.',
+                      tag: locale === 'en' ? 'Verification' : 'Thông tin xác thực',
                       bg: 'bg-blue-50 text-blue-600 border-blue-200',
                     },
                     {
                       step: '2',
                       icon: Search,
-                      title: 'Nhập thông tin tra cứu',
-                      desc: 'Điền chính xác Mã vận đơn và Số điện thoại người gửi hoặc người nhận vào biểu mẫu, sau đó nhấn "Tra cứu vận đơn".',
-                      tag: 'Tra cứu tức thì',
+                      title: locale === 'en' ? 'Enter Lookup Details' : 'Nhập thông tin tra cứu',
+                      desc: locale === 'en' ? 'Enter accurate Waybill code and sender or receiver phone number in the form, then click "Track Waybill".' : 'Điền chính xác Mã vận đơn và Số điện thoại người gửi hoặc người nhận vào biểu mẫu, sau đó nhấn "Tra cứu vận đơn".',
+                      tag: locale === 'en' ? 'Instant Lookup' : 'Tra cứu tức thì',
                       bg: 'bg-emerald-50 text-emerald-600 border-emerald-200',
                     },
                     {
                       step: '3',
                       icon: MapPin,
-                      title: 'Theo dõi lộ trình & Bến nhận',
-                      desc: 'Xem trạng thái xử lý kiện hàng (Mới tạo, Đã nhận hàng, Đang vận chuyển, Đã đến bến nhận, Đã giao hàng), thông tin chuyến xe và cước phí.',
-                      tag: 'Cập nhật thời gian thực',
+                      title: locale === 'en' ? 'Track Journey & Destination' : 'Theo dõi lộ trình & Bến nhận',
+                      desc: locale === 'en' ? 'View package handling status (Created, Received, In Transit, Arrived, Delivered), bus trip details and freight fee.' : 'Xem trạng thái xử lý kiện hàng (Mới tạo, Đã nhận hàng, Đang vận chuyển, Đã đến bến nhận, Đã giao hàng), thông tin chuyến xe và cước phí.',
+                      tag: locale === 'en' ? 'Real-time' : 'Cập nhật thời gian thực',
                       bg: 'bg-amber-50 text-amber-700 border-amber-200',
                     },
                     {
                       step: '4',
                       icon: RotateCcw,
-                      title: 'Quản lý & Hủy đơn trực tuyến',
-                      desc: 'Khi đơn gửi hàng đang ở trạng thái Mới tạo (chưa bàn giao kiện hàng tại quầy nhà xe), bạn có thể hủy đơn trực tiếp trên màn hình tra cứu.',
-                      tag: 'Tiện ích trực tuyến',
+                      title: locale === 'en' ? 'Manage & Cancel Online' : 'Quản lý & Hủy đơn trực tuyến',
+                      desc: locale === 'en' ? 'When the shipment is in Created status (before physical handover at station), you can cancel the order directly on screen.' : 'Khi đơn gửi hàng đang ở trạng thái Mới tạo (chưa bàn giao kiện hàng tại quầy nhà xe), bạn có thể hủy đơn trực tiếp trên màn hình tra cứu.',
+                      tag: locale === 'en' ? 'Online Utility' : 'Tiện ích trực tuyến',
                       bg: 'bg-rose-50 text-rose-600 border-rose-200',
                     },
                   ].map((item) => {
@@ -3455,7 +3474,7 @@ function SendFreightContent() {
                             {item.tag}
                           </span>
                           <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                            ✓ Trực tuyến
+                            {locale === 'en' ? '✓ Online' : '✓ Trực tuyến'}
                           </span>
                         </div>
                       </div>
@@ -3466,25 +3485,25 @@ function SendFreightContent() {
                 <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-4">
                   <h4 className="text-xs font-black text-[#0060c4] uppercase tracking-wide flex items-center gap-1.5 mb-2">
                     <ShieldCheck className="w-4 h-4 text-[#0060c4]" />
-                    Lưu ý khi gửi & nhận hàng tại nhà xe
+                    {locale === 'en' ? 'Notes on dropping off and picking up parcels' : 'Lưu ý khi gửi & nhận hàng tại nhà xe'}
                   </h4>
                   <ul className="text-xs text-slate-700 space-y-1.5 font-medium">
                     <li className="flex items-start gap-1.5">
                       <span className="text-[#f05123] font-bold">•</span>
                       <span>
-                        Cả <strong>người gửi</strong> và <strong>người nhận</strong> đều có thể dùng số điện thoại của mình kèm Mã vận đơn để tra cứu trạng thái kiện hàng.
+                        {locale === 'en' ? <>Both <strong>sender</strong> and <strong>receiver</strong> can use their phone number with the Waybill code to track package status.</> : <>Cả <strong>người gửi</strong> và <strong>người nhận</strong> đều có thể dùng số điện thoại của mình kèm Mã vận đơn để tra cứu trạng thái kiện hàng.</>}
                       </span>
                     </li>
                     <li className="flex items-start gap-1.5">
                       <span className="text-[#f05123] font-bold">•</span>
                       <span>
-                        Sau khi tạo mã vận đơn trực tuyến, quý khách vui lòng mang hàng ra bưu cục/bến xe đã chọn trong vòng <strong>72 giờ</strong> để nhân viên xác nhận.
+                        {locale === 'en' ? <>After creating a waybill online, please drop off the package at the selected station within <strong>72 hours</strong> for staff confirmation.</> : <>Sau khi tạo mã vận đơn trực tuyến, quý khách vui lòng mang hàng ra bưu cục/bến xe đã chọn trong vòng <strong>72 giờ</strong> để nhân viên xác nhận.</>}
                       </span>
                     </li>
                     <li className="flex items-start gap-1.5">
                       <span className="text-[#f05123] font-bold">•</span>
                       <span>
-                        Khi kiện hàng chuyển sang trạng thái <strong>Đã đến bến nhận</strong>, người nhận vui lòng mang theo giấy tờ tùy thân (CCCD) và đọc mã vận đơn để nhận hàng.
+                        {locale === 'en' ? <>When the parcel reaches <strong>Arrived at Destination</strong>, the receiver should bring their ID card (CCCD) and state the waybill code to collect.</> : <>Khi kiện hàng chuyển sang trạng thái <strong>Đã đến bến nhận</strong>, người nhận vui lòng mang theo giấy tờ tùy thân (CCCD) và đọc mã vận đơn để nhận hàng.</>}
                       </span>
                     </li>
                   </ul>
@@ -3496,7 +3515,7 @@ function SendFreightContent() {
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
                   <Phone className="w-4 h-4 text-[#f05123]" />
                   <span>
-                    Tổng đài CSKH 24/7: <strong className="text-slate-900">1900 6067</strong>
+                    {locale === 'en' ? '24/7 Customer Care Hotline:' : 'Tổng đài CSKH 24/7:'} <strong className="text-slate-900">1900 6067</strong>
                   </span>
                 </div>
                 <button
@@ -3525,12 +3544,11 @@ function SendFreightContent() {
               <div className="flex items-center gap-2.5 text-amber-600 mb-3">
                 <AlertCircle className="w-6 h-6" />
                 <h3 className="text-base font-black text-slate-900">
-                  Thông tin chưa hoàn tất
+                  {t('incompleteInfoTitle')}
                 </h3>
               </div>
               <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-                Vui lòng điền đầy đủ các thông tin bắt buộc trước khi tạo mã vận
-                đơn.
+                {t('incompleteInfoNoticeText')}
               </p>
               {Object.values(fieldErrors).length > 0 && (
                 <div className="mb-5 max-h-44 overflow-y-auto space-y-1.5 bg-amber-50/70 p-3 rounded-xl border border-amber-200/80 text-xs text-amber-900">
@@ -3575,18 +3593,17 @@ function SendFreightContent() {
                   <CheckCircle className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-black text-slate-900">
-                  Tạo đơn gửi hàng thành công!
+                  {t('waybillCreatedHeading')}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Đơn đã được tiếp nhận trên hệ thống. Quý khách vui lòng lưu mã
-                  vận đơn hoặc quét mã QR dưới đây khi gửi hàng.
+                  {t('waybillCreatedNotice')}
                 </p>
               </div>
 
               {/* Waybill Code Card */}
               <div className="p-4 rounded-xl bg-orange-50/70 border border-orange-200 text-center mb-4">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-orange-700">
-                  Mã vận đơn của bạn
+                  {t('yourWaybillCode')}
                 </div>
                 <div className="text-2xl font-mono font-black text-[#F06A2D] my-1 tracking-wide break-all">
                   {createdSuccessShipment.waybillCode}
@@ -3605,12 +3622,12 @@ function SendFreightContent() {
                   {copiedCode ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Đã sao chép</span>
+                      <span>{t('copied')}</span>
                     </>
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5" />
-                      <span>Sao chép mã</span>
+                      <span>{t('copyCode')}</span>
                     </>
                   )}
                 </button>
@@ -3629,14 +3646,14 @@ function SendFreightContent() {
                   />
                 </div>
                 <span className="text-[11px] text-slate-500 font-medium">
-                  Đưa mã QR này cho nhân viên tại bến để cân đo hàng nhanh chóng
+                  {t('qrScanStationNotice')}
                 </span>
               </div>
 
               {/* Chi tiết đơn */}
               <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3 mb-5">
                 <div className="flex justify-between items-baseline py-1 border-b border-dashed border-slate-100">
-                  <span className="text-slate-500">Cước phí tạm tính:</span>
+                  <span className="text-slate-500">{t('provisionalFeeLabel')}</span>
                   <span className="font-extrabold text-base text-[#EF4444]">
                     {createdSuccessShipment.pricing.totalFee.toLocaleString(
                       'vi-VN',
@@ -3645,28 +3662,28 @@ function SendFreightContent() {
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-dashed border-slate-100">
-                  <span className="text-slate-500">Hình thức thanh toán:</span>
+                  <span className="text-slate-500">{t('paymentMethodLabel')}</span>
                   <span className="font-bold text-slate-800">
                     {paymentOption === 'RECEIVER_COUNTER'
-                      ? 'Người nhận thanh toán khi lấy hàng'
-                      : 'Người gửi thanh toán tại quầy'}
+                      ? t('receiverPaysOption')
+                      : t('senderPaysOption')}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-dashed border-slate-100">
-                  <span className="text-slate-500">Nhà xe vận chuyển:</span>
+                  <span className="text-slate-500">{t('busCompanyLabel')}</span>
                   <span className="font-bold text-slate-800">
                     {createdSuccessShipment.trip.busCompany.name}
                   </span>
                 </div>
                 <div className="py-1">
-                  <span className="text-slate-500 block">Điểm gửi hàng:</span>
+                  <span className="text-slate-500 block">{t('dropoffStationColon')}</span>
                   <span className="font-semibold text-slate-800 block">
                     {createdSuccessShipment.pickupPoint.name} —{' '}
                     {createdSuccessShipment.pickupPoint.address}
                   </span>
                 </div>
                 <div className="py-1">
-                  <span className="text-slate-500 block">Điểm nhận hàng:</span>
+                  <span className="text-slate-500 block">{t('pickupStationColon')}</span>
                   <span className="font-semibold text-slate-800 block">
                     {createdSuccessShipment.dropoffPoint.name} —{' '}
                     {createdSuccessShipment.dropoffPoint.address}
@@ -3723,7 +3740,7 @@ function SendFreightContent() {
                   }}
                   className="w-full py-2.5 px-3 rounded-xl bg-[#FF7D42] text-white font-bold text-xs hover:bg-[#F06A2D] transition-colors cursor-pointer shadow-sm"
                 >
-                  Tạo đơn gửi mới
+                  {locale === 'en' ? 'Create New Shipment' : 'Tạo đơn gửi mới'}
                 </button>
               </div>
             </div>
@@ -3735,11 +3752,12 @@ function SendFreightContent() {
 }
 
 export default function SendFreightPage() {
+  const t = useTranslations('shipments');
   return (
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center">
-          Gửi hàng theo nhà xe - Đang tải...
+          {t('loadingPage')}
         </div>
       }
     >

@@ -199,7 +199,7 @@ export function useReviews() {
         const message =
           err instanceof ReviewApiError
             ? err.message
-            : 'Đã xảy ra lỗi khi tải danh sách đánh giá.';
+            : 'An error occurred while loading reviews.';
         setError(message);
         toast.error(message);
       } finally {
@@ -260,7 +260,7 @@ export function useReviews() {
       const message =
         err instanceof ReviewApiError
           ? err.message
-          : 'Không thể cập nhật trạng thái đánh giá.';
+          : 'Unable to update review status.';
       toast.error(message);
     } finally {
       setModifyingStatus(false);
@@ -280,7 +280,7 @@ export function useReviews() {
   const handleSaveReply = async () => {
     if (!replyingReview) return;
     if (!replyText.trim()) {
-      toast.error('Vui lòng nhập nội dung phản hồi.');
+      toast.error('Please enter reply content.');
       return;
     }
     setSubmittingReply(true);
@@ -293,7 +293,7 @@ export function useReviews() {
       const message =
         err instanceof ReviewApiError
           ? err.message
-          : 'Không thể gửi phản hồi.';
+          : 'Unable to submit reply.';
       toast.error(message);
     } finally {
       setSubmittingReply(false);
@@ -312,7 +312,7 @@ export function useReviews() {
       const message =
         err instanceof ReviewApiError
           ? err.message
-          : 'Không thể xóa phản hồi.';
+          : 'Unable to delete reply.';
       toast.error(message);
     } finally {
       setSubmittingReply(false);

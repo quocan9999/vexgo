@@ -227,8 +227,8 @@ describe('Admin account management API', () => {
     const { phoneNumber, employeeCode } = uniqueIdentity();
     const account = await prisma.taiKhoan.create({
       data: {
-        hoTen: 'Nhân viên kiểm thử',
         soDienThoai: phoneNumber,
+        loaiTaiKhoan: 'QUAN_TRI',
         matKhau: 'not-a-real-login-hash',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
@@ -238,6 +238,7 @@ describe('Admin account management API', () => {
     await prisma.nhanVien.create({
       data: {
         maNhanVien: employeeCode,
+        hoTen: 'Nhân viên kiểm thử',
         trangThaiLamViec: 'DANG_LAM_VIEC',
         nhaXeId: firstCompanyId,
         taiKhoanId: account.taiKhoanId,
@@ -259,8 +260,8 @@ describe('Admin account management API', () => {
     const { phoneNumber } = uniqueIdentity();
     const account = await prisma.taiKhoan.create({
       data: {
-        hoTen: 'Tài khoản nền tảng kiểm thử',
         soDienThoai: phoneNumber,
+        loaiTaiKhoan: 'QUAN_TRI',
         matKhau: 'not-a-real-login-hash',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',

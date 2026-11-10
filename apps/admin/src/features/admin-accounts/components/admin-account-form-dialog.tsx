@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/action-button';
+import { useTranslations } from 'next-intl';
 import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
 import type { AdminRbacRole } from '@/features/platform-rbac/types/platform-rbac';
@@ -137,6 +138,8 @@ export function AdminAccountFormDialog({
   onClose: () => void;
   onSaved: (saved: AdminAccount) => void;
 }) {
+  const tAccounts = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
   const editing = account !== undefined;
   const idPrefix = editing
     ? `edit-admin-account-${account.accountId}`
@@ -177,7 +180,7 @@ export function AdminAccountFormDialog({
           message:
             error instanceof Error
               ? error.message
-              : 'Không thể tải nhà xe và danh mục vai trò.',
+              : tAccounts('loadError'),
         });
       });
 
@@ -216,18 +219,18 @@ export function AdminAccountFormDialog({
     const email = values.email.trim();
     const citizenId = values.citizenId.trim();
 
-    if (!fullName) errors.fullName = 'Vui lòng nhập họ và tên.';
+    if (!fullName) errors.fullName = tAccounts('validationFullNameRequired');
     else if (fullName.length > 100) {
-      errors.fullName = 'Họ và tên không được vượt quá 100 ký tự.';
+      errors.fullName = tAccounts('validationFullNameMaxLength');
     }
 
     if (!editing) {
       if (!/^\+84\d{9}$/.test(values.phoneNumber.trim())) {
-        errors.phoneNumber = 'Số điện thoại phải có dạng +84xxxxxxxxx.';
+        errors.phoneNumber = tAccounts('validationPhoneFormat');
       }
       const passwordBytes = new TextEncoder().encode(values.password).length;
       if (passwordBytes < 8 || passwordBytes > 72) {
-        errors.password = 'Mật khẩu phải dài từ 8 đến 72 byte.';
+        errors.password = tAccounts('validationPasswordLength');
       }
       const busCompanyId = Number(values.busCompanyId);
       if (
@@ -236,14 +239,14 @@ export function AdminAccountFormDialog({
         options.status !== 'success' ||
         !options.companies.some((company) => company.id === busCompanyId)
       ) {
-        errors.busCompanyId = 'Vui lòng chọn nhà xe hợp lệ.';
+        errors.busCompanyId = tAccounts('validationBusCompanyRequired');
       }
       const employeeCode = values.employeeCode.trim();
       if (employeeCode && employeeCode.length > 50) {
-        errors.employeeCode = 'Mã nhân viên không được vượt quá 50 ký tự.';
+        errors.employeeCode = tAccounts('validationEmployeeCodeMaxLength');
       }
       if (options.status !== 'success' || options.roles.length === 0) {
-        errors.roleNames = 'Chưa tải được vai trò nhà xe để gán.';
+        errors.roleNames = tAccounts('validationRolesNotLoaded');
       } else if (
         values.roleNames.length === 0 ||
         new Set(values.roleNames).size !== values.roleNames.length ||
@@ -252,27 +255,27 @@ export function AdminAccountFormDialog({
             !options.roles.some((role) => role.roleName === roleName),
         )
       ) {
-        errors.roleNames = 'Vui lòng chọn ít nhất một vai trò nhà xe.';
+        errors.roleNames = tAccounts('validationRolesRequired');
       }
     }
 
     if (values.position.trim().length > 100) {
-      errors.position = 'Chức vụ không được vượt quá 100 ký tự.';
+      errors.position = tAccounts('validationPositionMaxLength');
     }
     if (values.joinedAt && !isValidDate(values.joinedAt)) {
-      errors.joinedAt = 'Ngày vào làm không hợp lệ.';
+      errors.joinedAt = tAccounts('validationJoinedAtInvalid');
     }
     if (values.dateOfBirth && !isValidDate(values.dateOfBirth)) {
-      errors.dateOfBirth = 'Ngày sinh không hợp lệ.';
+      errors.dateOfBirth = tAccounts('validationDateOfBirthInvalid');
     }
     if (
       email &&
       (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 150)
     ) {
-      errors.email = 'Email không hợp lệ hoặc vượt quá 150 ký tự.';
+      errors.email = tAccounts('validationEmailInvalid');
     }
     if (citizenId && !/^\d{12}$/.test(citizenId)) {
-      errors.citizenId = 'CCCD phải gồm đúng 12 chữ số.';
+      errors.citizenId = tAccounts('validationCitizenIdFormat');
     }
 
     return errors;
@@ -315,8 +318,8 @@ export function AdminAccountFormDialog({
           } satisfies CreateAdminAccountInput);
       toast.success(
         editing
-          ? 'Đã cập nhật thông tin tài khoản Admin.'
-          : 'Đã tạo tài khoản Admin.',
+          ? tAccounts('updatedSuccess')
+          : tAccounts('createdSuccess'),
       );
       onSaved(saved);
     } catch (requestError: unknown) {
@@ -332,16 +335,16 @@ export function AdminAccountFormDialog({
         setFieldErrors(serverErrors);
         setFormError(
           Object.keys(serverErrors).length > 0
-            ? 'Vui lòng kiểm tra lại các trường được đánh dấu.'
+            ? tAccounts('checkMarkedFields')
             : requestError.message,
         );
       } else {
         setFormError(
           requestError instanceof TypeError
-            ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+            ? tAccounts('networkError')
             : requestError instanceof Error
               ? requestError.message
-              : 'Không thể lưu tài khoản Admin. Vui lòng thử lại.',
+              : tAccounts('cannotSave'),
         );
       }
     } finally {
@@ -392,11 +395,11 @@ export function AdminAccountFormDialog({
       busy={submitting}
       description={
         editing
-          ? 'Cập nhật thông tin cá nhân. Số điện thoại, nhà xe, mã nhân viên và vai trò được quản lý riêng.'
-          : 'Tạo tài khoản nhân viên gắn với một nhà xe và ít nhất một vai trò nhà xe.'
+          ? tAccounts('editDesc')
+          : tAccounts('createDesc')
       }
       preventDismiss={submitting}
-      title={editing ? 'Chỉnh sửa tài khoản Admin' : 'Thêm tài khoản Admin'}
+      title={editing ? tAccounts('editAccount') : tAccounts('createAccount')}
       onClose={closeDialog}
       size="xl"
     >
@@ -411,7 +414,7 @@ export function AdminAccountFormDialog({
               type="button"
               variant="outline"
             >
-              Hủy
+              {tCommon('cancel')}
             </Button>
             <Button
               disabled={
@@ -431,23 +434,23 @@ export function AdminAccountFormDialog({
                 />
               )}
               {submitting
-                ? 'Đang lưu…'
+                ? tAccounts('savingRoles')
                 : editing
-                  ? 'Lưu thay đổi'
-                  : 'Tạo tài khoản'}
+                  ? tAccounts('saveChanges')
+                  : tAccounts('createButton')}
             </Button>
           </div>
         }
       >
         {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
-        {textField('fullName', 'Họ và tên', 'text', true)}
+        {textField('fullName', tAccounts('accountName'), 'text', true)}
         {!editing && (
           <>
-            {textField('phoneNumber', 'Số điện thoại', 'tel', true)}
-            {textField('password', 'Mật khẩu', 'password', true)}
+            {textField('phoneNumber', tAccounts('accountPhone'), 'tel', true)}
+            {textField('password', tAccounts('password'), 'password', true)}
             <UiField data-invalid={Boolean(fieldErrors.busCompanyId)}>
               <FieldLabel htmlFor={`${idPrefix}-busCompanyId`}>
-                Nhà xe <span aria-hidden>*</span>
+                {tAccounts('colCompany')} <span aria-hidden>*</span>
               </FieldLabel>
               <Select
                 disabled={
@@ -461,7 +464,7 @@ export function AdminAccountFormDialog({
                 value={values.busCompanyId || null}
               >
                 <SelectTrigger
-                  aria-label="Nhà xe"
+                  aria-label={tAccounts('colCompany')}
                   aria-required="true"
                   aria-invalid={Boolean(fieldErrors.busCompanyId)}
                   aria-describedby={
@@ -471,13 +474,13 @@ export function AdminAccountFormDialog({
                   }
                   id={`${idPrefix}-busCompanyId`}
                 >
-                  <SelectValue placeholder="Chọn nhà xe">
+                  <SelectValue placeholder={tAccounts('selectCompany')}>
                     {options.status === 'success'
                       ? (options.companies.find(
                           (company) =>
                             String(company.id) === values.busCompanyId,
-                        )?.label ?? 'Chọn nhà xe')
-                      : 'Chọn nhà xe'}
+                        )?.label ?? tAccounts('selectCompany'))
+                      : tAccounts('selectCompany')}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -503,17 +506,17 @@ export function AdminAccountFormDialog({
                   className="text-xs text-muted-foreground"
                   role="status"
                 >
-                  Đang tải danh sách nhà xe…
+                  {tAccounts('loadingCompanies')}
                 </p>
               )}
             </UiField>
-            {/* Mã nhân viên được hệ thống tự sinh UUID v4 */}
+            {/* Employee code is auto-generated by the system as UUID v4 */}
             <FieldSet
               aria-invalid={Boolean(fieldErrors.roleNames)}
               className="gap-3"
             >
               <FieldLegend>
-                Vai trò nhà xe <span aria-hidden>*</span>
+                {tAccounts('tenantRolesLegend')} <span aria-hidden>*</span>
               </FieldLegend>
               <FieldGroup className="gap-2">
                 {options.status === 'success' &&
@@ -554,12 +557,12 @@ export function AdminAccountFormDialog({
             </FieldSet>
             {options.status === 'success' && options.roles.length === 0 && (
               <ResourceNotice kind="error">
-                Danh mục chưa có vai trò nhà xe hợp lệ.
+                {tAccounts('noRolesAvailable')}
               </ResourceNotice>
             )}
             {options.status === 'success' && options.companies.length === 0 && (
               <ResourceNotice kind="error">
-                Chưa có nhà xe để tạo tài khoản.
+                {tAccounts('noCompaniesAvailable')}
               </ResourceNotice>
             )}
             {options.status === 'error' && (
@@ -571,18 +574,18 @@ export function AdminAccountFormDialog({
                     type="button"
                     variant="outline"
                   >
-                    Tải lại danh mục
+                    {tAccounts('reloadCatalog')}
                   </Button>
                 </div>
               </ResourceNotice>
             )}
           </>
         )}
-        {textField('position', 'Chức vụ')}
-        {textField('joinedAt', 'Ngày vào làm', 'date')}
-        {textField('dateOfBirth', 'Ngày sinh', 'date')}
-        {textField('email', 'Email', 'email')}
-        {textField('citizenId', 'CCCD')}
+        {textField('position', tAccounts('position'))}
+        {textField('joinedAt', tAccounts('joinedAt'), 'date')}
+        {textField('dateOfBirth', tAccounts('dateOfBirth'), 'date')}
+        {textField('email', tAccounts('accountEmail'), 'email')}
+        {textField('citizenId', tAccounts('citizenId'))}
       </ResourceModalForm>
     </ResourceModalDialog>
   );
