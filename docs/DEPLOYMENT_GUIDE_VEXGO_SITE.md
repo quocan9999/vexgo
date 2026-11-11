@@ -101,6 +101,16 @@ Khi màn hình hiện `[PASS]` toàn bộ 14 bảng dữ liệu là database Aiv
 | `TEXTBEE_DEVICE_ID` | *(ID thiết bị Android hiển thị trên TextBee.dev)* |
 | `SEPAY_ACCOUNT_NUMBER` | *(Số tài khoản ngân hàng nhận tiền SePay của bạn)* |
 | `SEPAY_WEBHOOK_SECRET` | *(Chuỗi bí mật ngẫu nhiên >= 32 ký tự)* |
+| `CLOUDINARY_ENABLED` | `true` |
+| `CLOUDINARY_CLOUD_NAME` | *(Cloud Name trên Cloudinary của bạn)* |
+| `CLOUDINARY_API_KEY` | *(API Key Cloudinary)* |
+| `CLOUDINARY_API_SECRET` | *(API Secret Cloudinary)* |
+| `SMTP_ENABLED` | `true` |
+| `SMTP_HOST` | *(Ví dụ: smtp.gmail.com)* |
+| `SMTP_PORT` | `465` *(hoặc 587)* |
+| `SMTP_USER` | *(Email gửi)* |
+| `SMTP_PASSWORD` | *(Mật khẩu ứng dụng App Password của email)* |
+| `SMTP_FROM` | *(Email hoặc Tên hiển thị người gửi, ví dụ: VexGo <no-reply@vexgo.site>)* |
 | `PAYMENT_DEMO_MODE` | `false` *(hoặc `true` nếu muốn bật nút xác nhận thanh toán demo)* |
 
 6. Nhấn **Deploy Web Service**. Khi build xong, truy cập thử `https://<ten-service-cua-ban>.onrender.com/api/v1/health` sẽ thấy trả về:
