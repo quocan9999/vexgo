@@ -8,25 +8,25 @@ import {
   MapPin,
   Phone,
   Mail,
-  Bus,
 } from 'lucide-react';
+import { VexGoMark } from '@/components/ui/vexgo-logo';
 
 export const CustomerFooter: React.FC = () => {
   const t = useTranslations('footer');
 
   return (
-    <footer className="bg-[#E60012] text-white/80 pt-14 pb-8 border-t border-[#CC0010] font-sans">
+    <footer className="bg-[#E8272B] text-white/90 pt-14 pb-8 border-t border-[#CC1D20] font-sans">
       <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-white/15">
           {/* Cột 1: Thông tin thương hiệu */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white">
-                <Bus className="w-5 h-5 text-white" />
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="transition-transform group-hover:scale-105">
+                <VexGoMark size={32} variant="red" />
               </div>
-              <div className="text-xl font-extrabold tracking-tight">
-                <span className="text-white">Vex</span>
-                <span className="text-amber-400">Go</span>
+              <div className="text-2xl font-extrabold tracking-[-0.03em]">
+                <span className="text-white">vex</span>
+                <b className="font-extrabold text-[#FFB81C]">go</b>
               </div>
             </Link>
             <p className="text-xs text-white/80 leading-relaxed">

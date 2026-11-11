@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/action-button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { AdminLanguageSwitcher } from '@/components/admin/admin-language-switcher';
+import { VexGoMark } from '@/components/ui/vexgo-logo';
 import { useTranslations } from 'next-intl';
 
 export function AdminLoginForm() {
@@ -84,11 +85,15 @@ export function AdminLoginForm() {
   return (
     <main className="admin-ui login-layout">
       <section className="login-showcase" aria-label="VexGo Admin">
-        <Link aria-label="VexGo Admin" className="login-brand" href="/login">
-          <span className="login-brand-mark" aria-hidden="true">V</span>
-          <span>
-            <strong>VexGo</strong>
-            <small>ADMIN</small>
+        <Link aria-label="VexGo Admin" className="login-brand group" href="/login">
+          <span className="flex-shrink-0 transition-transform group-hover:scale-105" aria-hidden="true">
+            <VexGoMark size={42} variant="red" />
+          </span>
+          <span className="flex flex-col">
+            <span className="text-[20px] font-extrabold tracking-[-0.03em] leading-tight text-white">
+              vex<b className="font-extrabold text-[#FFB81C]">go</b>
+            </span>
+            <small className="text-white/70 font-bold tracking-[0.08em] text-[10px]">ADMIN</small>
           </span>
         </Link>
 
