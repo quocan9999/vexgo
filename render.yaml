@@ -28,6 +28,10 @@ services:
         generateValue: true
       - key: SMS_PROVIDER
         value: console
+      - key: TEXTBEE_API_KEY
+        sync: false
+      - key: TEXTBEE_DEVICE_ID
+        sync: false
       - key: PAYMENT_DEMO_MODE
         value: 'false'
       - key: CLOUDINARY_ENABLED
