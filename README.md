@@ -1,250 +1,231 @@
-# VexGo
+# 🚍 VexGo — Nền Tảng Công Nghệ Quản Lý & Đặt Vé Xe Khách Trực Tuyến
 
-VexGo là nền tảng đặt vé xe khách trực tuyến tích hợp nhiều nhà xe.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/quocan9999/vexgo/main/apps/web/public/favicon.ico" alt="VexGo Logo" width="80" height="80" style="vertical-align: middle;" />
+</p>
 
-## Mô tả
+<p align="center">
+  <strong>Giải pháp chuyển đổi số toàn diện cho mạng lưới vận tải hành khách và hàng hóa liên tỉnh</strong>
+</p>
 
-VexGo hướng tới việc số hóa quy trình tìm kiếm chuyến xe, đặt vé và quản lý vận hành nhà xe trên một nền tảng thống nhất. Hệ thống được định hướng phục vụ hai nhóm người dùng chính:
+<p align="center">
+  <a href="https://vexgo.site"><img src="https://img.shields.io/badge/Live-vexgo.site-22c55e?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Site" /></a>
+  <a href="https://admin.vexgo.site"><img src="https://img.shields.io/badge/Admin-admin.vexgo.site-3b82f6?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Admin" /></a>
+  <a href="https://api.vexgo.site/api/v1/health"><img src="https://img.shields.io/badge/API-api.vexgo.site-a855f7?style=for-the-badge&logo=render&logoColor=white" alt="Live API" /></a>
+  <a href="https://github.com/quocan9999/vexgo"><img src="https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge" alt="Production Ready" /></a>
+</p>
 
-- **Khách hàng:** tìm kiếm chuyến xe, đặt và quản lý vé, thanh toán và sử dụng các dịch vụ liên quan.
-- **Quản trị viên và nhà xe:** quản lý người dùng, nhà xe, xe, tuyến, chuyến, vé và theo dõi số liệu vận hành.
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16.0-black?logo=next.js" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/NestJS-12.0-E0234E?logo=nestjs" alt="NestJS 12" />
+  <img src="https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white" alt="MySQL 8.4" />
+  <img src="https://img.shields.io/badge/Prisma-7.10-2D3748?logo=prisma" alt="Prisma" />
+  <img src="https://img.shields.io/badge/TailwindCSS-4.0-38B2AC?logo=tailwind-css" alt="Tailwind CSS 4" />
+  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Socket.io-4.8-010101?logo=socket.io" alt="Socket.io" />
+</p>
 
-Repository hiện bao gồm customer web, admin web và backend API trong cùng một workspace.
+---
 
-## Tech Stack
+## 🌐 Hệ Thống Triển Khai Trực Tuyến (Production)
 
-| Hạng mục            | Công nghệ                                        |
-| ------------------- | ------------------------------------------------ |
-| Frontend khách hàng | Next.js 16, React 19, TypeScript                 |
-| Frontend quản trị   | Next.js 16, React 19, TypeScript                 |
-| UI và styling       | Tailwind CSS 4, shadcn/ui, Lucide React          |
-| Backend             | NestJS 12, Node.js, TypeScript, Express adapter  |
-| API                 | REST API                                         |
-| Mobile              | Flutter                                          |
-| Database            | MySQL 8.4                                        |
-| Monorepo            | npm workspaces, Turborepo                        |
-| Code quality        | ESLint, Oxlint, Prettier, TypeScript strict mode |
-| Testing             | Vitest, Supertest                                |
+Toàn bộ hệ thống VexGo hiện đang vận hành trực tiếp trên tên miền chính thức **`vexgo.site`** với hạ tầng Cloud phân tán:
 
-## Core Features
+| Phân hệ | Tên miền chính thức | Nền tảng Cloud | Mục đích & Ghi chú |
+| :--- | :--- | :---: | :--- |
+| **Customer Web** | [https://vexgo.site](https://vexgo.site) | **Vercel** | Cổng đặt vé, gửi hàng và chăm sóc khách hàng (Next.js 16 App Router) |
+| **Admin Portal** | [https://admin.vexgo.site](https://admin.vexgo.site) | **Vercel** | Bàn điều hành nhà xe và quản trị toàn hệ thống |
+| **Backend API** | [https://api.vexgo.site/api/v1](https://api.vexgo.site/api/v1) | **Render** | REST API & Realtime Gateway (NestJS 12, Node.js 24) |
+| **API Health Check** | [https://api.vexgo.site/api/v1/health](https://api.vexgo.site/api/v1/health) | **Render** | Endpoint giám sát & duy trì trạng thái 24/7 qua cron-job.org |
+| **Database Server** | `mysql-vexgo-vexgo.h.aivencloud.com` | **Aiven** | MySQL 8.4 Cloud hỗ trợ TLS/SSL bảo mật cao |
 
-### Customer
+---
 
-- Tìm kiếm chuyến xe theo tuyến, ngày khởi hành và nhà xe; xem thông tin chuyến.
-- Chọn chỗ, đặt vé, thanh toán trực tuyến và áp dụng mã khuyến mãi.
-- Tra cứu, xem và quản lý vé; hủy vé theo điều kiện áp dụng.
-- Gửi hàng hóa và theo dõi trạng thái vận chuyển.
-- Chat realtime với bộ phận hỗ trợ.
-- Sử dụng giao diện tiếng Việt và tiếng Anh.
+## 📖 Giới Thiệu Tổng Quan
 
-### Admin
+**VexGo** là nền tảng quản lý và thương mại điện tử chuyên biệt cho ngành vận tải xe khách liên tỉnh, hướng tới giải quyết bài toán phân mảnh dữ liệu giữa các nhà xe, tối ưu hóa công tác bán vé đa kênh (Online & Quầy vé POS) và tự động hóa quy trình ký gửi hàng hóa.
 
-- Quản lý nhà xe, xe, tuyến đường, lịch chạy, chuyến xe và sơ đồ ghế.
-- Quản lý vé, đơn đặt vé, khách hàng, nhân viên và tài khoản nhà xe.
-- Quản lý bảng giá, mã khuyến mãi và chương trình ưu đãi.
-- Quản lý đơn gửi hàng và trạng thái vận chuyển.
-- Theo dõi thanh toán, doanh thu và báo cáo theo thời gian.
-- Quản lý vai trò, quyền truy cập và yêu cầu hỗ trợ khách hàng.
+### Đối tượng phục vụ:
+1. **Hành khách:** Trải nghiệm tìm kiếm tuyến đường thông minh, chọn vị trí ngồi trực quan trên sơ đồ 2 tầng, thanh toán không dùng tiền mặt (VietQR tự động), tra cứu hành trình và hỗ trợ trực tuyến song ngữ (Việt - Anh) kèm Trợ lý AI.
+2. **Doanh nghiệp vận tải (Nhà xe):** Quản trị toàn trình từ đội xe, phương tiện, tài xế, mở chuyến, cấu hình biểu cước linh hoạt theo thời điểm, bán vé tại quầy (POS), quản lý gom dỡ hàng hóa và phân tích doanh thu chuyên sâu.
+3. **Ban quản trị nền tảng (Super Admin):** Điều phối danh mục nhà xe, phê duyệt đối tác, giám sát vận hành toàn quốc và kiểm soát quyền hạn đa tầng (RBAC).
 
-### Mobile App
+---
 
-- Tìm chuyến, chọn chỗ và đặt vé ngay trên điện thoại.
-- Thanh toán, lưu vé điện tử và tra cứu lịch sử đặt vé.
-- Tạo đơn gửi hàng và theo dõi trạng thái vận chuyển.
-- Nhận thông tin chuyến đi và trao đổi với bộ phận hỗ trợ.
-- Sử dụng ứng dụng bằng tiếng Việt hoặc tiếng Anh.
+## 🏗️ Kiến Trúc Hệ Thống (Architecture)
 
-## Getting Started
-
-### Yêu cầu môi trường
-
-- Node.js LTS
-- npm
-- Docker Desktop và Docker Compose
-- Git
-
-### 1. Cài đặt project
-
-```bash
-git clone <repository-url>
-cd vexgo
-
-npm install
-```
-
-Tạo file biến môi trường local từ file mẫu:
-
-PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-macOS/Linux:
-
-```bash
-cp .env.example .env
-```
-
-Tạo file môi trường cho từng ứng dụng Next.js:
-
-PowerShell:
-
-```powershell
-Copy-Item apps/web/.env.example apps/web/.env.local
-Copy-Item apps/admin/.env.example apps/admin/.env.local
-```
-
-macOS/Linux:
-
-```bash
-cp apps/web/.env.example apps/web/.env.local
-cp apps/admin/.env.example apps/admin/.env.local
-```
-
-Trước khi khởi động API, hãy thay hai giá trị mẫu `OTP_HASH_SECRET` và
-`JWT_ACCESS_SECRET` trong `.env` bằng hai secret ngẫu nhiên riêng biệt, mỗi
-secret dài ít nhất 32 ký tự. Tạo từng giá trị bằng lệnh sau và chạy lệnh hai
-lần:
-
-```bash
-node --input-type=commonjs -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-Chỉ lưu các giá trị này trong `.env`; không dùng chung một secret và không
-commit file `.env` hoặc `.env.local`.
-
-Trước khi chạy, hãy thay `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `DATABASE_URL`,
-`MIGRATION_URL` và `SHADOW_DATABASE_URL` theo cùng database; URL shadow phải dùng
-database riêng. Thay `OTP_HASH_SECRET`, `JWT_ACCESS_SECRET` bằng secret ngẫu
-nhiên riêng, đồng thời đặt `SEPAY_WEBHOOK_TOKEN` nếu dùng webhook SePay. Trong
-`apps/web/.env.local`, điền `NEXT_PUBLIC_SEPAY_BANK_ID`,
-`NEXT_PUBLIC_SEPAY_ACCOUNT_NUMBER` và `NEXT_PUBLIC_SEPAY_ACCOUNT_NAME` bằng
-thông tin tài khoản nhận tiền thật do dự án cung cấp. Khi chưa có đủ ba giá trị,
-Customer Web sẽ không hiển thị mã VietQR. `SEPAY_WEBHOOK_TOKEN` chỉ nằm trong
-`.env` backend; không tạo biến `NEXT_PUBLIC_` cho token này.
-
-`NEXT_PUBLIC_API_URL` của Customer Web dùng URL có hậu tố `/api/v1`; Admin Web
-dùng địa chỉ gốc vì service Admin tự thêm `/api/v1`. `VEXGO_API_URL` của Customer
-Web cũng cần kết thúc bằng `/api/v1`. Script chạy Next.js nạp `PORT` từ
-`.env.local` trước khi khởi động server.
-
-> File `.env` chỉ dùng cho môi trường local. Không sử dụng các thông tin đăng nhập mẫu cho production.
-
-### 2. Khởi động Docker services
-
-Khởi động MySQL và phpMyAdmin:
-
-```bash
-docker compose up -d
-docker compose ps
-```
-
-Các địa chỉ mặc định:
-
-- MySQL: `127.0.0.1:3306`
-- phpMyAdmin: <http://localhost:8080> (đổi cổng bằng `PHPMYADMIN_PORT`)
-
-Khi đăng nhập phpMyAdmin, dùng `mysql` làm database host và thông tin tài khoản được cấu hình trong file `.env`.
-
-Xem log hoặc dừng services:
-
-```bash
-docker compose logs -f mysql
-docker compose down
-```
-
-`mysql_data` là named volume nên dữ liệu vẫn được giữ lại sau `docker compose down`. Chỉ dùng lệnh sau khi muốn xóa toàn bộ dữ liệu MySQL local:
-
-```bash
-docker compose down --volumes
-```
-
-### 3. Chạy frontend và backend
-
-Mỗi lệnh dưới đây nên được chạy trong một terminal riêng, từ thư mục gốc của repository.
-
-Customer Web — địa chỉ theo `PORT` trong `apps/web/.env.local` (mẫu mặc định `3000`):
-
-```bash
-npm run dev --workspace=@vexgo/web
-```
-
-Admin Web — địa chỉ theo `PORT` trong `apps/admin/.env.local` (mẫu mặc định `3001`):
-
-```bash
-npm run dev --workspace=@vexgo/admin
-```
-
-Backend API — địa chỉ theo `PORT` trong `.env` (mẫu mặc định `4000`):
-
-```bash
-npm run start:dev --workspace=@vexgo/api
-```
-
-Có thể chạy đồng thời hai frontend bằng:
-
-```bash
-npm run dev
-```
-
-Hiện tại backend chưa có script `dev` ở cấp workspace nên cần khởi động bằng lệnh `start:dev` riêng.
-
-Với worktree PR #36 hiện tại, các file local được cấu hình Customer Web `3004`,
-Admin Web `3005`, API `4002`, MySQL `3306`, database `vexgo_pr36` và phpMyAdmin
-`9090`. Các giá trị này nằm trong file môi trường bị Git ignore. Khi tạo worktree
-khác, hãy chọn database riêng và đổi `PORT`/origin CORS tương ứng trong file local;
-không chép các port của worktree này vào file mẫu dùng chung.
-
-### 4. Các lệnh thường dùng
-
-```bash
-# Chạy frontend ở chế độ development
-npm run dev
-
-# Kiểm tra lint toàn workspace
-npm run lint
-
-# Kiểm tra TypeScript
-npm run typecheck
-
-# Build toàn bộ workspace
-npm run build
-
-# Kiểm tra format
-npm run format:check
-
-# Chạy test API
-npm run test --workspace=@vexgo/api
-```
-
-## Project Structure
-
-Cấu trúc dưới đây phản ánh trạng thái hiện tại và sẽ được cập nhật khi các module nghiệp vụ được bổ sung:
+Dự án áp dụng mô hình **Monorepo** chuẩn hóa với triết lý **ONE DATABASE · ONE BACKEND · ONE BUSINESS RULE**, phân tách rõ ràng trách nhiệm giữa các tầng:
 
 ```text
 vexgo/
 ├── apps/
-│   ├── web/                 # Customer web application
-│   ├── admin/               # Admin web application
-│   └── api/                 # NestJS backend API
-├── docs/                    # Tài liệu phân tích, thiết kế và kế hoạch
-├── compose.yaml             # MySQL và phpMyAdmin cho local development
-├── .env.example             # Mẫu biến môi trường API và database
-├── apps/web/.env.example    # Mẫu Customer Web
-├── apps/admin/.env.example  # Mẫu Admin Web
-├── package.json             # Scripts và cấu hình workspace root
-├── package-lock.json        # Khóa phiên bản dependency của npm
-├── turbo.json               # Cấu hình Turborepo
-└── README.md
+│   ├── web/                 # Customer Web App (Next.js 16, React 19, Tailwind CSS 4)
+│   ├── admin/               # Admin Management Portal (Next.js 16, shadcn/ui, Radix)
+│   └── api/                 # Core Backend API (NestJS 12, Prisma, Socket.IO, Express)
+├── prisma/                  # Database Schema, 66 Migrations & Comprehensive Seed Pipeline
+├── scripts/                 # Utility scripts phục vụ seed và kiểm chứng tính toàn vẹn dữ liệu
+├── docs/                    # Tài liệu đặc tả kỹ thuật, hướng dẫn triển khai và báo cáo
+└── render.yaml              # Cấu hình tự động hóa triển khai hạ tầng Render Blueprint
 ```
 
-## Contributors
+### Luồng Dữ Liệu & Tích Hợp Ngoại Vi:
+```
+[ Khách hàng / Quản trị viên ]
+             │
+             ▼
+    [ Next.js Web / Admin ]
+             │ (HTTPS / WSS)
+             ▼
+   [ NestJS Backend API ] ────► [ MariaDB Driver Pool (TLS/SSL) ] ──► [ Aiven MySQL 8.4 ]
+             │
+             ├──► [ TextBee.dev Android Gateway ] ──► Gửi SMS OTP thực tế đến điện thoại
+             ├──► [ SePay Payment Gateway ]       ──► Webhook thanh toán VietQR tự động
+             ├──► [ Cloudinary Media CDN ]        ──► Lưu trữ ảnh xe, giấy tờ & chứng từ
+             ├──► [ SMTP Mail Server ]            ──► Gửi hóa đơn & vé điện tử qua email
+             └──► [ Groq LLM & Jina Embeddings ]  ──► AI Chatbot tư vấn lịch trình (RAG)
+```
 
-- Trình Quốc An
-- Lê Sony
-- Phạm Minh Tài
+---
 
-## License
+## ✨ Tính Năng Nổi Bật
 
-Project hiện được cấu hình là **UNLICENSED** và chưa phát hành theo một giấy phép mã nguồn mở. Đây là repository phục vụ mục đích học thuật/phát triển nội bộ; việc sao chép, phân phối hoặc sử dụng lại cần có sự đồng ý của nhóm tác giả.
+### 1. Phân hệ Khách hàng (Customer Web)
+- **Tìm kiếm chuyến xe đa tiêu chí:** Lọc chuyến xe theo điểm đi, điểm đến, ngày khởi hành, khung giờ, nhà xe, loại xe (Giường nằm, Limousine, Ghế ngồi) và mức giá.
+- **Sơ đồ ghế 2 tầng Realtime:** Hiển thị trực quan tầng dưới/tầng trên; áp dụng cơ chế khóa ghế tạm thời (Atomic Seat Hold) ngăn chặn triệt để tình trạng xung đột đặt trùng ghế (Race Condition).
+- **Thanh toán VietQR tự động (SePay):** Sinh mã QR động kèm nội dung chuyển khoản độc bản; hệ thống tự động ghi nhận thanh toán và phát hành vé chỉ sau 2-3 giây.
+- **Ký gửi hàng hóa liên tỉnh:** Đặt dịch vụ gửi hàng theo chuyến, tự động tính cước theo khoảng cách, khối lượng và thể tích; tra cứu vận đơn bằng mã phiếu gửi.
+- **Trợ lý ảo AI Chatbot (RAG):** Ứng dụng mô hình ngôn ngữ lớn (Llama 3.3 qua Groq) kết hợp tìm kiếm ngữ nghĩa (Jina AI) để giải đáp lịch trình và chính sách 24/7.
+- **Hủy vé & Đổi trả tự động:** Tính toán tỷ lệ hoàn tiền theo chính sách riêng của từng nhà xe và thời gian trước giờ khởi hành.
+- **Đa ngôn ngữ (i18n):** Chuyển đổi mượt mà giữa Tiếng Việt và Tiếng Anh trên toàn bộ giao diện.
+
+### 2. Phân hệ Quản trị (Admin Portal)
+- **Phân quyền đa cấp bậc (RBAC):** Super Admin (toàn quyền nền tảng) và Admin Nhà xe (giới hạn trong phạm vi Tenant/Nhà xe sở hữu).
+- **Quản lý Đội xe & Phương tiện:** Quản lý danh sách phương tiện, cấu hình bố cục ghế tùy biến theo từng loại xe.
+- **Điều hành Tuyến & Chuyến xe:** Lập lịch trình, phân công tài xế/phụ xe, quản lý điểm đón/trả dọc đường và kiểm soát lệnh xuất bến.
+- **Bán vé & Nhận hàng tại quầy (POS):** Giao diện chuyên dụng cho nhân viên phòng vé thao tác đặt chỗ, in vé và lập phiếu nhận hàng nhanh chóng.
+- **Báo cáo Doanh thu Chuyên sâu:** Biểu đồ phân tích doanh thu theo ngày/tháng, sản lượng vé bán, tỷ lệ lấp đầy ghế và doanh thu dịch vụ gửi hàng.
+
+### 3. Phân hệ Backend API
+- **Kiến trúc Module hóa (NestJS):** Tách biệt rành mạch các domain: `auth`, `bus-companies`, `vehicles`, `routes`, `trips`, `bookings`, `tickets`, `shipments`, `payments`, `media`, `notifications`, `ai-chatbot`.
+- **Bảo mật Đa tầng:** Xác thực qua Access Token JWT, bảo vệ phiên đăng nhập quản trị qua HttpOnly Cookie, mã hóa một chiều dữ liệu nhạy cảm.
+- **Xác thực OTP qua SMS thật:** Tích hợp TextBee Android SMS Gateway chuyển tiếp tin nhắn SMS OTP thực tế tới điện thoại người dùng.
+
+---
+
+## 🔑 Tài Khoản Dùng Thử (Demo Accounts)
+
+Hệ thống đã được nạp sẵn bộ dữ liệu mẫu toàn diện với **3.938 chuyến xe** và **117.964 ghế** (bao phủ từ tháng 09/2026 đến tháng 12/2026):
+
+> **Mật khẩu dùng chung cho tất cả tài khoản bên dưới:** `VexGo@123`
+
+| Vai trò | Số điện thoại đăng nhập | Đơn vị quản lý | Phạm vi truy cập |
+| :--- | :---: | :--- | :--- |
+| **Super Admin** | `+84900000000` | Toàn hệ thống VexGo | Toàn quyền kiểm soát, quản lý tất cả nhà xe |
+| **Admin Nhà xe** | `+84900000101` | Công ty Phương Trang (FUTA) | Quản lý dữ liệu nội bộ nhà xe FUTA |
+| **Admin Nhà xe** | `+84900000201` | Công ty Thành Bưởi (TB) | Quản lý dữ liệu nội bộ nhà xe Thành Bưởi |
+| **Admin Nhà xe** | `+84900000301` | Công ty Hoa Mai (HM) | Quản lý dữ liệu nội bộ nhà xe Hoa Mai |
+| **Khách hàng** | Đăng ký trực tiếp | Khách hàng cá nhân | Đặt vé, gửi hàng, lịch sử giao dịch cá nhân |
+
+---
+
+## 💻 Hướng Dẫn Cài Đặt & Vận Hành Local (Local Development)
+
+### Yêu cầu tiên quyết
+- **Node.js**: Phiên bản 20 LTS trở lên (khuyến nghị 24.x)
+- **npm**: Phiên bản 10.x trở lên
+- **Docker Desktop**: Chạy MySQL 8 và phpMyAdmin cục bộ
+- **Git**
+
+### 1. Clone repository & Cài đặt dependencies
+```bash
+git clone https://github.com/quocan9999/vexgo.git
+cd vexgo
+
+# Cài đặt toàn bộ dependencies cho tất cả workspaces từ root
+npm install
+```
+
+### 2. Thiết lập biến môi trường
+Tạo file cấu hình `.env` cho Backend và các file `.env.local` cho từng ứng dụng Frontend:
+
+```bash
+# Windows PowerShell
+Copy-Item .env.example .env
+Copy-Item apps/web/.env.example apps/web/.env.local
+Copy-Item apps/admin/.env.example apps/admin/.env.local
+
+# Linux / macOS
+cp .env.example .env
+cp apps/web/.env.example apps/web/.env.local
+cp apps/admin/.env.example apps/admin/.env.local
+```
+
+### 3. Khởi động Cơ sở dữ liệu Docker
+```bash
+# Khởi chạy MySQL 8 và phpMyAdmin local
+docker compose up -d
+
+# Kiểm tra trạng thái containers
+docker compose ps
+```
+- **MySQL Local**: `127.0.0.1:3306` (User: `vexgo_app` / Password: `vexgo_dev_password`)
+- **phpMyAdmin**: [http://localhost:8080](http://localhost:8080)
+
+### 4. Nạp dữ liệu mẫu (Database Seed)
+```bash
+# Chạy migration và chuỗi nạp dữ liệu toàn diện
+npx prisma migrate dev
+npx prisma db seed
+```
+
+### 5. Khởi chạy ứng dụng
+Mở các terminal riêng biệt để chạy từng phân hệ:
+
+```bash
+# Terminal 1: Chạy Backend NestJS API (Port 4000)
+npm run start:dev --workspace=@vexgo/api
+
+# Terminal 2: Chạy Customer Web (Port 3000)
+npm run dev --workspace=@vexgo/web
+
+# Terminal 3: Chạy Admin Web (Port 3001)
+npm run dev --workspace=@vexgo/admin
+```
+
+---
+
+## 🧪 Kiểm Thử & Đảm Bảo Chất Lượng (Quality Assurance)
+
+Dự án tuân thủ nghiêm ngặt quy trình kiểm thử trước khi bàn giao mã nguồn:
+
+```bash
+# Chạy Unit Tests Backend API (Vitest)
+npm run test --workspace=@vexgo/api
+
+# Kiểm tra kiểu dữ liệu TypeScript (Typecheck)
+npm run typecheck
+
+# Kiểm tra quy chuẩn mã nguồn (Linting)
+npm run lint
+
+# Build thử nghiệm toàn bộ dự án
+npm run build
+```
+
+---
+
+## 👥 Thành Viên Thực Hiện (Contributors)
+
+Đồ án Khóa luận Tốt nghiệp Cử nhân Công nghệ Thông tin:
+
+- **Trình Quốc An** — *Lead Developer / Full-stack Engineer*
+- **Lê Sony** — *Frontend / Mobile Developer*
+- **Phạm Minh Tài** — *Backend / Database Engineer*
+
+---
+
+## 📄 Bản Quyền & Giấy Phép (License)
+
+Dự án được xây dựng phục vụ mục đích nghiên cứu học thuật và nghiệm thu Khóa luận Tốt nghiệp tại Trường Đại học Công Thương TP. Hồ Chí Minh (HUIT). 
+
+Bản quyền mã nguồn thuộc về nhóm tác giả. Vui lòng liên hệ trước khi sử dụng lại với mục đích thương mại.
