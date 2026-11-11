@@ -3,21 +3,7 @@ import crypto from 'node:crypto';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import { getVehicleSeatLayout } from './lib/seat-layouts.mjs';
-
-function databaseConfig() {
-  const raw = process.env.DATABASE_URL ?? process.env.MIGRATION_URL;
-  if (!raw) throw new Error('MIGRATION_URL or DATABASE_URL is required for sync-all-trip-seats');
-  const url = new URL(raw);
-  if (url.protocol !== 'mysql:') throw new Error('Database URL must use mysql: protocol');
-  return {
-    host: url.hostname,
-    port: Number(url.port || 3306),
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
-    allowPublicKeyRetrieval: true,
-  };
-}
+import { databaseConfig } from './lib/db-config.mjs';
 
 function deterministicUuid(...parts) {
   const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');

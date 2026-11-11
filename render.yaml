@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: vexgo-api
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && npm run build --workspace=@vexgo/api && npx prisma migrate deploy
+    startCommand: npm run start:prod --workspace=@vexgo/api
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: BUSINESS_TIME_ZONE
+        value: Asia/Ho_Chi_Minh
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://vexgo.site,https://www.vexgo.site,https://admin.vexgo.site
+      - key: ADMIN_AUTH_COOKIE_ALLOWED_ORIGINS
+        value: https://admin.vexgo.site
+      - key: DATABASE_URL
+        sync: false
+      - key: MIGRATION_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: OTP_HASH_SECRET
+        generateValue: true
+      - key: SMS_PROVIDER
+        value: console
+      - key: TEXTBEE_API_KEY
+        sync: false
+      - key: TEXTBEE_DEVICE_ID
+        sync: false
+      - key: PAYMENT_DEMO_MODE
+        value: 'false'
+      - key: CLOUDINARY_ENABLED
+        value: 'false'
+      - key: CLOUDINARY_ENVIRONMENT
+        value: prod
+      - key: CLOUDINARY_FOLDER_MODE
+        value: dynamic
+      - key: SEPAY_WEBHOOK_SECRET
+        generateValue: true

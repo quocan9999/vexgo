@@ -9,6 +9,7 @@ import bcrypt from 'bcrypt';
 import { ensureDemoPayment } from './demo-revenue.mjs';
 import { runSeedShipmentsNetwork } from './seed-shipments-network.mjs';
 import { getVehicleSeatLayout } from './lib/seat-layouts.mjs';
+import { databaseConfig } from './lib/db-config.mjs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import {
@@ -201,21 +202,6 @@ function seatCode(index) {
 
 async function passwordHash(password) {
   return bcrypt.hash(password, 10);
-}
-
-function databaseConfig() {
-  const raw = process.env.DATABASE_URL ?? process.env.MIGRATION_URL;
-  if (!raw) throw new Error('MIGRATION_URL or DATABASE_URL is required for seed');
-  const url = new URL(raw);
-  if (url.protocol !== 'mysql:') throw new Error('Seed URL must use mysql: protocol');
-  return {
-    host: url.hostname,
-    port: Number(url.port || 3306),
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
-    allowPublicKeyRetrieval: true,
-  };
 }
 
 const prisma = new PrismaClient({ adapter: new PrismaMariaDb(databaseConfig()) });
