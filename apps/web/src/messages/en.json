@@ -157,7 +157,9 @@
       "step3Sub": "Bank QR / E-wallets",
       "step4Title": "Board safely",
       "step4Sub": "Show e-ticket at station"
-    }
+    },
+    "returnDatePastError": "Return date cannot be in the past",
+    "swapRoutes": "Swap origin and destination"
   },
   "search": {
     "tripList": "Trip List",
@@ -283,7 +285,9 @@
     "transferPickupHeading": "Transfer Pick-up Points ({count})",
     "transferDropoffHeading": "Transfer Drop-off Points ({count})",
     "tripNoteTitle": "Note:",
-    "seeMore": "see more"
+    "seeMore": "see more",
+    "pickup": "Pickup point",
+    "dropoff": "Drop-off point"
   },
   "booking": {
     "stepSelectTrip": "Select Trip",
@@ -535,9 +539,23 @@
     "maxSeatsPerTrip": "Up to 5 seats/trip",
     "tripInfoOutbound": "Trip details (Outbound trip)",
     "tripInfoReturn": "Trip details (Return trip)",
-    "swapRoutes": "Swap departure and destination",
-    "returnDatePastError": "Return date cannot be earlier than today",
-    "securePayment": "Secure Payment"
+    "swapRoutes": "Swap origin and destination",
+    "returnDatePastError": "Return date cannot be in the past",
+    "securePayment": "Secure Payment",
+    "tabBus": "Book tickets",
+    "tabFreight": "Send freight",
+    "oneWay": "One-way",
+    "roundTrip": "Round trip",
+    "origin": "Origin",
+    "destination": "Destination",
+    "originPlaceholder": "Select origin",
+    "destinationPlaceholder": "Select destination",
+    "departureDate": "Departure date",
+    "returnDate": "Return date",
+    "ticketQuantity": "Seats",
+    "searchBuses": "Search buses",
+    "departureDatePastError": "Departure date cannot be in the past",
+    "returnDateBeforeDepError": "Return date cannot be before departure date"
   },
   "lookup": {
     "lookupTitle": "Look Up Ticket Information",
@@ -817,7 +835,11 @@
     "submittedAtLabel": "Submitted at {date}",
     "editedNotice": "(Edited)",
     "editExpiredNotice": "Editing expired (after 3 days)",
-    "editCommentLabel": "Edit review comments"
+    "editCommentLabel": "Edit review comments",
+    "statusExpired": "Expired",
+    "back": "Back",
+    "backToHome": "Back to Home",
+    "tabBusTicket": "Bus ticket"
   },
   "payments": {
     "paymentTitle": "Order Payment",
@@ -1404,7 +1426,11 @@
       "deleteReviewConfirmTitle": "Delete trip review?",
       "deleteReviewConfirmDesc": "Are you sure you want to delete your review for this trip? You can submit a new review anytime after deletion.",
       "deletingReview": "Deleting...",
-      "confirmDeleteReview": "Confirm Delete"
+      "confirmDeleteReview": "Confirm Delete",
+      "deleteReview": "Delete review",
+      "deleteReviewConfirm": "Are you sure you want to delete your review for this trip? You can submit a new review anytime after deleting.",
+      "cancelFilter": "Cancel",
+      "loading": "Processing..."
     },
     "shipments": {
       "cannotLoadShipments": "Cannot load shipments. Please try again.",
