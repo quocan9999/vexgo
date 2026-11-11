@@ -94,6 +94,12 @@ export function ShipmentRatesManagement() {
   const tShipments = useTranslations('shipments');
   const tFare = useTranslations('farePrices');
   const tCommon = useTranslations('common');
+  const { can } = useAdminPermissions();
+  const canReadFreight = can('shipment:read') || can('fare-price:read');
+  const canCreate = can('shipment:update') || can('fare-price:create');
+  const canUpdate = can('shipment:update') || can('fare-price:update');
+  const canReadLuggage = can('luggage-rate:read');
+  const canUpdateLuggage = can('luggage-rate:update');
   const {
     ratePage,
     error,
@@ -114,10 +120,7 @@ export function ShipmentRatesManagement() {
     sortRates,
     resetFilters,
     refresh,
-  } = useShipmentRates();
-  const { can } = useAdminPermissions();
-  const canCreate = can('shipment:update') || can('fare-price:create');
-  const canUpdate = can('shipment:update') || can('fare-price:update');
+  } = useShipmentRates(canReadFreight);
 
   const [filterOptions, setFilterOptions] =
     useState<ShipmentRateOptionsState>(INITIAL_OPTIONS);
@@ -127,7 +130,9 @@ export function ShipmentRatesManagement() {
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [formOpen, setFormOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ShipmentRate | null>(null);
-  const [rateTab, setRateTab] = useState<'freight' | 'luggage'>('freight');
+  const [rateTab, setRateTab] = useState<'freight' | 'luggage'>(() =>
+    !canReadFreight && canReadLuggage ? 'luggage' : 'freight',
+  );
 
   const statusOptions: FilterOption[] = [
     { value: 'HOAT_DONG', label: tShipments('ratesStatusActive') },
@@ -160,6 +165,11 @@ export function ShipmentRatesManagement() {
   }
 
   useEffect(() => {
+    if (!canReadFreight) {
+      setFilterOptions((current) => ({ ...current, loading: false, error: null }));
+      setFormOptions((current) => ({ ...current, loading: false, error: null }));
+      return;
+    }
     const controller = new AbortController();
 
     async function loadOptions() {
@@ -218,7 +228,7 @@ export function ShipmentRatesManagement() {
     void loadOptions();
 
     return () => controller.abort();
-  }, [optionsReloadTick]);
+  }, [canReadFreight, optionsReloadTick]);
 
   const reloadOptions = useCallback(() => {
     setOptionsReloadTick((value) => value + 1);
@@ -330,35 +340,39 @@ export function ShipmentRatesManagement() {
 
         {/* Tab Switcher */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setRateTab('freight')}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all cursor-pointer',
-              rateTab === 'freight'
-                ? 'bg-primary text-white shadow-xs'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
-            )}
-          >
-            <Package className="size-4" />
-            {tShipments('tabRouteFreight')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRateTab('luggage')}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all cursor-pointer',
-              rateTab === 'luggage'
-                ? 'bg-primary text-white shadow-xs'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
-            )}
-          >
-            <Luggage className="size-4" />
-            {tShipments('tabLuggage')}
-          </button>
+          {canReadFreight && (
+            <button
+              type="button"
+              onClick={() => setRateTab('freight')}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all cursor-pointer',
+                rateTab === 'freight'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+              )}
+            >
+              <Package className="size-4" />
+              {tShipments('tabRouteFreight')}
+            </button>
+          )}
+          {canReadLuggage && (
+            <button
+              type="button"
+              onClick={() => setRateTab('luggage')}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all cursor-pointer',
+                rateTab === 'luggage'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+              )}
+            >
+              <Luggage className="size-4" />
+              {tShipments('tabLuggage')}
+            </button>
+          )}
         </div>
 
-        {rateTab === 'luggage' ? (
+        {(rateTab === 'luggage' && canReadLuggage) || (!canReadFreight && canReadLuggage) ? (
           <div className="space-y-4">
             <div>
               <AdminPageHeader
@@ -370,7 +384,7 @@ export function ShipmentRatesManagement() {
                 {tShipments('luggageTabDesc')}
               </p>
             </div>
-            <LuggagePackagesManagement canUpdate={canUpdate} />
+            <LuggagePackagesManagement canUpdate={canUpdateLuggage} />
           </div>
         ) : (
           <>
@@ -396,19 +410,21 @@ export function ShipmentRatesManagement() {
               </p>
             </div>
 
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/40 px-3.5 py-2.5 text-xs text-muted-foreground">
-              <span>
-                💡 <strong>{tShipments('ratesTipTitle')}</strong> {tShipments('ratesTipText')}{' '}
-                <strong>{tShipments('ratesTipTabName')}</strong>.
-              </span>
-              <button
-                type="button"
-                onClick={() => setRateTab('luggage')}
-                className="shrink-0 font-bold text-primary hover:underline cursor-pointer"
-              >
-                {tShipments('ratesTipLink')}
-              </button>
-            </div>
+            {canReadLuggage && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/40 px-3.5 py-2.5 text-xs text-muted-foreground">
+                <span>
+                  💡 <strong>{tShipments('ratesTipTitle')}</strong> {tShipments('ratesTipText')}{' '}
+                  <strong>{tShipments('ratesTipTabName')}</strong>.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRateTab('luggage')}
+                  className="shrink-0 font-bold text-primary hover:underline cursor-pointer"
+                >
+                  {tShipments('ratesTipLink')}
+                </button>
+              </div>
+            )}
 
             <section
               className="overflow-hidden rounded-xl border bg-card shadow-sm"

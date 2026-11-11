@@ -224,6 +224,16 @@ export const ADMIN_PERMISSION_CATALOG = [
     scope: 'tenant',
     description: 'Kiểm duyệt (ẩn/hiển thị) đánh giá và phản hồi của khách hàng.',
   },
+  {
+    key: 'luggage-rate:read',
+    scope: 'tenant',
+    description: 'Xem cấu hình cước hành lý nhà xe.',
+  },
+  {
+    key: 'luggage-rate:update',
+    scope: 'tenant',
+    description: 'Cập nhật cấu hình cước hành lý nhà xe.',
+  },
 ] as const;
 
 export type AdminPermissionKey =
@@ -283,6 +293,8 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'chat:manage',
     'review:read',
     'review:moderate',
+    'luggage-rate:read',
+    'luggage-rate:update',
   ],
   NHAN_VIEN_DIEU_HANH: [
     'vehicle-type:read',

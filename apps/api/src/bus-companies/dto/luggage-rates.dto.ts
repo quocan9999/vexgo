@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsDefined,
   IsNumber,
   IsObject,
   IsOptional,
@@ -207,6 +208,8 @@ export class RouteLuggageRateOverrideDto {
 }
 
 export class UpdateLuggageRatesDto {
+  @IsDefined()
+  @IsObject()
   @ValidateNested()
   @Type(() => LuggageRatesPackagePricingDto)
   default: LuggageRatesPackagePricingDto;

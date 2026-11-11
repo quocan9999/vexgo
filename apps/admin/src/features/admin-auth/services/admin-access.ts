@@ -105,6 +105,8 @@ export type AdminPermission =
   | 'promotion:update'
   | 'shipment:read'
   | 'shipment:update'
+  | 'luggage-rate:read'
+  | 'luggage-rate:update'
   | 'revenue:read'
   | 'role:read'
   | 'permission:assign'
@@ -233,7 +235,8 @@ export function canAccessShipmentRates(session: AdminSession | null): boolean {
     session !== null &&
     getAdminAccessScope(session) === 'tenant' &&
     (session.permissions.includes('shipment:read') ||
-      session.permissions.includes('fare-price:read'))
+      session.permissions.includes('fare-price:read') ||
+      session.permissions.includes('luggage-rate:read'))
   );
 }
 
@@ -315,6 +318,11 @@ export function getFirstAccessibleAdminPath(
         return canAccessAiKnowledge(session);
       }
       return hasAdminPermission(session, item.readPermission);
-    })?.href ?? (canReadTenantRbac(session) ? '/tenant-rbac' : null)
+    })?.href ??
+    (canAccessShipmentRates(session)
+      ? '/shipments/rates'
+      : canReadTenantRbac(session)
+        ? '/tenant-rbac'
+        : null)
   );
 }

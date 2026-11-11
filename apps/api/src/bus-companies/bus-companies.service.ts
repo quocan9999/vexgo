@@ -22,6 +22,10 @@ import {
 } from './dto/luggage-rates.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+import {
+  assertTenantScope,
+  requireTenantPrincipal,
+} from '../auth/tenant-scope.js';
 
 interface BusCompanyReadScope {
   platformWide: boolean;
@@ -323,9 +327,25 @@ export class BusCompaniesService {
     };
   }
 
-  async getLuggageRates(busCompanyId: number) {
+  private assertLuggageRateAccess(
+    busCompanyId: number,
+    principal: AuthPrincipal | undefined,
+    requiredPermission: 'luggage-rate:read' | 'luggage-rate:update',
+  ): number {
+    const trustedNhaXeId = requireTenantPrincipal(principal);
+    if (!principal?.permissions?.includes(requiredPermission)) {
+      throw new ForbiddenException({
+        error: 'PERMISSION_FORBIDDEN',
+        message: 'Tài khoản không có quyền thực hiện thao tác này.',
+      });
+    }
+    assertTenantScope(busCompanyId, trustedNhaXeId);
+    return trustedNhaXeId;
+  }
+
+  private async loadLuggageRatesForTenant(trustedNhaXeId: number) {
     const company = await this.prisma.nhaXe.findUnique({
-      where: { nhaXeId: busCompanyId },
+      where: { nhaXeId: trustedNhaXeId },
       select: {
         nhaXeId: true,
         tenNhaXe: true,
@@ -359,7 +379,7 @@ export class BusCompaniesService {
 
     const defaultRates = {
       ...DEFAULT_LUGGAGE_RATES,
-      ...(parsed?.default ?? {}),
+      ...parsed?.default,
     };
 
     const routesOverrides = parsed?.routes ?? {};
@@ -383,9 +403,28 @@ export class BusCompaniesService {
     };
   }
 
-  async updateLuggageRates(busCompanyId: number, dto: UpdateLuggageRatesDto) {
+  async getLuggageRates(busCompanyId: number, principal?: AuthPrincipal) {
+    const trustedNhaXeId = this.assertLuggageRateAccess(
+      busCompanyId,
+      principal,
+      'luggage-rate:read',
+    );
+    return this.loadLuggageRatesForTenant(trustedNhaXeId);
+  }
+
+  async updateLuggageRates(
+    busCompanyId: number,
+    dto: UpdateLuggageRatesDto,
+    principal?: AuthPrincipal,
+  ) {
+    const trustedNhaXeId = this.assertLuggageRateAccess(
+      busCompanyId,
+      principal,
+      'luggage-rate:update',
+    );
+
     const company = await this.prisma.nhaXe.findUnique({
-      where: { nhaXeId: busCompanyId },
+      where: { nhaXeId: trustedNhaXeId },
       select: { nhaXeId: true },
     });
 
@@ -403,13 +442,13 @@ export class BusCompaniesService {
     });
 
     await this.prisma.nhaXe.update({
-      where: { nhaXeId: busCompanyId },
+      where: { nhaXeId: trustedNhaXeId },
       data: {
         cauHinhHanhLy: payloadString,
       },
     });
 
-    return this.getLuggageRates(busCompanyId);
+    return this.loadLuggageRatesForTenant(trustedNhaXeId);
   }
 
   async getTripLuggageRates(tripId: number) {
