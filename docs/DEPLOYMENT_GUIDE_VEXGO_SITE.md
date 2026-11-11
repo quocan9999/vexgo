@@ -96,9 +96,10 @@ Khi màn hình hiện `[PASS]` toàn bộ 14 bảng dữ liệu là database Aiv
 | `ADMIN_AUTH_COOKIE_ALLOWED_ORIGINS` | `https://admin.vexgo.site` |
 | `JWT_ACCESS_SECRET` | *(Chuỗi ngẫu nhiên >= 32 ký tự, ví dụ chạy `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)* |
 | `OTP_HASH_SECRET` | *(Chuỗi ngẫu nhiên >= 32 ký tự khác với JWT_ACCESS_SECRET)* |
-| `SMS_PROVIDER` | `console` *(hoặc `textbee` nếu muốn gửi SMS thật qua Android Gateway của TextBee.dev)* |
-| `TEXTBEE_API_KEY` | *(Lấy từ TextBee.dev Dashboard nếu chọn SMS_PROVIDER=textbee)* |
-| `TEXTBEE_DEVICE_ID` | *(ID thiết bị Android hiển thị trên TextBee.dev nếu chọn SMS_PROVIDER=textbee)* |
+| `SMS_PROVIDER` | `textbee` *(Gửi OTP qua TextBee Android Gateway)* |
+| `TEXTBEE_API_KEY` | *(Lấy từ TextBee.dev Dashboard)* |
+| `TEXTBEE_DEVICE_ID` | *(ID thiết bị Android hiển thị trên TextBee.dev)* |
+| `SEPAY_ACCOUNT_NUMBER` | *(Số tài khoản ngân hàng nhận tiền SePay của bạn)* |
 | `SEPAY_WEBHOOK_SECRET` | *(Chuỗi bí mật ngẫu nhiên >= 32 ký tự)* |
 | `PAYMENT_DEMO_MODE` | `false` *(hoặc `true` nếu muốn bật nút xác nhận thanh toán demo)* |
 
