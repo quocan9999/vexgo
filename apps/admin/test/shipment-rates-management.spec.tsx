@@ -369,6 +369,12 @@ describe('ShipmentRatesManagement', () => {
     ).toBe(true);
     expect(
       canAccessTenantPath(
+        { ...baseSession, permissions: ['luggage-rate:read'] },
+        '/shipments/rates',
+      ),
+    ).toBe(true);
+    expect(
+      canAccessTenantPath(
         { ...baseSession, permissions: ['customer:read'] },
         '/shipments/rates',
       ),

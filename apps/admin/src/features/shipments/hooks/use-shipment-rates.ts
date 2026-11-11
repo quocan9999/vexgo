@@ -13,10 +13,10 @@ import type {
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 250;
 
-export function useShipmentRates() {
+export function useShipmentRates(enabled = true) {
   const [ratePage, setRatePage] = useState<PaginatedShipmentRates | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -42,6 +42,9 @@ export function useShipmentRates() {
   }, [search, searchInput]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const controller = new AbortController();
 
     async function load() {
@@ -91,6 +94,7 @@ export function useShipmentRates() {
 
     return () => controller.abort();
   }, [
+    enabled,
     effectiveState,
     page,
     reloadTick,

@@ -811,6 +811,27 @@ describe('BusCompaniesService', () => {
   });
 
   describe('luggage rates', () => {
+    const tenantAdminPrincipal = {
+      taiKhoanId: 30,
+      sessionId: 'tenant-admin-3',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: ['luggage-rate:read', 'luggage-rate:update'],
+      nhanVienId: 300,
+      nhaXeId: 3,
+    };
+
+    const validUpdatePayload = {
+      default: {
+        packageS: 40_000,
+        packageM: 70_000,
+        packageL: 110_000,
+        packageXL: 160_000,
+      },
+      routes: {
+        '10': { inherit: false, packageS: 30_000 },
+      },
+    };
+
     it('returns default fallback luggage rates when company has no custom configuration', async () => {
       nhaXe.findUnique.mockResolvedValueOnce({
         nhaXeId: 3,
@@ -821,7 +842,7 @@ describe('BusCompaniesService', () => {
         ],
       });
 
-      const res = await service.getLuggageRates(3);
+      const res = await service.getLuggageRates(3, tenantAdminPrincipal);
       expect(res.data.busCompanyId).toBe(3);
       expect(res.data.default.packageS).toBe(50_000);
       expect(res.data.default.packageM).toBe(80_000);
@@ -846,17 +867,11 @@ describe('BusCompaniesService', () => {
           ],
         });
 
-      const res = await service.updateLuggageRates(3, {
-        default: {
-          packageS: 40_000,
-          packageM: 70_000,
-          packageL: 110_000,
-          packageXL: 160_000,
-        },
-        routes: {
-          '10': { inherit: false, packageS: 30_000 },
-        },
-      });
+      const res = await service.updateLuggageRates(
+        3,
+        validUpdatePayload,
+        tenantAdminPrincipal,
+      );
 
       expect(nhaXe.update).toHaveBeenCalledWith({
         where: { nhaXeId: 3 },
@@ -866,6 +881,158 @@ describe('BusCompaniesService', () => {
       });
       expect(res.data.default.packageS).toBe(40_000);
       expect(res.data.availableRoutes[0].hasOverride).toBe(true);
+    });
+
+    it('allows tenant employee with only luggage-rate:update to update own company without luggage-rate:read', async () => {
+      const employeeUpdateOnly = {
+        taiKhoanId: 31,
+        sessionId: 'emp-update-only',
+        roles: ['NHAN_VIEN_DIEU_HANH'],
+        permissions: ['luggage-rate:update'],
+        nhanVienId: 301,
+        nhaXeId: 3,
+      };
+      nhaXe.findUnique
+        .mockResolvedValueOnce({ nhaXeId: 3 })
+        .mockResolvedValueOnce({
+          nhaXeId: 3,
+          tenNhaXe: 'Phương Trang',
+          cauHinhHanhLy: JSON.stringify(validUpdatePayload),
+          tuyenXes: [],
+        });
+
+      const res = await service.updateLuggageRates(
+        3,
+        validUpdatePayload,
+        employeeUpdateOnly,
+      );
+      expect(res.data.busCompanyId).toBe(3);
+      expect(nhaXe.update).toHaveBeenCalledTimes(1);
+
+      await expect(
+        service.getLuggageRates(3, employeeUpdateOnly),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'PERMISSION_FORBIDDEN',
+          message: 'Tài khoản không có quyền thực hiện thao tác này.',
+        },
+      });
+    });
+
+    it('blocks cross-tenant getLuggageRates and updateLuggageRates with TENANT_SCOPE_VIOLATION before touching DB', async () => {
+      nhaXe.findUnique.mockClear();
+      nhaXe.update.mockClear();
+
+      await expect(
+        service.getLuggageRates(99, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TENANT_SCOPE_VIOLATION',
+          message: 'Không được truy cập dữ liệu của nhà xe khác.',
+        },
+      });
+
+      await expect(
+        service.updateLuggageRates(99, validUpdatePayload, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TENANT_SCOPE_VIOLATION',
+          message: 'Không được truy cập dữ liệu của nhà xe khác.',
+        },
+      });
+
+      expect(nhaXe.findUnique).not.toHaveBeenCalled();
+      expect(nhaXe.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects SUPER_ADMIN, KHACH_HANG, and missing principal with ROLE_FORBIDDEN', async () => {
+      nhaXe.findUnique.mockClear();
+      nhaXe.update.mockClear();
+
+      const superAdmin = {
+        taiKhoanId: 1,
+        sessionId: 'super-admin',
+        roles: ['SUPER_ADMIN'],
+        permissions: ['luggage-rate:read', 'luggage-rate:update'],
+        nhanVienId: null,
+        nhaXeId: null,
+      };
+      const customer = {
+        taiKhoanId: 2,
+        sessionId: 'customer',
+        roles: ['KHACH_HANG'],
+        permissions: ['luggage-rate:read', 'luggage-rate:update'],
+        nhanVienId: null,
+        nhaXeId: null,
+      };
+
+      for (const principal of [undefined, superAdmin, customer]) {
+        await expect(
+          service.getLuggageRates(3, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'ROLE_FORBIDDEN' },
+        });
+        await expect(
+          service.updateLuggageRates(3, validUpdatePayload, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'ROLE_FORBIDDEN' },
+        });
+      }
+
+      expect(nhaXe.findUnique).not.toHaveBeenCalled();
+      expect(nhaXe.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects tenant principal missing nhaXeId or nhanVienId with TENANT_SCOPE_REQUIRED', async () => {
+      nhaXe.findUnique.mockClear();
+      nhaXe.update.mockClear();
+
+      const missingNhaXe = {
+        ...tenantAdminPrincipal,
+        nhaXeId: null,
+      };
+      const missingNhanVien = {
+        ...tenantAdminPrincipal,
+        nhanVienId: null,
+      };
+
+      for (const principal of [missingNhaXe, missingNhanVien]) {
+        await expect(
+          service.getLuggageRates(3, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'TENANT_SCOPE_REQUIRED' },
+        });
+        await expect(
+          service.updateLuggageRates(3, validUpdatePayload, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'TENANT_SCOPE_REQUIRED' },
+        });
+      }
+
+      expect(nhaXe.findUnique).not.toHaveBeenCalled();
+      expect(nhaXe.update).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 BUS_COMPANY_NOT_FOUND when the tenant company record does not exist', async () => {
+      nhaXe.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.getLuggageRates(3, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
+        },
+      });
+
+      nhaXe.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.updateLuggageRates(3, validUpdatePayload, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
+        },
+      });
     });
 
     it('returns trip luggage rates with route override applied', async () => {
