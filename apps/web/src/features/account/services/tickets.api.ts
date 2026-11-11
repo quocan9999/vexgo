@@ -28,7 +28,10 @@ export type TicketItem = {
   diemDonSnapshot?: Record<string, unknown> | null;
   diemTraSnapshot?: Record<string, unknown> | null;
   cargoFee?: number;
+  cargoWaybillCode?: string | null;
+  cargoStatus?: string | null;
   cargoItems?: Array<{
+    id?: number;
     name?: string;
     quantity?: number;
     weight?: number;
@@ -214,6 +217,7 @@ export const ticketsApi = {
     reason: string | undefined,
     expectedCancelFeeRate: number,
     ticketCodes?: string[],
+    cargoItemIds?: number[],
   ): Promise<{ data: CancelTicketResult }> {
     const res = await fetch(`${API_BASE_URL}/tickets/cancel`, {
       method: 'POST',
@@ -226,6 +230,7 @@ export const ticketsApi = {
         reason,
         expectedCancelFeeRate,
         ticketCodes: ticketCodes && ticketCodes.length > 0 ? ticketCodes : undefined,
+        cargoItemIds: cargoItemIds && cargoItemIds.length > 0 ? cargoItemIds : undefined,
       }),
     });
 
@@ -249,6 +254,11 @@ export interface CancelTicketResult {
   cancelledTicketCodes?: string[];
   cancelledSeatNumbers?: string[];
   status: string;
+  cargoCancellation?: {
+    status: string;
+    cancelledItemIds: number[];
+    remainingItemsCount: number;
+  } | null;
   cancelFee: number;
   refundAmount: number;
   message?: string;

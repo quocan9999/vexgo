@@ -5,12 +5,14 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RefundProcessorService } from '../payments/refund-processor.service.js';
 import { lockPaymentOrder } from '../payments/payment-order-lock.js';
+import { ShipmentsService } from '../shipments/shipments.service.js';
 import {
   combineDeparture,
   computeArrival,
@@ -49,6 +51,8 @@ const TICKET_INCLUDE = {
           nhaXe: true,
           phieuGuiHang: {
             select: {
+              phieuGuiHangId: true,
+              maVanDon: true,
               trangThai: true,
               tongPhi: true,
               hangHoas: {
@@ -169,7 +173,11 @@ function getCancellationQuote(
 
   const cancelFeeRate = hoursUntilDeparture <= 24 ? 0.2 : 0.1;
   const shipment = ticket.phieuDatVe.donGiaoDich.phieuGuiHang;
-  if (shipment && shipment.trangThai !== 'DA_HUY') {
+  if (
+    shipment &&
+    shipment.trangThai !== 'DA_HUY' &&
+    shipment.trangThai !== 'MOI_TAO'
+  ) {
     return {
       eligible: false,
       reason: 'ACTIVE_SHIPMENT',
@@ -206,6 +214,7 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     config: ConfigService,
     private readonly refundProcessor: RefundProcessorService,
+    @Optional() private readonly shipmentsService?: ShipmentsService,
   ) {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
@@ -714,6 +723,37 @@ export class TicketsService {
             },
           });
 
+          if (dto.cargoItemIds?.length && remainingActiveTickets === 0) {
+            throw new BadRequestException({
+              error: 'CARGO_SELECTION_NOT_APPLICABLE',
+              message:
+                'Khi hủy toàn bộ vé trong đơn, gói hành lý Mới tạo sẽ được hủy toàn bộ. Vui lòng tải lại và xác nhận.',
+            });
+          }
+
+          let cargoCancellation: {
+            status: string;
+            cancelledItemIds: number[];
+            remainingItemsCount: number;
+          } | null = null;
+          if (dto.cargoItemIds?.length) {
+            if (!this.shipmentsService) {
+              throw new Error('ShipmentsService is required to cancel selected cargo.');
+            }
+            const cargoResult =
+              await this.shipmentsService.cancelAttachedCargoSelectionInTransaction(
+                tx,
+                order.donGiaoDichId,
+                dto.cargoItemIds,
+                changedAt,
+              );
+            cargoCancellation = {
+              status: cargoResult.status,
+              cancelledItemIds: cargoResult.cancelledItemIds,
+              remainingItemsCount: cargoResult.remainingItemsCount,
+            };
+          }
+
           if (remainingActiveTickets === 0) {
             await tx.phieuDatVe.update({
               where: { phieuDatVeId: ticketsToCancel[0].phieuDatVeId },
@@ -738,6 +778,46 @@ export class TicketsService {
                 maThaoTac: operationId,
               },
             });
+
+            const attachedShipment = order.phieuGuiHang as
+              | { phieuGuiHangId?: number; trangThai?: string }
+              | null
+              | undefined;
+            if (
+              attachedShipment?.phieuGuiHangId &&
+              attachedShipment.trangThai === 'MOI_TAO'
+            ) {
+              const cancelledShipment = await tx.phieuGuiHang.updateMany({
+                where: {
+                  phieuGuiHangId: attachedShipment.phieuGuiHangId,
+                  trangThai: 'MOI_TAO',
+                },
+                data: {
+                  trangThai: 'DA_HUY',
+                  updatedAt: changedAt,
+                },
+              });
+              if (cancelledShipment.count !== 1) {
+                throw new ConflictException({
+                  error: 'CONCURRENT_STATUS_UPDATE',
+                  message: 'Trạng thái hành lý đã thay đổi. Vui lòng tải lại thông tin đơn.',
+                });
+              }
+              await tx.lichSuTrangThaiPhieuGuiHang.create({
+                data: {
+                  phieuGuiHangId: attachedShipment.phieuGuiHangId,
+                  trangThai: 'DA_HUY',
+                  thoiGian: changedAt,
+                  taiKhoanId: null,
+                  ghiChu: `Tự động hủy gói hành lý gửi kèm do đã hủy vé (${reason})`,
+                },
+              });
+              cargoCancellation = {
+                status: 'DA_HUY',
+                cancelledItemIds: order.phieuGuiHang?.hangHoas?.map((item) => item.hangHoaId) ?? [],
+                remainingItemsCount: 0,
+              };
+            }
           }
 
           return {
@@ -752,6 +832,7 @@ export class TicketsService {
                 cancelFeeRate: dto.expectedCancelFeeRate,
                 cancelFee: Number(totalCancelFee.toString()),
                 refundAmount: Number(totalRefundAmount.toString()),
+                cargoCancellation,
                 message: totalRefundAmount.isZero()
                   ? 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.'
                   : 'Hủy vé thành công. Quý khách vui lòng liên hệ nhà xe để được hỗ trợ hoàn tiền.',
@@ -856,9 +937,12 @@ export class TicketsService {
     const discountAmount = Number(ticket.phieuDatVe?.soTienGiamKhuyenMai ?? 0);
     const shipment = order?.phieuGuiHang as
       | {
+          phieuGuiHangId?: number;
+          maVanDon?: string;
           trangThai?: string;
           tongPhi?: Prisma.Decimal | number | string | null;
           hangHoas?: Array<{
+            hangHoaId: number;
             tenHang: string;
             soLuong: number;
             khoiLuong: Prisma.Decimal | number | string;
@@ -871,14 +955,18 @@ export class TicketsService {
         }
       | null
       | undefined;
-    const cargoItems = (shipment?.hangHoas ?? []).map((h) => ({
-      name: h.tenHang,
-      quantity: h.soLuong,
-      weight: Number(h.khoiLuong),
-      category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
-      categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
-      note: h.moTa ?? null,
-    }));
+    const isCargoCancelled = shipment?.trangThai === 'DA_HUY';
+    const cargoItems = isCargoCancelled
+      ? []
+      : (shipment?.hangHoas ?? []).map((h) => ({
+          id: h.hangHoaId,
+          name: h.tenHang,
+          quantity: h.soLuong,
+          weight: Number(h.khoiLuong),
+          category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
+          categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
+          note: h.moTa ?? null,
+        }));
 
     return {
       ticketId: ticket.veId,
@@ -892,7 +980,9 @@ export class TicketsService {
       originalTicketSubtotal,
       discountAmount,
       ticketSubtotal: originalTicketSubtotal - discountAmount,
-      cargoFee: Number(shipment?.tongPhi ?? 0),
+      cargoFee: isCargoCancelled ? 0 : Number(shipment?.tongPhi ?? 0),
+      cargoWaybillCode: shipment?.maVanDon ?? null,
+      cargoStatus: shipment?.trangThai ?? null,
       cargoItems,
       route,
       origin: tuyenXe?.diemDi ?? null,

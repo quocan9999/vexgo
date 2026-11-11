@@ -1,9 +1,37 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import {
+  getFutaGiuongNam34Seats,
+  getThanhBuoiGiuongNam34Seats,
+  getFutaLimousine28Seats,
+} from './lib/seat-layouts.mjs';
+
+function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
+
+function calculateClockTime(baseTime, durationMinutes) {
+  if (durationMinutes == null || !Number.isFinite(durationMinutes)) return null;
+  const totalSeconds =
+    baseTime.getUTCHours() * 3600 +
+    baseTime.getUTCMinutes() * 60 +
+    baseTime.getUTCSeconds() +
+    Math.round(durationMinutes * 60);
+  const normalizedSeconds = ((totalSeconds % 86400) + 86400) % 86400;
+  const hours = Math.floor(normalizedSeconds / 3600);
+  const minutes = Math.floor((normalizedSeconds % 3600) / 60);
+  const seconds = normalizedSeconds % 60;
+  const d = new Date(0);
+  d.setUTCHours(hours, minutes, seconds, 0);
+  return d;
+}
 
 async function main() {
-  const url = new URL(process.env.DATABASE_URL);
+  const rawUrl = process.env.DATABASE_URL ?? process.env.MIGRATION_URL;
+  const url = new URL(rawUrl);
   const prisma = new PrismaClient({
     adapter: new PrismaMariaDb({
       host: url.hostname,
@@ -15,20 +43,48 @@ async function main() {
     }),
   });
 
-  console.log('=== ĐANG TẠO CÁC CHUYẾN XE 0Đ (MIỄN PHÍ) ===\n');
+  console.log('=== ĐANG TẠO CÁC CHUYẾN XE 0Đ (MIỄN PHÍ) CHO HÔM NAY & 7 NGÀY TỚI ===\n');
 
-  // Danh sách các nhà xe cần tạo chuyến 0đ
   const operators = [
-    { nhaXeId: 1, codePrefix: 'FUTA', plate: '51B-000.99', typeName: 'Xe Thử Nghiệm (0đ)' },
-    { nhaXeId: 2, codePrefix: 'TB', plate: '51B-000.88', typeName: 'Xe Thử Nghiệm (0đ)' },
+    {
+      nhaXeId: 1,
+      codePrefix: 'FUTA',
+      plate: '51B-000.99',
+      typeName: 'Xe Giường Nằm Thử Nghiệm (0đ)',
+      getSeats: getFutaGiuongNam34Seats,
+    },
+    {
+      nhaXeId: 2,
+      codePrefix: 'TB',
+      plate: '51B-000.88',
+      typeName: 'Xe Phòng Nằm Thử Nghiệm (0đ)',
+      getSeats: getThanhBuoiGiuongNam34Seats,
+    },
+    {
+      nhaXeId: 3,
+      codePrefix: 'HM',
+      plate: '72B-000.77',
+      typeName: 'Limousine VIP Thử Nghiệm (0đ)',
+      getSeats: getFutaLimousine28Seats,
+    },
   ];
 
-  const seatCodes = [
-    'A01', 'A02', 'A03', 'A04', 'A05', 'A06',
-    'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
-    'B01', 'B02', 'B03', 'B04', 'B05', 'B06',
-    'B07', 'B08', 'B09', 'B10', 'B11', 'B12',
+  // Tạo lịch từ ngày 07/11/2026 đến 14/11/2026
+  const dates = [
+    '2026-11-07',
+    '2026-11-08',
+    '2026-11-09',
+    '2026-11-10',
+    '2026-11-11',
+    '2026-11-12',
+    '2026-11-13',
+    '2026-11-14',
   ];
+
+  const timesByDate = (dateStr) =>
+    dateStr === '2026-11-07'
+      ? ['23:30']
+      : ['07:30', '11:00', '15:30', '20:00'];
 
   const createdTripsSummary = [];
 
@@ -48,7 +104,7 @@ async function main() {
         data: {
           nhaXeId: op.nhaXeId,
           tenLoai: op.typeName,
-          moTa: 'Xe chuyên dùng thử nghiệm đặt vé và gửi hàng 0đ',
+          moTa: 'Xe chuyên dùng thử nghiệm đặt vé và gửi hàng 0đ (Miễn phí)',
           sucChuaXeMayMacDinh: 5,
           sucChuaHangCongKenhMacDinh: 10,
           sucChuaHangNheMacDinh: 50,
@@ -67,28 +123,47 @@ async function main() {
           loaiXeId: loaiXe.loaiXeId,
         },
       });
+    } else if (xe.loaiXeId !== loaiXe.loaiXeId || xe.trangThai !== 'HOAT_DONG') {
+      xe = await prisma.xe.update({
+        where: { xeId: xe.xeId },
+        data: { loaiXeId: loaiXe.loaiXeId, trangThai: 'HOAT_DONG' },
+      });
     }
 
-    // 3. Tạo ghế xe
-    for (const code of seatCodes) {
+    // 3. Tạo hoặc đồng bộ ghế xe theo sơ đồ chuẩn 2 tầng / Limousine
+    const layoutSpecs = op.getSeats();
+    for (const spec of layoutSpecs) {
+      const maGhe = deterministicUuid('GHE-0D', xe.bienSoXe, spec.tenGhe);
       const existing = await prisma.ghe.findFirst({
-        where: { xeId: xe.xeId, soGhe: code },
+        where: { xeId: xe.xeId, tenGhe: spec.tenGhe },
       });
       if (!existing) {
         await prisma.ghe.create({
           data: {
+            maGhe,
+            tenGhe: spec.tenGhe,
+            viTri: spec.viTri,
+            tang: spec.tang,
+            toaDoX: spec.toaDoX,
+            toaDoY: spec.toaDoY,
             xeId: xe.xeId,
-            soGhe: code,
-            viTri: code.startsWith('A') ? 'Tầng dưới' : 'Tầng trên',
           },
         });
       }
     }
-    const allSeats = await prisma.ghe.findMany({ where: { xeId: xe.xeId } });
+    const allSeats = await prisma.ghe.findMany({
+      where: { xeId: xe.xeId },
+      orderBy: { gheId: 'asc' },
+    });
 
-    // 4. Lấy các tuyến xe của nhà xe
+    // 4. Lấy các tuyến xe đang hoạt động của nhà xe kèm điểm dừng
     const routes = await prisma.tuyenXe.findMany({
       where: { nhaXeId: op.nhaXeId, trangThai: 'HOAT_DONG' },
+      include: {
+        tuyenXeDiemDungs: {
+          orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+        },
+      },
     });
 
     for (const route of routes) {
@@ -115,105 +190,110 @@ async function main() {
       } else {
         await prisma.bangGia.update({
           where: { bangGiaId: bangGia.bangGiaId },
-          data: { giaNiemYet: 0, trangThai: 'HOAT_DONG' },
+          data: { giaNiemYet: 0, trangThai: 'HOAT_DONG', denNgay: null },
         });
       }
 
-      // Tạo các chuyến xe cho 3 ngày tới: Hôm nay (2026-10-23), 2026-10-24, 2026-10-25
-      const tripSchedules = [
-        // Hôm nay (chiều và tối để chắc chắn sau giờ hiện tại)
-        { date: '2026-10-23', depTime: '13:30', arrTime: '19:30' },
-        { date: '2026-10-23', depTime: '16:00', arrTime: '22:00' },
-        { date: '2026-10-23', depTime: '18:30', arrTime: '01:30' },
-        { date: '2026-10-23', depTime: '21:00', arrTime: '04:00' },
-        // Ngày mai
-        { date: '2026-10-24', depTime: '07:30', arrTime: '13:30' },
-        { date: '2026-10-24', depTime: '10:00', arrTime: '16:00' },
-        { date: '2026-10-24', depTime: '14:00', arrTime: '20:00' },
-        { date: '2026-10-24', depTime: '19:30', arrTime: '02:30' },
-        // Ngày mốt
-        { date: '2026-10-25', depTime: '08:00', arrTime: '14:00' },
-        { date: '2026-10-25', depTime: '15:00', arrTime: '21:00' },
-      ];
+      const durationMinutes = route.thoiGianChayPhut || 300;
 
-      for (const schedule of tripSchedules) {
-        const dateClean = schedule.date.replace(/-/g, '');
-        const timeClean = schedule.depTime.replace(':', '');
-        const tripCode = `${op.codePrefix}-0D-${route.tuyenXeId}-${dateClean}-${timeClean}`;
+      for (const dateStr of dates) {
+        const depTimes = timesByDate(dateStr);
+        for (const depTimeStr of depTimes) {
+          const dateClean = dateStr.replace(/-/g, '');
+          const timeClean = depTimeStr.replace(':', '');
+          const tripCode = `${op.codePrefix}-0D-R${route.tuyenXeId}-${dateClean}-${timeClean}`;
 
-        let chuyenXe = await prisma.chuyenXe.findFirst({
-          where: { maChuyenXe: tripCode },
-        });
+          const departureDate = new Date(`${dateStr}T00:00:00.000Z`);
+          const gioKhoiHanh = new Date(`1970-01-01T${depTimeStr}:00.000Z`);
+          const gioDen = calculateClockTime(gioKhoiHanh, durationMinutes);
 
-        const departureDate = new Date(`${schedule.date}T00:00:00.000Z`);
-        const [depH, depM] = schedule.depTime.split(':').map(Number);
-        const [arrH, arrM] = schedule.arrTime.split(':').map(Number);
-        const gioKhoiHanh = new Date(Date.UTC(1970, 0, 1, depH, depM, 0));
-        const gioDen = new Date(Date.UTC(1970, 0, 1, arrH, arrM, 0));
-
-        if (!chuyenXe) {
-          chuyenXe = await prisma.chuyenXe.create({
-            data: {
-              maChuyenXe: tripCode,
-              ngayKhoiHanh: departureDate,
-              gioKhoiHanh: gioKhoiHanh,
-              gioDen: gioDen,
-              nhanGuiHang: true,
-              sucChuaXeMay: 5,
-              sucChuaHangCongKenh: 10,
-              sucChuaHangNhe: 50,
-              trangThai: 'CHUA_KHOI_HANH',
-              nhaXeId: op.nhaXeId,
-              tuyenXeId: route.tuyenXeId,
-              xeId: xe.xeId,
-            },
+          let chuyenXe = await prisma.chuyenXe.findFirst({
+            where: { maChuyenXe: tripCode },
           });
 
-          // Khởi tạo ghế chuyến xe ở trạng thái TRỐNG
-          for (const seat of allSeats) {
-            await prisma.gheChuyenXe.create({
+          if (!chuyenXe) {
+            chuyenXe = await prisma.chuyenXe.create({
               data: {
-                chuyenXeId: chuyenXe.chuyenXeId,
-                gheId: seat.gheId,
-                trangThai: 'TRONG',
+                maChuyenXe: tripCode,
+                ngayKhoiHanh: departureDate,
+                gioKhoiHanh,
+                gioDen,
+                nhanGuiHang: true,
+                sucChuaXeMay: 5,
+                sucChuaHangCongKenh: 10,
+                sucChuaHangNhe: 50,
+                trangThai: 'CHUA_KHOI_HANH',
+                nhaXeId: op.nhaXeId,
+                tuyenXeId: route.tuyenXeId,
+                xeId: xe.xeId,
+              },
+            });
+
+            if (allSeats.length > 0) {
+              await prisma.gheChuyenXe.createMany({
+                data: allSeats.map((seat) => ({
+                  chuyenXeId: chuyenXe.chuyenXeId,
+                  gheId: seat.gheId,
+                  trangThai: 'TRONG',
+                  tang: seat.tang,
+                  toaDoX: seat.toaDoX,
+                  toaDoY: seat.toaDoY,
+                })),
+                skipDuplicates: true,
+              });
+            }
+          } else {
+            await prisma.chuyenXe.update({
+              where: { chuyenXeId: chuyenXe.chuyenXeId },
+              data: {
+                trangThai: 'CHUA_KHOI_HANH',
+                gioKhoiHanh,
+                gioDen,
+                nhanGuiHang: true,
               },
             });
           }
-        } else {
-          // Cập nhật lại để đảm bảo trạng thái CHUA_KHOI_HANH và đúng giờ
-          await prisma.chuyenXe.update({
+
+          // Đồng bộ điểm đón trả cho chuyến xe (để khách chọn được điểm đón/trả trên UI)
+          const existingStopsCount = await prisma.diemDonTraChuyenXe.count({
             where: { chuyenXeId: chuyenXe.chuyenXeId },
-            data: {
-              trangThai: 'CHUA_KHOI_HANH',
-              gioKhoiHanh,
-              gioDen,
-              nhanGuiHang: true,
-            },
           });
-          // Đảm bảo ghế còn trống
-          await prisma.gheChuyenXe.updateMany({
-            where: { chuyenXeId: chuyenXe.chuyenXeId },
-            data: { trangThai: 'TRONG' },
+          if (existingStopsCount === 0 && route.tuyenXeDiemDungs.length > 0) {
+            await prisma.diemDonTraChuyenXe.createMany({
+              data: route.tuyenXeDiemDungs.map((stop) => ({
+                chuyenXeId: chuyenXe.chuyenXeId,
+                diemDonTraId: stop.diemDonTraId,
+                loaiDiem: stop.loaiDiem,
+                thoiGianDuKien: calculateClockTime(gioKhoiHanh, stop.phutLech),
+                phutLech: stop.phutLech,
+                thuTu: stop.thuTu,
+                phuPhi: 0,
+                phutCoMatTruoc: stop.phutCoMatTruoc,
+                nhanKhach: stop.nhanKhach,
+                ghiChu: stop.ghiChu,
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          createdTripsSummary.push({
+            id: chuyenXe.chuyenXeId,
+            code: tripCode,
+            nhaXe: nhaXe.tenNhaXe,
+            route: `${route.diemDi} → ${route.diemDen}`,
+            date: dateStr,
+            time: depTimeStr,
+            price: '0đ',
           });
         }
-
-        createdTripsSummary.push({
-          id: chuyenXe.chuyenXeId,
-          code: tripCode,
-          nhaXe: nhaXe.tenNhaXe,
-          route: `${route.diemDi} → ${route.diemDen}`,
-          date: schedule.date,
-          time: schedule.depTime,
-          price: '0đ',
-        });
       }
     }
   }
 
-  console.log(`✓ Đã tạo thành công ${createdTripsSummary.length} chuyến xe giá 0đ!`);
+  console.log(`✓ Đã tạo/cập nhật thành công ${createdTripsSummary.length} chuyến xe giá 0đ!`);
   console.log('\n--- BẢNG DANH SÁCH CÁC CHUYẾN XE 0Đ TIÊU BIỂU ---');
   console.table(
-    createdTripsSummary.slice(0, 20).map((t) => ({
+    createdTripsSummary.slice(0, 24).map((t) => ({
       ID: t.id,
       'Nhà xe': t.nhaXe,
       Tuyến: t.route,

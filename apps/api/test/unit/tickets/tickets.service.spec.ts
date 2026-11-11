@@ -109,6 +109,9 @@ describe('TicketsService', () => {
     phieuDatVe: {
       update: vi.fn(),
     },
+    phieuGuiHang: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     donGiaoDich: {
       update: vi.fn(),
     },
@@ -117,6 +120,9 @@ describe('TicketsService', () => {
     },
     lichSuTrangThaiPhieuDatVe: {
       create: vi.fn(),
+    },
+    lichSuTrangThaiPhieuGuiHang: {
+      create: vi.fn().mockResolvedValue({}),
     },
     thanhToan: {
       create: vi.fn(),
@@ -129,11 +135,15 @@ describe('TicketsService', () => {
     get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
   };
   const refundProcessor = { enqueueRefund: vi.fn() };
+  const shipmentCancellation = {
+    cancelAttachedCargoSelectionInTransaction: vi.fn(),
+  };
 
   const service = new TicketsService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
     refundProcessor as never,
+    shipmentCancellation as never,
   );
 
   beforeEach(() => {
@@ -575,7 +585,7 @@ describe('TicketsService', () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
       const current = { ...sampleTicket, phieuDatVe: { ...sampleTicket.phieuDatVe,
-        donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich, phieuGuiHang: { trangThai: 'MOI_TAO' } },
+        donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich, phieuGuiHang: { trangThai: 'DA_TIEP_NHAN' } },
       } };
       prisma.ve.findUnique.mockResolvedValueOnce(sampleTicket).mockResolvedValueOnce(current);
       await expect(service.cancelTicket({ ticketCode: 'VE-001', phoneNumber: '0901234567', expectedCancelFeeRate: 0.1 })).rejects.toMatchObject({ response: { error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' } });
@@ -584,7 +594,7 @@ describe('TicketsService', () => {
       expect(prisma.ve.updateMany).not.toHaveBeenCalled();
     });
 
-    it.each(['MOI_TAO', 'DA_TIEP_NHAN', 'DANG_VAN_CHUYEN', 'DA_GIAO'])('blocks every ticket with active cargo %s including zero fare', async (status) => {
+    it.each(['DA_TIEP_NHAN', 'DANG_VAN_CHUYEN', 'DA_GIAO'])('blocks every ticket with handed-over cargo %s including zero fare', async (status) => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
       const ticket = { ...sampleTicket, giaThucTe: '0', phieuDatVe: {
@@ -603,6 +613,78 @@ describe('TicketsService', () => {
       expect(refundProcessor.enqueueRefund).not.toHaveBeenCalled();
       const lookup = await service.findCustomerTicketById(1, 1);
       expect(lookup.data.cancellation).toMatchObject({ eligible: false, reason: 'ACTIVE_SHIPMENT' });
+    });
+
+    it('allows cancelling ticket with MOI_TAO cargo and auto-cancels the attached cargo when all tickets are cancelled', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      prisma.ve.count.mockResolvedValue(0);
+      const ticket = {
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            phieuGuiHang: { phieuGuiHangId: 77, maVanDon: 'VD-77', trangThai: 'MOI_TAO' },
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket);
+      const res = await service.cancelTicket({
+        ticketCode: ticket.maVe,
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1,
+      });
+      expect(res.data.status).toBe('HUY');
+      expect(prisma.phieuGuiHang.updateMany).toHaveBeenCalledWith({
+        where: { phieuGuiHangId: 77, trangThai: 'MOI_TAO' },
+        data: expect.objectContaining({ trangThai: 'DA_HUY' }),
+      });
+    });
+
+    it('applies selected cargo cancellation in the same transaction as a partial ticket cancellation', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            phieuGuiHang: { phieuGuiHangId: 77, trangThai: 'MOI_TAO' },
+          },
+        },
+      });
+      shipmentCancellation.cancelAttachedCargoSelectionInTransaction.mockResolvedValue({
+        status: 'MOI_TAO', cancelledItemIds: [101], remainingItemsCount: 1,
+      });
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001', phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1, cargoItemIds: [101],
+      });
+
+      expect(shipmentCancellation.cancelAttachedCargoSelectionInTransaction).toHaveBeenCalledWith(
+        prisma, 201, [101], expect.any(Date),
+      );
+      expect(result.data.cargoCancellation).toEqual({
+        status: 'MOI_TAO', cancelledItemIds: [101], remainingItemsCount: 1,
+      });
+    });
+
+    it('rejects a per-item cargo selection when cancelling the last ticket', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      prisma.ve.count.mockResolvedValue(0);
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      await expect(service.cancelTicket({
+        ticketCode: 'VE-001', phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1, cargoItemIds: [101],
+      })).rejects.toMatchObject({ response: { error: 'CARGO_SELECTION_NOT_APPLICABLE' } });
+      expect(shipmentCancellation.cancelAttachedCargoSelectionInTransaction).not.toHaveBeenCalled();
+      expect(refundProcessor.enqueueRefund).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when ticket does not exist', async () => {

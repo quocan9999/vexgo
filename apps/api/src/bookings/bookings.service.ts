@@ -1546,14 +1546,18 @@ export class BookingsService {
     const latestPayment = booking.donGiaoDich?.thanhToans?.[0];
 
     const shipment = booking.donGiaoDich?.phieuGuiHang;
-    const cargoItems = (shipment?.hangHoas ?? []).map((h: any) => ({
-      name: h.tenHang,
-      quantity: h.soLuong,
-      weight: Number(h.khoiLuong),
-      category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
-      categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
-      note: h.moTa ?? null,
-    }));
+    const isCargoCancelled = shipment?.trangThai === 'DA_HUY';
+    const cargoItems = isCargoCancelled
+      ? []
+      : (shipment?.hangHoas ?? []).map((h: any) => ({
+          id: h.hangHoaId,
+          name: h.tenHang,
+          quantity: h.soLuong,
+          weight: Number(h.khoiLuong),
+          category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
+          categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
+          note: h.moTa ?? null,
+        }));
     const ticketSubtotal = (booking.ves ?? []).reduce(
       (sum: number, ticket: any) =>
         sum + Number(ticket.giaThucTe ?? ticket.giaNiemYet ?? 0),
@@ -1599,7 +1603,9 @@ export class BookingsService {
       originalTicketSubtotal,
       discountAmount: Number(booking.soTienGiamKhuyenMai ?? 0),
       promotionCode: booking.khuyenMai?.maKhuyenMai ?? null,
-      cargoFee: Number(shipment?.tongPhi ?? 0),
+      cargoFee: isCargoCancelled ? 0 : Number(shipment?.tongPhi ?? 0),
+      cargoWaybillCode: shipment?.maVanDon ?? null,
+      cargoStatus: shipment?.trangThai ?? null,
       cargoItems,
       status: bookingPaymentHasExpired ? 'HET_HAN' : booking.trangThai,
       paymentStatus: bookingPaymentHasExpired

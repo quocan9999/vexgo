@@ -427,11 +427,19 @@ POST /tickets/:id/exchange         (LOW)
 
 `POST /tickets/lookup` nhận `ticketCode` và `phoneNumber` trong JSON body, đồng thời trả thêm `data.cancellation` gồm `eligible`, `reason`,
 `cancelFeeRate`, `cancelFee` và `refundAmount`. Backend tính báo giá theo thời
-điểm hiện tại: dưới 12 tiếng không được hủy; từ 12 đến hết 24 tiếng phí 20%;
+điểm hiện tại: dưới 2 giờ 30 phút không được hủy; từ 2 giờ 30 phút đến hết 24 tiếng phí 20%;
 trên 24 tiếng phí 10%.
 
 `POST /tickets/cancel` nhận `ticketCode`, `phoneNumber` và
-`expectedCancelFeeRate` bắt buộc. Khi quote hiện tại khác mức phí khách đã xác
+`expectedCancelFeeRate` bắt buộc. `ticketCodes` chọn các vé cùng đơn để hủy
+trong một lượt. `cargoItemIds` là danh sách ID mục hành lý Mới tạo muốn hủy
+cùng vé; chỉ dùng khi đơn vẫn còn vé sau lượt hủy này. Lựa chọn hành lý được
+áp dụng trong cùng transaction hủy vé. Nếu hủy hết vé còn hiệu lực, toàn bộ
+gói hành lý Mới tạo được hủy tự động; không gửi `cargoItemIds`. Response trả
+`data.cargoCancellation` khi có hành lý được hủy cùng vé, gồm `status`,
+`cancelledItemIds` và `remainingItemsCount`.
+
+Khi quote hiện tại khác mức phí khách đã xác
 nhận, API trả `409 CANCELLATION_QUOTE_EXPIRED`; `details.previousRate` chứa mức
 phí cũ và `details.currentQuote` chứa quote mới đã được filter kiểm tra schema.
 Frontend phải hiển thị quote mới từ server và yêu cầu khách xác nhận lại, không
@@ -439,6 +447,9 @@ Frontend phải hiển thị quote mới từ server và yêu cầu khách xác 
 giải phóng ghế trong transaction, đồng thời tạo giao dịch `HOAN_TIEN` ở trạng
 thái `DANG_XU_LY`; response chỉ xác nhận yêu cầu hoàn tiền đã được ghi nhận,
 không khẳng định tiền đã hoàn tất.
+ID hành lý không thuộc đơn trả `400 INVALID_CARGO_ITEM_IDS`; chọn mục hành lý
+khi hủy hết vé trả `400 CARGO_SELECTION_NOT_APPLICABLE`; hành lý không còn
+trạng thái Mới tạo trả `409 SHIPMENT_CANNOT_BE_CANCELLED_ONLINE`.
 
 Sau khi transaction commit, refund processor gửi yêu cầu tới
 `REFUND_PROVIDER_URL` với idempotency key ổn định theo `thanhToanId`. Record

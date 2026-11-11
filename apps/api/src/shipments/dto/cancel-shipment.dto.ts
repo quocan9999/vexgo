@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CancelShipmentDto {
   @ApiProperty({
@@ -26,4 +34,26 @@ export class CancelShipmentDto {
   @IsString()
   @MaxLength(255, { message: 'Lý do hủy không được vượt quá 255 ký tự.' })
   reason?: string;
+
+  @ApiPropertyOptional({
+    description: 'Danh sách ID các kiện hàng muốn hủy riêng (nếu chỉ hủy một phần kiện)',
+    example: [1],
+    type: [Number],
+  })
+  @IsOptional()
+  @IsArray({ message: 'itemIds phải là danh sách số nguyên.' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: 'Mỗi itemId phải là số nguyên hợp lệ.' })
+  itemIds?: number[];
+
+  @ApiPropertyOptional({
+    description: 'Danh sách vị trí (index 0, 1...) các kiện hàng muốn hủy riêng',
+    example: [0],
+    type: [Number],
+  })
+  @IsOptional()
+  @IsArray({ message: 'itemIndices phải là danh sách số nguyên.' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: 'Mỗi itemIndex phải là số nguyên hợp lệ.' })
+  itemIndices?: number[];
 }
