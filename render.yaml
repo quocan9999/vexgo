@@ -27,10 +27,12 @@ services:
       - key: OTP_HASH_SECRET
         generateValue: true
       - key: SMS_PROVIDER
-        value: console
+        value: textbee
       - key: TEXTBEE_API_KEY
         sync: false
       - key: TEXTBEE_DEVICE_ID
+        sync: false
+      - key: SEPAY_ACCOUNT_NUMBER
         sync: false
       - key: PAYMENT_DEMO_MODE
         value: 'false'
