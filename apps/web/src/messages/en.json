@@ -1543,7 +1543,16 @@
     "botFallbackReply": "Sorry, I did not understand that. Would you like to connect with operator customer service?",
     "botCancelTicketReply": "You can cancel tickets directly under My Activity if your ticket meets cancellation conditions. Refund will be processed according to operator policy.",
     "botPaymentReply": "We support payment via MoMo, VNPAY, ZaloPay, and bank transfer. If an error occurs, the system automatically reconciles and refunds within 24 working hours.",
-    "botHelloReply": "Hello! Do you need route advice or operator contact information?"
+    "botHelloReply": "Hello! Do you need route advice or operator contact information?",
+    "aiThinking": "AI assistant is searching and thinking...",
+    "ragBadge": "RAG 24/7",
+    "citations": "Document citations",
+    "hideCitations": "Hide citations",
+    "viewCitations": "View citations",
+    "viewTicket": "View e-ticket",
+    "seatsLeft": "{count} seats left",
+    "details": "Details",
+    "contactOperator": "Contact"
   },
   "promotions": {
     "badge": "VexGo Offers",

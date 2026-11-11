@@ -261,19 +261,32 @@ const WIDGET_FALLBACK: Record<string, string> = {
 };
 
 function useSafeWidgetTranslations() {
-  try {
-    return useTranslations('chat');
-  } catch {
-    const fallbackT = (key: string, values?: Record<string, unknown>) => {
-      let text = WIDGET_FALLBACK[key] || key;
-      if (values) {
-        for (const [k, v] of Object.entries(values)) {
-          text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
-        }
+  const getFallback = (key: string, values?: Record<string, unknown>) => {
+    let text = WIDGET_FALLBACK[key] || key;
+    if (values) {
+      for (const [k, v] of Object.entries(values)) {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
       }
-      return text;
+    }
+    return text;
+  };
+
+  try {
+    const t = useTranslations('chat');
+    const safeT = (key: string, values?: Record<string, unknown>) => {
+      try {
+        const res = t(key as any, values as any);
+        if (res === key || res === `chat.${key}`) {
+          return getFallback(key, values);
+        }
+        return res;
+      } catch {
+        return getFallback(key, values);
+      }
     };
-    return fallbackT as unknown as ReturnType<typeof useTranslations>;
+    return safeT as unknown as ReturnType<typeof useTranslations>;
+  } catch {
+    return getFallback as unknown as ReturnType<typeof useTranslations>;
   }
 }
 

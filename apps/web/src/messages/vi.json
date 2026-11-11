@@ -1543,7 +1543,16 @@
     "botFallbackReply": "Xin lỗi, tôi chưa hiểu ý bạn. Bạn có muốn kết nối với nhân viên CSKH của nhà xe không?",
     "botCancelTicketReply": "Bạn có thể hủy vé trực tiếp trong phần Vé và đơn hàng nếu vé của bạn thỏa mãn điều kiện hủy. Tiền sẽ được hoàn tự động về tài khoản thanh toán ban đầu.",
     "botPaymentReply": "Chúng tôi hỗ trợ thanh toán qua MoMo, VNPAY, ZaloPay và thẻ ngân hàng. Nếu thanh toán lỗi, hệ thống sẽ tự động hoàn tiền sau 24h làm việc.",
-    "botHelloReply": "Chào bạn! Bạn cần tư vấn về tuyến đường hay liên hệ nhà xe nào ạ?"
+    "botHelloReply": "Chào bạn! Bạn cần tư vấn về tuyến đường hay liên hệ nhà xe nào ạ?",
+    "aiThinking": "Trợ lý AI đang tra cứu và suy nghĩ...",
+    "ragBadge": "RAG 24/7",
+    "citations": "Trích dẫn tài liệu",
+    "hideCitations": "Đang ẩn nguồn",
+    "viewCitations": "Xem nguồn",
+    "viewTicket": "Xem vé điện tử",
+    "seatsLeft": "Còn {count} ghế",
+    "details": "Chi tiết",
+    "contactOperator": "Liên hệ"
   },
   "promotions": {
     "badge": "Ưu đãi VexGo",
