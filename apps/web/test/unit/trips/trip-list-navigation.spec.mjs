@@ -99,3 +99,25 @@ test('trip list sends keyword and vehicle filters before server pagination', () 
     },
   );
 });
+
+test('isTripUpcoming and filterUpcomingTrips filter out trips whose departure time has passed', () => {
+  const now = new Date('2026-11-08T05:15:00.000Z').getTime();
+
+  const pastTrip = {
+    id: '1',
+    departureDate: '2026-11-08T04:00:00.000Z',
+  };
+  const futureTrip = {
+    id: '2',
+    departureDate: '2026-11-08T06:00:00.000Z',
+  };
+
+  assert.equal(tripListState.isTripUpcoming(pastTrip, now), false);
+  assert.equal(tripListState.isTripUpcoming(futureTrip, now), true);
+
+  const filtered = tripListState.filterUpcomingTrips(
+    [pastTrip, futureTrip],
+    now,
+  );
+  assert.deepEqual(filtered, [futureTrip]);
+});

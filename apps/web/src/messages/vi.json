@@ -157,7 +157,9 @@
       "step3Sub": "QR chuyển khoản / Ví",
       "step4Title": "Lên xe an toàn",
       "step4Sub": "Xuất trình vé điện tử"
-    }
+    },
+    "returnDatePastError": "Ngày về không được nhỏ hơn ngày hiện tại",
+    "swapRoutes": "Đổi chiều điểm đi và điểm đến"
   },
   "search": {
     "tripList": "Danh sách chuyến xe",
@@ -283,7 +285,9 @@
     "transferPickupHeading": "Điểm đón trung chuyển ({count})",
     "transferDropoffHeading": "Điểm trả trung chuyển ({count})",
     "tripNoteTitle": "Lưu ý:",
-    "seeMore": "xem thêm"
+    "seeMore": "xem thêm",
+    "pickup": "Điểm đón",
+    "dropoff": "Điểm trả"
   },
   "booking": {
     "stepSelectTrip": "Chọn chuyến",
@@ -535,9 +539,23 @@
     "maxSeatsPerTrip": "Tối đa 5 ghế/chuyến",
     "tripInfoOutbound": "Thông tin chuyến đi (Chiều đi)",
     "tripInfoReturn": "Thông tin chuyến đi (Chiều về)",
-    "swapRoutes": "Đổi chiều tuyến",
+    "swapRoutes": "Đổi chiều điểm đi và điểm đến",
     "returnDatePastError": "Ngày về không được nhỏ hơn ngày hiện tại",
-    "securePayment": "Thanh toán an toàn"
+    "securePayment": "Thanh toán an toàn",
+    "tabBus": "Đặt vé",
+    "tabFreight": "Gửi hàng",
+    "oneWay": "Một chiều",
+    "roundTrip": "Khứ hồi",
+    "origin": "Điểm đi",
+    "destination": "Điểm đến",
+    "originPlaceholder": "Chọn điểm đi",
+    "destinationPlaceholder": "Chọn điểm đến",
+    "departureDate": "Ngày đi",
+    "returnDate": "Ngày về",
+    "ticketQuantity": "Số ghế",
+    "searchBuses": "Tìm chuyến",
+    "departureDatePastError": "Ngày đi không được nhỏ hơn ngày hiện tại",
+    "returnDateBeforeDepError": "Ngày về không được nhỏ hơn ngày đi"
   },
   "lookup": {
     "lookupTitle": "Tra cứu thông tin đặt vé",
@@ -1427,7 +1445,11 @@
       "deleteReviewConfirmTitle": "Xóa đánh giá chuyến xe?",
       "deleteReviewConfirmDesc": "Bạn có chắc chắn muốn xóa đánh giá của mình cho chuyến đi này không? Sau khi xóa, bạn có thể thực hiện đánh giá lại bất kỳ lúc nào.",
       "deletingReview": "Đang xóa...",
-      "confirmDeleteReview": "Xác nhận xóa"
+      "confirmDeleteReview": "Xác nhận xóa",
+      "deleteReview": "Xóa đánh giá",
+      "deleteReviewConfirm": "Bạn có chắc chắn muốn xóa đánh giá của mình cho chuyến đi này không? Sau khi xóa, bạn có thể thực hiện đánh giá lại bất kỳ lúc nào.",
+      "cancelFilter": "Hủy bỏ",
+      "loading": "Đang xử lý..."
     },
     "shipments": {
       "cannotLoadShipments": "Không thể tải danh sách đơn gửi hàng. Vui lòng thử lại.",
@@ -1566,7 +1588,16 @@
     "botFallbackReply": "Xin lỗi, tôi chưa hiểu ý bạn. Bạn có muốn kết nối với nhân viên CSKH của nhà xe không?",
     "botCancelTicketReply": "Bạn có thể hủy vé trực tiếp trong phần Vé và đơn hàng nếu vé của bạn thỏa mãn điều kiện hủy. Tiền sẽ được hoàn tự động về tài khoản thanh toán ban đầu.",
     "botPaymentReply": "Chúng tôi hỗ trợ thanh toán qua MoMo, VNPAY, ZaloPay và thẻ ngân hàng. Nếu thanh toán lỗi, hệ thống sẽ tự động hoàn tiền sau 24h làm việc.",
-    "botHelloReply": "Chào bạn! Bạn cần tư vấn về tuyến đường hay liên hệ nhà xe nào ạ?"
+    "botHelloReply": "Chào bạn! Bạn cần tư vấn về tuyến đường hay liên hệ nhà xe nào ạ?",
+    "aiThinking": "Trợ lý AI đang tra cứu và suy nghĩ...",
+    "ragBadge": "RAG 24/7",
+    "citations": "Trích dẫn tài liệu",
+    "hideCitations": "Đang ẩn nguồn",
+    "viewCitations": "Xem nguồn",
+    "viewTicket": "Xem vé điện tử",
+    "seatsLeft": "Còn {count} ghế",
+    "details": "Chi tiết",
+    "contactOperator": "Liên hệ"
   },
   "promotions": {
     "badge": "Ưu đãi VexGo",

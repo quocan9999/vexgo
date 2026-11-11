@@ -23,7 +23,6 @@ import {
   type FilterOption,
 } from '@/components/data-filters/resource-filters';
 import { Button } from '@/components/ui/action-button';
-import { Badge } from '@/components/ui/status-badge';
 import { Card } from '@/components/ui/card';
 import {
   Table,
@@ -39,12 +38,11 @@ import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useTranslations } from 'next-intl';
 import { useRoutes } from '../hooks/use-routes';
-import type { Route, RouteSortKey, RouteStatus } from '../types/route';
+import type { RouteSortKey, RouteStatus } from '../types/route';
 import { RouteFormDialog } from './route-form-dialog';
 import { RouteWorkspace, RouteDetails } from './route-workspace';
 
 export { RouteWorkspace, RouteDetails };
-import type { RouteStopItem } from '@/features/stops/types/stop';
 
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {

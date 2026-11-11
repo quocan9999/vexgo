@@ -5,13 +5,10 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Calendar,
-  Layers,
   MapPin,
   Package,
   Pencil,
-  RefreshCw,
   Scale,
-  ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';

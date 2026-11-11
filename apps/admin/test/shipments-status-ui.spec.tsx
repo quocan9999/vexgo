@@ -577,7 +577,6 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       status: 'DANG_VAN_CHUYEN',
     };
     let detailReadCount = 0;
-    let listReadCount = 0;
     let patchCount = 0;
 
     const fetchMock = vi
@@ -614,7 +613,6 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
           );
         }
         if (url.includes('/api/v1/shipments')) {
-          listReadCount += 1;
           return Promise.resolve(
             jsonResponse({
               data: [latestSummary],

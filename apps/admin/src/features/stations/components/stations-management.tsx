@@ -33,8 +33,6 @@ export function StationsManagement() {
   const tCommon = useTranslations('common');
   const { can } = useAdminPermissions();
   const canCreate = can('route:create');
-  const canUpdate = can('route:update');
-  const canDelete = can('route:update');
 
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,7 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Filter, ChevronDown, MapPin, X, Bus, Loader2, RotateCcw, AlertCircle } from 'lucide-react';
+import {
+  Filter,
+  ChevronDown,
+  MapPin,
+  X,
+  Bus,
+  Loader2,
+  RotateCcw,
+  AlertCircle,
+} from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { TripCard } from '@/features/trips/components/trip-card';
@@ -15,6 +24,7 @@ import {
   buildTripBookingHref,
   buildTripListSearchParams,
   buildRoundTripBookingHrefAfterSelection,
+  filterUpcomingTrips,
   getTripSummaryCardStates,
 } from '@/features/trips/services/trip-list-state';
 
@@ -26,8 +36,16 @@ type TripPage = {
     totalItems: number;
     totalPages: number;
   };
-  fromSubAreas?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
-  toSubAreas?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
+  fromSubAreas?: Array<{
+    diaDiemId: number;
+    tenDiaDiem: string;
+    tripCount: number;
+  }>;
+  toSubAreas?: Array<{
+    diaDiemId: number;
+    tenDiaDiem: string;
+    tripCount: number;
+  }>;
 };
 
 const EMPTY_META = {
@@ -103,7 +121,12 @@ async function fetchTripsByRoute(
     toAreaId?: number;
   },
 ): Promise<TripPage> {
-  if (!origin && !destination && !options?.fromLocationId && !options?.toLocationId) {
+  if (
+    !origin &&
+    !destination &&
+    !options?.fromLocationId &&
+    !options?.toLocationId
+  ) {
     return { trips: [], meta: EMPTY_META };
   }
   const response = await tripsApi.searchTrips(
@@ -125,9 +148,13 @@ async function fetchTripsByRoute(
       toAreaId: options?.toAreaId,
     }),
   );
+  const upcomingTrips = filterUpcomingTrips(response.data.map(mapApiToTrip));
   return {
-    trips: response.data.map(mapApiToTrip),
-    meta: response.meta,
+    trips: upcomingTrips,
+    meta: {
+      ...response.meta,
+      totalItems: Math.min(response.meta.totalItems, upcomingTrips.length),
+    },
     fromSubAreas: response.fromSubAreas,
     toSubAreas: response.toSubAreas,
   };
@@ -303,10 +330,14 @@ export function TripList() {
     : undefined;
 
   const [fromAreaId, setFromAreaId] = useState<number | undefined>(
-    searchParams.get('fromAreaId') ? Number(searchParams.get('fromAreaId')) : undefined,
+    searchParams.get('fromAreaId')
+      ? Number(searchParams.get('fromAreaId'))
+      : undefined,
   );
   const [toAreaId, setToAreaId] = useState<number | undefined>(
-    searchParams.get('toAreaId') ? Number(searchParams.get('toAreaId')) : undefined,
+    searchParams.get('toAreaId')
+      ? Number(searchParams.get('toAreaId'))
+      : undefined,
   );
 
   const [subAreas, setSubAreas] = useState<{
@@ -527,23 +558,27 @@ export function TripList() {
 
   const allPickupPoints = Array.from(
     new Set(
-      activeTrips.flatMap((t) => [
-        t.pickupPoint,
-        ...(t.pickupPoints || []).map((p) => p.name),
-      ]).filter(Boolean) as string[],
+      activeTrips
+        .flatMap((t) => [
+          t.pickupPoint,
+          ...(t.pickupPoints || []).map((p) => p.name),
+        ])
+        .filter(Boolean) as string[],
     ),
   );
 
   const allDropoffPoints = Array.from(
     new Set(
-      activeTrips.flatMap((t) => [
-        t.dropoffPoint,
-        ...(t.dropoffPoints || []).map((p) => p.name),
-      ]).filter(Boolean) as string[],
+      activeTrips
+        .flatMap((t) => [
+          t.dropoffPoint,
+          ...(t.dropoffPoints || []).map((p) => p.name),
+        ])
+        .filter(Boolean) as string[],
     ),
   );
 
-  const filteredTrips = activeTrips.filter((t) => {
+  const filteredTrips = filterUpcomingTrips(activeTrips).filter((t) => {
     if (pickupPointFilter !== 'all') {
       const match =
         t.pickupPoint === pickupPointFilter ||
@@ -603,16 +638,15 @@ export function TripList() {
   }
 
   const loadingMore =
-    effectiveActiveTab === 'outbound'
-      ? loadingMoreOutbound
-      : loadingMoreReturn;
+    effectiveActiveTab === 'outbound' ? loadingMoreOutbound : loadingMoreReturn;
   const hasMore =
     activeTrips.length < activeMeta.totalItems &&
     currentPage < activeMeta.totalPages;
 
   async function handleLoadMore() {
     if (effectiveActiveTab === 'outbound') {
-      if (loadingMoreOutbound || outboundPage >= outboundMeta.totalPages) return;
+      if (loadingMoreOutbound || outboundPage >= outboundMeta.totalPages)
+        return;
       const nextPage = outboundPage + 1;
       setLoadingMoreOutbound(true);
       try {
@@ -677,8 +711,12 @@ export function TripList() {
           </div>
           <div className="flex gap-2">
             <div className="bg-[#e8f6f3] text-[#00b14f] px-3.5 py-1.5 rounded-xl text-center border border-[#b2e8d3] min-w-[70px]">
-              <p className="font-extrabold text-lg leading-tight">{totalResults}</p>
-              <p className="text-[10px] uppercase font-bold">{t('resultsBadge')}</p>
+              <p className="font-extrabold text-lg leading-tight">
+                {totalResults}
+              </p>
+              <p className="text-[10px] uppercase font-bold">
+                {t('resultsBadge')}
+              </p>
             </div>
             <div className="bg-[#fff4e5] text-[#FF5722] px-3.5 py-1.5 rounded-xl text-center border border-[#ffe0b2] min-w-[70px]">
               <p className="font-extrabold text-lg leading-tight">{t('seatHoldTime')}</p>
@@ -1122,6 +1160,7 @@ export function TripList() {
                     )}
                   </button>
                 ) : null}
+
               </div>
             )}
           </div>
