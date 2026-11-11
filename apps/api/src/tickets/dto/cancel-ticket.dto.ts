@@ -1,9 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsDefined,
   IsNotEmpty,
   IsNumber,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
@@ -13,7 +16,10 @@ import {
 import { VIETNAM_PHONE_NUMBER_REGEX } from '../../common/validation/vietnamese-phone.js';
 
 export class CancelTicketDto {
-  @ApiProperty({ description: 'Mã vé xe cần yêu cầu hủy', example: 'TK-202610-001' })
+  @ApiProperty({
+    description: 'Mã vé xe cần yêu cầu hủy',
+    example: 'TK-202610-001',
+  })
   @IsString()
   @IsNotEmpty()
   ticketCode!: string;
@@ -28,7 +34,23 @@ export class CancelTicketDto {
   @IsString({ each: true })
   ticketCodes?: string[];
 
-  @ApiProperty({ description: 'Số điện thoại của người đặt vé để xác thực quyền sở hữu', example: '0912345678' })
+  @ApiPropertyOptional({
+    description:
+      'ID các mục hành lý trong cùng đơn sẽ hủy khi xác nhận hủy vé. Nếu hủy hết vé, toàn bộ hành lý Mới tạo được hủy theo quy tắc của đơn.',
+    type: [Number],
+    example: [101],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  cargoItemIds?: number[];
+
+  @ApiProperty({
+    description: 'Số điện thoại của người đặt vé để xác thực quyền sở hữu',
+    example: '0912345678',
+  })
   @IsString()
   @IsNotEmpty()
   @Matches(VIETNAM_PHONE_NUMBER_REGEX, {
@@ -36,13 +58,17 @@ export class CancelTicketDto {
   })
   phoneNumber!: string;
 
-  @ApiPropertyOptional({ description: 'Lý do yêu cầu hủy vé', example: 'Có việc bận đột xuất' })
+  @ApiPropertyOptional({
+    description: 'Lý do yêu cầu hủy vé',
+    example: 'Có việc bận đột xuất',
+  })
   @IsOptional()
   @IsString()
   reason?: string;
 
   @ApiProperty({
-    description: 'Tỷ lệ phí hủy vé dự kiến khách chấp nhận (0: miễn phí, 0.1: 10%, 0.2: 20%)',
+    description:
+      'Tỷ lệ phí hủy vé dự kiến khách chấp nhận (0: miễn phí, 0.1: 10%, 0.2: 20%)',
     example: 0.1,
     minimum: 0,
     maximum: 1,

@@ -16,6 +16,8 @@ describe('Admin permission defaults', () => {
     'revenue:read',
     'shipment:read',
     'shipment:update',
+    'luggage-rate:read',
+    'luggage-rate:update',
   ] as const)(
     'keeps %s tenant-scoped without granting platform access',
     (key) => {
@@ -72,6 +74,8 @@ describe('Admin permission defaults', () => {
       'chat:manage',
       'review:read',
       'review:moderate',
+      'luggage-rate:read',
+      'luggage-rate:update',
     ]);
   });
 
@@ -149,6 +153,8 @@ describe('Admin permission defaults', () => {
       'chat:manage',
       'review:read',
       'review:moderate',
+      'luggage-rate:read',
+      'luggage-rate:update',
     ]);
     expect(new Set(permissionKeys).size).toBe(permissionKeys.length);
   });
@@ -192,6 +198,8 @@ describe('Admin permission defaults', () => {
       'chat:manage',
       'review:read',
       'review:moderate',
+      'luggage-rate:read',
+      'luggage-rate:update',
     ];
     const platformPermissionKeys = [
       'bus-company:read',

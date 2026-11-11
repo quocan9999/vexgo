@@ -5,7 +5,7 @@ import { AuthController } from './auth.controller.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { OtpCryptoService } from './otp/otp-crypto.service.js';
 import { OtpService } from './otp/otp.service.js';
-import { ConsoleSmsSender } from './sms/console-sms.sender.js';
+import { createSmsSender } from './sms/sms-sender.factory.js';
 import { SMS_SENDER } from './sms/sms-sender.js';
 import { JwtModule } from '@nestjs/jwt';
 import { TokenService } from './tokens/token.service.js';
@@ -70,8 +70,11 @@ function readPositiveInteger(
     { provide: APP_GUARD, useExisting: AccessTokenGuard },
     AuthorizationGuard,
     { provide: APP_GUARD, useExisting: AuthorizationGuard },
-    ConsoleSmsSender,
-    { provide: SMS_SENDER, useExisting: ConsoleSmsSender },
+    {
+      provide: SMS_SENDER,
+      useFactory: (config: ConfigService) => createSmsSender(config),
+      inject: [ConfigService],
+    },
   ],
   exports: [
     TokenService,

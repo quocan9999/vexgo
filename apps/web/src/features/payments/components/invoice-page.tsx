@@ -134,16 +134,55 @@ function mapPaymentMethod(
   }
 }
 
+function formatSeatPosition(pos?: string | null, locale = 'vi'): string {
+  if (!pos) return locale === 'en' ? 'Standard row' : 'Dãy tiêu chuẩn';
+  if (locale !== 'en') return pos;
+  const p = pos.trim().toLowerCase();
+  if (p === 'dãy trái') return 'Left row';
+  if (p === 'dãy phải') return 'Right row';
+  if (p === 'dãy giữa') return 'Middle row';
+  if (p === 'tầng trên') return 'Upper deck';
+  if (p === 'tầng dưới') return 'Lower deck';
+  if (p === 'lượt đi' || p === 'chuyến đi') return 'Outbound';
+  if (p === 'lượt về' || p === 'chuyến về') return 'Return';
+  if (p === 'dãy tiêu chuẩn') return 'Standard row';
+  return pos;
+}
+
+function formatLegTitle(title?: string | null, locale = 'vi'): string {
+  if (!title) return '';
+  if (locale !== 'en') return title;
+  const t = title.trim().toLowerCase();
+  if (t === 'lượt đi' || t === 'chuyến đi') return 'Outbound';
+  if (t === 'lượt về' || t === 'chuyến về') return 'Return';
+  return title;
+}
+
+function formatLuggageName(name?: string | null, locale = 'vi'): string {
+  if (!name) return '';
+  if (locale !== 'en') return name;
+  const n = name.trim().toLowerCase();
+  if (n === 'vali') return 'Suitcase / Luggage';
+  if (n.includes('balo') || n.includes('túi du lịch')) return 'Backpack / Travel bag';
+  if (n.includes('thùng xốp') || n.includes('thùng carton')) return 'Carton / Styrofoam Box';
+  if (n === 'xe máy') return 'Motorbike';
+  if (n === 'xe đạp') return 'Bicycle';
+  if (n.includes('hàng đặc biệt') || n.includes('khác')) return 'Special / Other Cargo';
+  return name;
+}
+
 function CopyCodeBlock({
   label,
   code,
   copiedCode,
   onCopy,
+  locale = 'vi',
 }: {
   label?: string;
   code: string;
   copiedCode: string | null;
   onCopy: (code: string) => void;
+  locale?: string;
 }) {
   const isCopied = copiedCode === code;
   return (
@@ -151,7 +190,7 @@ function CopyCodeBlock({
       type="button"
       onClick={() => onCopy(code)}
       className="group relative w-full text-left bg-white hover:bg-blue-50/40 border border-slate-200 hover:border-blue-400 p-3 rounded-xl transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-      title="Nhấp để sao chép"
+      title={locale === 'en' ? 'Click to copy' : 'Nhấp để sao chép'}
     >
       <div className="flex items-center justify-between mb-1.5 gap-2">
         {label && (
@@ -163,12 +202,12 @@ function CopyCodeBlock({
           {isCopied ? (
             <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
               <Check className="w-3.5 h-3.5 text-emerald-600" />
-              Đã sao chép!
+              {locale === 'en' ? 'Copied!' : 'Đã sao chép!'}
             </span>
           ) : (
             <span className="text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 border border-transparent group-hover:border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition-all">
               <Copy className="w-3.5 h-3.5" />
-              <span className="text-[10px]">Sao chép</span>
+              <span className="text-[10px]">{locale === 'en' ? 'Copy' : 'Sao chép'}</span>
             </span>
           )}
         </div>
@@ -186,12 +225,14 @@ function CopyBadge({
   onCopy,
   className = '',
   variant = 'light',
+  locale = 'vi',
 }: {
   code: string;
   copiedCode: string | null;
   onCopy: (code: string) => void;
   className?: string;
   variant?: 'light' | 'dark';
+  locale?: string;
 }) {
   const isCopied = copiedCode === code;
   const isDark = variant === 'dark';
@@ -205,7 +246,7 @@ function CopyBadge({
           ? 'bg-white/10 hover:bg-white/20 border border-white/15 hover:border-blue-400/50 text-white shadow-2xs'
           : 'bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200/80 hover:border-blue-300 text-slate-900'
       } ${className}`}
-      title="Nhấp để sao chép"
+      title={locale === 'en' ? 'Click to copy' : 'Nhấp để sao chép'}
     >
       <span
         className={`font-bold break-all ${
@@ -225,7 +266,7 @@ function CopyBadge({
           }`}
         >
           <Check className="w-3 h-3 text-emerald-400" />
-          <span>Đã sao chép!</span>
+          <span>{locale === 'en' ? 'Copied!' : 'Đã sao chép!'}</span>
         </span>
       ) : (
         <span
@@ -242,7 +283,7 @@ function CopyBadge({
                 : 'text-slate-400 group-hover:text-blue-600'
             }`}
           />
-          <span>Sao chép</span>
+          <span>{locale === 'en' ? 'Copy' : 'Sao chép'}</span>
         </span>
       )}
     </button>
@@ -255,12 +296,14 @@ function BoardingPassCard({
   copiedCode,
   handleCopyCode,
   isRoundTrip,
+  locale = 'vi',
 }: {
   ticket: InvoiceTicket;
   invoice: InvoiceModel;
   copiedCode: string | null;
   handleCopyCode: (code: string) => void;
   isRoundTrip?: boolean;
+  locale?: string;
 }) {
   const isCancelled = t.status === 'HUY' || t.status === 'CANCELLED';
   const isReturn = t.legIndex === 1;
@@ -294,13 +337,13 @@ function BoardingPassCard({
           </div>
           <div>
             <span className="text-[10px] font-medium text-slate-400 block leading-tight">
-              Thẻ lên xe điện tử
+              {locale === 'en' ? 'Electronic Boarding Pass' : 'Thẻ lên xe điện tử'}
             </span>
             <span className="text-sm font-bold text-white tracking-tight">
               {t.busCompanyName || invoice.busCompanyName}
               {t.legTitle && (
                 <span className="ml-2 text-xs font-normal text-slate-300">
-                  • {t.legTitle}: {t.route}
+                  • {formatLegTitle(t.legTitle, locale)}: {t.route}
                 </span>
               )}
             </span>
@@ -309,7 +352,9 @@ function BoardingPassCard({
 
         <div className="flex flex-col items-end">
           <span className="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider mb-1">
-            Mã đặt chỗ {isReturn ? 'Lượt về' : isRoundTrip ? 'Lượt đi' : ''}
+            {locale === 'en'
+              ? `Booking Code ${isReturn ? 'Return' : isRoundTrip ? 'Outbound' : ''}`
+              : `Mã đặt chỗ ${isReturn ? 'Lượt về' : isRoundTrip ? 'Lượt đi' : ''}`}
           </span>
           <CopyBadge
             code={legBookingCode}
@@ -317,6 +362,7 @@ function BoardingPassCard({
             onCopy={handleCopyCode}
             variant="dark"
             className="text-xs sm:text-sm"
+            locale={locale}
           />
         </div>
       </div>
@@ -329,7 +375,7 @@ function BoardingPassCard({
           <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3.5">
             <div>
               <span className="text-xs font-medium text-slate-400 block mb-0.5">
-                Số ghế hành khách
+                {locale === 'en' ? 'Passenger Seat' : 'Số ghế hành khách'}
               </span>
               <div className="flex items-baseline gap-2 flex-wrap">
                 <span className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
@@ -337,12 +383,12 @@ function BoardingPassCard({
                 </span>
                 {t.seatPosition && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                    {t.seatPosition}
+                    {formatSeatPosition(t.seatPosition, locale)}
                   </span>
                 )}
                 {t.legTitle && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                    {t.legTitle}
+                    {formatLegTitle(t.legTitle, locale)}
                   </span>
                 )}
               </div>
@@ -350,13 +396,13 @@ function BoardingPassCard({
 
             <div className="text-right">
               <span className="text-xs font-medium text-slate-400 block mb-0.5">
-                Giá vé
+                {locale === 'en' ? 'Ticket Fare' : 'Giá vé'}
               </span>
               <span className="text-lg font-bold text-slate-900">
                 {typeof t.price === 'number'
                   ? t.price === 0
-                    ? '0đ (Miễn phí)'
-                    : `${t.price.toLocaleString('vi-VN')}đ`
+                    ? (locale === 'en' ? '0 VND (Free)' : '0đ (Miễn phí)')
+                    : `${t.price.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} ${locale === 'en' ? 'VND' : 'đ'}`
                   : '—'}
               </span>
               <div className="mt-0.5">
@@ -365,7 +411,9 @@ function BoardingPassCard({
                     isCancelled ? 'text-rose-600' : 'text-emerald-700'
                   }`}
                 >
-                  {isCancelled ? '● Đã hủy' : '● Có hiệu lực'}
+                  {isCancelled
+                    ? (locale === 'en' ? '● Cancelled' : '● Đã hủy')
+                    : (locale === 'en' ? '● Valid' : '● Có hiệu lực')}
                 </span>
               </div>
             </div>
@@ -375,13 +423,13 @@ function BoardingPassCard({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
               <span className="text-slate-400 font-bold uppercase tracking-wider block mb-0.5">
-                Hành khách
+                {locale === 'en' ? 'Passenger' : 'Hành khách'}
               </span>
               <strong className="text-slate-800 text-sm break-words">{invoice.passengerName}</strong>
             </div>
             <div>
               <span className="text-slate-400 font-bold uppercase tracking-wider block mb-0.5">
-                Số điện thoại
+                {locale === 'en' ? 'Phone Number' : 'Số điện thoại'}
               </span>
               <span className="text-slate-800 font-semibold">{invoice.passengerPhone}</span>
             </div>
@@ -409,7 +457,7 @@ function BoardingPassCard({
                     <Clock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                     <div>
                       <span className="text-slate-400 font-medium block">
-                        Khởi hành lúc
+                        {locale === 'en' ? 'Departure at' : 'Khởi hành lúc'}
                       </span>
                       <strong className="text-slate-800 text-sm">
                         {t.departureTime || currentLeg?.departureTime}
@@ -417,18 +465,39 @@ function BoardingPassCard({
                       <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
                         {hasMotorbike ? (
                           <span>
-                            Có mặt trước giờ khởi hành{' '}
-                            <strong>90–120 phút</strong> (bàn giao xe máy &amp; xuất trình cà-vẹt gốc)
+                            {locale === 'en' ? (
+                              <>
+                                Arrive at boarding point <strong>90–120 minutes</strong> prior (hand over motorbike &amp; present original registration)
+                              </>
+                            ) : (
+                              <>
+                                Có mặt trước giờ khởi hành <strong>90–120 phút</strong> (bàn giao xe máy &amp; xuất trình cà-vẹt gốc)
+                              </>
+                            )}
                           </span>
                         ) : hasBicycle ? (
                           <span>
-                            Có mặt tại điểm đón trước giờ khởi hành{' '}
-                            <strong>20–30 phút</strong> (hỗ trợ xếp xe đạp)
+                            {locale === 'en' ? (
+                              <>
+                                Arrive at boarding point <strong>20–30 minutes</strong> prior (assist bicycle loading)
+                              </>
+                            ) : (
+                              <>
+                                Có mặt tại điểm đón trước giờ khởi hành <strong>20–30 phút</strong> (hỗ trợ xếp xe đạp)
+                              </>
+                            )}
                           </span>
                         ) : (
                           <span>
-                            Có mặt tại điểm đón trước giờ khởi hành ít nhất{' '}
-                            <strong>{checkInMinutes} phút</strong>
+                            {locale === 'en' ? (
+                              <>
+                                Arrive at boarding point at least <strong>{checkInMinutes} minutes</strong> prior
+                              </>
+                            ) : (
+                              <>
+                                Có mặt tại điểm đón trước giờ khởi hành ít nhất <strong>{checkInMinutes} phút</strong>
+                              </>
+                            )}
                           </span>
                         )}
                       </div>
@@ -438,7 +507,7 @@ function BoardingPassCard({
                     <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
                       <span className="text-slate-400 font-medium block">
-                        Điểm đón
+                        {locale === 'en' ? 'Boarding point' : 'Điểm đón'}
                       </span>
                       <span className="font-bold text-slate-800 leading-snug">
                         {t.pickup || currentLeg?.pickup}
@@ -450,7 +519,9 @@ function BoardingPassCard({
                       )}
                       {currentLeg?.transferStationName && (
                         <span className="block text-[11px] font-semibold text-[#0060c4] mt-0.5">
-                          Xe trung chuyển đón về bến: {currentLeg.transferStationName}
+                          {locale === 'en'
+                            ? `Transfer bus to station: ${currentLeg.transferStationName}`
+                            : `Xe trung chuyển đón về bến: ${currentLeg.transferStationName}`}
                         </span>
                       )}
                     </div>
@@ -459,7 +530,7 @@ function BoardingPassCard({
                     <MapPin className="w-4 h-4 text-[#f05123] shrink-0 mt-0.5" />
                     <div>
                       <span className="text-slate-400 font-medium block">
-                        Điểm trả
+                        {locale === 'en' ? 'Drop-off point' : 'Điểm trả'}
                       </span>
                       <span className="font-bold text-slate-800 leading-snug">
                         {t.dropoff || currentLeg?.dropoff}
@@ -473,19 +544,19 @@ function BoardingPassCard({
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-slate-700 flex items-center gap-1.5 uppercase text-[11px] tracking-wider">
                       <Package className="w-3.5 h-3.5 text-[#0060c4]" />
-                      Hành lý gửi kèm theo vé
+                      {locale === 'en' ? 'Accompanied luggage with ticket' : 'Hành lý gửi kèm theo vé'}
                     </span>
                     <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                       {legCargoItems.length > 0
-                        ? `${legCargoItems.reduce((s, i) => s + (i.quantity || 1), 0)} kiện ký gửi`
-                        : 'Không có'}
+                        ? `${legCargoItems.reduce((s, i) => s + (i.quantity || 1), 0)} ${locale === 'en' ? 'checked item(s)' : 'kiện ký gửi'}`
+                        : (locale === 'en' ? 'None' : 'Không có')}
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-600 space-y-1">
                     {legCargoItems.length > 0 ? (
                       <div className="space-y-1">
                         <div className="font-semibold text-slate-800">
-                          Kiện hành lý ký gửi hầm xe:
+                          {locale === 'en' ? 'Under-bus checked baggage:' : 'Kiện hành lý ký gửi hầm xe:'}
                         </div>
                         {legCargoItems.map((item, idx) => (
                           <div
@@ -493,7 +564,7 @@ function BoardingPassCard({
                             className="flex items-center justify-between pl-3 text-slate-700 bg-white rounded-lg px-2.5 py-1.5 border border-slate-200/70"
                           >
                             <span>
-                              <strong>{item.quantity}x {item.name}</strong>
+                              <strong>{item.quantity}x {formatLuggageName(item.name, locale)}</strong>
                               {item.note ? ` (${item.note})` : ''}
                             </span>
                             <span className="font-mono font-bold text-slate-800 shrink-0 ml-2">
@@ -504,7 +575,7 @@ function BoardingPassCard({
                       </div>
                     ) : (
                       <div className="text-slate-500">
-                        Không có hành lý ký gửi kèm vé.
+                        {locale === 'en' ? 'No accompanied checked luggage.' : 'Không có hành lý ký gửi kèm vé.'}
                       </div>
                     )}
                   </div>
@@ -516,11 +587,14 @@ function BoardingPassCard({
           {/* Hàng 4: Mã vé & Hành động */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 uppercase">Mã vé:</span>
+              <span className="text-xs font-bold text-slate-400 uppercase">
+                {locale === 'en' ? 'Ticket code:' : 'Mã vé:'}
+              </span>
               <CopyBadge
                 code={t.ticketCode}
                 copiedCode={copiedCode}
                 onCopy={handleCopyCode}
+                locale={locale}
               />
             </div>
           </div>
@@ -538,7 +612,7 @@ function BoardingPassCard({
           <div className="relative p-2.5 bg-white rounded-2xl border border-slate-200 shadow-xs">
             <img
               src={singleQrSrc}
-              alt={`Mã QR vé ${t.seatNumber}`}
+              alt={locale === 'en' ? `QR code for seat ${t.seatNumber}` : `Mã QR vé ${t.seatNumber}`}
               className={`w-32 h-32 object-contain ${
                 isCancelled ? 'opacity-20 grayscale' : ''
               }`}
@@ -546,19 +620,19 @@ function BoardingPassCard({
             {isCancelled && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="px-3 py-1 rounded-md bg-rose-600 text-white text-xs font-black uppercase tracking-wider rotate-[-12deg] shadow-lg">
-                  ĐÃ HỦY
+                  {locale === 'en' ? 'CANCELLED' : 'ĐÃ HỦY'}
                 </span>
               </div>
             )}
           </div>
           <p className="text-xs font-black text-slate-900 mt-3 font-mono">
-            Ghế {t.seatNumber}
-            {t.legTitle ? ` (${t.legTitle})` : ''}
+            {locale === 'en' ? `Seat ${t.seatNumber}` : `Ghế ${t.seatNumber}`}
+            {t.legTitle ? ` (${formatLegTitle(t.legTitle, locale)})` : ''}
           </p>
           <span className="text-[11px] text-slate-500 font-medium leading-relaxed mt-1 block">
             {isCancelled
-              ? 'Vé đã hủy, không còn hiệu lực lên xe'
-              : 'Xuất trình mã QR này cho tài xế quét khi lên xe'}
+              ? (locale === 'en' ? 'Cancelled ticket, invalid for boarding' : 'Vé đã hủy, không còn hiệu lực lên xe')
+              : (locale === 'en' ? 'Present this QR code to the driver upon boarding' : 'Xuất trình mã QR này cho tài xế quét khi lên xe')}
           </span>
         </div>
       </div>
@@ -609,7 +683,11 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     const loadInvoice = async () => {
       setPendingBookingForPayment(null);
       if (!Number.isSafeInteger(numericBookingId) || numericBookingId <= 0) {
-        setError('Mã đặt vé không hợp lệ nên chưa thể xác minh vé.');
+        setError(
+          locale === 'en'
+            ? 'Invalid booking code, unable to verify ticket.'
+            : 'Mã đặt vé không hợp lệ nên chưa thể xác minh vé.',
+        );
         setLoading(false);
         setLoadedKey(loadKey);
         return;
@@ -1029,7 +1107,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
         setError(
           loadError instanceof Error
             ? loadError.message
-            : 'Không thể xác minh trạng thái thanh toán. Vui lòng thử lại sau.',
+            : (locale === 'en'
+                ? 'Unable to verify payment status. Please try again later.'
+                : 'Không thể xác minh trạng thái thanh toán. Vui lòng thử lại sau.'),
         );
       } finally {
         if (!controller.signal.aborted) {
@@ -1418,11 +1498,17 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
         <section className="hero">
           <div>
             <div className="eyebrow">
-              VEXGO / CHUYẾN ĐI ĐÃ XÁC NHẬN ·{' '}
+              {locale === 'en'
+                ? 'VEXGO / CONFIRMED TRIP · '
+                : 'VEXGO / CHUYẾN ĐI ĐÃ XÁC NHẬN · '}
               <span>
                 {isRoundTrip
-                  ? 'Vé xe khứ hồi điện tử (Round-trip E-Ticket)'
-                  : 'Vé xe điện tử (E-Ticket)'}
+                  ? (locale === 'en'
+                      ? 'Round-trip E-Ticket'
+                      : 'Vé xe khứ hồi điện tử (Round-trip E-Ticket)')
+                  : (locale === 'en'
+                      ? 'E-Ticket'
+                      : 'Vé xe điện tử (E-Ticket)')}
               </span>
             </div>
             <h1>{t('title')}</h1>
@@ -1467,7 +1553,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 <span className="round-icon">▤</span> {t('title')}
               </h2>
               <span className="chip gray">
-                {invoice.legs.length > 1 ? `${invoice.legs.length} chặng` : '1 đơn'}
+                {invoice.legs.length > 1
+                  ? (locale === 'en' ? `${invoice.legs.length} legs` : `${invoice.legs.length} chặng`)
+                  : (locale === 'en' ? '1 booking' : '1 đơn')}
               </span>
             </div>
 
@@ -1486,10 +1574,16 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 item.name?.toLowerCase().includes('xe đạp'),
               );
               const checkInText = hasMotorbike
-                ? '90 – 120 phút (do có gửi xe máy kèm vé)'
+                ? (locale === 'en'
+                    ? '90–120 minutes (due to accompanied motorbike)'
+                    : '90 – 120 phút (do có gửi xe máy kèm vé)')
                 : hasBicycle
-                  ? '20 – 30 phút (do có gửi xe đạp kèm vé)'
-                  : `${leg.checkInMinutes || 20} phút`;
+                  ? (locale === 'en'
+                      ? '20–30 minutes (due to accompanied bicycle)'
+                      : '20 – 30 phút (do có gửi xe đạp kèm vé)')
+                  : (locale === 'en'
+                      ? `${leg.checkInMinutes || 20} minutes`
+                      : `${leg.checkInMinutes || 20} phút`);
 
               return (
                 <div
@@ -1500,7 +1594,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   {invoice.legs.length > 1 && (
                     <div style={{ marginBottom: 6 }}>
                       <span className="chip gray">
-                        {idx === 0 ? 'Chặng 1: Lượt đi' : 'Chặng 2: Lượt về'}
+                        {idx === 0
+                          ? (locale === 'en' ? 'Leg 1: Outbound' : 'Chặng 1: Lượt đi')
+                          : (locale === 'en' ? 'Leg 2: Return' : 'Chặng 2: Lượt về')}
                       </span>
                     </div>
                   )}
@@ -1518,10 +1614,12 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                     <div>
                       <span className="place">{leg.pickup}</span>
                       <div className="place-hint">
-                        Điểm đón
+                        {locale === 'en' ? 'Boarding point' : 'Điểm đón'}
                         {leg.pickupAddress ? ` · ${leg.pickupAddress}` : ''}
                         {leg.transferStationName
-                          ? ` · Trung chuyển: ${leg.transferStationName}`
+                          ? (locale === 'en'
+                              ? ` · Transfer: ${leg.transferStationName}`
+                              : ` · Trung chuyển: ${leg.transferStationName}`)
                           : ''}
                       </div>
                     </div>
@@ -1530,12 +1628,16 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                     <span className="dot end" />
                     <div>
                       <span className="place">{leg.dropoff}</span>
-                      <div className="place-hint">Điểm trả</div>
+                      <div className="place-hint">
+                        {locale === 'en' ? 'Drop-off point' : 'Điểm trả'}
+                      </div>
                     </div>
                   </div>
                   <div className="note">
-                    ◷ Có mặt tại điểm đón trước giờ khởi hành ít nhất{' '}
-                    <strong>{checkInText}</strong>.
+                    ◷{' '}
+                    {locale === 'en'
+                      ? <>Please arrive at the boarding point at least <strong>{checkInText}</strong> before departure.</>
+                      : <>Có mặt tại điểm đón trước giờ khởi hành ít nhất <strong>{checkInText}</strong>.</>}
                   </div>
                 </div>
               );
@@ -1563,7 +1665,8 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             <div className="info-line">
               <span>{t('ticketSubtotal')} ({allTickets.length} {t('seats')})</span>
               <strong style={{ color: '#dc2626' }}>
-                {invoice.ticketSubtotal.toLocaleString('vi-VN')}đ
+                {invoice.ticketSubtotal.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}{' '}
+                {locale === 'en' ? 'VND' : 'đ'}
               </strong>
             </div>
             {(invoice.cargoItems.length > 0 || invoice.cargoFee > 0) && (
@@ -1571,16 +1674,18 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 <span>
                   {t('cargoFee')}
                   {totalCargoQty > 0
-                    ? ` (${totalCargoQty} kiện · ${totalCargoWeight} kg)`
+                    ? ` (${totalCargoQty} ${locale === 'en' ? (totalCargoQty > 1 ? 'packages' : 'package') : 'kiện'} · ${totalCargoWeight} kg)`
                     : ''}
                   <small style={{ display: 'block', color: '#b45309', fontSize: '11px', fontWeight: 500 }}>
-                    (Thanh toán tại bến khi gửi hàng, không cộng vào tổng thanh toán trực tuyến)
+                    {locale === 'en'
+                      ? '(Pay at counter upon drop-off, not added to online total)'
+                      : '(Thanh toán tại bến khi gửi hàng, không cộng vào tổng thanh toán trực tuyến)'}
                   </small>
                 </span>
                 <strong>
                   {invoice.cargoFee > 0
-                    ? `${invoice.cargoFee.toLocaleString('vi-VN')}đ`
-                    : 'Miễn phí'}
+                    ? `${invoice.cargoFee.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} ${locale === 'en' ? 'VND' : 'đ'}`
+                    : (locale === 'en' ? 'Free' : 'Miễn phí')}
                 </strong>
               </div>
             )}
@@ -1591,17 +1696,23 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   <strong>{invoice.promotionCode}</strong>
                 </div>
                 <div className="info-line">
-                  <span>Giá vé gốc của toàn đơn</span>
-                  <strong>{invoice.originalTicketSubtotal.toLocaleString('vi-VN')}đ</strong>
+                  <span>{locale === 'en' ? 'Base Ticket Subtotal' : 'Giá vé gốc của toàn đơn'}</span>
+                  <strong>
+                    {invoice.originalTicketSubtotal.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}{' '}
+                    {locale === 'en' ? 'VND' : 'đ'}
+                  </strong>
                 </div>
                 <div className="info-line">
-                  <span>Giảm giá cho toàn đơn</span>
+                  <span>{locale === 'en' ? 'Total Discount' : 'Giảm giá cho toàn đơn'}</span>
                   <strong style={{ color: '#058060' }}>
-                    −{invoice.discountAmount.toLocaleString('vi-VN')}đ
+                    −{invoice.discountAmount.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}{' '}
+                    {locale === 'en' ? 'VND' : 'đ'}
                   </strong>
                 </div>
                 <div className="sub" style={{ marginTop: 4 }}>
-                  Ưu đãi chỉ áp dụng cho tiền vé; cước hàng hóa không được giảm.
+                  {locale === 'en'
+                    ? 'Discount applies only to ticket fare; cargo fee is not discounted.'
+                    : 'Ưu đãi chỉ áp dụng cho tiền vé; cước hàng hóa không được giảm.'}
                 </div>
               </>
             )}
@@ -1609,10 +1720,15 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             <div className="price-card">
               <div className="sum" style={{ marginTop: 0, border: 0, padding: 0 }}>
                 <span>{t('totalAmount')}</span>
-                <b>{invoice.totalAmount.toLocaleString('vi-VN')}đ</b>
+                <b>
+                  {invoice.totalAmount.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}{' '}
+                  {locale === 'en' ? 'VND' : 'đ'}
+                </b>
               </div>
               <div className="sub" style={{ marginTop: 5 }}>
-                Đã bao gồm các khoản phí hiển thị trong đơn.
+                {locale === 'en'
+                  ? 'Includes all fees displayed in this order.'
+                  : 'Đã bao gồm các khoản phí hiển thị trong đơn.'}
               </div>
             </div>
 
@@ -1626,10 +1742,19 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             </div>
 
             <div className="order-qr">
-              <img alt="QR tra cứu đơn hàng" src={qrImageSrc} />
+              <img
+                alt={locale === 'en' ? 'Order lookup QR code' : 'QR tra cứu đơn hàng'}
+                src={qrImageSrc}
+              />
               <div>
-                <strong>QR tra cứu đơn hàng</strong>
-                <p>Dùng để xem lại đơn đặt vé, không dùng để lên xe.</p>
+                <strong>
+                  {locale === 'en' ? 'Order Lookup QR Code' : 'QR tra cứu đơn hàng'}
+                </strong>
+                <p>
+                  {locale === 'en'
+                    ? 'Used to review booking details, not valid for boarding.'
+                    : 'Dùng để xem lại đơn đặt vé, không dùng để lên xe.'}
+                </p>
                 <a
                   className="tiny-btn"
                   href={qrImageSrc}
@@ -1637,7 +1762,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   target="_blank"
                   rel="noreferrer"
                 >
-                  ↓ Lưu QR
+                  ↓ {locale === 'en' ? 'Save QR' : 'Lưu QR'}
                 </a>
               </div>
             </div>
@@ -1653,7 +1778,11 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                     {allTickets.length} {t('seats')}
                   </span>
                 </h2>
-                <p>Xuất trình mã QR riêng của từng vé cho nhân viên khi lên xe.</p>
+                <p>
+                  {locale === 'en'
+                    ? 'Present the individual QR code for each ticket to staff when boarding.'
+                    : 'Xuất trình mã QR riêng của từng vé cho nhân viên khi lên xe.'}
+                </p>
               </div>
               {allTickets.length > 1 && (
                 <div className="ticket-tabs" id="tabs">
@@ -1665,8 +1794,10 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                       onClick={() => setActiveLegFilter(i)}
                       aria-pressed={safeTicketIdx === i}
                     >
-                      Ghế {t.seatNumber}
-                      {isRoundTrip && t.legTitle ? ` (${t.legTitle})` : ''}
+                      {locale === 'en' ? `Seat ${t.seatNumber}` : `Ghế ${t.seatNumber}`}
+                      {isRoundTrip && t.legTitle
+                        ? ` (${formatLegTitle(t.legTitle, locale)})`
+                        : ''}
                     </button>
                   ))}
                 </div>
@@ -1674,7 +1805,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             </div>
 
             <div className="boarding-hint">
-              ✓ Chỉ cần xuất trình mã QR bên dưới khi lên xe
+              {locale === 'en'
+                ? '✓ Simply present the QR code below when boarding'
+                : '✓ Chỉ cần xuất trình mã QR bên dưới khi lên xe'}
             </div>
 
             {currentTicket && (
@@ -1683,17 +1816,23 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   <div className="operator">
                     <div className="operator-logo">▦</div>
                     <div>
-                      <small>Thẻ lên xe điện tử · VexGo</small>
+                      <small>
+                        {locale === 'en'
+                          ? 'Electronic Boarding Pass · VexGo'
+                          : 'Thẻ lên xe điện tử · VexGo'}
+                      </small>
                       <strong>
                         {currentTicket.busCompanyName || invoice.busCompanyName}
                       </strong>
                     </div>
                   </div>
                   <div className="code">
-                    <span style={{ display: 'block' }}>MÃ VÉ</span>
+                    <span style={{ display: 'block' }}>
+                      {locale === 'en' ? 'TICKET CODE' : 'MÃ VÉ'}
+                    </span>
                     <b
                       id="ticketCode"
-                      title="Nhấp để sao chép mã vé"
+                      title={locale === 'en' ? 'Click to copy ticket code' : 'Nhấp để sao chép mã vé'}
                       onClick={() => handleCopyCode(currentTicket.ticketCode)}
                       style={{ cursor: 'pointer' }}
                     >
@@ -1718,42 +1857,54 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   <div className="ticket-details">
                     <div className="trip-title">
                       <div>
-                        <div className="seat-label">SỐ GHẾ HÀNH KHÁCH</div>
+                        <div className="seat-label">
+                          {locale === 'en' ? 'PASSENGER SEAT' : 'SỐ GHẾ HÀNH KHÁCH'}
+                        </div>
                         <div>
                           <span className="seat-big" id="seat">
                             {currentTicket.seatNumber}
                           </span>
                           <span className="seat-type">
-                            {currentTicket.seatPosition ||
-                              currentTicket.legTitle ||
-                              'Dãy tiêu chuẩn'}
+                            {formatSeatPosition(
+                              currentTicket.seatPosition || currentTicket.legTitle,
+                              locale,
+                            )}
                           </span>
                         </div>
                       </div>
                       <div className="fare">
-                        <div className="seat-label">GIÁ VÉ</div>
+                        <div className="seat-label">
+                          {locale === 'en' ? 'TICKET FARE' : 'GIÁ VÉ'}
+                        </div>
                         <strong>
-                          {(currentTicket.price || 0).toLocaleString('vi-VN')}đ
+                          {(currentTicket.price || 0).toLocaleString(
+                            locale === 'en' ? 'en-US' : 'vi-VN',
+                          )}{' '}
+                          {locale === 'en' ? 'VND' : 'đ'}
                         </strong>
                         <small
                           style={isCurrentCancelled ? { color: '#e11d48' } : undefined}
                         >
                           {isCurrentCancelled
-                            ? 'Vé đã hủy'
-                            : 'Giá vé chưa gồm hành lý'}
+                            ? (locale === 'en' ? 'Cancelled ticket' : 'Vé đã hủy')
+                            : (locale === 'en' ? 'Fare excludes luggage' : 'Giá vé chưa gồm hành lý')}
                         </small>
                       </div>
                     </div>
 
                     <div className="person-grid">
                       <div>
-                        <div className="seat-label">HÀNH KHÁCH</div>
+                        <div className="seat-label">
+                          {locale === 'en' ? 'PASSENGER' : 'HÀNH KHÁCH'}
+                        </div>
                         <div className="value" id="passenger">
                           {invoice.passengerName}
                         </div>
                       </div>
                       <div>
-                        <div className="seat-label">SỐ ĐIỆN THOẠI</div>
+                        <div className="seat-label">
+                          {locale === 'en' ? 'PHONE NUMBER' : 'SỐ ĐIỆN THOẠI'}
+                        </div>
                         <div className="value" id="phone">
                           {invoice.passengerPhone}
                         </div>
@@ -1761,7 +1912,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                     </div>
 
                     <div className="timeline-box">
-                      <div className="seat-label">THÔNG TIN CHUYẾN ĐI</div>
+                      <div className="seat-label">
+                        {locale === 'en' ? 'TRIP INFORMATION' : 'THÔNG TIN CHUYẾN ĐI'}
+                      </div>
                       <div className="title">
                         ◷ {currentTicket.departureTime || currentLeg?.departureTime}
                       </div>
@@ -1773,34 +1926,50 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                           item.name?.toLowerCase().includes('xe đạp'),
                         );
                         const currentCheckInText = hasMotorbike
-                          ? '90 – 120 phút (do có gửi xe máy kèm vé)'
+                          ? (locale === 'en'
+                              ? '90–120 minutes (due to accompanied motorbike)'
+                              : '90 – 120 phút (do có gửi xe máy kèm vé)')
                           : hasBicycle
-                            ? '20 – 30 phút (do có gửi xe đạp kèm vé)'
-                            : `${currentTicket.checkInMinutes || currentLeg?.checkInMinutes || 20} phút`;
+                            ? (locale === 'en'
+                                ? '20–30 minutes (due to accompanied bicycle)'
+                                : '20 – 30 phút (do có gửi xe đạp kèm vé)')
+                            : (locale === 'en'
+                                ? `${currentTicket.checkInMinutes || currentLeg?.checkInMinutes || 20} minutes`
+                                : `${currentTicket.checkInMinutes || currentLeg?.checkInMinutes || 20} phút`);
                         return (
                           <div className="note" style={{ marginTop: 8 }}>
-                            ◷ Có mặt tại điểm đón trước giờ khởi hành ít nhất{' '}
-                            <strong>{currentCheckInText}</strong>.
+                            ◷{' '}
+                            {locale === 'en'
+                              ? <>Please arrive at the boarding point at least <strong>{currentCheckInText}</strong> before departure.</>
+                              : <>Có mặt tại điểm đón trước giờ khởi hành ít nhất <strong>{currentCheckInText}</strong>.</>}
                           </div>
                         );
                       })()}
                       <div className="timeline-point">
                         <span className="pin">♧</span>
                         <div>
-                          <span className="point-tag">Điểm đón</span>
+                          <span className="point-tag">
+                            {locale === 'en' ? 'Boarding point' : 'Điểm đón'}
+                          </span>
                           <b>{currentTicket.pickup || currentLeg?.pickup}</b>
                           {currentLeg?.pickupAddress && (
                             <span>{currentLeg.pickupAddress}</span>
                           )}
                           {currentLeg?.transferStationName && (
-                            <span>Trung chuyển: {currentLeg.transferStationName}</span>
+                            <span>
+                              {locale === 'en'
+                                ? `Transfer: ${currentLeg.transferStationName}`
+                                : `Trung chuyển: ${currentLeg.transferStationName}`}
+                            </span>
                           )}
                         </div>
                       </div>
                       <div className="timeline-point">
                         <span className="pin orange">♧</span>
                         <div>
-                          <span className="point-tag dropoff">Điểm trả</span>
+                          <span className="point-tag dropoff">
+                            {locale === 'en' ? 'Drop-off point' : 'Điểm trả'}
+                          </span>
                           <b>{currentTicket.dropoff || currentLeg?.dropoff}</b>
                         </div>
                       </div>
@@ -1808,11 +1977,11 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
 
                     <div className="luggage">
                       <div className="luggage-title">
-                        <span>♧ HÀNH LÝ ĐI KÈM VÉ</span>
+                        <span>♧ {locale === 'en' ? 'ACCOMPANIED LUGGAGE' : 'HÀNH LÝ ĐI KÈM VÉ'}</span>
                         <span className="chip green" id="luggageBadge">
                           {currentLegCargoItems.length > 0
-                            ? `${currentLegCargoItems.reduce((s, i) => s + (i.quantity || 1), 0)} kiện ký gửi`
-                            : 'Không ký gửi'}
+                            ? `${currentLegCargoItems.reduce((s, i) => s + (i.quantity || 1), 0)} ${locale === 'en' ? 'checked item(s)' : 'kiện ký gửi'}`
+                            : (locale === 'en' ? 'No checked items' : 'Không ký gửi')}
                         </span>
                       </div>
                       {currentLegCargoItems.length > 0 ? (
@@ -1820,7 +1989,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                           {currentLegCargoItems.map((item, idx) => (
                             <div className="luggage-row" key={idx}>
                               <span id={idx === 0 ? 'luggageName' : undefined}>
-                                {item.quantity}× {item.name}
+                                {item.quantity}× {formatLuggageName(item.name, locale)}
                                 {item.note ? ` (${item.note})` : ''}
                               </span>
                               <strong id={idx === 0 ? 'luggageKg' : undefined}>
@@ -1829,12 +1998,18 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                             </div>
                           ))}
                           <div className="muted" style={{ marginTop: 7 }}>
-                            Đã tính phí trong đơn hàng · Không thu lại khi lên xe
+                            {locale === 'en'
+                              ? 'Fee included in order · No extra charge upon boarding'
+                              : 'Đã tính phí trong đơn hàng · Không thu lại khi lên xe'}
                           </div>
                         </>
                       ) : (
                         <div className="luggage-row">
-                          <span id="luggageName">Không có hành lý ký gửi</span>
+                          <span id="luggageName">
+                            {locale === 'en'
+                              ? 'No accompanied checked luggage'
+                              : 'Không có hành lý ký gửi'}
+                          </span>
                           <strong id="luggageKg">—</strong>
                         </div>
                       )}
@@ -1843,7 +2018,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
 
                   <div className="ticket-qr">
                     <img
-                      alt="Mã QR lên xe riêng cho hành khách"
+                      alt={locale === 'en' ? 'Boarding pass QR code' : 'Mã QR lên xe riêng cho hành khách'}
                       id="boardingQr"
                       src={currentQrSrc}
                       style={
@@ -1852,12 +2027,16 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                           : undefined
                       }
                     />
-                    <b>QUÉT MÃ ĐỂ LÊN XE</b>
+                    <b>{locale === 'en' ? 'SCAN CODE TO BOARD' : 'QUÉT MÃ ĐỂ LÊN XE'}</b>
                     <p>
-                      Đưa mã này cho nhân viên nhà xe. Mỗi ghế sử dụng một mã riêng.
+                      {locale === 'en'
+                        ? 'Show this code to the bus operator staff. Each seat uses a unique code.'
+                        : 'Đưa mã này cho nhân viên nhà xe. Mỗi ghế sử dụng một mã riêng.'}
                     </p>
                     <span className="seat-qr" id="qrSeat">
-                      Vé ghế {currentTicket.seatNumber}
+                      {locale === 'en'
+                        ? `Seat ${currentTicket.seatNumber}`
+                        : `Vé ghế ${currentTicket.seatNumber}`}
                     </span>
                     <a
                       className="tiny-btn"
@@ -1867,14 +2046,16 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                       rel="noreferrer"
                       style={{ marginTop: 12 }}
                     >
-                      ↓ Lưu mã QR
+                      ↓ {locale === 'en' ? 'Save QR code' : 'Lưu mã QR'}
                     </a>
                   </div>
                 </div>
 
                 <div className="ticket-foot">
                   <span>
-                    Vui lòng kiểm tra đúng chuyến, ngày và ghế trước khi lên xe.
+                    {locale === 'en'
+                      ? 'Please verify trip, date, and seat number before boarding.'
+                      : 'Vui lòng kiểm tra đúng chuyến, ngày và ghế trước khi lên xe.'}
                   </span>
                   <strong>VexGo · E-ticket</strong>
                 </div>
@@ -1884,8 +2065,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
         </main>
 
         <footer className="footer">
-          Vé điện tử có giá trị như vé xe thông thường. Nếu cần hỗ trợ thay đổi
-          thông tin, vui lòng liên hệ nhà xe hoặc VexGo.
+          {locale === 'en'
+            ? 'Electronic tickets have the same validity as paper tickets. For support or changes, please contact the bus operator or VexGo.'
+            : 'Vé điện tử có giá trị như vé xe thông thường. Nếu cần hỗ trợ thay đổi thông tin, vui lòng liên hệ nhà xe hoặc VexGo.'}
         </footer>
       </div>
 
@@ -1894,7 +2076,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
         className={`toast ${copiedCode ? 'show' : ''}`}
         role="status"
       >
-        {copiedCode ? 'Đã sao chép mã' : ''}
+        {copiedCode ? (locale === 'en' ? 'Code copied' : 'Đã sao chép mã') : ''}
       </div>
     </div>
   );

@@ -82,7 +82,7 @@ function toUtcDate(dateOnly: string): Date {
 
 function mapFarePrice(record: FarePriceRecord, businessDate: string) {
   const listedPrice = record.giaNiemYet.toNumber();
-  if (!Number.isSafeInteger(listedPrice) || listedPrice <= 0) {
+  if (!Number.isSafeInteger(listedPrice) || listedPrice < 0) {
     throw new Error('BangGia contains an invalid listed VND price.');
   }
 
@@ -221,7 +221,7 @@ export class FarePricesService {
         const currentListedPrice = current.giaNiemYet.toNumber();
         if (
           input.listedPrice === undefined &&
-          (!Number.isSafeInteger(currentListedPrice) || currentListedPrice <= 0)
+          (!Number.isSafeInteger(currentListedPrice) || currentListedPrice < 0)
         ) {
           throw new Error('BangGia contains an invalid listed VND price.');
         }
@@ -512,7 +512,7 @@ export class FarePricesService {
 
     const record = records[0]!;
     const listedPrice = record.giaNiemYet.toNumber();
-    if (!Number.isSafeInteger(listedPrice) || listedPrice <= 0) {
+    if (!Number.isSafeInteger(listedPrice) || listedPrice < 0) {
       throw new Error(
         `BangGia contains an invalid listed VND price. farePriceId=${record.bangGiaId}`,
       );

@@ -41,6 +41,7 @@ const RESOURCE_KEYS: Record<string, string> = {
   revenue: 'resourceRevenue',
   promotion: 'resourcePromotion',
   shipment: 'resourceShipment',
+  'luggage-rate': 'resourceLuggageRate',
   chat: 'resourceChat',
 };
 

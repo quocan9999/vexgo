@@ -562,7 +562,10 @@ function TicketSearchForm() {
                   {t('seatAndPosition')}
                 </span>
                 <p className="text-xl font-black text-[#0060c4]">
-                  {t('seatNumberWithLabel', { seatNumber: ticket.seatNumber || 'N/A' })}
+                  {t('seatNumberWithLabel', {
+                    seat: ticket.seatNumber || 'N/A',
+                    seatNumber: ticket.seatNumber || 'N/A',
+                  })}
                 </p>
                 <p className="text-xs font-medium text-slate-600 mt-1">
                   {t('seatPositionPrefix')}{' '}
@@ -688,7 +691,10 @@ function TicketSearchForm() {
                 )}
               </div>
               <p className="text-xs font-black text-slate-900 mt-3 font-mono">
-                {t('seatNumberWithLabel', { seatNumber: ticket.seatNumber || 'N/A' })} • {ticket.ticketCode}
+                {t('seatNumberWithLabel', {
+                  seat: ticket.seatNumber || 'N/A',
+                  seatNumber: ticket.seatNumber || 'N/A',
+                })} • {ticket.ticketCode}
               </p>
               <span className="text-[11px] text-slate-500 font-medium leading-relaxed mt-1 block">
                 {isCancelled
@@ -751,20 +757,19 @@ function TicketSearchForm() {
 
                   <div className="space-y-1 text-slate-700">
                     {cargoItems.length > 0 ? (
-                      <div className="space-y-1">
-                        <div className="font-semibold text-slate-900">
+                      <div className="space-y-2">
+                        <div className="font-semibold text-slate-900 text-xs sm:text-sm">
                           {t('cargoHoldListTitle')}
                         </div>
-                        <ul className="space-y-1 pl-4 list-disc text-slate-700">
+                        <ul className="space-y-1.5 text-xs text-slate-700">
                           {cargoItems.map((item, idx) => (
-                            <li key={idx}>
-                              <strong className="text-slate-900">
+                            <li key={item.id ?? idx} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
+                              <span className="font-semibold text-slate-800">
                                 {item.quantity}x {item.name}
-                              </strong>{' '}
-                              ({item.weight}kg)
-                              {item.note ? (
-                                <span className="text-slate-500"> — {item.note}</span>
-                              ) : null}
+                              </span>
+                              <span className="text-slate-500 text-xs">
+                                ({item.weight}kg){item.note ? ` — ${item.note}` : ''}
+                              </span>
                             </li>
                           ))}
                         </ul>
@@ -775,6 +780,10 @@ function TicketSearchForm() {
                             <span className="text-amber-600 block">{t('cargoPayAtTerminalNotice')}</span>
                           </div>
                         )}
+                      </div>
+                    ) : ticket.cargoStatus === 'DA_HUY' ? (
+                      <div className="text-xs text-slate-500 italic">
+                        Đã hủy gói hành lý gửi kèm (Vé xe vẫn giữ nguyên hiệu lực).
                       </div>
                     ) : (
                       <div className="text-slate-500">
@@ -909,7 +918,10 @@ function TicketSearchForm() {
                                 : 'text-slate-800'
                           }`}
                         >
-                          {t('seatNumberWithLabel', { seatNumber: sibling.seatNumber || 'N/A' })}
+                          {t('seatNumberWithLabel', {
+                            seat: sibling.seatNumber || 'N/A',
+                            seatNumber: sibling.seatNumber || 'N/A',
+                          })}
                         </span>
                         {isSiblingCancelled ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">

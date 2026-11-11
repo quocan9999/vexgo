@@ -186,10 +186,13 @@ export type PublicShipmentLookupData = {
 
 export type CancelShipmentResult = {
   waybillCode: string;
-  status: 'DA_HUY';
-  updatedAt: string;
-  hasPaidBeforeCancel: boolean;
+  status: string;
+  updatedAt?: string;
+  hasPaidBeforeCancel?: boolean;
   message: string;
+  cancelledItemIds?: number[];
+  remainingItemsCount?: number;
+  newTotalFee?: number;
 };
 
 export type CustomerShipmentListItem = {
@@ -467,6 +470,8 @@ export const shipmentsApi = {
       waybillCode: string;
       phoneNumber: string;
       reason?: string;
+      itemIds?: number[];
+      itemIndices?: number[];
     },
     accessToken?: string,
   ): Promise<{ data: CancelShipmentResult }> {

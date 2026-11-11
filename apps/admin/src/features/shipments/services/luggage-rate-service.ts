@@ -58,11 +58,9 @@ export const DEFAULT_VEXGO_LUGGAGE_RATES: LuggagePackagePricing = {
 };
 
 export async function getBusCompanyLuggageRates(
-  busCompanyId?: number,
   signal?: AbortSignal,
 ): Promise<BusCompanyLuggageRatesData> {
-  const query = busCompanyId ? `?busCompanyId=${busCompanyId}` : '';
-  const url = `${getApiBaseUrl()}/api/v1/bus-companies/my/luggage-rates${query}`;
+  const url = `${getApiBaseUrl()}/api/v1/bus-companies/my/luggage-rates`;
 
   const response = await adminApiFetch(url, {
     method: 'GET',
@@ -89,11 +87,9 @@ export async function updateBusCompanyLuggageRates(
     default: LuggagePackagePricing;
     routes?: Record<string, RouteLuggageRateOverride>;
   },
-  busCompanyId?: number,
   signal?: AbortSignal,
 ): Promise<BusCompanyLuggageRatesData> {
-  const query = busCompanyId ? `?busCompanyId=${busCompanyId}` : '';
-  const url = `${getApiBaseUrl()}/api/v1/bus-companies/my/luggage-rates${query}`;
+  const url = `${getApiBaseUrl()}/api/v1/bus-companies/my/luggage-rates`;
 
   const response = await adminApiFetch(url, {
     method: 'PUT',
