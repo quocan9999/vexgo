@@ -56,6 +56,24 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: JINA_API_KEY
+        sync: false
+      - key: AI_LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: AI_LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: MOMO_SECRET_KEY
+        sync: false
+      - key: VNPAY_HASH_SECRET
+        sync: false
+      - key: ZALOPAY_KEY2
+        sync: false
+      - key: FCM_ENABLED
+        value: 'false'
+      - key: NOTIFICATION_REMINDERS_ENABLED
+        value: 'false'
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: OTP_HASH_SECRET

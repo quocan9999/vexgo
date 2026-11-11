@@ -111,6 +111,11 @@ Khi màn hình hiện `[PASS]` toàn bộ 14 bảng dữ liệu là database Aiv
 | `SMTP_USER` | *(Email gửi)* |
 | `SMTP_PASSWORD` | *(Mật khẩu ứng dụng App Password của email)* |
 | `SMTP_FROM` | *(Email hoặc Tên hiển thị người gửi, ví dụ: VexGo <no-reply@vexgo.site>)* |
+| `GROQ_API_KEY` | *(Lấy miễn phí tại console.groq.com/keys nếu dùng AI Chatbot)* |
+| `JINA_API_KEY` | *(Lấy miễn phí tại jina.ai/embeddings nếu dùng AI Chatbot)* |
+| `MOMO_SECRET_KEY` | *(Chỉ điền nếu tích hợp MoMo thực tế)* |
+| `VNPAY_HASH_SECRET` | *(Chỉ điền nếu tích hợp VNPay thực tế)* |
+| `ZALOPAY_KEY2` | *(Chỉ điền nếu tích hợp ZaloPay thực tế)* |
 | `PAYMENT_DEMO_MODE` | `false` *(hoặc `true` nếu muốn bật nút xác nhận thanh toán demo)* |
 
 6. Nhấn **Deploy Web Service**. Khi build xong, truy cập thử `https://<ten-service-cua-ban>.onrender.com/api/v1/health` sẽ thấy trả về:
