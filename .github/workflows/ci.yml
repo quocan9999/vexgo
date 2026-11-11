@@ -1,0 +1,222 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API CI
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: vexgo_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+          --health-start-period=20s
+    env:
+      DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+      MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+      SHADOW_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci_shadow
+      JWT_ACCESS_SECRET: vexgo-ci-only-jwt-secret-not-for-any-deployment-2026
+      OTP_HASH_SECRET: vexgo-ci-only-otp-secret-not-for-any-deployment-2026
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Pin npm
+        run: npm install --global npm@11.14.1
+
+      - name: Verify Node.js and npm versions
+        run: |
+          node --version
+          npm_version="$(npm --version)"
+          printf 'npm %s\n' "$npm_version"
+          test "$npm_version" = "11.14.1"
+
+      - run: npm ci
+
+      # This also generates Prisma Client, which is needed before tests and typecheck.
+      - name: API build
+        run: npm run build --workspace=@vexgo/api
+
+      - name: Shipment migration regression harness
+        run: node prisma/tests/shipment-migration-upgrade.mjs
+
+      - name: Booking/ticket history verifier regression tests
+        run: node --test prisma/tests/booking-ticket-status-history-invariants.test.mjs
+
+      - name: Booking/ticket history migration regression harness
+        run: node prisma/tests/booking-ticket-status-history-migration-upgrade.mjs
+        env:
+          BOOKING_TICKET_STATUS_HISTORY_HARNESS_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
+      - name: Prepare CI shadow database
+        run: node prisma/tests/prepare-ci-shadow-database.mjs
+
+      - name: Promotion upgrade from seeded develop database
+        run: node prisma/tests/promotion-migration-upgrade.mjs
+        env:
+          PROMOTION_UPGRADE_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
+      - name: Apply API database migrations
+        run: npm exec -- prisma migrate deploy
+
+      - name: Sync permission catalog
+        run: node prisma/sync-permissions.mjs
+
+      - name: Seed the auth E2E role
+        run: node prisma/seed-auth-e2e.mjs
+
+      - name: Prepare booking/ticket history integration database
+        run: node prisma/tests/prepare-booking-ticket-status-history-test-database.mjs
+        env:
+          BOOKING_TICKET_STATUS_HISTORY_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
+      - name: Apply migrations to booking/ticket history test database
+        run: npm exec -- prisma migrate deploy
+        env:
+          MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_booking_ticket_status_history_ci_test
+
+      - name: Prepare Feature 07 integration database
+        run: node prisma/tests/prepare-feature07-test-database.mjs
+        env:
+          FEATURE07_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
+      - name: Apply migrations to Feature 07 test database
+        run: npm exec -- prisma migrate deploy
+        env:
+          MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_feature07_ci_test
+
+      - name: Shipment status cleanup regression (repeat on one isolated DB)
+        run: node prisma/tests/run-shipment-integration-isolated.mjs --repeat=2 test/integration/shipments/shipments-status.spec.ts
+
+      - name: API tests
+        run: npm run test --workspace=@vexgo/api
+        env:
+          SHIPMENT_TEST_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
+      - name: Clear integration test credentials
+        if: always()
+        run: |
+          echo "BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL=" >> "$GITHUB_ENV"
+          echo "FEATURE07_TEST_DATABASE_URL=" >> "$GITHUB_ENV"
+
+      - name: API e2e tests
+        run: npm run test:e2e --workspace=@vexgo/api
+
+      - name: API typecheck
+        run: npm run typecheck --workspace=@vexgo/api
+
+      - name: API lint
+        run: npm run lint --workspace=@vexgo/api
+
+  admin:
+    name: Admin CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Pin npm
+        run: npm install --global npm@11.14.1
+
+      - name: Verify Node.js and npm versions
+        run: |
+          node --version
+          npm_version="$(npm --version)"
+          printf 'npm %s\n' "$npm_version"
+          test "$npm_version" = "11.14.1"
+
+      - run: npm ci
+
+      - name: Admin tests
+        run: npm run test --workspace=@vexgo/admin
+
+      - name: Admin typecheck
+        run: npm run typecheck --workspace=@vexgo/admin
+
+      - name: Admin lint
+        run: npm run lint --workspace=@vexgo/admin
+
+      - name: Admin build
+        run: npm run build --workspace=@vexgo/admin
+
+      - name: Admin production start smoke test
+        run: node --test scripts/next-workspace-start-smoke.test.mjs
+        env:
+          VEXGO_NEXT_START_SMOKE_APP: admin
+
+  web:
+    name: Web CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Pin npm
+        run: npm install --global npm@11.14.1
+
+      - name: Verify Node.js and npm versions
+        run: |
+          node --version
+          npm_version="$(npm --version)"
+          printf 'npm %s\n' "$npm_version"
+          test "$npm_version" = "11.14.1"
+
+      - run: npm ci
+
+      - name: Web unit tests
+        run: npm run test --workspace=@vexgo/web
+
+      - name: Web typecheck
+        run: npm run typecheck --workspace=@vexgo/web
+
+      - name: Web lint
+        run: npm run lint --workspace=@vexgo/web
+
+      - name: Web build
+        run: npm run build --workspace=@vexgo/web
+
+      - name: Web production start smoke test
+        run: node --test scripts/next-workspace-start-smoke.test.mjs
+        env:
+          VEXGO_NEXT_START_SMOKE_APP: web
+
+      - name: Web e2e and route regression tests
+        run: npm run test:e2e --workspace=@vexgo/web

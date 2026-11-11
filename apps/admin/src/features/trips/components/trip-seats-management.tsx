@@ -1,0 +1,732 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import {
+  Armchair,
+  ArrowLeft,
+  BusFront,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  Route,
+  Ticket,
+} from 'lucide-react';
+import { ResourceState } from '@/components/admin/resource-ui';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { Badge } from '@/components/ui/status-badge';
+import { Button } from '@/components/ui/action-button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
+import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { getTripById, getTripSeats, isTripNotFoundError } from '../services/trip-service';
+import { TripStatusBadge } from './trip-detail-sheet';
+import type {
+  Trip,
+  TripSeat,
+  TripSeatsResponse,
+  TripSeatStatus,
+} from '../types/trip';
+
+const tripSeatStatusPresentation = {
+  TRONG: { label: 'Available', variant: 'success' },
+  DANG_GIU: { label: 'Held', variant: 'warning' },
+  DA_DAT: { label: 'Booked', variant: 'destructive' },
+} satisfies Record<
+  TripSeatStatus,
+  {
+    label: string;
+    variant: 'success' | 'warning' | 'destructive';
+  }
+>;
+
+const tripSeatMapStatusPresentation = {
+  TRONG: {
+    label: 'Available',
+    icon: CheckCircle2,
+    className: 'border-emerald-300/90 bg-emerald-50/90 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs hover:scale-[1.03] transition-transform',
+    badgeVariant: 'outline',
+  },
+  DANG_GIU: {
+    label: 'Held',
+    icon: Clock3,
+    className:
+      'border-amber-300/90 bg-amber-50/90 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 shadow-2xs hover:scale-[1.03] transition-transform',
+    badgeVariant: 'warning',
+  },
+  DA_DAT: {
+    label: 'Booked',
+    icon: Ticket,
+    className: 'border-slate-200 bg-slate-100/90 text-slate-500 dark:bg-slate-800/80 dark:text-slate-400 dark:border-slate-700 shadow-2xs opacity-85',
+    badgeVariant: 'secondary',
+  },
+} satisfies Record<
+  TripSeatStatus,
+  {
+    label: string;
+    icon: typeof CheckCircle2;
+    className: string;
+    badgeVariant: 'outline' | 'warning' | 'secondary';
+  }
+>;
+
+function formatDate(dateStr: string) {
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return parts[2] + '-' + parts[1] + '-' + parts[0];
+  }
+  return dateStr;
+}
+
+function formatTime(timeStr: string) {
+  return timeStr.slice(0, 5);
+}
+
+function formatCount(value: number) {
+  return value.toLocaleString('vi-VN');
+}
+
+export function TripSeatStatusBadge({ status }: { status: TripSeatStatus }) {
+  const tTrips = useTranslations('trips');
+  const { variant } = tripSeatStatusPresentation[status];
+  const label =
+    status === 'TRONG'
+      ? tTrips('seatStatusAvailable')
+      : status === 'DANG_GIU'
+        ? tTrips('seatStatusHeld')
+        : tTrips('seatStatusBooked');
+
+  return (
+    <Badge data-status={status} variant={variant}>
+      {label}
+    </Badge>
+  );
+}
+
+type WorkspaceState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string; isNotFound?: boolean }
+  | { status: 'success'; trip: Trip; seatsData: TripSeatsResponse };
+
+type TripSeatFilter = '' | TripSeatStatus;
+
+type PositionedTripSeat = {
+  seat: TripSeat;
+  floor: number;
+  x: number;
+  y: number;
+};
+
+type TripSeatFloorMap = {
+  floor: number;
+  seats: PositionedTripSeat[];
+  height: number;
+};
+
+const SEAT_MAP_VERTICAL_UNIT_PX = 0.064;
+const SEAT_MAP_FALLBACK_COLUMNS = [160, 360, 640, 840];
+
+function getTripSeatFloorMaps(seats: TripSeat[]): TripSeatFloorMap[] {
+  const seatsByFloor = new Map<number, TripSeat[]>();
+
+  for (const seat of seats) {
+    const floor = seat.seat.floor === 2 ? 2 : 1;
+    const floorSeats = seatsByFloor.get(floor) ?? [];
+    floorSeats.push(seat);
+    seatsByFloor.set(floor, floorSeats);
+  }
+
+  return [...seatsByFloor.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([floor, floorSeats]) => {
+      const occupied = floorSeats.flatMap((seat) =>
+        typeof seat.seat.x === 'number' && typeof seat.seat.y === 'number'
+          ? [{ x: seat.seat.x, y: seat.seat.y }]
+          : [],
+      );
+      const positionedSeats = floorSeats.map((seat) => {
+        if (
+          typeof seat.seat.x === 'number' &&
+          typeof seat.seat.y === 'number'
+        ) {
+          return { seat, floor, x: seat.seat.x, y: seat.seat.y };
+        }
+
+        let fallback: { x: number; y: number } | undefined;
+        let row = 0;
+        while (!fallback) {
+          fallback = SEAT_MAP_FALLBACK_COLUMNS.map((x) => ({
+            x,
+            y: 1000 + row * 1000,
+          })).find(
+            (candidate) =>
+              !occupied.some(
+                (other) =>
+                  Math.abs(other.x - candidate.x) < 180 &&
+                  Math.abs(other.y - candidate.y) < 875,
+              ),
+          );
+          row += 1;
+        }
+        occupied.push(fallback);
+        return { seat, floor, ...fallback };
+      });
+
+      const maxY = Math.max(1000, ...positionedSeats.map((seat) => seat.y));
+      const height = Math.max(
+        320,
+        (Math.floor(maxY / 1000) + 2) * 64,
+      );
+
+      return { floor, seats: positionedSeats, height };
+    });
+}
+
+function TripSeatsLoading() {
+  const tTrips = useTranslations('trips');
+  return (
+    <div
+      aria-busy="true"
+      aria-label={tTrips('loadingSeats')}
+      className="space-y-4"
+      role="status"
+    >
+      <span className="sr-only">{tTrips('loadingSeats')}</span>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <Card className="h-auto gap-3 py-4" key={index}>
+            <CardContent className="flex items-center gap-3">
+              <Skeleton className="size-10 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-7 w-16" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card className="h-auto gap-4 py-5">
+        <CardHeader className="space-y-3">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 8 }, (_, index) => (
+            <Skeleton className="h-16" key={index} />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export function TripSeatsManagement({
+  tripId,
+  initialTrip,
+  initialSeats,
+}: {
+  tripId: number;
+  initialTrip?: Trip;
+  initialSeats?: TripSeatsResponse;
+}) {
+  const tTrips = useTranslations('trips');
+  const tCommon = useTranslations('common');
+  const { can } = useAdminPermissions();
+  const canRead = can('trip:read');
+  const validTripId = Number.isSafeInteger(tripId) && tripId > 0;
+
+  const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
+    if (!validTripId) {
+      return { status: 'error', message: 'Invalid trip ID' };
+    }
+    if (initialTrip && initialSeats) {
+      return { status: 'success', trip: initialTrip, seatsData: initialSeats };
+    }
+    return { status: 'loading' };
+  });
+  const [statusFilter, setStatusFilter] = useState<TripSeatFilter>('');
+  const [refreshCount, setRefreshCount] = useState(0);
+
+  const currentWorkspace: WorkspaceState = !validTripId
+    ? { status: 'error', message: 'Invalid trip ID' }
+    : workspace;
+
+  function refresh() {
+    setWorkspace({ status: 'loading' });
+    setRefreshCount((count) => count + 1);
+  }
+
+  useEffect(() => {
+    if (!validTripId || !canRead) {
+      return;
+    }
+
+    const controller = new AbortController();
+    Promise.all([
+      getTripById(tripId, controller.signal),
+      getTripSeats(
+        tripId,
+        statusFilter ? { status: statusFilter } : undefined,
+        controller.signal,
+      ),
+    ])
+      .then(([trip, seatsData]) => {
+        if (!controller.signal.aborted) {
+          setWorkspace({ status: 'success', trip, seatsData });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          const isNotFound = isTripNotFoundError(error);
+          const message =
+            error instanceof Error
+              ? error.message
+              : tTrips('cannotLoadSeats');
+          setWorkspace({ status: 'error', message, isNotFound });
+        }
+      });
+
+    return () => controller.abort();
+  }, [tripId, validTripId, canRead, statusFilter, refreshCount]);
+
+  if (!canRead) {
+    return (
+      <SuperAdminLayout activeSection="trips">
+        <div className="admin-page-content space-y-5">
+          <AdminPageHeader
+            actions={
+              <Button
+                nativeButton={false}
+                render={<Link href="/trips" />}
+                variant="secondary"
+              >
+                <ArrowLeft aria-hidden="true" />
+                {tTrips('backToTrips')}
+              </Button>
+            }
+            eyebrow={tTrips('eyebrow')}
+            title={tTrips('seatMapPageTitle')}
+            titleId="trip-seats-title"
+          />
+          <Card className="h-auto gap-0 py-0">
+            <ResourceState error>
+              {tTrips('noPermissionViewSeats')}
+            </ResourceState>
+          </Card>
+        </div>
+      </SuperAdminLayout>
+    );
+  }
+
+  const seatFloorMaps =
+    currentWorkspace.status === 'success'
+      ? getTripSeatFloorMaps(currentWorkspace.seatsData.data)
+      : [];
+
+  const backAction = (
+    <Button
+      nativeButton={false}
+      render={<Link href="/trips" />}
+      variant="secondary"
+    >
+      <ArrowLeft aria-hidden="true" />
+      {tTrips('backToTrips')}
+    </Button>
+  );
+
+  return (
+    <SuperAdminLayout
+      activeSection="trips"
+      breadcrumbs={[
+        { label: tTrips('tripsTitle'), href: '/trips' },
+        { label: tTrips('seatMapBreadcrumb') },
+      ]}
+    >
+      <div className="admin-page-content space-y-5">
+        <AdminPageHeader
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {backAction}
+              <Button
+                disabled={currentWorkspace.status === 'loading'}
+                onClick={refresh}
+                type="button"
+                variant="outline"
+              >
+                <RefreshCw aria-hidden="true" />
+                {tCommon('refresh')}
+              </Button>
+            </div>
+          }
+          eyebrow={tTrips('eyebrow')}
+          title={
+            currentWorkspace.status === 'success'
+              ? tTrips('seatMapPageTitleWithCode', { code: currentWorkspace.trip.code })
+              : tTrips('seatMapPageTitle')
+          }
+          titleId="trip-seats-title"
+        />
+
+        {currentWorkspace.status === 'loading' && <TripSeatsLoading />}
+
+        {currentWorkspace.status === 'error' && (
+          <Card className="h-auto gap-0 py-0">
+            <ResourceState error>
+              <div className="grid justify-items-center gap-4">
+                <p className="m-0">
+                  {currentWorkspace.isNotFound
+                    ? tTrips('tripNotFoundOrNoPermission')
+                    : currentWorkspace.message}
+                </p>
+                {currentWorkspace.isNotFound ? (
+                  backAction
+                ) : (
+                  <Button onClick={refresh} type="button" variant="secondary">
+                    <RefreshCw aria-hidden="true" />
+                    {tCommon('retry')}
+                  </Button>
+                )}
+              </div>
+            </ResourceState>
+          </Card>
+        )}
+
+        {currentWorkspace.status === 'success' && (
+          <>
+            <Card className="h-auto gap-0 py-0">
+              <CardHeader className="border-b p-4 sm:p-5">
+                <CardTitle className="text-base">{tTrips('tripInfoTitle')}</CardTitle>
+                <CardDescription>
+                  {tTrips('seatMapDescription')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <Route aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-xs text-muted-foreground">{tTrips('colRoute')}</p>
+                    <p className="m-0 break-words text-sm font-semibold text-foreground">
+                      <span className="font-mono">
+                        {currentWorkspace.trip.route.code}
+                      </span>
+                    </p>
+                    <p className="mt-1 mb-0 break-words text-xs text-muted-foreground">
+                      {currentWorkspace.trip.route.origin} →{' '}
+                      {currentWorkspace.trip.route.destination}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <CalendarDays aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-xs text-muted-foreground">
+                      {tTrips('departureLabel')}
+                    </p>
+                    <p className="m-0 text-sm font-semibold text-foreground">
+                      {formatTime(currentWorkspace.trip.departureTime)}
+                    </p>
+                    <p className="mt-1 mb-0 text-xs text-muted-foreground">
+                      {formatDate(currentWorkspace.trip.departureDate)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <BusFront aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-xs text-muted-foreground">{tTrips('colVehicle')}</p>
+                    <p className="m-0 break-all font-mono text-sm font-semibold text-foreground">
+                      {currentWorkspace.trip.vehicle.licensePlate}
+                    </p>
+                    <p className="mt-1 mb-0 break-words text-xs text-muted-foreground">
+                      {currentWorkspace.trip.vehicle.vehicleType.name}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <Clock3 aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      {tTrips('tripStatus')}
+                    </p>
+                    <TripStatusBadge status={currentWorkspace.trip.status} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <section
+              aria-label={tTrips('seatOverviewAria')}
+              className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
+            >
+              {[
+                {
+                  label: tTrips('totalSeatsCount'),
+                  value: currentWorkspace.seatsData.meta.total,
+                  icon: Armchair,
+                  iconTone: 'bg-blue-50 text-blue-600 border border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
+                  detail: tTrips('metricTotalSeatsDetail'),
+                },
+                {
+                  label: tTrips('availableSeatsCount'),
+                  value: currentWorkspace.seatsData.meta.available,
+                  icon: CheckCircle2,
+                  iconTone: 'bg-emerald-50 text-emerald-600 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+                  detail: tTrips('metricAvailableSeatsDetail'),
+                },
+                {
+                  label: tTrips('heldSeatsCount'),
+                  value: currentWorkspace.seatsData.meta.held,
+                  icon: Clock3,
+                  iconTone: 'bg-amber-50 text-amber-600 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
+                  detail: tTrips('metricHeldSeatsDetail'),
+                },
+                {
+                  label: tTrips('bookedSeatsCount'),
+                  value: currentWorkspace.seatsData.meta.booked,
+                  icon: Ticket,
+                  iconTone: 'bg-rose-50 text-rose-600 border border-rose-200/80 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
+                  detail: tTrips('metricBookedSeatsDetail'),
+                },
+              ].map((metric) => {
+                const Icon = metric.icon;
+                return (
+                  <Card
+                    className="h-auto gap-0 py-0 border-border/80 bg-card shadow-[var(--admin-shadow-sm)] hover:shadow-[var(--admin-shadow-md)] transition-shadow"
+                    key={metric.label}
+                  >
+                    <CardContent className="flex min-h-28 items-start gap-4 p-4 sm:p-5">
+                      <span
+                        className={
+                          'grid size-11 shrink-0 place-items-center rounded-xl ' +
+                          metric.iconTone
+                        }
+                      >
+                        <Icon aria-hidden="true" size={20} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                          {metric.label}
+                        </p>
+                        <p className="m-0 text-3xl font-bold leading-none tracking-tight text-foreground tabular-nums">
+                          {formatCount(metric.value)}
+                        </p>
+                        <p className="mt-2 mb-0 text-[11.5px] text-muted-foreground">
+                          {metric.detail}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </section>
+
+            <Card className="h-auto gap-0 py-0">
+              <CardHeader className="flex flex-col gap-4 border-b p-4 sm:p-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <CardTitle className="text-base">{tTrips('seatMapTitle')}</CardTitle>
+                  <CardDescription className="max-w-3xl leading-relaxed">
+                    {tTrips('seatMapDescription')}
+                  </CardDescription>
+                </div>
+                <div
+                  aria-label={tTrips('filterByStatusAria')}
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                >
+                  <Button
+                    aria-pressed={statusFilter === ''}
+                    onClick={() => setStatusFilter('')}
+                    size="sm"
+                    type="button"
+                    variant={statusFilter === '' ? 'default' : 'outline'}
+                  >
+                    {tCommon('all')} ({formatCount(currentWorkspace.seatsData.meta.total)})
+                  </Button>
+                  <Button
+                    aria-pressed={statusFilter === 'TRONG'}
+                    onClick={() => setStatusFilter('TRONG')}
+                    size="sm"
+                    type="button"
+                    variant={statusFilter === 'TRONG' ? 'default' : 'outline'}
+                  >
+                    {tTrips('seatStatusAvailable')} ({formatCount(currentWorkspace.seatsData.meta.available)})
+                  </Button>
+                  <Button
+                    aria-pressed={statusFilter === 'DANG_GIU'}
+                    onClick={() => setStatusFilter('DANG_GIU')}
+                    size="sm"
+                    type="button"
+                    variant={
+                      statusFilter === 'DANG_GIU' ? 'default' : 'outline'
+                    }
+                  >
+                    {tTrips('seatStatusHeld')} ({formatCount(currentWorkspace.seatsData.meta.held)})
+                  </Button>
+                  <Button
+                    aria-pressed={statusFilter === 'DA_DAT'}
+                    onClick={() => setStatusFilter('DA_DAT')}
+                    size="sm"
+                    type="button"
+                    variant={statusFilter === 'DA_DAT' ? 'default' : 'outline'}
+                  >
+                    {tTrips('seatStatusBooked')} ({formatCount(currentWorkspace.seatsData.meta.booked)})
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4 sm:p-5">
+                <p className="m-0 text-xs text-muted-foreground" aria-live="polite">
+                  {tTrips('showingSeatsCount', { count: formatCount(currentWorkspace.seatsData.data.length) })}
+                </p>
+
+                {currentWorkspace.seatsData.data.length === 0 ? (
+                  <ResourceState>
+                    {statusFilter
+                      ? tTrips('noSeatsInStatus')
+                      : tTrips('noSeatDataForTrip')}
+                  </ResourceState>
+                ) : (
+                  <div className="space-y-4">
+                    <div
+                      aria-label={tTrips('seatStatusLegendAria')}
+                      className="flex flex-wrap gap-2"
+                      role="list"
+                    >
+                      {(Object.keys(
+                        tripSeatMapStatusPresentation,
+                      ) as TripSeatStatus[]).map((status) => {
+                        const presentation =
+                          tripSeatMapStatusPresentation[status];
+                        const StatusIcon = presentation.icon;
+                        return (
+                          <Badge
+                            data-status={status}
+                            key={status}
+                            role="listitem"
+                            variant={presentation.badgeVariant}
+                          >
+                            <StatusIcon aria-hidden="true" />
+                            {status === 'TRONG' ? tTrips('seatStatusAvailable') : status === 'DANG_GIU' ? tTrips('seatStatusHeld') : tTrips('seatStatusBooked')}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {seatFloorMaps.map(({ floor, seats, height }) => {
+                        const floorLabel =
+                          floor === 2 ? tTrips('floorUpper') : tTrips('floorLower');
+                        const headingId = `trip-seat-floor-${floor}`;
+
+                        return (
+                          <section
+                            aria-labelledby={headingId}
+                            className="min-w-0 space-y-2"
+                            key={floor}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <h3
+                                className="m-0 text-sm font-semibold text-foreground"
+                                id={headingId}
+                              >
+                                {floorLabel}
+                              </h3>
+                              <Badge variant="secondary">
+                                {tTrips('seatsCountBadge', { count: formatCount(seats.length) })}
+                              </Badge>
+                            </div>
+
+                            <div className="overflow-x-auto rounded-2xl border border-border/80 bg-slate-100/40 dark:bg-slate-900/30 p-2 sm:p-4">
+                              <div className="mx-auto min-w-[340px] max-w-[460px]">
+                                <div className="grid h-12 grid-cols-3 items-center rounded-t-2xl border-x border-t border-slate-300/80 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-card px-4 text-[11px] font-semibold text-slate-700 dark:text-slate-300 shadow-2xs">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 px-2 py-0.5 text-blue-700 dark:text-blue-300 justify-self-start">
+                                    <BusFront aria-hidden="true" className="size-3.5 text-blue-600 dark:text-blue-400" />
+                                    {tTrips('driver')}
+                                  </span>
+                                  <span className="justify-self-center font-bold tracking-wider uppercase text-slate-400">
+                                    {tTrips('busFront')}
+                                  </span>
+                                  <span className="justify-self-end text-slate-500 whitespace-nowrap">
+                                    {tTrips('entryDoorIndicator')}
+                                  </span>
+                                </div>
+                                <div
+                                  aria-label={tTrips('seatMapForFloor', { floor: floorLabel })}
+                                  className="relative overflow-hidden rounded-b-2xl border-x border-b border-slate-300/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 shadow-inner"
+                                  role="list"
+                                  style={{
+                                    height,
+                                    backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(148, 163, 184, 0.15) 1.5px, transparent 1.5px)',
+                                    backgroundSize: '24px 24px',
+                                  }}
+                                >
+                                  {seats.map(({ seat, x, y }) => {
+                                    const presentation =
+                                      tripSeatMapStatusPresentation[seat.status];
+                                    const StatusIcon = presentation.icon;
+                                    const accessibleLabel = `${seat.seat.code}, ${floorLabel.toLowerCase()}, ${presentation.label.toLowerCase()}`;
+
+                                    return (
+                                      <div
+                                        aria-label={accessibleLabel}
+                                        className={`absolute z-10 flex h-[54px] w-[62px] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-xl border shadow-sm ${presentation.className}`}
+                                        data-seat-code={seat.seat.code}
+                                        data-status={seat.status}
+                                        key={seat.tripSeatId}
+                                        role="listitem"
+                                        style={{
+                                          left: `${x / 10}%`,
+                                          top: `${y * SEAT_MAP_VERTICAL_UNIT_PX}px`,
+                                        }}
+                                        title={accessibleLabel}
+                                      >
+                                        <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full border bg-background">
+                                          <StatusIcon
+                                            aria-hidden="true"
+                                            className="size-2.5"
+                                          />
+                                        </span>
+                                        <Armchair
+                                          aria-hidden="true"
+                                          className="size-[17px]"
+                                        />
+                                        <span className="max-w-full truncate px-1 font-mono text-[10px] font-semibold leading-none">
+                                          {seat.seat.code}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+    </SuperAdminLayout>
+  );
+}

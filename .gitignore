@@ -1,0 +1,32 @@
+node_modules/
+.DS_Store
+.turbo/
+.next/
+dist/
+coverage/
+apps/api/src/generated/prisma/
+*.tsbuildinfo
+
+.env*
+!.env.example
+
+# Prisma local SQLite artifacts
+*.db
+*.db-journal
+
+# Playwright reports
+playwright-report/
+test-results/
+blob-report/
+.worktrees/
+.codex-build/
+.codex-finalizer/
+output/
+.superpowers/
+backups/
+*.sql
+!prisma/migrations/**/*.sql
+*.sql.gz
+
+.codex-work/
+outputs/

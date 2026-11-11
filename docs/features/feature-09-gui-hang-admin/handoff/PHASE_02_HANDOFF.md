@@ -1,0 +1,46 @@
+# Feature 09 — Phase 02 Handoff: Tenant-scoped Shipment Read APIs
+
+- **Phase / spec chính xác:** PHASE 02 — Tenant-scoped shipment read APIs (`docs/features/feature-09-gui-hang-admin/spec/PHASE_02_SHIPMENT_READ_APIS.md`)
+- **Ngày giờ / trạng thái:** 09/10/2026 / READY
+- **Branch / worktree path / base origin/develop SHA:**
+  - Branch: `feature/shipment-management`
+  - Worktree: `E:\Huit_Local\KhoaLuanCuNhan\SourceCode\vexgo-feature09`
+  - Base `origin/develop` SHA: `f2edf7f8562a2e397f58b7c88568e7f1e6bd40c5`
+- **Ports đã xác minh:** Admin 3003; API 4003; MySQL 3306
+- **DB đã xác minh (tên, không đưa credential):** `vexgo_feature09`; shadow `vexgo_feature09_shadow`
+- **Source/rules đã đọc và khác biệt so develop:**
+  - Triển khai mới module `ShipmentsModule` tại backend chung (`apps/api/src/shipments/`), không tách endpoint `/admin` riêng biệt.
+  - Toàn bộ truy vấn danh sách và chi tiết vận đơn được giới hạn nghiêm ngặt theo `nhaXeId` từ `AuthPrincipal` tin cậy (`requireTenantPrincipal`).
+- **Changed files và logic đã hoàn tất:**
+  - `apps/api/src/shipments/dto/shipment-query.dto.ts`: DTO phân trang (`page`, `pageSize` 1..50), lọc trạng thái (`TrangThaiPhieuGuiHang`), tìm kiếm (`search`), hướng sắp xếp (`sortDirection`).
+  - `apps/api/src/shipments/dto/shipment-response.dto.ts`: Định nghĩa cấu trúc chuẩn `ShipmentSummary`, `ShipmentDetail`, `CargoItemDetail`, `CargoFeeDetail`, `ShipmentFeeSummary`, `ShipmentHistoryItem`.
+  - `apps/api/src/shipments/shipments.service.ts`: Nghiệp vụ truy vấn DB-backed cho danh sách và chi tiết phiếu gửi, kiểm tra ràng buộc tenant trên toàn bộ thực thể liên quan (`donGiaoDich`, `chuyenXe`, `diemGui`, `diemNhan`), fail-closed nếu có quan hệ lệch scope, chuyển đổi số tiền Decimal sang số nguyên VND.
+  - `apps/api/src/shipments/shipments.controller.ts`: Controller REST với tiền tố `/api/v1/shipments`, áp dụng guard `@RequireRoles(...TENANT_PRINCIPAL_ROLES)` và `@RequirePermissions('shipment:read')`.
+  - `apps/api/src/shipments/shipments.module.ts`: Đăng ký module vận đơn.
+  - `apps/api/src/app.module.ts`: Khai báo `ShipmentsModule`.
+  - `apps/api/test/integration/shipments/shipments.spec.ts`: Bộ 14 integration test kiểm tra auth (401), thiếu quyền (403), SUPER_ADMIN (403), cách ly tenant (tenant A không thấy tenant B, tra cứu ID tenant khác trả về 404), validation DTO (400), bộ lọc/tìm kiếm và chi tiết phiếu gửi.
+  - `docs/features/feature-09-gui-hang-admin/handoff/PHASE_02_HANDOFF.md`: Tài liệu bàn giao Phase 02.
+- **DB / migrations / permission sync / seed đã chạy (tên, tác động, không secret):**
+  - Sử dụng DB `vexgo_feature09` đã áp dụng 23 migrations và seed ban đầu.
+- **API contract, security scope, negative cases đã xác minh:**
+  - `GET /api/v1/shipments`: Phân trang envelope `{ data, meta }`, tìm kiếm theo mã vận đơn/người gửi/người nhận.
+  - `GET /api/v1/shipments/:id`: Chi tiết envelope `{ data }` gồm thông tin chuyến, 2 điểm giao nhận, hàng hóa, cước từng loại, tổng cước và lịch sử trạng thái theo thời gian.
+  - Bắt lỗi: 401 khi không đăng nhập, 403 khi thiếu quyền `shipment:read` hoặc là `SUPER_ADMIN`, 404 khi không tồn tại hoặc thuộc nhà xe khác, 400 khi params không hợp lệ.
+- **Component audit:** N/A (Phase 02 hoàn toàn thuộc backend API).
+- **Targeted tests / commands / kết quả thực tế:**
+  - `npm exec -- vitest run test/integration/shipments/shipments.spec.ts`: 14/14 tests PASSED.
+  - `npm exec -- vitest run test/unit/auth/shipment-rbac.spec.ts`: 5/5 tests PASSED.
+  - `npm exec -- vitest run test/unit/auth/permission-catalog.spec.ts`: 8/8 tests PASSED.
+  - `npm run build --workspace=@vexgo/api`: Build PASSED không lỗi type/lint.
+- **Browser responsive 1440x900 và 375x667:** N/A cho Phase 02.
+- **GitNexus impact / detect changes risk:**
+  - Detect changes xác nhận không có xung đột hay phá vỡ đồ thị phụ thuộc.
+- **Self-review findings / fixes / unresolved:**
+  - Sử dụng trường snapshot `tenKhachHang` và `soDienThoaiKhachHang` từ `DonGiaoDich`.
+  - Giữ vững quy tắc fail-closed, không rò rỉ dữ liệu cross-tenant.
+- **Commit subject và cách tra SHA:**
+  - `feat(shipments): bổ sung API tra cứu phiếu gửi theo nhà xe`
+- **Blockers / remaining scope / test chưa chạy:**
+  - Không có blocker.
+- **Next phase exact path / checklist preflight:**
+  - Phase 03: `docs/features/feature-09-gui-hang-admin/spec/PHASE_03_ADMIN_LIST_DETAIL_UI.md`

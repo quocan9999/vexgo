@@ -1,0 +1,247 @@
+'use client';
+
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
+
+import { LoaderCircle } from 'lucide-react';
+import { useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
+import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
+import { Button } from '@/components/ui/action-button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  BusCompanyApiError,
+  updateBusCompany,
+  type BusCompanyApiErrorDetail,
+} from '../services/bus-company-service';
+import type { BusCompany } from '../types/bus-company';
+
+type EditBusCompanyDialogProps = {
+  company: BusCompany;
+  onClose: () => void;
+  onUpdated: (company: BusCompany) => void;
+};
+
+type FormValues = {
+  code: string;
+  name: string;
+  contactInfo: string;
+};
+
+type FormField = keyof FormValues;
+type FieldErrors = Partial<Record<FormField, string>>;
+
+function fieldErrorsFromDetails(details: BusCompanyApiErrorDetail[]) {
+  const errors: FieldErrors = {};
+
+  for (const detail of details) {
+    if (
+      detail.field === 'code' ||
+      detail.field === 'name' ||
+      detail.field === 'contactInfo'
+    ) {
+      errors[detail.field] = detail.message;
+    }
+  }
+
+  return errors;
+}
+
+export function EditBusCompanyDialog({
+  company,
+  onClose,
+  onUpdated,
+}: EditBusCompanyDialogProps) {
+  const tCompanies = useTranslations('busCompanies');
+  const tCommon = useTranslations('common');
+  const submittingRef = useRef(false);
+  const [values, setValues] = useState<FormValues>(() => ({
+    code: company.code,
+    name: company.name,
+    contactInfo: company.contactInfo ?? '',
+  }));
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  function closeDialog() {
+    if (!submittingRef.current) onClose();
+  }
+
+  function updateField(field: FormField, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError(null);
+  }
+
+  function validate(): FieldErrors {
+    const errors: FieldErrors = {};
+    const code = values.code.trim();
+    const name = values.name.trim();
+
+    if (!code) errors.code = tCompanies('validationCodeRequired');
+    else if (code.length > 50) {
+      errors.code = tCompanies('validationCodeMaxLength');
+    }
+
+    if (!name) errors.name = tCompanies('validationNameRequired');
+    else if (name.length > 150) {
+      errors.name = tCompanies('validationNameMaxLength');
+    }
+
+    return errors;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submittingRef.current) return;
+
+    setFormError(null);
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    submittingRef.current = true;
+    setSubmitting(true);
+
+    try {
+      const updatedCompany = await updateBusCompany(company.busCompanyId, {
+        code: values.code.trim(),
+        name: values.name.trim(),
+        contactInfo: values.contactInfo.trim() || null,
+      });
+      onUpdated(updatedCompany);
+    } catch (requestError: unknown) {
+      if (requestError instanceof BusCompanyApiError) {
+        if (requestError.code === 'BUS_COMPANY_CODE_EXISTS') {
+          setFieldErrors({ code: requestError.message });
+          setFormError(null);
+        } else {
+          const serverErrors = fieldErrorsFromDetails(requestError.details);
+          setFieldErrors(serverErrors);
+          setFormError(
+            Object.keys(serverErrors).length > 0 ? null : requestError.message,
+          );
+        }
+      } else {
+        setFormError(
+          requestError instanceof Error
+            ? requestError.message
+            : tCompanies('cannotUpdate'),
+        );
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ResourceModalDialog
+      title={tCompanies('editBusCompany')}
+      description={tCompanies('editCompanyDesc')}
+      busy={submitting}
+      preventDismiss={submitting}
+      onClose={onClose}
+      size="lg"
+    >
+      <ResourceModalForm
+        noValidate
+        onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-5 -mb-5 flex justify-end gap-2 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
+            <Button
+              disabled={submitting}
+              onClick={closeDialog}
+              type="button"
+              variant="outline"
+            >
+              {tCommon('cancel')}
+            </Button>
+            <Button disabled={submitting} type="submit">
+              {submitting && (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="size-4 motion-safe:animate-spin"
+                />
+              )}
+              {submitting ? tCommon('loading') : tCommon('save')}
+            </Button>
+          </div>
+        }
+      >
+        {formError && (
+          <ResourceNotice kind="error">{formError}</ResourceNotice>
+        )}
+        
+        <Field data-invalid={Boolean(fieldErrors.code)}>
+          <FieldLabel htmlFor="edit-company-code">{tCompanies('colCode')}</FieldLabel>
+          <Input
+            autoComplete="off"
+            className="admin-data-mono"
+            id="edit-company-code"
+            maxLength={50}
+            onChange={(event) => updateField('code', event.target.value)}
+            required
+            type="text"
+            value={values.code}
+            aria-invalid={Boolean(fieldErrors.code)}
+            aria-describedby={
+              fieldErrors.code ? 'edit-company-code-error' : undefined
+            }
+          />
+          <FieldError id="edit-company-code-error">
+            {fieldErrors.code}
+          </FieldError>
+        </Field>
+        
+        <Field data-invalid={Boolean(fieldErrors.name)}>
+          <FieldLabel htmlFor="edit-company-name">{tCompanies('colName')}</FieldLabel>
+          <Input
+            autoComplete="organization"
+            id="edit-company-name"
+            maxLength={150}
+            onChange={(event) => updateField('name', event.target.value)}
+            required
+            type="text"
+            value={values.name}
+            aria-invalid={Boolean(fieldErrors.name)}
+            aria-describedby={
+              fieldErrors.name ? 'edit-company-name-error' : undefined
+            }
+          />
+          <FieldError id="edit-company-name-error">
+            {fieldErrors.name}
+          </FieldError>
+        </Field>
+        
+        <Field data-invalid={Boolean(fieldErrors.contactInfo)}>
+          <FieldLabel htmlFor="edit-company-contact">
+              {tCompanies('contactInfo')}{' '}
+              <span className="text-xs font-normal text-muted-foreground">
+                {tCompanies('optional')}
+              </span>
+          </FieldLabel>
+          <Input
+            autoComplete="tel"
+            id="edit-company-contact"
+            onChange={(event) =>
+              updateField('contactInfo', event.target.value)
+            }
+            type="text"
+            value={values.contactInfo}
+            aria-invalid={Boolean(fieldErrors.contactInfo)}
+            aria-describedby={
+              fieldErrors.contactInfo
+                ? 'edit-company-contact-error'
+                : undefined
+            }
+          />
+          <FieldError id="edit-company-contact-error">
+            {fieldErrors.contactInfo}
+          </FieldError>
+        </Field>
+      </ResourceModalForm>
+    </ResourceModalDialog>
+  );
+}

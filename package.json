@@ -1,0 +1,32 @@
+{
+  "name": "vexgo",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "npm@11.14.1",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "npx prettier --write .",
+    "format:check": "npx prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev": "turbo run dev --ui=stream",
+    "rollout:booking-read": "node prisma/rollouts/add-booking-read-permission.mjs",
+    "seed": "node prisma/seed-bootstrap.mjs",
+    "seed:trips-nov": "node scripts/seed-trips-nov-2026.mjs"
+  },
+  "prisma": {
+    "seed": "node prisma/seed-bootstrap.mjs"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "bcrypt": "^6.0.0",
+    "dotenv": "18.0.1",
+    "prettier": "3.9.7",
+    "prisma": "7.10.0",
+    "turbo": "^2.10.13"
+  }
+}

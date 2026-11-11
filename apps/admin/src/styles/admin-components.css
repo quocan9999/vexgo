@@ -1,0 +1,191 @@
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 90px;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background: var(--admin-canvas);
+  color: var(--admin-ink);
+  font-family: var(--font-sans), 'Segoe UI', Arial, sans-serif;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:not([data-slot]) {
+  font: inherit;
+}
+
+input:not([data-slot]) {
+  font: inherit;
+}
+
+.admin-data-mono,
+code {
+  font-family:
+    var(--admin-font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+button:not([data-slot]) {
+  color: inherit;
+}
+
+button:not([data-slot]):focus-visible {
+  outline: 3px solid #8cb5ff;
+  outline-offset: 3px;
+}
+
+a:focus-visible {
+  outline: 3px solid #8cb5ff;
+  outline-offset: 3px;
+}
+
+input:not([data-slot]):focus-visible {
+  outline: 3px solid #8cb5ff;
+  outline-offset: 3px;
+}
+
+dialog:focus-visible {
+  outline: 3px solid #8cb5ff;
+  outline-offset: 3px;
+}
+
+.admin-page-content {
+  width: min(100%, 1810px);
+  margin: 0 auto;
+  padding: var(--admin-space-page-block) var(--admin-space-page-inline);
+}
+
+.page-intro {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--admin-space-section-gap);
+}
+
+.page-intro.page-intro-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.eyebrow {
+  margin: 0 0 var(--admin-space-control-gap);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  line-height: var(--admin-type-eyebrow-line-height);
+  letter-spacing: 0.08em;
+}
+
+.page-intro h1 {
+  margin: 0;
+  color: #14233d;
+  font-size: var(--admin-type-page-title-size);
+  font-weight: var(--admin-type-page-title-weight);
+  letter-spacing: -0.02em;
+  line-height: var(--admin-type-page-title-line-height);
+}
+
+.page-intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--admin-space-toolbar-gap);
+}
+
+.panel {
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(21 40 75 / 2.5%);
+}
+
+.panel {
+  min-width: 0;
+  padding: var(--admin-space-card-padding);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+  border: 0;
+}
+
+@media (max-width: 1180px) {
+  .admin-page-content {
+    padding-right: var(--admin-space-page-inline);
+    padding-left: var(--admin-space-page-inline);
+  }
+}
+
+@media (max-width: 900px) {
+  .page-intro {
+    align-items: flex-start;
+  }
+
+  .page-intro-actions {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: var(--admin-space-control-gap);
+  }
+}
+
+@media (max-width: 700px) {
+  html {
+    scroll-padding-top: 70px;
+  }
+
+  .admin-page-content {
+    padding: var(--admin-space-page-block) var(--admin-space-page-inline);
+  }
+
+  .page-intro {
+    flex-direction: column;
+    gap: var(--admin-space-component-gap);
+  }
+
+  .page-intro-actions {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel {
+    padding: var(--admin-space-card-padding);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  *::before {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

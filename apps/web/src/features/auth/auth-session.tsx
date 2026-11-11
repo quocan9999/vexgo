@@ -1,0 +1,336 @@
+'use client';
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+} from 'react';
+import {
+  clearStoredAuth,
+  readStoredAuth,
+  writeStoredAuth,
+  AUTH_STORAGE_KEY,
+  type AuthState,
+  type AuthUser,
+} from './auth-session-state';
+import { usePathname } from 'next/navigation';
+import { authApi, API_BASE_URL, ApiError } from './services/auth.api';
+import { runWithAuthRetry, type TokenPair } from './services/auth-retry';
+import { clearAllPaymentDrafts } from '@/features/booking/services/payment-draft';
+
+export type { AuthState, AuthUser } from './auth-session-state';
+
+type AuthSessionContextValue = AuthState & {
+  signIn: (data: {
+    user: AuthUser;
+    accessToken: string;
+    refreshToken: string;
+  }) => void;
+  signOut: () => void;
+  refreshSession: () => Promise<string | null>;
+  executeWithAuth: <T>(action: (token: string) => Promise<T>) => Promise<T>;
+};
+
+const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
+
+
+function SessionWatcher({
+  onValidate,
+  isAuthenticated,
+}: {
+  onValidate: () => void;
+  isAuthenticated: boolean;
+}) {
+  let pathname: string | null = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    pathname = usePathname();
+  } catch {
+    pathname = null;
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void onValidate();
+    }
+  }, [pathname, isAuthenticated, onValidate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleFocus = () => {
+      void onValidate();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void onValidate();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [isAuthenticated, onValidate]);
+
+  return null;
+}
+
+export function AuthSessionProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    accessToken: null,
+    refreshToken: null,
+    isAuthenticated: false,
+    isHydrated: false,
+  });
+  const current = useRef(state);
+  const generation = useRef(0);
+  const refreshInFlight = useRef<Promise<TokenPair> | null>(null);
+  const invalidatePending = useCallback(() => {
+    generation.current++;
+    refreshInFlight.current = null;
+  }, []);
+  const updateState = useCallback((next: AuthState) => {
+    current.current = next;
+    setState(next);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) updateState(readStoredAuth(window.localStorage));
+    });
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === AUTH_STORAGE_KEY || event.key === null) {
+        invalidatePending();
+        updateState(readStoredAuth(window.localStorage));
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+    }
+
+    return () => {
+      active = false;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageChange);
+      }
+      invalidatePending();
+    };
+  }, [updateState, invalidatePending]);
+
+  const signIn = useCallback(
+    (data: { user: AuthUser; accessToken: string; refreshToken: string }) => {
+      const nextState = {
+        user: data.user,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        isAuthenticated: true,
+        isHydrated: true,
+      };
+      generation.current++;
+      refreshInFlight.current = null;
+      updateState(nextState);
+      try {
+        writeStoredAuth(window.localStorage, data);
+      } catch {}
+    },
+    [updateState],
+  );
+
+  const signOut = useCallback(() => {
+    const currentToken = current.current.accessToken;
+    const currentRefreshToken = current.current.refreshToken;
+    const nextState = {
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      isHydrated: true,
+    };
+    void authApi.logout(currentRefreshToken, currentToken);
+    generation.current++;
+    refreshInFlight.current = null;
+    updateState(nextState);
+    try {
+      clearStoredAuth(window.localStorage);
+      clearAllPaymentDrafts();
+    } catch {}
+  }, [updateState]);
+
+  const refreshTokens = useCallback(
+    async (epoch: number, previousRefresh?: string): Promise<TokenPair> => {
+      if (epoch !== generation.current)
+        throw new Error('Phiên đăng nhập đã thay đổi.');
+      const snapshot = current.current;
+      if (
+        previousRefresh &&
+        snapshot.refreshToken !== previousRefresh &&
+        snapshot.accessToken &&
+        snapshot.refreshToken
+      ) {
+        return {
+          accessToken: snapshot.accessToken,
+          refreshToken: snapshot.refreshToken,
+        };
+      }
+      if (refreshInFlight.current) return refreshInFlight.current;
+      if (!snapshot.refreshToken || !snapshot.user)
+        throw new Error('Chưa đăng nhập');
+      const operation = (async () => {
+        const { data } = await authApi.refresh(snapshot.refreshToken!);
+        if (epoch !== generation.current)
+          throw new Error('Phiên đăng nhập đã thay đổi.');
+        updateState({
+          ...snapshot,
+          ...data,
+          isAuthenticated: true,
+          isHydrated: true,
+        });
+        try {
+          writeStoredAuth(window.localStorage, {
+            user: snapshot.user!,
+            ...data,
+          });
+        } catch {}
+        return data;
+      })();
+      refreshInFlight.current = operation;
+      try {
+        return await operation;
+      } finally {
+        if (refreshInFlight.current === operation)
+          refreshInFlight.current = null;
+      }
+    },
+    [updateState],
+  );
+
+  const refreshSession = useCallback(async (): Promise<string | null> => {
+    const epoch = generation.current;
+    try {
+      return (await refreshTokens(epoch)).accessToken;
+    } catch {
+      if (epoch === generation.current) signOut();
+      return null;
+    }
+  }, [refreshTokens, signOut]);
+
+  const executeWithAuth = useCallback(
+    async <T,>(action: (token: string) => Promise<T>): Promise<T> => {
+      const epoch = generation.current;
+      const ensureCurrent = () => {
+        if (epoch !== generation.current)
+          throw new Error('Phiên đăng nhập đã thay đổi.');
+      };
+      return runWithAuthRetry(
+        async (token) => {
+          ensureCurrent();
+          const result = await action(token);
+          ensureCurrent();
+          return result;
+        },
+        {
+          getTokens: () => ({
+            accessToken: current.current.accessToken,
+            refreshToken: current.current.refreshToken,
+          }),
+          onRefresh: () => {}, // The shared refresh operation publishes tokens once, before any retry.
+          onAuthFailed: () => {
+            if (epoch === generation.current) signOut();
+          },
+          refreshFn: async (rt) => ({ data: await refreshTokens(epoch, rt) }),
+        },
+      );
+    },
+    [refreshTokens, signOut],
+  );
+
+  const lastValidated = useRef<number>(0);
+
+  const validateSession = useCallback(async () => {
+    if (!current.current.isAuthenticated || !current.current.accessToken) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastValidated.current < 1000) {
+      return;
+    }
+    lastValidated.current = now;
+
+    try {
+      await executeWithAuth(async (token) => {
+        const res = await fetch(`${API_BASE_URL}/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new ApiError(
+            res.status,
+            errorData.error || 'UNAUTHORIZED',
+            errorData.message || 'Phiên đăng nhập không hợp lệ',
+          );
+        }
+
+        return res.json();
+      });
+    } catch {
+      // executeWithAuth và runWithAuthRetry tự động gọi onAuthFailed() -> signOut() khi gặp 403 ACCOUNT_LOCKED / ACCOUNT_SUSPENDED
+    }
+  }, [executeWithAuth]);
+
+  const value = useMemo(
+    () => ({
+      ...state,
+      signIn,
+      signOut,
+      refreshSession,
+      executeWithAuth,
+    }),
+    [state, signIn, signOut, refreshSession, executeWithAuth],
+  );
+
+  return (
+    <AuthSessionContext.Provider value={value}>
+      <SessionWatcher
+        onValidate={validateSession}
+        isAuthenticated={state.isAuthenticated}
+      />
+      {children}
+    </AuthSessionContext.Provider>
+  );
+}
+
+export function useOptionalAuthSession() {
+  return useContext(AuthSessionContext);
+}
+
+export function useAuthSession() {
+  const context = useContext(AuthSessionContext);
+  if (!context)
+    throw new Error('useAuthSession must be used inside AuthSessionProvider');
+  return context;
+}

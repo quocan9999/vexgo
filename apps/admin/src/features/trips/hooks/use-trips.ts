@@ -1,0 +1,279 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import type { DateRangeValue } from '@/components/data-filters/data-filters';
+import { getTrips } from '../services/trip-service';
+import type {
+  PaginatedTrips,
+  TripSortKey,
+  TripStatus,
+  SortDirection,
+} from '../types/trip';
+
+const PAGE_SIZE = 10;
+
+export function useTrips() {
+  const [result, setResult] = useState<{
+    key: string;
+    page: PaginatedTrips;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<TripSortKey>('departureDate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [status, setStatus] = useState<TripStatus | ''>('');
+  const [routeId, setRouteId] = useState('');
+  const [vehicleId, setVehicleId] = useState('');
+  const [departureDate, setDepartureDate] = useState('');
+  const [departureDateRange, setDepartureDateRange] = useState<DateRangeValue | null>(null);
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
+  const [timeRange, setTimeRange] = useState('');
+  const [refreshCount, setRefreshCount] = useState(0);
+
+  const requestKey = JSON.stringify([
+    page,
+    search,
+    sortBy,
+    sortDirection,
+    status,
+    routeId,
+    vehicleId,
+    departureDate,
+    departureDateRange?.from ?? '',
+    departureDateRange?.to ?? '',
+    origin,
+    destination,
+    timeRange,
+  ]);
+  const tripPage = result?.key === requestKey ? result.page : null;
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => {
+        setSearch(searchInput.trim());
+        setPage(1);
+      },
+      searchInput.trim() ? 300 : 0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let current = true;
+    const key = JSON.stringify([
+      page,
+      search,
+      sortBy,
+      sortDirection,
+      status,
+      routeId,
+      vehicleId,
+      departureDate,
+      departureDateRange?.from ?? '',
+      departureDateRange?.to ?? '',
+      origin,
+      destination,
+      timeRange,
+    ]);
+
+    getTrips(
+      {
+        page,
+        pageSize: PAGE_SIZE,
+        search,
+        sortBy,
+        sortDirection,
+        status: status || undefined,
+        routeId: routeId ? Number(routeId) : undefined,
+        vehicleId: vehicleId ? Number(vehicleId) : undefined,
+        departureDate: departureDate || undefined,
+        fromDepartureDate: departureDateRange?.from || undefined,
+        toDepartureDate: departureDateRange?.to || undefined,
+        origin: origin || undefined,
+        destination: destination || undefined,
+        timeRange: timeRange || undefined,
+      },
+      controller.signal,
+    )
+      .then((data) => {
+        if (current) {
+          setResult({ key, page: data });
+          setError(null);
+        }
+      })
+      .catch((requestError: unknown) => {
+        if (current && !controller.signal.aborted) {
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : 'Không thể tải danh sách chuyến xe.',
+          );
+        }
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [
+    page,
+    search,
+    sortBy,
+    sortDirection,
+    status,
+    routeId,
+    vehicleId,
+    departureDate,
+    departureDateRange?.from,
+    departureDateRange?.to,
+    origin,
+    destination,
+    timeRange,
+    refreshCount,
+  ]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') setRefreshCount((count) => count + 1);
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  function updateSearch(value: string) {
+    setLoading(value.trim() !== search);
+    setError(null);
+    setSearchInput(value);
+  }
+
+  function changePage(value: number) {
+    if (value === page) return;
+    setLoading(true);
+    setError(null);
+    setPage(value);
+  }
+
+  function updateStatus(value: string) {
+    if (value === status) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setStatus(
+      value === 'CHUA_KHOI_HANH' ||
+        value === 'DANG_CHAY' ||
+        value === 'HOAN_THANH' ||
+        value === 'DA_HUY'
+        ? value
+        : '',
+    );
+  }
+
+  function updateRouteId(value: string) {
+    if (value === routeId) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setRouteId(value);
+  }
+
+  function updateVehicleId(value: string) {
+    if (value === vehicleId) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setVehicleId(value);
+  }
+
+  function updateDepartureDate(value: string) {
+    if (value === departureDate) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setDepartureDate(value);
+  }
+
+  function updateDepartureDateRange(value: DateRangeValue | null) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setDepartureDateRange(value);
+  }
+
+  function updateOrigin(value: string) {
+    if (value === origin) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setOrigin(value);
+  }
+
+  function updateDestination(value: string) {
+    if (value === destination) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setDestination(value);
+  }
+
+  function updateTimeRange(value: string) {
+    if (value === timeRange) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setTimeRange(value);
+  }
+
+  function sortTrips(key: TripSortKey) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    if (sortBy === key) {
+      setSortDirection((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortDirection('asc');
+    }
+  }
+
+  function refresh() {
+    setLoading(true);
+    setError(null);
+    setRefreshCount((count) => count + 1);
+  }
+
+  return {
+    tripPage,
+    error,
+    loading,
+    searchInput,
+    status,
+    routeId,
+    vehicleId,
+    departureDate,
+    origin,
+    destination,
+    timeRange,
+    sortBy,
+    sortDirection,
+    changePage,
+    updateSearch,
+    updateStatus,
+    updateRouteId,
+    updateVehicleId,
+    updateDepartureDate,
+    departureDateRange,
+    updateDepartureDateRange,
+    updateOrigin,
+    updateDestination,
+    updateTimeRange,
+    sortTrips,
+    refresh,
+  };
+}

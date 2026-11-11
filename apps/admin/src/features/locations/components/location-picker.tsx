@@ -1,0 +1,127 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { MapPin } from 'lucide-react';
+import {
+  SearchableCombobox,
+  type SearchableOption,
+} from '@/components/ui/searchable-combobox';
+import { Button } from '@/components/ui/action-button';
+import { getLocations } from '../services/location-service';
+
+export function LocationPicker({
+  id,
+  value,
+  onChange,
+  disabled,
+  invalid,
+  describedBy,
+  excludeValue,
+  placeholder = 'Chọn địa điểm',
+  allowCustom = true,
+  required = false,
+  className,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
+  excludeValue?: string;
+  placeholder?: string;
+  allowCustom?: boolean;
+  required?: boolean;
+  className?: string;
+}) {
+  const [options, setOptions] = useState<SearchableOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    getLocations()
+      .then((locations) => {
+        if (!active) return;
+        const sorted = [...locations].sort((a, b) => {
+          if (a.kind === 'province' && b.kind === 'province') {
+            const aLegacy = Boolean(a.isLegacy);
+            const bLegacy = Boolean(b.isLegacy);
+            if (aLegacy !== bLegacy) {
+              return aLegacy ? 1 : -1;
+            }
+          }
+          return a.name.localeCompare(b.name, 'vi');
+        });
+
+        setOptions(
+          sorted.map((location) => ({
+            id: location.id,
+            value: location.value,
+            label: location.name,
+            keywords: location.aliases.join(' '),
+            badge: location.isLegacy ? 'CŨ' : undefined,
+            description:
+              location.mergedFromText ??
+              location.address ??
+              (location.province ? `Thuộc ${location.province}` : undefined),
+            group:
+              location.kind === 'station'
+                ? 'station'
+                : location.kind === 'district' || location.kind === 'city'
+                  ? 'district'
+                  : 'province',
+          })),
+        );
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setError(
+            cause instanceof Error ? cause.message : 'Không thể tải địa điểm.',
+          );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+
+  return (
+    <div className={className}>
+      <SearchableCombobox
+        id={id}
+        value={value}
+        options={options}
+        onChange={onChange}
+        disabled={disabled}
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
+        aria-required={required ? 'true' : undefined}
+        loading={loading}
+        placeholder={placeholder}
+        icon={<MapPin />}
+        excludeValue={excludeValue}
+        allowCustom={allowCustom}
+      />
+      {error && (
+        <div role="alert" className="mt-2 text-xs text-destructive">
+          {error}{' '}
+          <Button
+            variant="link"
+            disabled={disabled || loading}
+            onClick={() => {
+              setError('');
+              setLoading(true);
+              setAttempt((current) => current + 1);
+            }}
+          >
+            Thử lại
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

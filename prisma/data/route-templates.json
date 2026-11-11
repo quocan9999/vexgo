@@ -1,0 +1,493 @@
+[
+  {
+    "nhaXeCode": "FUTA",
+    "tuyenThamChieu": "Sài Gòn - Cần Thơ / Tiền Giang",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "74b47d3b04c042c6a6fe7a3b0cddb1c1",
+        "loaiDiem": "DON",
+        "phutLech": -105,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "fe6ea8b9341b493aa655c3a3c4e83a61",
+        "loaiDiem": "DON",
+        "phutLech": -90,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "3f5d84afbbc6495ba2b27fe5c9fee08d",
+        "loaiDiem": "DON",
+        "phutLech": -90,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "c03a2ea06b7e4cc2add7237a5ad74e14",
+        "loaiDiem": "DON",
+        "phutLech": -90,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "a5b80deea9a34583a3057e8ec7531a96",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "d460cf059b1841e7ae1c16c29d494837",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "bb04c30fcde94324a57633be43163098",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "e9a41ae2db184abba287ae4b0074c0dc",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "1075991dbeb740c4a6264fab5827363f",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 9
+      },
+      {
+        "maDiem": "5ca683c656f84c07a1c0372f9624be23",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 10
+      },
+      {
+        "maDiem": "3244d45e8bd142d2ab8426f394dfc066",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 11
+      },
+      {
+        "maDiem": "af12209866d94cb3a381b755a7caacc7",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 12
+      },
+      {
+        "maDiem": "4f6e30e638654d9ea459b6ab1134e8a4",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 13
+      },
+      {
+        "maDiem": "622eea64cbfa4f5da81d387ed609a0f9",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 14
+      },
+      {
+        "maDiem": "fb14a9a910e64158ab310c6e2c97c09f",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 15
+      },
+      {
+        "maDiem": "083751191d9f49c7acbb406d0a81c9f7",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 16
+      },
+      {
+        "maDiem": "64c7cc69e6cb43f4a31737bc56f95301",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 17
+      },
+      {
+        "maDiem": "13f4f07dabd7422dac813aa634c198af",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 18
+      },
+      {
+        "maDiem": "abf87bf9b15b4c8eaa580b8cb88c78e7",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 19
+      },
+      {
+        "maDiem": "5bcb02014f964625af3ab8d2bd4e128b",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 20
+      },
+      {
+        "maDiem": "e3c402687b484042ab51fe6623ab7acd",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 21
+      },
+      {
+        "maDiem": "1f79ebb6ef684446aba97c1b0e9f67e1",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 22
+      },
+      {
+        "maDiem": "4a72ee20d89b4809a1f68efa0b9379b1",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 23
+      },
+      {
+        "maDiem": "f8d7551f5ef14673afce82e360ec067d",
+        "loaiDiem": "DON",
+        "phutLech": 0,
+        "thuTu": 24
+      },
+      {
+        "maDiem": "69a4d423698d41c2a4fdbbd66aebc655",
+        "loaiDiem": "DON",
+        "phutLech": 60,
+        "thuTu": 25
+      },
+      {
+        "maDiem": "a7365ddec1564e71a6192ae5d41df5a6",
+        "loaiDiem": "DON",
+        "phutLech": 140,
+        "thuTu": 26
+      },
+      {
+        "maDiem": "72765620624b4bdfa8635055d29ba387",
+        "loaiDiem": "TRA",
+        "phutLech": 150,
+        "thuTu": 27
+      },
+      {
+        "maDiem": "c6e5187a37d64914ab1ff5c96be7f5b7",
+        "loaiDiem": "DON",
+        "phutLech": 150,
+        "thuTu": 28
+      },
+      {
+        "maDiem": "91ba71aa4d344033ab9f58968c7a673d",
+        "loaiDiem": "DON",
+        "phutLech": 160,
+        "thuTu": 29
+      },
+      {
+        "maDiem": "23e33848778341b5a49b9378880139ba",
+        "loaiDiem": "DON",
+        "phutLech": 180,
+        "thuTu": 30
+      },
+      {
+        "maDiem": "aaa0a5dd91e544d5a479997da4a3da0f",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 31
+      },
+      {
+        "maDiem": "7d04783db9aa47f7a66bf9d4c5eb9113",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 32
+      },
+      {
+        "maDiem": "03766e6b9fdb49d9a246f68c76b34c6d",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 33
+      },
+      {
+        "maDiem": "c8fe6cb47ef64fa7a46d7b975d88abd0",
+        "loaiDiem": "TRA",
+        "phutLech": 240,
+        "thuTu": 34
+      },
+      {
+        "maDiem": "f89dedff655a4611a3fae1ce6f7fe5fd",
+        "loaiDiem": "TRA",
+        "phutLech": 270,
+        "thuTu": 35
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "FUTA",
+    "tuyenThamChieu": "Cần Thơ - Sài Gòn",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "c7e5a5c2e23e4ec1a0df8510dda269ce",
+        "loaiDiem": "DON",
+        "phutLech": 15,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "2c4ffdce9c3b487eac1b9c06df85fdeb",
+        "loaiDiem": "DON",
+        "phutLech": 30,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "b321e37a23174320aa82a8faf6cc19a4",
+        "loaiDiem": "DON",
+        "phutLech": 50,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "12f981bddfbf4d8ba8e7a71cc205e431",
+        "loaiDiem": "DON",
+        "phutLech": 75,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "4c0ae9f34513472daa9b1c9a8d78d265",
+        "loaiDiem": "DON",
+        "phutLech": 85,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "90461023623c48d1a2fab006a5f0837c",
+        "loaiDiem": "DON",
+        "phutLech": 150,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "1fcaef6a46e44f94adda02f6399f6c92",
+        "loaiDiem": "TRA",
+        "phutLech": 300,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "0df55ac98b3f4deeaf456bdc38277983",
+        "loaiDiem": "TRA",
+        "phutLech": 360,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "d85dd87873f74334ac8fb6ce9fde05dc",
+        "loaiDiem": "TRA",
+        "phutLech": 360,
+        "thuTu": 9
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "FUTA",
+    "tuyenThamChieu": "Sài Gòn - Vũng Tàu",
+    "incomplete": false,
+    "thin": true,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "3b44be79fdb84d8fa48d0f436db6b6d2",
+        "loaiDiem": "DON",
+        "phutLech": -15,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "cc867f00aecb4b4daaaaa07202566cfd",
+        "loaiDiem": "DON",
+        "phutLech": 30,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "4f390eefa8c44216a8e90ff02c2078f7",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "d01772a3e6184b06a1de6fd3f31b19e1",
+        "loaiDiem": "TRA",
+        "phutLech": 240,
+        "thuTu": 4
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "HM",
+    "tuyenThamChieu": "Sài Gòn - Vũng Tàu",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "7be4d97900314c1aae8d3c2d9e156811",
+        "loaiDiem": "DON",
+        "phutLech": 0,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "acee8a5278ca4271ad30a2a1a7b60dd5",
+        "loaiDiem": "DON",
+        "phutLech": 0,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "9c03370188214fcca6a5745ccd8710cf",
+        "loaiDiem": "TRA",
+        "phutLech": 45,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "f169963eaff14e37a8731101e92ce8b4",
+        "loaiDiem": "TRA",
+        "phutLech": 75,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "eff608a2f2c34de6afbfc136f7c5fed7",
+        "loaiDiem": "TRA",
+        "phutLech": 75,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "ce44b377782544fda54eb9c4bc126fb6",
+        "loaiDiem": "TRA",
+        "phutLech": 80,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "dd394516edb446b2a6d28dc0957b7fa1",
+        "loaiDiem": "TRA",
+        "phutLech": 82,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "f0df0f8a94d44e77a7a0c6158db33f6e",
+        "loaiDiem": "TRA",
+        "phutLech": 90,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "0275d814f29f49bba9c2107b05a97a7c",
+        "loaiDiem": "TRA",
+        "phutLech": 95,
+        "thuTu": 9
+      },
+      {
+        "maDiem": "08d3ba8446c146f5a9a71b9dec3df18f",
+        "loaiDiem": "TRA",
+        "phutLech": 102,
+        "thuTu": 10
+      },
+      {
+        "maDiem": "b41600e35c074ea3a439f0af2ebcfe89",
+        "loaiDiem": "TRA",
+        "phutLech": 107,
+        "thuTu": 11
+      },
+      {
+        "maDiem": "953237251dcb4c51aae565ca2d16487f",
+        "loaiDiem": "TRA",
+        "phutLech": 125,
+        "thuTu": 12
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "HM",
+    "tuyenThamChieu": "Vũng Tàu - Sài Gòn",
+    "incomplete": true,
+    "thin": false,
+    "reasons": [
+      "Điểm TRẢ cuối cùng có phutLech (0) nhỏ hơn hoặc bằng phutLech của điểm ĐÓN cuối cùng (65); không có điểm trả hợp lệ sau lộ trình đón"
+    ],
+    "stops": [
+      {
+        "maDiem": "b41600e35c074ea3a439f0af2ebcfe89",
+        "loaiDiem": "DON",
+        "phutLech": -15,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "07ddbc1c71524e11af496825d48418a3",
+        "loaiDiem": "TRA",
+        "phutLech": 0,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "9c75684ba01e4649aee349412960615c",
+        "loaiDiem": "TRA",
+        "phutLech": 0,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "75ed9318ab1645adacf2a2996724d9dd",
+        "loaiDiem": "DON",
+        "phutLech": 12,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "892852d6f96d4600a63bd87955910c04",
+        "loaiDiem": "DON",
+        "phutLech": 16,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "76822e249bd54419a914fffdd9899ac0",
+        "loaiDiem": "DON",
+        "phutLech": 18,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "83243343b87b4d6da2a4eacd2be1a93a",
+        "loaiDiem": "DON",
+        "phutLech": 22,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "dd394516edb446b2a6d28dc0957b7fa1",
+        "loaiDiem": "DON",
+        "phutLech": 25,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "f735a7dd91224c85af714b3188406ec4",
+        "loaiDiem": "DON",
+        "phutLech": 27,
+        "thuTu": 9
+      },
+      {
+        "maDiem": "ce44b377782544fda54eb9c4bc126fb6",
+        "loaiDiem": "DON",
+        "phutLech": 30,
+        "thuTu": 10
+      },
+      {
+        "maDiem": "88bbb2371b87453fa59eb1be0295df1a",
+        "loaiDiem": "DON",
+        "phutLech": 31,
+        "thuTu": 11
+      },
+      {
+        "maDiem": "9fc5d97e30884736a19c6761cf7514e1",
+        "loaiDiem": "DON",
+        "phutLech": 32,
+        "thuTu": 12
+      },
+      {
+        "maDiem": "550e29f4e8c9401bab500df2e144772b",
+        "loaiDiem": "DON",
+        "phutLech": 33,
+        "thuTu": 13
+      },
+      {
+        "maDiem": "db53586d11d54121a960ac4c45b597cb",
+        "loaiDiem": "DON",
+        "phutLech": 65,
+        "thuTu": 14
+      }
+    ]
+  }
+]

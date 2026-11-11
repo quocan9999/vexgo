@@ -1,0 +1,2425 @@
+/* eslint-disable */
+'use client';
+
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
+import {
+  Armchair,
+  Bus,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Info,
+  Mail,
+  MapPin,
+  Package,
+  PackageCheck,
+  Phone,
+  Tag,
+  Ticket,
+  User,
+  X,
+} from 'lucide-react';
+import type { Post } from '@/features/posts/types/post';
+import type { ApiTrip, ApiTripStopPoint } from '@/features/trips/services/trips.api';
+import { AlertModal } from '@/components/ui/alert-modal';
+import { LuggageStep, calculateLuggageFee } from './luggage/luggage-step';
+import { LuggageSummary } from './luggage/luggage-summary';
+import type { ILuggageItem, LuggageSizePackage } from './luggage/luggage-item';
+import {
+  canPayForOneWayBooking,
+  formatTripDateTime,
+} from '../utils/one-way-booking';
+import { validatePassengerInfo } from '../utils/passenger-validation';
+import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
+import {
+  findOverweightRegularCargoItem,
+  getEffectiveCargoUnitWeightKg,
+  MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG,
+} from '../utils/cargo-weight';
+import { createPaymentDraft } from '../services/payment-draft';
+import { FeaturePlaceholderModal } from './feature-placeholder-modal';
+import { PromotionSelectorModal } from '@/features/promotions/components/promotion-selector-modal';
+import { useAuthSession } from '@/features/auth/auth-session';
+import { customerApi } from '@/features/account/services/customer.api';
+import {
+  ApiError,
+  bookingsApi,
+  type BookingQuoteData,
+  type CreatedBookingData,
+  type CreateBookingPayload,
+} from '@/features/account/services/bookings.api';
+import { tripsApi, type ApiTripSeat } from '@/features/trips/services/trips.api';
+import { getTripSeatFloorLayouts } from '../utils/seat-layout';
+import {
+  shipmentsApi,
+  type ShipmentRoutePoints,
+} from '@/features/shipments/services/shipments.api';
+import {
+  promotionsApi,
+  type AvailablePromotion,
+} from '@/features/promotions/services/promotions.api';
+
+
+export interface OneWayBookingProps {
+  post: Post;
+  tripSeats: ApiTripSeat[];
+  apiTrip?: ApiTrip;
+}
+
+const formatDisplayPhone = (phone?: string | null): string => {
+  if (!phone) return '';
+  if (phone.startsWith('+84')) {
+    return '0' + phone.slice(3);
+  }
+  return phone;
+};
+
+function isValidCargoItem(item: ILuggageItem): boolean {
+  return (
+    item.type === 'Xe máy' ||
+    item.type === 'Xe đạp' ||
+    (item.weight || 0) > 0 ||
+    Boolean(item.length && item.width && item.height)
+  );
+}
+
+export const OneWayBooking: React.FC<OneWayBookingProps> = ({
+  post,
+  tripSeats,
+  apiTrip,
+}) => {
+  const router = useRouter();
+  const t = useTranslations('booking');
+  const locale = useLocale();
+  const formatMoney = (amount: number) => locale === 'vi' ? `${amount.toLocaleString('vi-VN')}đ` : `${amount.toLocaleString('en-US')} VND`;
+  const { user, executeWithAuth, isAuthenticated, isHydrated } = useAuthSession();
+  const isTicket = post.needType === 'BUY';
+  const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
+  const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
+  const [verifiedAccountPhone, setVerifiedAccountPhone] = useState<string | null>(null);
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [pickupOverride, setPickupOverride] = useState<string | null>(null);
+  const [dropoffOverride, setDropoffOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    executeWithAuth((token) => customerApi.getMe(token))
+      .then((res) => {
+        if (!active || !res?.data) return;
+        if (res.data.email) {
+          setCustomerEmail((curr) => curr || res.data.email || '');
+        }
+        if (res.data.fullName) {
+          setUserNameOverride((current) => hydrateUntouchedProfileField(current, res.data.fullName));
+        }
+        if (res.data.phoneNumber) {
+          setUserPhoneOverride((current) => hydrateUntouchedProfileField(current, formatDisplayPhone(res.data.phoneNumber)));
+        }
+        setVerifiedAccountPhone(
+          res.data.phoneVerified && res.data.phoneNumber
+            ? formatDisplayPhone(res.data.phoneNumber)
+            : null,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, executeWithAuth]);
+
+  const customerName =
+    userNameOverride !== null ? userNameOverride : user?.fullName || '';
+  const customerPhone =
+    userPhoneOverride !== null
+      ? userPhoneOverride
+      : formatDisplayPhone(user?.phoneNumber) || '';
+
+  const handleReloadUserInfo = () => {
+    if (user?.fullName) setUserNameOverride(user.fullName);
+    if (user?.phoneNumber) setUserPhoneOverride(formatDisplayPhone(user.phoneNumber));
+    executeWithAuth((token) => customerApi.getMe(token))
+      .then((res) => {
+        if (res?.data) {
+          if (res.data.fullName) setUserNameOverride(res.data.fullName);
+          if (res.data.phoneNumber) setUserPhoneOverride(formatDisplayPhone(res.data.phoneNumber));
+          setVerifiedAccountPhone(
+            res.data.phoneVerified && res.data.phoneNumber
+              ? formatDisplayPhone(res.data.phoneNumber)
+              : null,
+          );
+          if (res.data.email) setCustomerEmail(res.data.email);
+        }
+      })
+      .catch(() => {});
+  };
+  // Stop points from apiTrip
+  const pickupPoints = React.useMemo(() => apiTrip?.pickupPoints ?? [], [apiTrip]);
+  const dropoffPoints = React.useMemo(() => apiTrip?.dropoffPoints ?? [], [apiTrip]);
+
+  const pickupStations = React.useMemo(
+    () => pickupPoints.filter((p) => p.type !== 'transfer'),
+    [pickupPoints],
+  );
+  const pickupTransfers = React.useMemo(
+    () => pickupPoints.filter((p) => p.type === 'transfer'),
+    [pickupPoints],
+  );
+
+  const dropoffStations = React.useMemo(
+    () => dropoffPoints.filter((p) => p.type !== 'transfer'),
+    [dropoffPoints],
+  );
+  const dropoffTransfers = React.useMemo(
+    () => dropoffPoints.filter((p) => p.type === 'transfer'),
+    [dropoffPoints],
+  );
+
+  const [pickupMode, setPickupMode] = useState<'station' | 'transfer'>('station');
+  const [dropoffMode, setDropoffMode] = useState<'station' | 'transfer'>('station');
+
+  const [selectedPickupPointId, setSelectedPickupPointId] = useState<number | null>(() => {
+    const defaultPoint = pickupStations.find((p) => p.isDefault) || pickupStations[0] || pickupTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  const [selectedDropoffPointId, setSelectedDropoffPointId] = useState<number | null>(() => {
+    const defaultPoint = dropoffStations.find((p) => p.isDefault) || dropoffStations[0] || dropoffTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  useEffect(() => {
+    if (pickupPoints.length > 0 && selectedPickupPointId === null) {
+      const defaultPoint = pickupStations.find((p) => p.isDefault) || pickupStations[0] || pickupTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedPickupPointId(defaultPoint.diemDonTraChuyenXeId);
+        setPickupMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [pickupPoints, pickupStations, pickupTransfers, selectedPickupPointId]);
+
+  useEffect(() => {
+    if (dropoffPoints.length > 0 && selectedDropoffPointId === null) {
+      const defaultPoint = dropoffStations.find((p) => p.isDefault) || dropoffStations[0] || dropoffTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedDropoffPointId(defaultPoint.diemDonTraChuyenXeId);
+        setDropoffMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [dropoffPoints, dropoffStations, dropoffTransfers, selectedDropoffPointId]);
+
+  const selectedPickupStop = React.useMemo(() => {
+    if (!selectedPickupPointId) return null;
+    return pickupPoints.find((p) => p.diemDonTraChuyenXeId === selectedPickupPointId) ?? null;
+  }, [pickupPoints, selectedPickupPointId]);
+
+  const selectedDropoffStop = React.useMemo(() => {
+    if (!selectedDropoffPointId) return null;
+    return dropoffPoints.find((p) => p.diemDonTraChuyenXeId === selectedDropoffPointId) ?? null;
+  }, [dropoffPoints, selectedDropoffPointId]);
+
+  const pickupSurcharge = Number(selectedPickupStop?.phuPhi ?? 0);
+  const dropoffSurcharge = Number(selectedDropoffStop?.phuPhi ?? 0);
+  const totalSurchargePerSeat = pickupSurcharge + dropoffSurcharge;
+
+  const handlePickupModeChange = (mode: 'station' | 'transfer') => {
+    setPickupMode(mode);
+    const pool = mode === 'transfer' ? pickupTransfers : pickupStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedPickupPointId(first.diemDonTraChuyenXeId ?? null);
+      setPickupOverride(first.name);
+    }
+  };
+
+  const handleDropoffModeChange = (mode: 'station' | 'transfer') => {
+    setDropoffMode(mode);
+    const pool = mode === 'transfer' ? dropoffTransfers : dropoffStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedDropoffPointId(first.diemDonTraChuyenXeId ?? null);
+      setDropoffOverride(first.name);
+    }
+  };
+
+  const handlePickupSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedPickupPointId(numId);
+      const stop = pickupPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setPickupOverride(stop.name);
+    } else {
+      setPickupOverride(val);
+    }
+  };
+
+  const handleDropoffSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedDropoffPointId(numId);
+      const stop = dropoffPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setDropoffOverride(stop.name);
+    } else {
+      setDropoffOverride(val);
+    }
+  };
+
+  const pickup = selectedPickupStop?.name || (pickupOverride !== null ? pickupOverride : post.province);
+  const dropoff = selectedDropoffStop?.name || (dropoffOverride !== null ? dropoffOverride : post.district);
+
+  const [validationAttempted, setValidationAttempted] = useState(false);
+  const [showVehicleInfoModal, setShowVehicleInfoModal] = useState(false);
+
+  const passengerValidation = validatePassengerInfo({
+    fullName: customerName,
+    phoneNumber: customerPhone,
+    email: customerEmail,
+  });
+  const passengerErrors = validationAttempted ? passengerValidation.errors : {};
+
+  const departureDateTimeText = formatTripDateTime(
+    post.createdAt,
+    post.timeAgo,
+  );
+
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [promotionInput, setPromotionInput] = useState('');
+  const [activePromotionCode, setActivePromotionCode] = useState<string | null>(null);
+  const [promotionRequestVersion, setPromotionRequestVersion] = useState(0);
+  const [promotionQuoteState, setPromotionQuoteState] = useState<{
+    requestKey: string;
+    status: 'idle' | 'loading' | 'valid' | 'invalid';
+    message: string;
+    quote?: BookingQuoteData;
+  }>({ requestKey: '', status: 'idle', message: '' });
+  const promotionInputRef = useRef<HTMLInputElement | null>(null);
+  const [seatMap, setSeatMap] = useState(tripSeats);
+  const activeTripIdRef = useRef(Number(post.id));
+  const latestTripIdRef = useRef(Number(post.id));
+  latestTripIdRef.current = Number(post.id);
+  const mountedRef = useRef(true);
+  const submissionLockRef = useRef(false);
+  const submissionUnknownRef = useRef(false);
+  const activeHoldRef = useRef<{
+    holdToken: string;
+    tripId: number;
+    bookingRequestStarted: boolean;
+  } | null>(null);
+  const [submissionUnknown, setSubmissionUnknown] = useState(false);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
+  const [requiresLogin, setRequiresLogin] = useState(false);
+  const [showTripInfoModal, setShowTripInfoModal] = useState(false);
+  const [showCargoInfoModal, setShowCargoInfoModal] = useState(false);
+  const [showCustomerInfoAlert, setShowCustomerInfoAlert] = useState(false);
+  const [customerInfoAlertMessage, setCustomerInfoAlertMessage] = useState('');
+  const customerInfoSectionRef = useRef<HTMLDivElement>(null);
+  const [isAcceptedTerms, setIsAcceptedTerms] = useState(false);
+  const descriptionLines = post.description
+    .split('\n')
+    .map((line: string) => line.trim())
+    .filter(Boolean);
+  const checklist = descriptionLines
+    .filter((line: string) => line.startsWith('-'))
+    .map((line: string) => line.slice(1).trim());
+  const paragraphs = descriptionLines.filter(
+    (line: string) =>
+      !line.startsWith('-') &&
+      !line.toLowerCase().includes('yêu cầu nghiệp vụ'),
+  );
+  const seatFloorLayouts = getTripSeatFloorLayouts(seatMap);
+  const isSleeper =
+    post.propertyType?.toUpperCase().includes('GIƯỜNG') ||
+    seatFloorLayouts.some((layout) => layout.floor > 1) ||
+    seatMap.some((seat) =>
+      seat.position?.toLocaleLowerCase('vi-VN').includes('tầng'),
+    );
+
+  const bookedSeats = new Set(
+    seatMap
+      .filter((seat) => seat.status !== 'TRONG')
+      .map((seat) => seat.seatNumber),
+  );
+  const [cargoCapacity, setCargoCapacity] = useState<{
+    acceptsShipments: boolean;
+    capacities: {
+      motorcycles: { total: number; used: number; remaining: number };
+      bulkyGoods: { total: number; used: number; remaining: number };
+      parcels: { total: number; used: number; remaining: number };
+    };
+  } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const releaseSeatHoldSafely = useCallback(async (holdToken: string) => {
+    try {
+      const response = await bookingsApi.releaseSeatHold(holdToken);
+      return response.data?.success === true;
+    } catch {
+      // The backend TTL remains the fallback if release cannot be confirmed.
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const activeHold = activeHoldRef.current;
+      if (activeHold && !activeHold.bookingRequestStarted) {
+        activeHoldRef.current = null;
+        void releaseSeatHoldSafely(activeHold.holdToken);
+      }
+    };
+  }, [releaseSeatHoldSafely]);
+
+  useEffect(() => {
+    const nextTripId = Number(post.id);
+    if (activeTripIdRef.current === nextTripId) return;
+
+    activeTripIdRef.current = nextTripId;
+    setSeatMap(tripSeats);
+    setSelectedSeats([]);
+    setSubmitError(null);
+    setHoldExpiresAt(null);
+    setRequiresLogin(false);
+
+    const activeHold = activeHoldRef.current;
+    if (activeHold && !activeHold.bookingRequestStarted) {
+      activeHoldRef.current = null;
+      void releaseSeatHoldSafely(activeHold.holdToken);
+    }
+  }, [post.id, releaseSeatHoldSafely, tripSeats]);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(post.id);
+    if (!Number.isNaN(tripId) && tripId > 0) {
+      tripsApi
+        .getCargoCapacity(tripId)
+        .then((res) => {
+          if (active && res) {
+            setCargoCapacity(res);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [post.id]);
+
+  const [availablePromotions, setAvailablePromotions] = useState<AvailablePromotion[]>([]);
+  const [loadingPromotions, setLoadingPromotions] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(post.id);
+    if (!Number.isSafeInteger(tripId) || tripId <= 0) {
+      setAvailablePromotions([]);
+      return;
+    }
+
+    setLoadingPromotions(true);
+    promotionsApi
+      .getAvailablePromotions({ tripId })
+      .then(({ data }) => {
+        if (active) {
+          setAvailablePromotions(data);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAvailablePromotions([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingPromotions(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [post.id]);
+
+  const [luggageFee, setLuggageFee] = useState(0);
+  const [luggagePackages, setLuggagePackages] = useState<LuggageSizePackage[]>([]);
+
+  const [luggageWeight, setLuggageWeight] = useState(0);
+  const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
+  const hasSelectedCargoItems = luggageItems.length > 0;
+  const validCargoItems = luggageItems.filter(isValidCargoItem);
+  const hasCargoItems = validCargoItems.length > 0;
+  const overweightRegularCargoItem = findOverweightRegularCargoItem(luggageItems);
+  const luggagePackageCount = luggageItems.reduce(
+    (total, item) => total + (Number.isFinite(item.quantity) ? item.quantity : 0),
+    0,
+  );
+  const [cargoRoutePoints, setCargoRoutePoints] =
+    useState<ShipmentRoutePoints | null>(null);
+  const [cargoRoutePointsLoading, setCargoRoutePointsLoading] = useState(false);
+  const [cargoRoutePointsError, setCargoRoutePointsError] = useState<string | null>(null);
+  const [senderPointId, setSenderPointId] = useState<number | null>(null);
+  const [receiverPointId, setReceiverPointId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(post.id);
+    setCargoRoutePoints(null);
+    setCargoRoutePointsError(null);
+    setSenderPointId(null);
+    setReceiverPointId(null);
+    if (!hasCargoItems || !Number.isSafeInteger(tripId) || tripId <= 0) {
+      setCargoRoutePointsLoading(false);
+      return;
+    }
+
+    setCargoRoutePointsLoading(true);
+    shipmentsApi
+      .getRoutePoints(tripId)
+      .then(({ data }) => {
+        if (!active) return;
+        setCargoRoutePoints(data);
+        const senderId =
+          data.senderPoints.length > 0 ? data.senderPoints[0].id : null;
+        const receiverCandidate =
+          data.receiverPoints.find((p) => p.id !== senderId) ??
+          data.receiverPoints[data.receiverPoints.length - 1];
+        const receiverId = receiverCandidate ? receiverCandidate.id : null;
+        setSenderPointId(senderId);
+        setReceiverPointId(receiverId);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setCargoRoutePointsError(
+            error instanceof Error
+              ? error.message
+              : 'Không thể tải điểm gửi và điểm nhận hàng.',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCargoRoutePointsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hasCargoItems, post.id]);
+
+  const handleLuggageChange = useCallback(
+    (fee: number, weight: number, items: ILuggageItem[]) => {
+      setLuggageFee(fee);
+      setLuggageWeight(weight);
+      setLuggageItems(items);
+    },
+    [],
+  );
+
+  const selectedSeatText = selectedSeats.join(', ');
+  const baseFare = post.price.split(' - ')[0];
+  const baseFareNumber = Number(baseFare.replace(/[^\d]/g, '')) || 0;
+  const unitPriceWithSurcharges = baseFareNumber + totalSurchargePerSeat;
+  const quoteTripId = Number(post.id);
+  const quoteSeatIds = selectedSeats
+    .map((seatNumber) =>
+      seatMap.find((seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG')?.tripSeatId,
+    )
+    .filter(
+      (seatId): seatId is number =>
+        typeof seatId === 'number' && Number.isSafeInteger(seatId) && seatId > 0,
+    );
+  const promotionIdentityPhone = isAuthenticated ? '' : customerPhone.trim();
+  const promotionRequestKey = JSON.stringify({
+    tripId: quoteTripId,
+    seatIds: quoteSeatIds,
+    selectedSeats,
+    promotionCode: activePromotionCode,
+    identityPhone: promotionIdentityPhone,
+    isAuthenticated,
+    isHydrated,
+    fare: unitPriceWithSurcharges,
+    diemDonChuyenXeId: selectedPickupPointId,
+    diemTraChuyenXeId: selectedDropoffPointId,
+    version: promotionRequestVersion,
+  });
+  const currentPromotionState =
+    promotionQuoteState.requestKey === promotionRequestKey
+      ? promotionQuoteState
+      : null;
+  const promotionStatus = activePromotionCode
+    ? currentPromotionState?.status ?? 'loading'
+    : 'idle';
+  const promotionMessage = currentPromotionState?.message ?? '';
+  const promotionQuote =
+    promotionStatus === 'valid' ? currentPromotionState?.quote ?? null : null;
+  const hasCurrentPromotionQuote = Boolean(promotionQuote);
+  const quotedTicketTotal = promotionQuote ? Number(promotionQuote.finalTotal) : null;
+  const totalFare =
+    quotedTicketTotal !== null && Number.isFinite(quotedTicketTotal)
+      ? quotedTicketTotal
+      : unitPriceWithSurcharges * selectedSeats.length;
+  const isPromotionQuotePending =
+    Boolean(activePromotionCode) && promotionStatus === 'loading';
+  const totalFareText = isPromotionQuotePending
+    ? t('calculatingTotal')
+    : formatMoney(totalFare);
+  const totalFareLabel = hasCurrentPromotionQuote
+    ? t('estimatedTotalFare')
+    : hasSelectedCargoItems
+      ? t('ticketSubtotal')
+      : t('totalAmount');
+  const canPay = canPayForOneWayBooking(selectedSeats, isAcceptedTerms);
+  const hasUnappliedPromotionInput = Boolean(
+    promotionInput.trim() && !activePromotionCode,
+  );
+  const canPayWithPromotion =
+    !hasUnappliedPromotionInput &&
+    (!activePromotionCode || hasCurrentPromotionQuote);
+
+  useEffect(() => {
+    if (!activePromotionCode) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: '',
+      });
+      return;
+    }
+
+    if (!isHydrated) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: locale === 'vi' ? 'Đang xác minh trạng thái tài khoản trước khi kiểm tra mã.' : 'Verifying account status before checking promo code.',
+      });
+      return;
+    }
+
+    if (selectedSeats.length === 0) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: locale === 'vi' ? 'Chọn ít nhất một ghế để kiểm tra mã khuyến mãi.' : 'Select at least one seat to apply promo code.',
+      });
+      return;
+    }
+
+    if (!isAuthenticated && !customerPhone.trim()) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: locale === 'vi' ? 'Nhập số điện thoại để kiểm tra điều kiện sử dụng mã.' : 'Enter phone number to verify promo code eligibility.',
+      });
+      return;
+    }
+
+    if (
+      !Number.isSafeInteger(quoteTripId) ||
+      quoteTripId <= 0 ||
+      quoteSeatIds.length !== selectedSeats.length
+    ) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'invalid',
+        message: locale === 'vi' ? 'Không thể xác minh chuyến hoặc ghế đã chọn. Hãy tải lại sơ đồ ghế.' : 'Cannot verify selected trip or seats. Please reload seat map.',
+      });
+      promotionInputRef.current?.focus();
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrent = true;
+    setPromotionQuoteState({
+      requestKey: promotionRequestKey,
+      status: 'loading',
+      message: t('checkingPromo'),
+    });
+
+    const timeout = setTimeout(async () => {
+      try {
+        const payload = {
+          tripId: quoteTripId,
+          seatIds: [...quoteSeatIds].sort((a, b) => a - b),
+          diemDonChuyenXeId: selectedPickupPointId ?? undefined,
+          diemTraChuyenXeId: selectedDropoffPointId ?? undefined,
+          promotionCode: activePromotionCode,
+          ...(!isAuthenticated ? { contactPhone: customerPhone.trim() } : {}),
+        };
+        const response = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.getBookingQuote(payload, token, controller.signal),
+            )
+          : await bookingsApi.getBookingQuote(payload, undefined, controller.signal);
+        if (!isCurrent || controller.signal.aborted) return;
+
+        const quote = response.data;
+        const amounts = [quote.originalTotal, quote.discountAmount, quote.finalTotal].map(Number);
+        if (
+          !quote.appliedPromotionCode ||
+          quote.appliedPromotionCode.toUpperCase() !== activePromotionCode ||
+          amounts.some((amount) => !Number.isFinite(amount) || amount < 0)
+        ) {
+          throw new Error(locale === 'vi' ? 'Máy chủ chưa xác nhận được mã khuyến mãi. Hãy kiểm tra lại mã.' : 'Server could not verify promo code. Please check again.');
+        }
+
+        setPromotionQuoteState({
+          requestKey: promotionRequestKey,
+          status: 'valid',
+          message: t('promoAppliedSuccess', { code: quote.appliedPromotionCode }),
+          quote,
+        });
+      } catch (error) {
+        if (!isCurrent || controller.signal.aborted) return;
+        setPromotionQuoteState({
+          requestKey: promotionRequestKey,
+          status: 'invalid',
+          message:
+            error instanceof Error
+              ? error.message
+              : (locale === 'vi' ? 'Không thể kiểm tra mã khuyến mãi. Vui lòng thử lại.' : 'Cannot verify promo code. Please try again.'),
+        });
+        promotionInputRef.current?.focus();
+      }
+    }, 250);
+
+    return () => {
+      isCurrent = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [promotionRequestKey]);
+
+  const handleApplyPromotion = (codeOverride?: unknown) => {
+    const rawCode =
+      typeof codeOverride === 'string' ? codeOverride : promotionInput;
+    const code = rawCode.trim().toUpperCase();
+    if (!code) {
+      promotionInputRef.current?.focus();
+      return;
+    }
+    if (typeof codeOverride === 'string') {
+      setPromotionInput(codeOverride);
+    }
+    setSubmitError(null);
+    setActivePromotionCode(code);
+    setPromotionRequestVersion((version) => version + 1);
+  };
+
+
+
+  const handleRemovePromotion = () => {
+    setPromotionInput('');
+    setActivePromotionCode(null);
+    setPromotionQuoteState({ requestKey: '', status: 'idle', message: '' });
+    setSubmitError(null);
+  };
+
+  const toggleSeat = (seat: string) => {
+    if (bookedSeats.has(seat) || isSubmitting || submissionUnknown) return;
+    setSubmitError(null);
+    setRequiresLogin(false);
+    setSelectedSeats((prev) => {
+      if (prev.includes(seat)) {
+        return prev.filter((item) => item !== seat);
+      }
+      if (prev.length >= 5) {
+        setSubmitError(t('errorMax5SeatsPerTrip'));
+        return prev;
+      }
+      return [...prev, seat];
+    });
+  };
+
+  const refreshSeatMap = async (tripId: number) => {
+    try {
+      const refreshedSeats = await tripsApi.getTripSeats(tripId);
+      if (mountedRef.current && latestTripIdRef.current === tripId) {
+        setSeatMap(refreshedSeats);
+        setSelectedSeats((current) =>
+          current.filter((seatNumber) =>
+            refreshedSeats.some(
+              (seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG',
+            ),
+          ),
+        );
+      }
+    } catch {
+      // The booking error remains visible if the seat-map refresh also fails.
+    }
+  };
+
+  const showApiError = (error: unknown, tripId: number) => {
+    if (!mountedRef.current) return;
+    if (error instanceof ApiError && error.status === 409) {
+      setSubmitError(
+        error.message || t('errorSeatHeldConflict'),
+      );
+      void refreshSeatMap(tripId);
+      return;
+    }
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      setRequiresLogin(isAuthenticated);
+      setSubmitError(
+        isAuthenticated
+          ? t('sessionExpiredNotice')
+          : error.message || (locale === 'vi' ? 'Bạn chưa được phép thực hiện thao tác này.' : 'You are not authorized for this action.'),
+      );
+      return;
+    }
+    setSubmitError(
+      error instanceof Error
+        ? error.message
+        : (locale === 'vi' ? 'Không thể tạo đơn đặt vé. Vui lòng thử lại.' : 'Cannot create booking. Please try again.'),
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (submissionLockRef.current || submissionUnknownRef.current) return;
+
+    setValidationAttempted(true);
+    setSubmitError(null);
+    setRequiresLogin(false);
+    if (!isHydrated) {
+      setSubmitError(t('errorLoadingAccountState'));
+      return;
+    }
+    if (!passengerValidation.isValid) {
+      const missingDetails: string[] = [];
+      if (!customerName.trim()) {
+        missingDetails.push(t('customerName'));
+      }
+      if (!customerPhone.trim()) {
+        missingDetails.push(t('customerPhone'));
+      } else if (passengerValidation.errors.phoneNumber) {
+        missingDetails.push(t('errorFieldPhoneInvalid'));
+      }
+      if (!customerEmail.trim()) {
+        missingDetails.push(t('customerEmail'));
+      } else if (passengerValidation.errors.email) {
+        missingDetails.push(t('errorFieldEmailInvalid'));
+      }
+
+      const msg =
+        missingDetails.length > 0
+          ? `${t('errorEnterRequiredCustomerInfo')}\n• ${missingDetails.join('\n• ')}`
+          : t('errorIncompleteInfoSimple');
+
+      setCustomerInfoAlertMessage(msg);
+      setShowCustomerInfoAlert(true);
+      return;
+    }
+    if (selectedSeats.length === 0) return;
+    if (selectedSeats.length > 5) {
+      setSubmitError(t('errorMax5SeatsPerTrip'));
+      return;
+    }
+    if (!isAcceptedTerms) return;
+    if (promotionInput.trim() && !activePromotionCode) {
+      setSubmitError(t('errorApplyOrDiscardPromo'));
+      promotionInputRef.current?.focus();
+      return;
+    }
+    if (activePromotionCode && !hasCurrentPromotionQuote) {
+      setSubmitError(
+        promotionMessage || (locale === 'vi' ? 'Đang kiểm tra mã khuyến mãi. Vui lòng đợi rồi thử lại.' : 'Checking promotion code. Please wait and try again.'),
+      );
+      promotionInputRef.current?.focus();
+      return;
+    }
+
+    const tripId = Number(post.id);
+    if (!Number.isSafeInteger(tripId) || tripId <= 0) {
+      setSubmitError(t('errorTripNotFound'));
+      return;
+    }
+
+    const resolvedSeats = selectedSeats.map((seatNumber) =>
+      seatMap.find(
+        (seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG',
+      ),
+    );
+    const seatIds = resolvedSeats.map((seat) => seat?.tripSeatId);
+    const requestedSeatIds = seatIds.filter(
+      (seatId): seatId is number =>
+        typeof seatId === 'number' && Number.isSafeInteger(seatId) && seatId > 0,
+    );
+    if (
+      resolvedSeats.some((seat) => !seat) ||
+      requestedSeatIds.length !== seatIds.length
+    ) {
+      setSubmitError(t('seatChangedError'));
+      await refreshSeatMap(tripId);
+      return;
+    }
+
+    const oversizedItem = luggageItems.find(
+      (item) =>
+        item.type !== 'Xe máy' &&
+        item.type !== 'Xe đạp' &&
+        ((item.length && item.length > 150) ||
+          (item.width && item.width > 80) ||
+          (item.height && item.height > 80)),
+    );
+    if (oversizedItem) {
+      setSubmitError(
+        `Kiện "${oversizedItem.type}" vượt quá kích thước cho phép (Dài ≤ 150cm, Rộng ≤ 80cm, Cao ≤ 80cm).`,
+      );
+      return;
+    }
+    if (overweightRegularCargoItem) {
+      const effectiveUnitWeight = getEffectiveCargoUnitWeightKg(
+        overweightRegularCargoItem,
+      );
+      setSubmitError(
+        `Kiện "${overweightRegularCargoItem.type}" có khối lượng hiệu dụng ${effectiveUnitWeight}kg; mỗi kiện tối đa ${MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg khi đi kèm vé.`,
+      );
+      return;
+    }
+
+    let finalSenderPointId = senderPointId;
+    let finalReceiverPointId = receiverPointId;
+    if (validCargoItems.length > 0) {
+      if (cargoRoutePointsLoading) {
+        setSubmitError(locale === 'vi' ? 'Đang tải điểm gửi và điểm nhận hàng. Vui lòng thử lại.' : 'Loading cargo stations. Please try again.');
+        return;
+      }
+      if (cargoRoutePointsError) {
+        setSubmitError(cargoRoutePointsError);
+        return;
+      }
+      if (!finalSenderPointId && cargoRoutePoints?.senderPoints.length) {
+        finalSenderPointId = cargoRoutePoints.senderPoints[0].id;
+      }
+      if (!finalReceiverPointId && cargoRoutePoints?.receiverPoints.length) {
+        const candidate = cargoRoutePoints.receiverPoints.find(
+          (p) => p.id !== finalSenderPointId,
+        ) ?? cargoRoutePoints.receiverPoints[cargoRoutePoints.receiverPoints.length - 1];
+        finalReceiverPointId = candidate ? candidate.id : null;
+      }
+      if (!finalSenderPointId || !finalReceiverPointId) {
+        setSubmitError(locale === 'vi' ? 'Tuyến xe chưa có điểm gửi/nhận hàng khả dụng.' : 'No cargo stations available for this route.');
+        return;
+      }
+      if (finalSenderPointId === finalReceiverPointId) {
+        setSubmitError(locale === 'vi' ? 'Điểm gửi và điểm nhận hàng phải khác nhau.' : 'Cargo sender and receiver points must be different.');
+        return;
+      }
+    }
+    const mappedCargoItems =
+      validCargoItems.length > 0
+        ? validCargoItems.map((item) => ({
+            name:
+              item.type === 'Xe máy'
+                ? `Xe máy (${item.motorbikeType || (locale === 'vi' ? 'Xe số' : 'Manual')})`
+                : item.type === 'Xe đạp'
+                  ? `Xe đạp (${item.bicycleType || (locale === 'vi' ? 'Xe đạp thường' : 'Standard bicycle')})`
+                  : item.customTypeName?.trim()
+                    ? `${item.type}: ${item.customTypeName.trim()}`
+                    : item.type || 'Hành lý gửi kèm',
+            type: item.type,
+            quantity: item.quantity || 1,
+            weight:
+              item.type === 'Xe máy'
+                ? 100
+                : item.type === 'Xe đạp'
+                  ? 15
+                  : item.weight || 0,
+            length: item.length,
+            width: item.width,
+            height: item.height,
+            loaiHangHoaId: item.loaiHangHoaId,
+            category: item.category,
+            note: item.note,
+            motorbikeModel: item.motorbikeType,
+            bicycleType: item.bicycleType,
+            licensePlate: item.licensePlate,
+          }))
+        : undefined;
+
+    const bookingDetails: Omit<CreateBookingPayload, 'holdToken'> = {
+      tripId,
+      seatIds: requestedSeatIds,
+      contact: {
+        fullName: customerName.trim(),
+        phone: customerPhone.trim(),
+        ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
+      },
+      pickupPoint: selectedPickupStop?.name || pickup || post.province,
+      dropoffPoint: selectedDropoffStop?.name || dropoff || post.district,
+      diemDonChuyenXeId: selectedPickupPointId ?? undefined,
+      diemTraChuyenXeId: selectedDropoffPointId ?? undefined,
+      cargoItems: mappedCargoItems,
+      ...(activePromotionCode && promotionQuote ? {
+        promotionCode: activePromotionCode,
+        expectedPromotionQuote: {
+          originalTotal: String(promotionQuote.originalTotal),
+          discountAmount: String(promotionQuote.discountAmount),
+          finalTotal: String(promotionQuote.finalTotal),
+        },
+      } : {}),
+      ...(mappedCargoItems
+        ? { senderPointId: finalSenderPointId!, receiverPointId: finalReceiverPointId! }
+        : {}),
+    };
+
+    submissionLockRef.current = true;
+    setIsSubmitting(true);
+    setHoldExpiresAt(null);
+
+    let holdToken: string | null = null;
+    try {
+      const holdResponse = isAuthenticated
+        ? await executeWithAuth((token) =>
+            bookingsApi.createSeatHold({ tripId, seatIds: requestedSeatIds }, token),
+          )
+        : await bookingsApi.createSeatHold({ tripId, seatIds: requestedSeatIds });
+      const hold = holdResponse.data;
+      const expiresAtMs = Date.parse(hold?.expiresAt || '');
+      const sortedRequestedSeatIds = [...requestedSeatIds].sort((a, b) => a - b);
+      const sortedReturnedSeatIds = Array.isArray(hold?.seatIds)
+        ? [...hold.seatIds].sort((a, b) => a - b)
+        : [];
+      const sameSeats =
+        sortedReturnedSeatIds.length === sortedRequestedSeatIds.length &&
+        sortedReturnedSeatIds.every(
+          (id, index) => id === sortedRequestedSeatIds[index],
+        );
+
+      if (
+        !hold ||
+        typeof hold.holdToken !== 'string' ||
+        hold.holdToken.trim().length === 0 ||
+        hold.tripId !== tripId ||
+        !sameSeats ||
+        !Number.isFinite(expiresAtMs) ||
+        expiresAtMs <= Date.now()
+      ) {
+        const released = hold?.holdToken
+          ? await releaseSeatHoldSafely(hold.holdToken)
+          : false;
+        if (!released) {
+          submissionUnknownRef.current = true;
+          if (mountedRef.current) {
+            setSubmissionUnknown(true);
+            setSubmitError(
+              locale === 'vi' ? 'Chưa xác định được kết quả giữ ghế. Ghế có thể đang được giữ; vui lòng không gửi lại yêu cầu ngay.' : 'Seat hold result undetermined. Seats may be held; please do not resubmit immediately.',
+            );
+          }
+          return;
+        }
+        setSubmitError(locale === 'vi' ? 'Không thể xác nhận lượt giữ ghế từ máy chủ. Hãy chọn lại ghế.' : 'Could not confirm seat hold from server. Please reselect seats.');
+        await refreshSeatMap(tripId);
+        return;
+      }
+
+      holdToken = hold.holdToken;
+      activeHoldRef.current = {
+        holdToken,
+        tripId,
+        bookingRequestStarted: false,
+      };
+      if (mountedRef.current) setHoldExpiresAt(hold.expiresAt);
+
+      if (!mountedRef.current || latestTripIdRef.current !== tripId) {
+        activeHoldRef.current = null;
+        await releaseSeatHoldSafely(holdToken);
+        return;
+      }
+
+      activeHoldRef.current.bookingRequestStarted = true;
+      const bookingPayload: CreateBookingPayload = {
+        ...bookingDetails,
+        holdToken,
+      };
+
+      let bookingResponse;
+      try {
+        bookingResponse = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.createBooking(bookingPayload, token),
+            )
+          : await bookingsApi.createBooking(bookingPayload);
+      } catch (error) {
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          activeHoldRef.current = null;
+          const released = await releaseSeatHoldSafely(holdToken);
+          if (!released) {
+            submissionUnknownRef.current = true;
+            if (mountedRef.current) {
+              setSubmissionUnknown(true);
+              setSubmitError(
+                locale === 'vi' ? 'Đơn chưa được tạo, nhưng chưa xác nhận được việc giải phóng ghế. Vui lòng không gửi lại yêu cầu ngay.' : 'Booking was not created and releasing seat hold could not be confirmed. Please do not resubmit immediately.',
+              );
+            }
+            return;
+          }
+          if (mountedRef.current) setHoldExpiresAt(null);
+          if (
+            mountedRef.current &&
+            activePromotionCode &&
+            error instanceof ApiError &&
+            error.code?.startsWith('PROMOTION_')
+          ) {
+            setPromotionQuoteState({
+              requestKey: promotionRequestKey,
+              status: 'invalid',
+              message: `${error.message} ${locale === 'vi' ? 'Hãy áp dụng lại mã hoặc bỏ mã để tiếp tục.' : 'Please reapply or discard code to continue.'}`,
+            });
+            setSubmitError(null);
+            promotionInputRef.current?.focus();
+          } else {
+            showApiError(error, tripId);
+          }
+          return;
+        }
+
+        activeHoldRef.current = null;
+        submissionUnknownRef.current = true;
+        if (mountedRef.current) {
+          setSubmissionUnknown(true);
+          setSubmitError(
+            locale === 'vi' ? 'Chưa xác định được kết quả đặt vé. Vui lòng không gửi lại yêu cầu; kiểm tra lịch sử đặt vé hoặc liên hệ hỗ trợ.' : 'Undetermined booking result. Please do not resubmit; check your booking history or contact support.',
+          );
+        }
+        return;
+      }
+
+      const booking = bookingResponse.data as CreatedBookingData | undefined;
+      const totalAmount = Number(booking?.totalAmount);
+      if (
+        !booking ||
+        !Number.isSafeInteger(booking.bookingId) ||
+        booking.bookingId <= 0 ||
+        booking.tripId !== tripId ||
+        !Array.isArray(booking.seatIds) ||
+        booking.seatIds.length !== requestedSeatIds.length ||
+        ![...booking.seatIds].sort((a, b) => a - b).every(
+          (id, index) => id === sortedRequestedSeatIds[index],
+        ) ||
+        !Number.isSafeInteger(booking.orderId) ||
+        booking.orderId <= 0 ||
+        !booking.bookingCode ||
+        !booking.orderCode ||
+        !Number.isFinite(totalAmount) ||
+        totalAmount < 0
+      ) {
+        activeHoldRef.current = null;
+        submissionUnknownRef.current = true;
+        if (mountedRef.current) {
+          setSubmissionUnknown(true);
+          setSubmitError(
+            locale === 'vi' ? 'Chưa xác định được kết quả đặt vé. Máy chủ chưa trả đủ mã đơn để tiếp tục; vui lòng kiểm tra lịch sử đặt vé hoặc liên hệ hỗ trợ.' : 'Undetermined booking result. Missing order codes; please check your booking history or contact support.',
+          );
+        }
+        return;
+      }
+
+      activeHoldRef.current = null;
+      if (!mountedRef.current) return;
+
+      const serverShippingFee = Number(booking.shippingFee);
+      const finalLuggageFee = Number.isFinite(serverShippingFee)
+        ? serverShippingFee
+        : 0;
+      const draft = createPaymentDraft({
+        tripType: 'one-way',
+        passenger: {
+          fullName: customerName.trim(),
+          phoneNumber: customerPhone.trim(),
+          email: customerEmail.trim(),
+        },
+        legs: [
+          {
+            tripId,
+            route: post.title || `${post.province} - ${post.district}`,
+            departureTime: departureDateTimeText,
+            seats: selectedSeats,
+            pickup: selectedPickupStop?.name || pickup || post.province,
+            dropoff: selectedDropoffStop?.name || dropoff || post.district,
+            unitFare: unitPriceWithSurcharges,
+            subtotal: booking.originalTotal ? Number(booking.originalTotal) : unitPriceWithSurcharges * selectedSeats.length,
+          },
+        ],
+        luggage:
+          luggageWeight > 0 || finalLuggageFee > 0
+            ? {
+                fee: finalLuggageFee,
+                weight: luggageWeight,
+                items: luggageItems,
+                info:
+                  luggageItems.length > 0 && luggageWeight > 0
+                    ? {
+                        count: luggagePackageCount,
+                        weight: luggageWeight,
+                        fee: finalLuggageFee,
+                        category: luggageItems[0]?.category || 'normal',
+                      }
+                    : undefined,
+              }
+            : undefined,
+        totalFare: totalAmount,
+        bookingId: booking.bookingId,
+        orderId: booking.orderId,
+        bookingCode: booking.bookingCode,
+        orderCode: booking.orderCode,
+        status: booking.status,
+        paymentExpiresAt: booking.paymentExpiresAt,
+      });
+
+      setHoldExpiresAt(null);
+      if (totalAmount === 0 && booking.status === 'DA_THANH_TOAN') {
+        router.push(`/invoice/${booking.bookingId}`);
+      } else {
+        router.push(`/payment?draftId=${encodeURIComponent(draft.id)}`);
+      }
+    } catch (error) {
+      if (holdToken && activeHoldRef.current?.holdToken === holdToken) {
+        const activeHold = activeHoldRef.current;
+        activeHoldRef.current = null;
+        if (!activeHold.bookingRequestStarted) {
+          await releaseSeatHoldSafely(holdToken);
+        }
+      }
+
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        showApiError(error, tripId);
+      } else {
+        submissionUnknownRef.current = true;
+        if (mountedRef.current) {
+          setSubmissionUnknown(true);
+          setSubmitError(
+            holdToken
+              ? t('unknownBookingResultNotice')
+              : t('unknownHoldResultNotice')
+          );
+        }
+      }
+    } finally {
+      submissionLockRef.current = false;
+      if (mountedRef.current) setIsSubmitting(false);
+    }
+  };
+
+
+  const ChairIcon = ({
+    className = 'w-[36px] h-[44px]',
+  }: {
+    className?: string;
+  }) => (
+    <svg
+      viewBox="0 0 40 48"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <g strokeWidth="2.5">
+        <rect x="1" y="14" width="8" height="20" rx="3" />
+        <rect x="31" y="14" width="8" height="20" rx="3" />
+        <rect x="9" y="34" width="22" height="12" rx="3" />
+        <rect x="7" y="2" width="26" height="38" rx="5" />
+      </g>
+    </svg>
+  );
+
+  const SteeringWheelIcon = ({
+    className = 'w-4 h-4',
+  }: {
+    className?: string;
+  }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="3" />
+      <line x1="12" y1="2" x2="12" y2="9" />
+      <line x1="4.93" y1="19.07" x2="9.88" y2="14.12" />
+      <line x1="19.07" y1="19.07" x2="14.12" y2="14.12" />
+    </svg>
+  );
+
+  const SeatIcon = ChairIcon;
+
+  const SeatButton = ({
+    seat,
+    style,
+  }: {
+    seat: string;
+    style?: React.CSSProperties;
+  }) => {
+    const isBooked = bookedSeats.has(seat);
+    const isSelected = selectedSeats.includes(seat);
+
+    let seatClass = '';
+    let textClass = '';
+
+    if (isBooked) {
+      seatClass = 'fill-slate-200 stroke-slate-300';
+      textClass = 'text-slate-400';
+    } else if (isSelected) {
+      seatClass = 'fill-[#F5A623] stroke-[#D98A12]';
+      textClass = 'text-white';
+    } else {
+      seatClass =
+        'fill-sky-100 stroke-sky-300 group-hover:fill-sky-200 group-hover:stroke-sky-400 transition-colors';
+      textClass = 'text-sky-600';
+    }
+
+    return (
+      <button
+        type="button"
+        disabled={isBooked || isSubmitting || submissionUnknown}
+        aria-label={`${seat}${isBooked ? ' ' + t('sold').toLowerCase() : isSelected ? ' ' + t('selecting').toLowerCase() : ' ' + t('available').toLowerCase()}`}
+        aria-pressed={isSelected}
+        className="group absolute min-h-11 min-w-11 -translate-x-1/2 -translate-y-1/2 inline-flex flex-col items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 active:scale-95 disabled:hover:scale-100 disabled:active:scale-100 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        onClick={() => toggleSeat(seat)}
+        style={style}
+      >
+        <SeatIcon className={`w-[36px] h-[44px] ${seatClass}`} />
+        <span
+          className={`absolute top-[10px] text-[10px] font-bold ${textClass}`}
+        >
+          {seat}
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F8FAF9] font-sans pb-12">
+      <div className="bg-white border-b border-slate-200">
+        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#F05929] transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            {t('actionBack')}
+          </button>
+        </div>
+      </div>
+
+      <main className="max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
+          <section className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 md:p-5 border-b border-slate-200">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    <h2 className="text-xl font-black text-slate-950 whitespace-nowrap">
+                      {t('selectSeats')}
+                    </h2>
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">
+                      {t('seatsCount', { count: seatMap.length })}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">
+                      {t('maxSeats')}
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap">
+                      {isSleeper ? (locale === 'vi' ? 'Giường nằm' : 'Sleeper') : (locale === 'vi' ? 'Ghế ngồi' : 'Seater')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowVehicleInfoModal(true)}
+                      className="text-xs font-bold text-accent hover:underline cursor-pointer ml-1 whitespace-nowrap"
+                    >
+                      {t('vehicleInfo')}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 sm:gap-5 text-[11px] font-bold text-slate-600">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <SeatIcon className="w-4 h-5 fill-slate-200 stroke-slate-300 shrink-0" />{' '}
+                    {t('sold')}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <SeatIcon className="w-4 h-5 fill-sky-100 stroke-sky-300 shrink-0" />{' '}
+                    {t('available')}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <SeatIcon className="w-4 h-5 fill-[#F5A623] stroke-[#D98A12] shrink-0" />{' '}
+                    {t('selecting')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Render each saved floor and its exact 2D seat coordinates. */}
+              <div
+                className={`mt-5 ${
+                  seatFloorLayouts.length > 1
+                    ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
+                    : 'max-w-[540px] mx-auto'
+                }`}
+              >
+                {seatFloorLayouts.map((floorLayout) => (
+                  <div
+                    key={floorLayout.floor}
+                    className={`bg-slate-50/80 border border-slate-200 rounded-xl ${isSleeper ? 'p-4' : 'p-4 sm:p-5'}`}
+                  >
+                    <div className="flex items-center justify-between pb-3 mb-4 border-b border-dashed border-slate-200 px-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-md border border-slate-200 shadow-2xs">
+                        <SteeringWheelIcon className="w-4 h-4 text-slate-500" />
+                        {t('driver')}
+                      </div>
+                      <span className="text-xs font-black uppercase text-[#0060c4] tracking-wide">
+                        {floorLayout.floor === 1 ? t('lowerFloor') : floorLayout.floor === 2 ? t('upperFloor') : floorLayout.label}
+                      </span>
+                      <div className="text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-md border border-slate-200 shadow-2xs">
+                        {t('entranceDoor')}
+                      </div>
+                    </div>
+
+                    <div
+                      className="relative w-full"
+                      style={{ height: `${floorLayout.heightPx}px` }}
+                    >
+                      {floorLayout.seats.map(
+                        ({ seat, leftPercent, topPx }) => (
+                          <SeatButton
+                            key={seat.tripSeatId}
+                            seat={seat.seatNumber}
+                            style={{
+                              left: `${leftPercent}%`,
+                              top: `${topPx}px`,
+                            }}
+                          />
+                        ),
+                      )}
+                    </div>
+
+                    <div className="text-center pt-3 mt-4 border-t border-dashed border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {t('rearOfBus')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 border-b border-slate-200">
+              <div ref={customerInfoSectionRef} className="p-4 md:p-5 border-b lg:border-b-0 lg:border-r border-slate-200">
+                <h2 className="text-base font-black text-slate-950 mb-4">
+                  {t('customerInfo')}
+                </h2>
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="text-xs font-bold text-slate-700">
+                      {t('customerName')} <span className="text-red-500">*</span>
+                    </span>
+                    <div className="mt-1.5 relative">
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent ${
+                          passengerErrors.fullName
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
+                        value={customerName}
+                        onChange={(e) => setUserNameOverride(e.target.value)}
+                        placeholder={t('customerNamePlaceholder')}
+                      />
+                    </div>
+                    {passengerErrors.fullName && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.fullName}
+                      </p>
+                    )}
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold text-slate-700">
+                      {t('customerPhone')} <span className="text-red-500">*</span>
+                    </span>
+                    <div className="mt-1.5 relative">
+                      <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent ${
+                          passengerErrors.phoneNumber
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
+                        value={customerPhone}
+                        onChange={(e) => setUserPhoneOverride(e.target.value)}
+                        placeholder={t('customerPhonePlaceholder')}
+                      />
+                    </div>
+                    {passengerErrors.phoneNumber && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.phoneNumber}
+                      </p>
+                    )}
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold text-slate-700">
+                      {t('customerEmail')} <span className="text-red-500">*</span>
+                    </span>
+                    <div className="mt-1.5 relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent ${
+                          passengerErrors.email
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder={t('customerEmailPlaceholder')}
+                      />
+                    </div>
+                    {passengerErrors.email && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.email}
+                      </p>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              <div className="p-4 md:p-5">
+                <h2 className="text-base font-black text-accent mb-4">
+                  {t('termsAndNotes')}
+                </h2>
+                <div className="space-y-3 text-xs font-semibold text-slate-700 leading-relaxed">
+                  <p className="text-accent font-black">
+                    {t('termsLoginRewardNotice')}
+                  </p>
+                  <p>
+                    {t('termsArriveEarlyNotice')}
+                  </p>
+                  <p>
+                    {t('termsShuttleHotlineNotice', { hotline: '1900 6789' })}
+                  </p>
+                  {paragraphs.slice(0, 1).map((line: string) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <section
+              className="p-4 md:p-5 border-b border-slate-200"
+              aria-labelledby="booking-promotion-heading"
+            >
+              <h2
+                id="booking-promotion-heading"
+                className="text-base font-black text-slate-950 mb-3 flex items-center gap-2"
+              >
+                <Tag className="w-4 h-4 text-accent" />
+                {t('promoCodeTitle')}
+              </h2>
+              <div className="max-w-2xl">
+                <label
+                  htmlFor="booking-promotion-code"
+                  className="block text-xs font-bold text-slate-700 mb-1.5"
+                >
+                  {t('enterPromoCode')}
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    ref={promotionInputRef}
+                    id="booking-promotion-code"
+                    type="text"
+                    autoComplete="off"
+                    value={promotionInput}
+                    onChange={(event) => {
+                      const value = event.target.value.toUpperCase();
+                      setPromotionInput(value);
+                      if (activePromotionCode && value.trim() !== activePromotionCode) {
+                        setActivePromotionCode(null);
+                      }
+                    }}
+                    aria-invalid={promotionStatus === 'invalid'}
+                    aria-describedby="booking-promotion-feedback"
+                    className={`h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm font-bold uppercase tracking-wide outline-none focus:ring-2 focus:ring-accent/20 ${
+                      promotionStatus === 'invalid'
+                        ? 'border-red-500 focus:border-red-500'
+                        : promotionStatus === 'valid'
+                          ? 'border-emerald-500 focus:border-emerald-500'
+                          : 'border-slate-300 focus:border-accent'
+                    }`}
+                    placeholder={t('promoCodePlaceholder')}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyPromotion}
+                    disabled={!promotionInput.trim() || promotionStatus === 'loading'}
+                    className="min-h-11 rounded-lg bg-accent px-5 text-sm font-black text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {promotionStatus === 'loading'
+                      ? t('checkingPromo')
+                      : activePromotionCode
+                        ? t('recheckPromo')
+                        : t('apply')}
+                  </button>
+                  {(promotionInput || activePromotionCode) && (
+                    <button
+                      type="button"
+                      onClick={handleRemovePromotion}
+                      className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      {t('remove')}
+                    </button>
+                  )}
+                </div>
+                {promotionMessage && (
+                  <p
+                    id="booking-promotion-feedback"
+                    role={promotionStatus === 'invalid' ? 'alert' : 'status'}
+                    aria-live="polite"
+                    className={`mt-2 text-sm font-semibold flex items-center gap-1.5 ${
+                      promotionStatus === 'invalid'
+                        ? 'text-red-700'
+                        : promotionStatus === 'valid'
+                          ? 'text-emerald-700'
+                          : 'text-slate-600'
+                    }`}
+                  >
+                    {promotionStatus === 'valid' && (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    {promotionMessage}
+                  </p>
+                )}
+
+                {availablePromotions.length > 0 && (
+                  <div className="mt-3.5 pt-3.5 border-t border-dashed border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowPromoModal(true)}
+                      className="group flex w-full items-center justify-between rounded-xl border border-orange-200/90 bg-orange-50/50 p-3 hover:bg-orange-50 hover:border-orange-300 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-accent font-bold">
+                          <Ticket className="h-4 w-4" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                            {t('promoAvailableVouchers')}
+                            <span className="rounded-full bg-accent px-1.5 py-0.2 text-[10px] font-extrabold text-white">
+                              {t('promoVouchersCount', { count: availablePromotions.length })}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {activePromotionCode
+                              ? t('promoActiveUsing', { code: activePromotionCode })
+                              : t('promoViewAllTripPromos')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-xs font-bold text-accent group-hover:translate-x-0.5 transition-transform">
+                        <span>{activePromotionCode ? t('promoChangeCode') : t('promoSelectCode')}</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
+
+
+            <div className="p-4 md:p-5 border-b border-slate-200">
+              <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-2">
+                {t('pickupDropoffInfo')}
+                <Info className="w-4 h-4 text-accent" />
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Điểm đón */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-slate-700 uppercase">
+                      {t('pickupPoint')}
+                    </h3>
+                    {pickupSurcharge > 0 && (
+                      <span className="text-xs font-bold text-accent">
+                        +{formatMoney(pickupSurcharge)} / {locale === 'vi' ? 'vé' : 'ticket'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
+                    <label className={`inline-flex items-center gap-1.5 cursor-pointer ${pickupMode === 'station' ? 'text-accent' : ''}`}>
+                      <input
+                        type="radio"
+                        name="pickupMode"
+                        checked={pickupMode === 'station'}
+                        onChange={() => handlePickupModeChange('station')}
+                        className="accent-[#EF5222]"
+                      />
+                      {t('stationOffice')} {pickupStations.length > 0 ? `(${pickupStations.length})` : ''}
+                    </label>
+                    <label className={`inline-flex items-center gap-1.5 cursor-pointer ${pickupMode === 'transfer' ? 'text-accent' : ''} ${pickupTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                      <input
+                        type="radio"
+                        name="pickupMode"
+                        checked={pickupMode === 'transfer'}
+                        disabled={pickupTransfers.length === 0}
+                        onChange={() => handlePickupModeChange('transfer')}
+                        className="accent-[#EF5222]"
+                      />
+                      {t('shuttleTransfer')} {pickupTransfers.length > 0 ? `(${pickupTransfers.length})` : ''}
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={selectedPickupPointId ?? pickup}
+                      onChange={handlePickupSelectChange}
+                      className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                    >
+                      {(pickupMode === 'transfer' ? pickupTransfers : pickupStations).length > 0 ? (
+                        (pickupMode === 'transfer' ? pickupTransfers : pickupStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${formatMoney(p.phuPhi)})` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value={post.province}>{post.province}</option>
+                          <option value={`Bến xe ${post.province}`}>
+                            Bến xe {post.province}
+                          </option>
+                        </>
+                      )}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  </div>
+                  {selectedPickupStop?.address && (
+                    <p className="text-xs text-slate-600 leading-relaxed flex items-start gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                      <span>{selectedPickupStop.address}</span>
+                    </p>
+                  )}
+                  {selectedPickupStop?.type === 'transfer' && selectedPickupStop.benTrungChuyen && (
+                    <p className="text-[11px] font-semibold text-accent bg-accent/5 p-2 rounded border border-accent/20">
+                      {t('shuttleArrivalNotice', { station: selectedPickupStop.benTrungChuyen.name })}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-slate-500">
+                    {t('pickupBeThereEarly', { minutes: selectedPickupStop?.phutCoMatTruoc ?? 20 })}
+                  </p>
+                </div>
+
+                {/* Điểm trả */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-slate-700 uppercase">
+                      {t('dropoffPoint')}
+                    </h3>
+                    {dropoffSurcharge > 0 && (
+                      <span className="text-xs font-bold text-accent">
+                        +{formatMoney(dropoffSurcharge)} / {locale === 'vi' ? 'vé' : 'ticket'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
+                    <label className={`inline-flex items-center gap-1.5 cursor-pointer ${dropoffMode === 'station' ? 'text-accent' : ''}`}>
+                      <input
+                        type="radio"
+                        name="dropoffMode"
+                        checked={dropoffMode === 'station'}
+                        onChange={() => handleDropoffModeChange('station')}
+                        className="accent-[#EF5222]"
+                      />
+                      {t('stationOffice')} {dropoffStations.length > 0 ? `(${dropoffStations.length})` : ''}
+                    </label>
+                    <label className={`inline-flex items-center gap-1.5 cursor-pointer ${dropoffMode === 'transfer' ? 'text-accent' : ''} ${dropoffTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                      <input
+                        type="radio"
+                        name="dropoffMode"
+                        checked={dropoffMode === 'transfer'}
+                        disabled={dropoffTransfers.length === 0}
+                        onChange={() => handleDropoffModeChange('transfer')}
+                        className="accent-[#EF5222]"
+                      />
+                      {t('shuttleTransfer')} {dropoffTransfers.length > 0 ? `(${dropoffTransfers.length})` : ''}
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={selectedDropoffPointId ?? dropoff}
+                      onChange={handleDropoffSelectChange}
+                      className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                    >
+                      {(dropoffMode === 'transfer' ? dropoffTransfers : dropoffStations).length > 0 ? (
+                        (dropoffMode === 'transfer' ? dropoffTransfers : dropoffStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${formatMoney(p.phuPhi)})` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value={post.district}>{post.district}</option>
+                          <option value={`Bến xe ${post.district}`}>
+                            Bến xe {post.district}
+                          </option>
+                        </>
+                      )}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  </div>
+                  {selectedDropoffStop?.address && (
+                    <p className="text-xs text-slate-600 leading-relaxed flex items-start gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                      <span>{selectedDropoffStop.address}</span>
+                    </p>
+                  )}
+                  {selectedDropoffStop?.type === 'transfer' && selectedDropoffStop.benTrungChuyen && (
+                    <p className="text-[11px] font-semibold text-accent bg-accent/5 p-2 rounded border border-accent/20">
+                      {t('shuttleDepartureNotice', { station: selectedDropoffStop.benTrungChuyen.name })}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {t('dropoffConfirmNotice')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <LuggageStep
+              route={`${post.province} - ${post.district}`}
+              time={departureDateTimeText}
+              seat={selectedSeatText}
+              passenger={customerName || (locale === 'vi' ? 'Khách hàng' : 'Customer')}
+              cargoCapacity={cargoCapacity}
+              tripId={Number(post.id)}
+              onPackagesChange={setLuggagePackages}
+              onFeeChange={handleLuggageChange}
+            />
+
+            {hasCargoItems && (
+              <div className="hidden" aria-hidden="true">
+                <select
+                  aria-label={locale === 'vi' ? 'Điểm gửi hàng' : 'Cargo pickup point'}
+                  value={senderPointId ?? ''}
+                  onChange={(event) => {
+                    const nextId = Number(event.target.value) || null;
+                    setSenderPointId(nextId);
+                    if (nextId === receiverPointId) setReceiverPointId(null);
+                  }}
+                >
+                  <option value="">{locale === 'vi' ? 'Chọn điểm gửi' : 'Select pickup point'}</option>
+                  {cargoRoutePoints?.senderPoints.map((point) => (
+                    <option key={point.id} value={point.id}>
+                      {point.name} — {point.address}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label={locale === 'vi' ? 'Điểm nhận hàng' : 'Cargo dropoff point'}
+                  value={receiverPointId ?? ''}
+                  onChange={(event) =>
+                    setReceiverPointId(Number(event.target.value) || null)
+                  }
+                >
+                  <option value="">{locale === 'vi' ? 'Chọn điểm nhận' : 'Select dropoff point'}</option>
+                  {cargoRoutePoints?.receiverPoints.map((point) => (
+                    <option
+                      key={point.id}
+                      value={point.id}
+                      disabled={point.id === senderPointId}
+                    >
+                      {point.name} — {point.address}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="p-4 md:p-5 border-b border-slate-200 flex items-center justify-center">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <div
+                  className={`w-5 h-5 rounded-md border-[1.5px] flex items-center justify-center transition-colors ${isAcceptedTerms ? 'bg-accent border-accent' : 'bg-white border-slate-300'}`}
+                >
+                  {isAcceptedTerms && (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-3.5 h-3.5 text-white"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <input
+                  type="checkbox"
+                  className="hidden"
+                  checked={isAcceptedTerms}
+                  onChange={(e) => setIsAcceptedTerms(e.target.checked)}
+                />
+                <span className="text-[13px] md:text-sm text-slate-800">
+                  <span className="text-accent font-bold underline underline-offset-2">
+                    {t('acceptTerms')}
+                  </span>{' '}
+                  {t('andPrivacyPolicy')}
+                </span>
+              </label>
+            </div>
+
+            {(isSubmitting || submissionUnknown || holdExpiresAt) && (
+              <div className="px-4 pt-4 md:px-5" aria-live="polite">
+                {isSubmitting && (
+                  <p role="status" className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
+                    {t('holdingSeatsNotice')}
+                  </p>
+                )}
+                {holdExpiresAt && (
+                  <p className="mt-2 text-sm text-slate-600">
+                    {t('seatsHeldUntil', { time: new Date(holdExpiresAt).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })}
+                  </p>
+                )}
+                {submissionUnknown && (
+                  <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                    {t('unknownResult')}
+                  </p>
+                )}
+              </div>
+            )}
+            {submitError && (
+              <div className="px-4 pt-4 md:px-5">
+                <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+                  {submitError}
+                </p>
+                {requiresLogin && (
+                  <Link className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-accent underline underline-offset-2" href="/login">
+                    {t('loginAgain')}
+                  </Link>
+                )}
+              </div>
+            )}
+
+            <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">
+                    VEXGO
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">
+                    {totalFareLabel}
+                  </span>
+                </div>
+                <p className="text-2xl font-black text-red-600">
+                  {totalFareText}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="h-11 px-8 rounded-full border border-slate-300 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors"
+                >
+                  {t('actionCancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canPay || !canPayWithPromotion || !isHydrated || isSubmitting || submissionUnknown}
+                  onClick={handleSubmit}
+                  className="h-11 px-8 rounded-full bg-accent hover:bg-accent-hover text-white text-sm font-black transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {submissionUnknown
+                    ? t('unknownResult')
+                    : isSubmitting
+                      ? t('actionProcessing')
+                      : t('actionPay')}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <aside className="space-y-4 lg:sticky lg:top-24">
+            <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="text-base font-black text-slate-950">
+                  {t('tripInfo')}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowTripInfoModal(true)}
+                  className="text-xs font-black text-accent hover:underline"
+                >
+                  {t('tripDetailsBtn')}
+                </button>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">{t('routeLabel')}</span>
+                  <strong className="text-slate-950 text-right">
+                    {post.province} - {post.district}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">
+                    {t('departureTimeLabel')}
+                  </span>
+                  <strong className="text-emerald-600">
+                    {departureDateTimeText}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">{t('seatTypeLabel')}</span>
+                  <strong className="text-slate-950">
+                    {isSleeper ? (locale === 'vi' ? 'Giường nằm' : 'Sleeper') : (locale === 'vi' ? 'Ghế ngồi' : 'Seater')}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">
+                    {t('seatCountLabel')}
+                  </span>
+                  <strong className="text-slate-950">
+                    {t('seatsQuantity', { count: selectedSeats.length })}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">{t('seatNumbersLabel')}</span>
+                  <strong className="text-slate-950 text-right">
+                    {selectedSeatText || t('unselected')}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">
+                    {t('ticketFareWithCount', { count: selectedSeats.length })}
+                  </span>
+                  <strong className="text-red-600">
+                    {formatMoney(unitPriceWithSurcharges * selectedSeats.length)}
+                  </strong>
+                </div>
+                {totalSurchargePerSeat > 0 && selectedSeats.length > 0 && (
+                  <div className="text-xs space-y-1 text-slate-500 pt-1">
+                    {pickupSurcharge > 0 && (
+                      <div className="flex justify-between">
+                        <span>{t('pickupSurchargeWithCount', { count: selectedSeats.length })}</span>
+                        <span className="font-semibold text-slate-700">
+                          +{formatMoney(pickupSurcharge * selectedSeats.length)}
+                        </span>
+                      </div>
+                    )}
+                    {dropoffSurcharge > 0 && (
+                      <div className="flex justify-between">
+                        <span>{t('dropoffSurchargeWithCount', { count: selectedSeats.length })}</span>
+                        <span className="font-semibold text-slate-700">
+                          +{formatMoney(dropoffSurcharge * selectedSeats.length)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {luggageItems.length > 0 && (
+              <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+                <div className="mb-3 pb-2.5 border-b border-slate-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-base font-black text-slate-950">
+                      {t('cargoHoldItems')}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setShowCargoInfoModal(true)}
+                      className="text-xs font-black text-accent hover:underline"
+                    >
+                      {t('tripDetailsBtn')}
+                    </button>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-full border border-accent/20">
+                      {t('cargoPackageCountWeight', { count: luggagePackageCount, weight: Number(luggageWeight.toFixed(2)) })}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2.5">
+                  {luggageItems.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-3 rounded-xl bg-slate-50/90 border border-slate-200/80 flex items-start justify-between gap-3 transition-colors hover:bg-slate-100/70"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900 text-xs">
+                            {locale === 'vi' ? 'Kiện' : 'Package'} {idx + 1}: {item.customTypeName?.trim() ? `${item.type} (${item.customTypeName.trim()})` : item.type}
+                          </span>
+                          {item.quantity > 1 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
+                              x{item.quantity}
+                            </span>
+                          )}
+                        </div>
+
+                        {item.type === 'Xe máy' ? (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            <span className="font-semibold text-slate-800">{item.motorbikeType || (locale === 'vi' ? 'Xe số' : 'Manual')}</span>
+                            {item.licensePlate && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="bg-slate-200 text-slate-800 font-bold px-1.5 py-0.2 rounded text-[10px]">
+                                  {item.licensePlate}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ) : item.type === 'Xe đạp' ? (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            <span className="font-semibold text-slate-800">{item.bicycleType || (locale === 'vi' ? 'Xe đạp thường' : 'Standard bicycle')}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            {item.packageSize && (
+                              <span className="bg-accent/10 text-accent font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                {locale === 'vi' ? 'Gói Size' : 'Package Size'} {item.packageSize}
+                              </span>
+                            )}
+                            <span>
+                              {item.weight > 0 ? (
+                                <strong className="text-slate-800">{locale === 'vi' ? 'Tối đa' : 'Max'} {Number((item.weight).toFixed(2))} kg</strong>
+                              ) : (
+                                <span className="text-slate-600 font-normal">{locale === 'vi' ? 'Chưa chọn gói' : 'Package not selected'}</span>
+                              )}
+                            </span>
+                            {item.length && item.width && item.height ? (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-500">
+                                  ≤ {item.length}×{item.width}×{item.height}cm
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                        )}
+
+                        {item.note && (
+                          <p className="text-[11px] text-slate-500 italic mt-1 line-clamp-2">
+                            "{item.note}"
+                          </p>
+                        )}
+                      </div>
+
+                      {(() => {
+                        const itemFee = calculateLuggageFee([item], luggagePackages);
+                        return itemFee > 0 ? (
+                          <span className="shrink-0 text-right text-xs font-bold text-red-600">
+                            {formatMoney(itemFee)}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                            {t('cargoFeePerRouteRate')}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+              <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-1.5">
+                {t('priceDetails')}
+                <Info className="w-5 h-5 text-accent" />
+              </h2>
+              <div className="space-y-3 text-sm pb-4 border-b border-slate-100">
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">
+                    {t('outboundFareWithCount', { count: selectedSeats.length })}
+                  </span>
+                  <strong className="text-slate-800">
+                    {formatMoney(baseFareNumber * selectedSeats.length)}
+                  </strong>
+                </div>
+
+                {promotionQuote && Number(promotionQuote.discountAmount) > 0 && (
+                  <div className="flex justify-between gap-3 text-emerald-700">
+                    <span className="font-semibold flex items-center gap-1">
+                      {t('discountWithCode', { code: promotionQuote.appliedPromotionCode || '' })}
+                    </span>
+                    <strong>
+                      −{formatMoney(Number(promotionQuote.discountAmount))}
+                    </strong>
+                  </div>
+                )}
+
+
+                <LuggageSummary
+                  fee={luggageFee}
+                  totalWeight={luggageWeight}
+                  hasCargo={hasSelectedCargoItems}
+                />
+              </div>
+              <div className="pt-4 flex justify-between gap-3 text-sm">
+                <span className="text-slate-500 font-black">{totalFareLabel}</span>
+                <strong className="text-red-600 text-base">
+                  {totalFareText}
+                </strong>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </main>
+
+      {showTripInfoModal && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/45 px-4 py-6 flex items-start justify-center"
+          onClick={() => setShowTripInfoModal(false)}
+        >
+          <section
+            className="w-full max-w-[340px] rounded-xl bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black text-slate-950">
+                  {t('tripInfo')} (1)
+                </h2>
+                <span className="w-5 h-5 rounded-full border-[1.5px] border-accent text-accent flex items-center justify-center font-black text-[10px]">
+                  i
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTripInfoModal(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                aria-label={t('tripInfo')}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-slate-200 p-3 bg-slate-50">
+              <div className="flex flex-col gap-2.5 text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="font-bold text-slate-500">{t('routeLabel')}</span>
+                  <strong className="text-right text-slate-950">
+                    {post.province} - {post.district}
+                  </strong>
+                </div>
+
+                <div className="flex justify-between gap-2">
+                  <span className="font-bold text-slate-500">{t('departureTimeLabel')}</span>
+                  <strong className="text-right text-emerald-600">
+                    {departureDateTimeText}
+                  </strong>
+                </div>
+
+                <div className="flex justify-between gap-2">
+                  <span className="font-bold text-slate-500">{t('seatCountLabel')}</span>
+                  <strong className="text-right text-slate-950">
+                    {selectedSeats.length}
+                  </strong>
+                </div>
+
+                <div className="flex justify-between gap-2">
+                  <span className="font-bold text-slate-500">{t('seatNumbersLabel')}</span>
+                  <strong className="text-right text-slate-950">
+                    {selectedSeatText || t('unselected')}
+                  </strong>
+                </div>
+
+                <div className="flex justify-between gap-2 pt-2.5 border-t border-slate-200 mt-0.5">
+                  <span className="font-black text-slate-700">{totalFareLabel}</span>
+                  <strong className="text-right text-red-600 text-sm">
+                    {totalFareText}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showCargoInfoModal && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/45 px-4 py-6 flex items-start justify-center"
+          onClick={() => setShowCargoInfoModal(false)}
+        >
+          <section
+            className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h2 className="text-base font-black text-slate-950">
+                  {t('cargoHoldItemsDetailModalTitle')}
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  {locale === 'vi' ? 'Tổng cộng: ' : 'Total: '}{t('cargoPackageCountWeight', { count: luggagePackageCount, weight: Number(luggageWeight.toFixed(2)) })}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCargoInfoModal(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                aria-label={t('cargoHoldItemsDetailModalTitle')}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-3.5 space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+              {luggageItems.map((item, idx) => {
+                const isMoto = item.type === 'Xe máy';
+                const isBike = item.type === 'Xe đạp';
+                const actualW = item.weight || 0;
+                const volW =
+                  !isMoto && !isBike && item.length && item.width && item.height
+                    ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
+                    : 0;
+
+                return (
+                  <div
+                    key={item.id || idx}
+                    className="p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs flex items-start justify-between gap-3"
+                  >
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <strong className="text-slate-900 font-bold">
+                          {isMoto || isBike ? (locale === 'vi' ? `Phương tiện ${idx + 1}: ${item.type}` : `Vehicle ${idx + 1}: ${item.type}`) : (locale === 'vi' ? `Kiện ${idx + 1}: ${item.type}` : `Package ${idx + 1}: ${item.type}`)}
+                        </strong>
+                        {item.quantity > 1 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
+                            x{item.quantity}
+                          </span>
+                        )}
+                        {item.category === 'fragile' && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                            {t('cargoCategoryFragile')}
+                          </span>
+                        )}
+                        {item.category === 'valuable' && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                            {t('cargoCategoryValuable')}
+                          </span>
+                        )}
+                      </div>
+
+                      {isMoto ? (
+                        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium flex-wrap">
+                          <span className="font-semibold text-slate-800">{item.motorbikeType || 'Xe số'}</span>
+                          {item.licensePlate && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span className="font-mono bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-800 font-bold text-[10px]">
+                                {item.licensePlate}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      ) : isBike ? (
+                        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium flex-wrap">
+                          <span className="font-semibold text-slate-800">{item.bicycleType || 'Xe đạp thường'}</span>
+                        </div>
+                      ) : (
+                        <div className="text-slate-600 flex items-center gap-1.5 flex-wrap">
+                          <span>
+                            {actualW > 0 ? (
+                              <strong className="text-slate-800 font-semibold">{Number(actualW.toFixed(2))} kg</strong>
+                            ) : (
+                              <span className="text-slate-600 font-normal">{locale === 'vi' ? 'Chưa nhập khối lượng' : 'Weight not specified'}</span>
+                            )}
+                          </span>
+                          {item.length && item.width && item.height ? (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span>{item.length}×{item.width}×{item.height}cm</span>
+                              {volW > actualW && (
+                                <span className="text-accent font-semibold">
+                                  {t('cargoVolumetricWeight', { weight: volW })}
+                                </span>
+                              )}
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+
+                      {item.note && (
+                        <p className="text-slate-500 italic mt-0.5">
+                          "{item.note}"
+                        </p>
+                      )}
+                    </div>
+
+                    {(() => {
+                      const itemFee = calculateLuggageFee([item], luggagePackages);
+                      return itemFee > 0 ? (
+                        <div className="shrink-0 text-right text-xs font-bold text-red-600">
+                          {formatMoney(itemFee)}
+                        </div>
+                      ) : (
+                        <div className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                          {t('cargoFeePerRouteRate')}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+              <div>
+                <span className="font-bold text-slate-600 block">{locale === 'vi' ? 'Cước hàng dự tính' : 'Estimated freight fee'}</span>
+                <span className="text-[11px] text-amber-600 font-medium block">{t('estimatedCargoFeeNotice')}</span>
+              </div>
+              <strong className={luggageFee > 0 ? "text-amber-700 text-sm font-bold" : "text-slate-600 text-xs"}>
+                {luggageFee > 0 ? formatMoney(luggageFee) : t('cargoFeeEstimatedAtTerminal')}
+              </strong>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <FeaturePlaceholderModal
+        isOpen={showVehicleInfoModal}
+        onClose={() => setShowVehicleInfoModal(false)}
+        title={t('vehicleInfoModalTitle')}
+        message={t('vehicleInfoModalDesc')}
+      />
+
+      <AlertModal
+        isOpen={showCustomerInfoAlert}
+        title={t('errorIncompleteCustomerInfoTitle')}
+        message={customerInfoAlertMessage}
+        variant="warning"
+        confirmText={t('errorIncompleteCustomerInfoAction')}
+        onClose={() => {
+          setShowCustomerInfoAlert(false);
+          customerInfoSectionRef.current?.scrollIntoView?.({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }}
+      />
+
+      <PromotionSelectorModal
+        isOpen={showPromoModal}
+        onClose={() => setShowPromoModal(false)}
+        promotions={availablePromotions}
+        activeCode={activePromotionCode}
+        onSelectPromotion={(code) => {
+          handleApplyPromotion(code);
+        }}
+        onRemovePromotion={() => {
+          handleRemovePromotion();
+        }}
+        isLoading={promotionStatus === 'loading'}
+      />
+    </div>
+  );
+};

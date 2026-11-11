@@ -1,0 +1,331 @@
+'use client';
+
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
+
+import { LoaderCircle } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
+import {
+  ResourceConfirmation,
+  ResourceNotice,
+  ResourceModalDialog,
+  ResourceState,
+} from '@/components/admin/resource-ui';
+import { Button } from '@/components/ui/action-button';
+import { useTranslations } from 'next-intl';
+import {
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+  Field,
+} from '@/components/ui/field';
+import { Checkbox } from '@/components/ui/checkbox';
+import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
+import {
+  TENANT_RBAC_ROLE_NAMES,
+  type TenantRbacRoleName,
+} from '@/features/tenant-rbac/types/tenant-rbac';
+import {
+  AdminAccountApiError,
+  replaceAdminAccountRoles,
+} from '../services/admin-account-service';
+import type { AdminAccount } from '../types/admin-account';
+import type { AdminRbacRole } from '@/features/platform-rbac/types/platform-rbac';
+
+type TenantRoleOption = {
+  roleName: TenantRbacRoleName;
+  label: string;
+};
+
+type RoleOptionsState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; roles: TenantRoleOption[] };
+
+const TENANT_ROLE_SET = new Set<string>(TENANT_RBAC_ROLE_NAMES);
+
+function tenantRoleOptions(catalogRoles: AdminRbacRole[]): TenantRoleOption[] {
+  return catalogRoles.flatMap((role) =>
+    role.scope === 'tenant' &&
+    TENANT_ROLE_SET.has(role.roleName) &&
+    TENANT_RBAC_ROLE_NAMES.includes(role.roleName as TenantRbacRoleName)
+      ? [
+          {
+            roleName: role.roleName as TenantRbacRoleName,
+            label: role.description ?? role.roleName,
+          },
+        ]
+      : [],
+  );
+}
+
+function sameRoleSet(
+  left: readonly TenantRbacRoleName[],
+  right: readonly TenantRbacRoleName[],
+): boolean {
+  return (
+    left.length === right.length && left.every((role) => right.includes(role))
+  );
+}
+
+function requestErrorMessage(
+  error: unknown,
+  fallbackMessage: string,
+  networkErrorMessage: string,
+): string {
+  if (error instanceof TypeError) {
+    return networkErrorMessage;
+  }
+  if (error instanceof AdminAccountApiError || error instanceof Error) {
+    return error.message;
+  }
+  return fallbackMessage;
+}
+
+export function AdminAccountRolesDialog({
+  account,
+  onClose,
+  onSaved,
+}: {
+  account: AdminAccount;
+  onClose: () => void;
+  onSaved: (account: AdminAccount) => void;
+}) {
+  const tAccounts = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
+  const submittingRef = useRef(false);
+  const [roles, setRoles] = useState<RoleOptionsState>({ status: 'loading' });
+  const [selectedRoleNames, setSelectedRoleNames] = useState<
+    TenantRbacRoleName[]
+  >(() => account.roles.filter((role) => TENANT_ROLE_SET.has(role)));
+  const [retryCount, setRetryCount] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [revokeConfirmationOpen, setRevokeConfirmationOpen] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    getDefaultRolePermissions(controller.signal)
+      .then((catalog) => {
+        if (controller.signal.aborted) return;
+        setRoles({
+          status: 'success',
+          roles: tenantRoleOptions(catalog.roles),
+        });
+      })
+      .catch((requestError: unknown) => {
+        if (controller.signal.aborted) return;
+        setRoles({
+          status: 'error',
+          message: requestErrorMessage(
+            requestError,
+            tAccounts('cannotLoadRoles'),
+            tAccounts('networkError'),
+          ),
+        });
+      });
+
+    return () => controller.abort();
+  }, [retryCount]);
+
+  const hasTenantOnlySelection =
+    roles.status === 'success' &&
+    selectedRoleNames.every((name) =>
+      roles.roles.some((role) => role.roleName === name),
+    );
+  const isDirty = !sameRoleSet(account.roles, selectedRoleNames);
+  const canSubmit =
+    roles.status === 'success' &&
+    hasTenantOnlySelection &&
+    isDirty &&
+    !submitting;
+
+  function toggleRole(roleName: TenantRbacRoleName) {
+    setSelectedRoleNames((current) =>
+      current.includes(roleName)
+        ? current.filter((role) => role !== roleName)
+        : [...current, roleName],
+    );
+    setError(null);
+  }
+
+  async function saveRoles(roleNames: readonly TenantRbacRoleName[]) {
+    if (submittingRef.current || roles.status !== 'success') return;
+    if (
+      roleNames.some(
+        (roleName) => !roles.roles.some((role) => role.roleName === roleName),
+      )
+    ) {
+      setError(tAccounts('rolesInvalidReload'));
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const updatedAccount = await replaceAdminAccountRoles(
+        account.accountId,
+        roleNames,
+      );
+      toast.success(
+        roleNames.length === 0
+          ? tAccounts('allRolesRevoked')
+          : tAccounts('rolesUpdated'),
+      );
+      onSaved(updatedAccount);
+    } catch (requestError: unknown) {
+      setError(
+        requestErrorMessage(
+          requestError,
+          tAccounts('cannotUpdateRoles'),
+          tAccounts('networkError'),
+        ),
+      );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) return;
+
+    if (selectedRoleNames.length === 0) {
+      setRevokeConfirmationOpen(true);
+      return;
+    }
+
+    void saveRoles(selectedRoleNames);
+  }
+
+  return (
+    <>
+      <ResourceModalDialog
+        busy={submitting || roles.status === 'loading'}
+        description={tAccounts('assignRolesModalDesc', { name: account.fullName })}
+        preventDismiss={submitting}
+        title={tAccounts('assignRolesModalTitle')}
+        onClose={onClose}
+        size="md"
+      >
+          <ResourceModalForm
+            noValidate
+            onSubmit={handleSubmit}
+            footer={
+              <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
+                <Button
+                  disabled={submitting}
+                  onClick={onClose}
+                  type="button"
+                  variant="outline"
+                >
+                  {tCommon('cancel')}
+                </Button>
+                <Button disabled={!canSubmit} type="submit">
+                  {submitting && (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="motion-safe:animate-spin"
+                      size={16}
+                    />
+                  )}
+                  {submitting ? tAccounts('savingRoles') : tAccounts('saveRoles')}
+                </Button>
+              </div>
+            }
+          >
+            {error && <ResourceNotice kind="error">{error}</ResourceNotice>}
+            {roles.status === 'loading' && (
+              <ResourceState loading>{tCommon('loading')}</ResourceState>
+            )}
+            <FieldSet
+              className="gap-3"
+              disabled={submitting}
+            >
+              <FieldLegend>{tAccounts('tenantRolesLegend')}</FieldLegend>
+              <div className="grid gap-2">
+                {roles.status === 'success' &&
+                  roles.roles.map((role) => {
+                    const checkboxId = `admin-account-role-${account.accountId}-${role.roleName}`;
+                    return (
+                      <Field
+                        className="items-center rounded-lg border p-3"
+                        key={role.roleName}
+                        orientation="horizontal"
+                      >
+                        <Checkbox
+                          checked={selectedRoleNames.includes(role.roleName)}
+                          id={checkboxId}
+                          onCheckedChange={() => toggleRole(role.roleName)}
+                          value={role.roleName}
+                        />
+                        <FieldLabel
+                          className="cursor-pointer"
+                          htmlFor={checkboxId}
+                        >
+                          {role.label}
+                        </FieldLabel>
+                      </Field>
+                    );
+                  })}
+                {roles.status === 'success' && roles.roles.length === 0 && (
+                  <ResourceNotice kind="error">
+                    {tAccounts('noRolesAvailable')}
+                  </ResourceNotice>
+                )}
+              {roles.status === 'error' && (
+                <ResourceNotice kind="error">
+                  <p>{roles.message}</p>
+                  <Button
+                    onClick={() => {
+                      setRoles({ status: 'loading' });
+                      setRetryCount((count) => count + 1);
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    {tAccounts('reloadCatalog')}
+                  </Button>
+                </ResourceNotice>
+              )}
+              </div>
+            </FieldSet>
+          </ResourceModalForm>
+      </ResourceModalDialog>
+
+      {revokeConfirmationOpen && (
+        <ResourceConfirmation
+          busy={submitting}
+          onClose={() => {
+            if (!submittingRef.current) setRevokeConfirmationOpen(false);
+          }}
+          title={tAccounts('revokeAllTitle')}
+          description={tAccounts('revokeAllDesc')}
+        >
+            {error && (
+              <ResourceNotice kind="error">{error}</ResourceNotice>
+            )}
+            <Button
+              aria-busy={submitting}
+              disabled={submitting}
+              onClick={() => void saveRoles([])}
+              type="button"
+            >
+                {submitting && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="motion-safe:animate-spin"
+                    size={15}
+                  />
+                )}
+                {submitting ? tAccounts('revoking') : tAccounts('revokeRoles')}
+            </Button>
+        </ResourceConfirmation>
+      )}
+    </>
+  );
+}

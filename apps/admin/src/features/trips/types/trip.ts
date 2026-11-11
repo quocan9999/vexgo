@@ -1,0 +1,203 @@
+export type TripStatus =
+  'CHUA_KHOI_HANH' | 'DANG_CHAY' | 'HOAN_THANH' | 'DA_HUY';
+
+export const TRIP_STATUSES: readonly TripStatus[] = [
+  'CHUA_KHOI_HANH',
+  'DANG_CHAY',
+  'HOAN_THANH',
+  'DA_HUY',
+];
+
+export type TripSortKey =
+  | 'code'
+  | 'departureDate'
+  | 'departureTime'
+  | 'status'
+  | 'createdAt'
+  | 'updatedAt';
+
+export type SortDirection = 'asc' | 'desc';
+
+export type TripRoute = {
+  routeId: number;
+  code: string;
+  origin: string;
+  destination: string;
+};
+
+export type TripVehicle = {
+  vehicleId: number;
+  licensePlate: string;
+  status: string;
+  vehicleType: {
+    vehicleTypeId: number;
+    name: string;
+  };
+};
+
+export type TripSeatSummary = {
+  total: number;
+  available: number;
+  held: number;
+  booked: number;
+};
+
+export type TripCargoCapacity = {
+  motorbikes: number;
+  bulkyCargo: number;
+  lightCargo: number;
+};
+
+export type Trip = {
+  tripId: number;
+  code: string;
+  departureDate: string;
+  departureTime: string;
+  status: TripStatus;
+  acceptsShipments: boolean;
+  cargoCapacity: TripCargoCapacity;
+  route: TripRoute;
+  vehicle: TripVehicle;
+  seatSummary?: TripSeatSummary;
+  donCount?: number;
+  traCount?: number;
+  nghiCount?: number;
+  thieuDiem?: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TripListQuery = {
+  page: number;
+  pageSize: number;
+  search: string;
+  sortBy: TripSortKey;
+  sortDirection: SortDirection;
+  status?: TripStatus;
+  routeId?: number;
+  vehicleId?: number;
+  departureDate?: string;
+  fromDepartureDate?: string;
+  toDepartureDate?: string;
+  origin?: string;
+  destination?: string;
+  timeRange?: string;
+  departureTime?: string;
+};
+
+export type PaginatedTrips = {
+  data: Trip[];
+  meta: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
+
+export type CreateTripInput = {
+  code?: string;
+  routeId: number;
+  vehicleId: number;
+  departureDate: string;
+  departureTime: string;
+  acceptsShipments: boolean;
+  copyRouteStops?: boolean;
+};
+
+export type UpdateTripInput = {
+  departureDate: string;
+  departureTime: string;
+};
+
+export type TripLookupOption = {
+  id: number;
+  label: string;
+};
+
+export type TripLookupOptionsState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; options: TripLookupOption[] };
+
+export type TripSeatStatus = 'TRONG' | 'DANG_GIU' | 'DA_DAT';
+
+export type TripSeat = {
+  tripSeatId: number;
+  status: TripSeatStatus;
+  seat: {
+    seatId: number;
+    code: string;
+    position: string | null;
+    floor?: number | null;
+    x?: number | null;
+    y?: number | null;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TripSeatsMeta = {
+  tripId: number;
+  total: number;
+  available: number;
+  held: number;
+  booked: number;
+};
+
+export type TripSeatsResponse = {
+  data: TripSeat[];
+  meta: TripSeatsMeta;
+};
+
+export interface ManifestPassenger {
+  veId: number;
+  maVe: string;
+  soGhe: string;
+  hoTen: string;
+  soDienThoai: string;
+  email: string | null;
+  diemDonChuyenXeId?: number | null;
+  diemDonTen: string;
+  diemTraChuyenXeId?: number | null;
+  diemTraTen: string;
+  trangThai: string;
+  giaThucTe: number;
+}
+
+export interface ManifestStopGroup {
+  diemDonTraChuyenXeId: number;
+  diemDonTraId: number;
+  tenDiem: string;
+  diaChi: string;
+  loaiDiem: string;
+  phutLech: number;
+  gioThucTe: string;
+  passengers: ManifestPassenger[];
+}
+
+export interface TripManifestData {
+  trip: {
+    chuyenXeId: number;
+    maChuyenXe: string;
+    ngayKhoiHanh: string;
+    gioKhoiHanh: string;
+    gioDen: string | null;
+    trangThai: string;
+    tuyenXe: {
+      tuyenXeId: number;
+      maTuyenXe: string;
+      diemDi: string;
+      diemDen: string;
+    };
+    xe: {
+      xeId: number;
+      bienSoXe: string;
+      tenLoaiXe: string;
+    };
+  };
+  pickupGroups: ManifestStopGroup[];
+  dropoffGroups: ManifestStopGroup[];
+  unassignedPassengers: ManifestPassenger[];
+  totalPassengers: number;
+}

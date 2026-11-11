@@ -1,0 +1,239 @@
+import { adminApiFetch } from '@/lib/admin-api-client';
+import type {
+  BusCompany,
+  BusCompanyListQuery,
+  PaginatedBusCompanies,
+} from '../types/bus-company';
+import { getApiBaseUrl } from '@/lib/api-url';
+
+export type CreateBusCompanyInput = {
+  code: string;
+  name: string;
+  contactInfo: string | null;
+  status: BusCompany['status'];
+};
+
+export type UpdateBusCompanyInput = Omit<CreateBusCompanyInput, 'status'>;
+
+export type BusCompanyApiErrorDetail = {
+  field: string;
+  message: string;
+};
+
+export class BusCompanyApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly details: BusCompanyApiErrorDetail[] = [],
+  ) {
+    super(message);
+    this.name = 'BusCompanyApiError';
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getErrorMessage(
+  body: unknown,
+  status: number,
+  resource = 'bus operator list',
+) {
+  if (isRecord(body) && typeof body.message === 'string') {
+    return body.message;
+  }
+  return `Unable to load ${resource} (HTTP ${status}).`;
+}
+
+function getApiErrorDetails(body: unknown): BusCompanyApiErrorDetail[] {
+  if (!isRecord(body) || !Array.isArray(body.details)) return [];
+
+  return body.details.flatMap((detail) =>
+    isRecord(detail) &&
+    typeof detail.field === 'string' &&
+    typeof detail.message === 'string'
+      ? [{ field: detail.field, message: detail.message }]
+      : [],
+  );
+}
+
+export async function createBusCompany(
+  input: CreateBusCompanyInput,
+): Promise<BusCompany> {
+  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/bus-companies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Unable to create bus operator (HTTP ${response.status}).`;
+    const code =
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : undefined;
+
+    throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API returned invalid bus operator data.');
+  }
+
+  return body.data as unknown as BusCompany;
+}
+
+export async function updateBusCompany(
+  busCompanyId: number,
+  input: UpdateBusCompanyInput,
+): Promise<BusCompany> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Unable to update bus operator (HTTP ${response.status}).`;
+    const code =
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : undefined;
+
+    throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API returned invalid bus operator data.');
+  }
+
+  return body.data as unknown as BusCompany;
+}
+
+export async function updateBusCompanyStatus(
+  busCompanyId: number,
+  status: BusCompany['status'],
+): Promise<BusCompany> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Unable to update bus operator status (HTTP ${response.status}).`;
+    const code =
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : undefined;
+
+    throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API returned invalid bus operator data.');
+  }
+
+  return body.data as unknown as BusCompany;
+}
+
+export async function getBusCompanies(
+  query: BusCompanyListQuery,
+  signal?: AbortSignal,
+): Promise<PaginatedBusCompanies> {
+  const searchParams = new URLSearchParams({
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+    search: query.search,
+    sortBy: query.sortBy,
+    sortDirection: query.sortDirection,
+  });
+  if (query.status) searchParams.set('status', query.status);
+  if (query.createdFrom) {
+    searchParams.set('createdFrom', query.createdFrom);
+  }
+  if (query.createdTo) {
+    searchParams.set('createdTo', query.createdTo);
+  }
+
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/bus-companies?${searchParams.toString()}`,
+    { cache: 'no-store', signal },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(body, response.status));
+  }
+  if (!isRecord(body) || !Array.isArray(body.data) || !isRecord(body.meta)) {
+    throw new Error('API returned invalid bus operator data.');
+  }
+
+  return body as unknown as PaginatedBusCompanies;
+}
+
+const BUS_COMPANY_FILTER_PAGE_SIZE = 100;
+
+export type BusCompanyFilterOption = { id: number; label: string };
+
+export async function getBusCompanyFilterOptions(
+  signal?: AbortSignal,
+): Promise<BusCompanyFilterOption[]> {
+  const query: BusCompanyListQuery = {
+    search: '', page: 1, pageSize: BUS_COMPANY_FILTER_PAGE_SIZE,
+    sortBy: 'name', sortDirection: 'asc',
+  };
+  const firstPage = await getBusCompanies(query, signal);
+  const { totalPages } = firstPage.meta;
+  if (!Number.isSafeInteger(totalPages) || totalPages < 0) {
+    throw new Error('API returned invalid operator filter pagination.');
+  }
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+      getBusCompanies({ ...query, page: index + 2 }, signal),
+    ),
+  );
+  return [firstPage, ...remainingPages].flatMap((page) => page.data).map((company) => ({
+    id: company.busCompanyId,
+    label: `${company.name} (${company.code})`,
+  }));
+}
+
+export async function getBusCompanyById(
+  busCompanyId: number,
+  signal?: AbortSignal,
+): Promise<BusCompany> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}`,
+    { cache: 'no-store', signal },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(body, response.status, 'bus operator details'));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API returned invalid bus operator details.');
+  }
+
+  return body.data as unknown as BusCompany;
+}

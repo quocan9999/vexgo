@@ -1,0 +1,369 @@
+/* eslint-disable */
+'use client';
+
+import { useState } from 'react';
+import {
+  ArrowRightLeft,
+  Bus,
+  CalendarDays,
+  MapPin,
+  PackageCheck,
+  Search,
+  Users,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/button';
+import { LocationPicker } from '@/features/locations/components/location-picker';
+import type { LocationOption } from '@/features/locations/services/locations.api';
+import { AlertModal } from '@/components/ui/alert-modal';
+
+export function TripSearchForm({ compact = false }: { compact?: boolean }) {
+  const router = useRouter();
+  const t = useTranslations('trips');
+  const tBooking = useTranslations('booking');
+  const [service, setService] = useState<'trip' | 'shipment'>('trip');
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
+  const [fromOption, setFromOption] = useState<LocationOption | null>(null);
+  const [toOption, setToOption] = useState<LocationOption | null>(null);
+  const [date, setDate] = useState(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
+      new Date(),
+    ),
+  );
+  const [returnDate, setReturnDate] = useState('');
+  const [passengers, setPassengers] = useState(1);
+  const [roundTrip, setRoundTrip] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+  }>({
+    isOpen: false,
+    title: '',
+  });
+
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(new Date());
+
+  const handleDateChange = (newDate: string) => {
+    if (newDate && newDate < todayStr) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errDepartDatePast'),
+      });
+      setDate(todayStr);
+      if (roundTrip && returnDate && returnDate < todayStr) {
+        setReturnDate(todayStr);
+      }
+      return;
+    }
+    setDate(newDate);
+    if (roundTrip && returnDate && newDate > returnDate) {
+      setReturnDate(newDate);
+    }
+  };
+
+  const handleReturnDateChange = (newDate: string) => {
+    const minDate = date && date >= todayStr ? date : todayStr;
+    if (newDate && newDate < todayStr) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errReturnDatePast'),
+      });
+      setReturnDate(minDate);
+      return;
+    }
+    if (date && newDate && date > newDate) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errReturnDateBeforeDepart'),
+      });
+      setReturnDate(minDate);
+      return;
+    }
+    setReturnDate(newDate);
+  };
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (service === 'shipment') {
+      if (!origin && !destination) {
+        setAlertConfig({
+          isOpen: true,
+          title: t('errSenderReceiverBothRequired'),
+        });
+        return;
+      }
+      if (!origin) {
+        setAlertConfig({
+          isOpen: true,
+          title: t('errSenderPointRequired'),
+        });
+        return;
+      }
+      if (!destination) {
+        setAlertConfig({
+          isOpen: true,
+          title: t('errReceiverPointRequired'),
+        });
+        return;
+      }
+      if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
+        setAlertConfig({
+          isOpen: true,
+          title: t('errSameSenderReceiver'),
+        });
+        return;
+      }
+      router.push(
+        `/shipments/new?${new URLSearchParams({ from: origin, to: destination, date }).toString()}`,
+      );
+      return;
+    }
+
+    if (!origin && !destination) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errOriginDestBothRequired'),
+      });
+      return;
+    }
+    if (!origin) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errOriginRequired'),
+      });
+      return;
+    }
+    if (!destination) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errDestRequired'),
+      });
+      return;
+    }
+    if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errSameOriginDest'),
+      });
+      return;
+    }
+
+    if (!date || date < todayStr) {
+      setAlertConfig({
+        isOpen: true,
+        title: t('errDepartDatePast'),
+      });
+      setDate(todayStr);
+      return;
+    }
+    if (roundTrip) {
+      if (!returnDate) {
+        setAlertConfig({ isOpen: true, title: t('errReturnDateRequired') });
+        return;
+      }
+      if (returnDate < todayStr) {
+        setAlertConfig({
+          isOpen: true,
+          title: t('errReturnDatePast'),
+        });
+        setReturnDate(date || todayStr);
+        return;
+      }
+      if (date && returnDate && date > returnDate) {
+        setAlertConfig({
+          isOpen: true,
+          title: t('errReturnDateBeforeDepart'),
+        });
+        return;
+      }
+    }
+    const params = new URLSearchParams({
+      from: origin,
+      to: destination,
+      date,
+      passengers: String(passengers),
+    });
+    if (fromOption?.kind === 'station' && fromOption.diemDonTraId) {
+      params.set('fromStationId', String(fromOption.diemDonTraId));
+    } else if (fromOption?.diaDiemId) {
+      params.set('fromLocationId', String(fromOption.diaDiemId));
+    }
+    if (toOption?.kind === 'station' && toOption.diemDonTraId) {
+      params.set('toStationId', String(toOption.diemDonTraId));
+    } else if (toOption?.diaDiemId) {
+      params.set('toLocationId', String(toOption.diaDiemId));
+    }
+    if (roundTrip && returnDate) params.set('returnDate', returnDate);
+    router.push(`/trips?${params.toString()}`);
+  };
+
+  return (
+    <>
+      <form
+        onSubmit={submit}
+        className={`rounded-lg border border-slate-200 bg-white p-4 text-slate-900 shadow-xl md:p-5 ${compact ? 'shadow-sm' : ''}`}
+      >
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center">
+          <div className="inline-flex w-fit rounded-lg bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setService('trip')}
+              className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-extrabold transition ${service === 'trip' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              <Bus className="size-4" /> {tBooking('tabBus')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setService('shipment')}
+              className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-extrabold transition ${service === 'shipment' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              <PackageCheck className="size-4" /> {tBooking('tabFreight')}
+            </button>
+          </div>
+          <div className="flex items-center gap-6 pr-2 text-xs font-bold text-slate-500 md:pr-4">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tripType"
+                checked={!roundTrip}
+                onChange={() => setRoundTrip(false)}
+                className="size-4 accent-brand"
+              />{' '}
+              {tBooking('oneWay')}
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tripType"
+                checked={roundTrip}
+                onChange={() => setRoundTrip(true)}
+                className="size-4 accent-brand"
+              />{' '}
+              {tBooking('roundTrip')}
+            </label>
+          </div>
+        </div>
+        <div className="grid gap-3 pt-4 lg:grid-cols-[1fr_auto_1fr_1fr_112px_auto] lg:items-end">
+          <div className="space-y-1.5">
+            <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
+              <MapPin className="size-3.5 text-brand" /> {tBooking('origin')}
+            </span>
+            <LocationPicker
+              value={origin}
+              onChange={setOrigin}
+              onSelectOption={setFromOption}
+              placeholder={tBooking('originPlaceholder')}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOrigin(destination);
+              setDestination(origin);
+              const temp = fromOption;
+              setFromOption(toOption);
+              setToOption(temp);
+            }}
+            aria-label={tBooking('swapRoutes')}
+            className="hidden size-11 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-brand transition hover:bg-slate-100 lg:grid"
+          >
+            <ArrowRightLeft className="size-5" />
+          </button>
+          <div className="space-y-1.5">
+            <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
+              <MapPin className="size-3.5 text-rose-500" /> {tBooking('destination')}
+            </span>
+            <LocationPicker
+              value={destination}
+              onChange={setDestination}
+              onSelectOption={setToOption}
+              placeholder={tBooking('destinationPlaceholder')}
+            />
+          </div>
+          <label className="space-y-1.5">
+            <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
+              <CalendarDays className="size-3.5 text-brand" /> {tBooking('departureDate')}
+            </span>
+            <input
+              type="date"
+              min={todayStr}
+              value={date || todayStr}
+              onChange={(event) => handleDateChange(event.target.value)}
+              onBlur={(e) => {
+                if (e.target.value && e.target.value < todayStr) {
+                  setAlertConfig({
+                    isOpen: true,
+                    title: tBooking('departureDatePastError'),
+                  });
+                  setDate(todayStr);
+                }
+              }}
+              className="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
+              <Users className="size-3.5 text-brand" /> {tBooking('ticketQuantity')}
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={passengers}
+              onChange={(event) =>
+                setPassengers(Math.max(1, Number(event.target.value) || 1))
+              }
+              className="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+            />
+          </label>
+          <Button variant="accent" className="h-12 rounded-lg px-6">
+            <Search className="size-4" /> {tBooking('searchBuses')}
+          </Button>
+        </div>
+        {roundTrip ? (
+          <div className="mt-3 max-w-xs">
+            <label className="space-y-1.5">
+              <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase text-slate-500">
+                <CalendarDays className="size-3.5 text-brand" /> {tBooking('returnDate')}
+              </span>
+              <input
+                type="date"
+                min={date && date >= todayStr ? date : todayStr}
+                value={returnDate}
+                onChange={(event) => handleReturnDateChange(event.target.value)}
+                onBlur={(e) => {
+                  const minDate = date && date >= todayStr ? date : todayStr;
+                  if (e.target.value && e.target.value < todayStr) {
+                    setAlertConfig({
+                      isOpen: true,
+                      title: tBooking('returnDatePastError'),
+                    });
+                    setReturnDate(minDate);
+                  } else if (date && e.target.value && date > e.target.value) {
+                    setAlertConfig({
+                      isOpen: true,
+                      title: tBooking('returnDateBeforeDepError'),
+                    });
+                    setReturnDate(minDate);
+                  }
+                }}
+                className="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+              />
+            </label>
+          </div>
+        ) : null}
+      </form>
+      <AlertModal
+        isOpen={alertConfig.isOpen}
+        title={alertConfig.title}
+        variant="warning"
+        confirmText={tBooking('btnUnderstood')}
+        onClose={() => setAlertConfig({ isOpen: false, title: '' })}
+      />
+    </>
+  );
+}

@@ -1,0 +1,398 @@
+import 'reflect-metadata';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
+import { Prisma } from '../../../src/generated/prisma/client.js';
+import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { CreateVehicleSeatDto } from '../../../src/vehicles/dto/create-vehicle-seat.dto.js';
+import { UpdateVehicleSeatDto } from '../../../src/vehicles/dto/update-vehicle-seat.dto.js';
+import { VehiclesService } from '../../../src/vehicles/vehicles.service.js';
+
+const seatRecord = {
+  gheId: 101,
+  maGhe: 'f6393ceced3348a98bcb0711319d1fa1',
+  tenGhe: 'A01',
+  soGhe: 'A01',
+  viTri: 'Tầng dưới',
+  tang: 1,
+  toaDoX: 10,
+  toaDoY: 20,
+  xeId: 12,
+  createdAt: new Date('2026-09-25T10:00:00.000Z'),
+  updatedAt: new Date('2026-09-25T11:00:00.000Z'),
+};
+
+const prisma = {
+  xe: { findUnique: vi.fn(), findFirst: vi.fn() },
+  ghe: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  gheChuyenXe: { count: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
+} as unknown as PrismaService;
+
+const tenantAdmin: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 1,
+};
+const tenantEmployee: AuthPrincipal = {
+  ...tenantAdmin,
+  taiKhoanId: 8,
+  sessionId: 'employee-session',
+  roles: ['NHAN_VIEN_PHU_XE'],
+  nhanVienId: 10,
+};
+const rawService = new VehiclesService(prisma);
+const service = {
+  findSeats: (vehicleId: number, principal = tenantAdmin) =>
+    rawService.findSeats(vehicleId, principal),
+  createSeat: (
+    vehicleId: number,
+    input: CreateVehicleSeatDto,
+    principal = tenantAdmin,
+  ) => rawService.createSeat(vehicleId, input, principal),
+  updateSeat: (
+    vehicleId: number,
+    seatId: number,
+    input: UpdateVehicleSeatDto,
+    principal = tenantAdmin,
+  ) => rawService.updateSeat(vehicleId, seatId, input, principal),
+  deleteSeat: (vehicleId: number, seatId: number, principal = tenantAdmin) =>
+    rawService.deleteSeat(vehicleId, seatId, principal),
+};
+
+function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
+  return new Prisma.PrismaClientKnownRequestError('Prisma request failed', {
+    code,
+    clientVersion: 'test',
+    meta,
+  });
+}
+
+function createInput(overrides: Partial<CreateVehicleSeatDto> = {}) {
+  return Object.assign(new CreateVehicleSeatDto(), {
+    seatNumber: 'A01',
+    position: 'Tầng dưới',
+    ...overrides,
+  });
+}
+
+function updateInput(overrides: Partial<UpdateVehicleSeatDto> = {}) {
+  return Object.assign(new UpdateVehicleSeatDto(), {
+    seatNumber: 'A02',
+    position: 'Tầng trên',
+    ...overrides,
+  });
+}
+
+describe('VehiclesService vehicle seats', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback) => callback(prisma as never),
+    );
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ xeId: 12 }] as never);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValue({ xeId: 12 } as never);
+    vi.mocked(prisma.ghe.findMany).mockResolvedValue([seatRecord] as never);
+    vi.mocked(prisma.ghe.create).mockResolvedValue(seatRecord as never);
+    vi.mocked(prisma.ghe.findFirst).mockResolvedValue({
+      gheId: 101,
+      maGhe: 'f6393ceced3348a98bcb0711319d1fa1',
+      tenGhe: 'A01',
+      soGhe: 'A01',
+      tang: 1,
+    } as never);
+    vi.mocked(prisma.ghe.update).mockResolvedValue({
+      ...seatRecord,
+      tenGhe: 'A02',
+      soGhe: 'A02',
+      viTri: 'Tầng trên',
+    } as never);
+    vi.mocked(prisma.ghe.delete).mockResolvedValue(seatRecord as never);
+    vi.mocked(prisma.gheChuyenXe.count).mockResolvedValue(0);
+  });
+
+  it('checks vehicle existence before listing and returns stable seat order with mapped fields', async () => {
+    const result = await service.findSeats(12);
+
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith({
+      where: { xeId: 12, nhaXeId: 1 },
+      select: { xeId: true },
+    });
+    expect(prisma.ghe.findMany).toHaveBeenCalledWith({
+      where: { xeId: 12 },
+      orderBy: { tenGhe: 'asc' },
+      select: expect.any(Object),
+    });
+    expect(result).toEqual({
+      data: [
+        {
+          seatId: 101,
+          seatCode: 'f6393ceced3348a98bcb0711319d1fa1',
+          seatNumber: 'A01',
+          position: 'Tầng dưới',
+          vehicleId: 12,
+          floor: 1,
+          x: 10,
+          y: 20,
+          createdAt: '2026-09-25T10:00:00.000Z',
+          updatedAt: '2026-09-25T11:00:00.000Z',
+        },
+      ],
+      meta: { totalItems: 1 },
+    });
+  });
+
+  it('scopes employee seat reads to the employee principal tenant', async () => {
+    await service.findSeats(12, tenantEmployee);
+
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith({
+      where: { xeId: 12, nhaXeId: 1 },
+      select: { xeId: true },
+    });
+    expect(prisma.ghe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { xeId: 12 } }),
+    );
+  });
+
+  it('returns an empty list for an existing vehicle without querying a count', async () => {
+    vi.mocked(prisma.ghe.findMany).mockResolvedValueOnce([] as never);
+
+    await expect(service.findSeats(12)).resolves.toEqual({
+      data: [],
+      meta: { totalItems: 0 },
+    });
+  });
+
+  it('returns VEHICLE_NOT_FOUND before listing seats for a missing vehicle', async () => {
+    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
+
+    const error = await service.findSeats(999).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect((error as NotFoundException).getResponse()).toEqual({
+      error: 'VEHICLE_NOT_FOUND',
+      message: 'Không tìm thấy xe.',
+    });
+    expect(prisma.ghe.findMany).not.toHaveBeenCalled();
+  });
+
+  it('creates a root seat with the vehicle ID and maps the response', async () => {
+    const result = await service.createSeat(12, createInput());
+
+    expect(prisma.ghe.create).toHaveBeenCalledWith({
+      data: {
+        xeId: 12,
+        maGhe: expect.any(String),
+        tenGhe: 'A01',
+        viTri: 'Tầng dưới',
+        tang: 1,
+        toaDoX: null,
+        toaDoY: null,
+      },
+      select: expect.any(Object),
+    });
+    expect(result.data).toMatchObject({ seatId: 101, vehicleId: 12 });
+  });
+
+  it('validates employee seat writes against the trusted tenant vehicle', async () => {
+    await service.createSeat(12, createInput(), tenantEmployee);
+
+    expect(prisma.$queryRaw).toHaveBeenCalledOnce();
+    expect(vi.mocked(prisma.$queryRaw).mock.calls[0]?.slice(1)).toEqual([12, 1]);
+    expect(prisma.ghe.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          xeId: 12,
+          maGhe: expect.any(String),
+          tenGhe: 'A01',
+          viTri: 'Tầng dưới',
+          tang: 1,
+          toaDoX: null,
+          toaDoY: null,
+        },
+      }),
+    );
+  });
+
+  it('stores blank position as null', async () => {
+    await service.createSeat(12, createInput({ position: '  ' }));
+
+    expect(prisma.ghe.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          xeId: 12,
+          maGhe: expect.any(String),
+          tenGhe: 'A01',
+          viTri: null,
+          tang: 1,
+          toaDoX: null,
+          toaDoY: null,
+        },
+      }),
+    );
+  });
+
+  it('returns VEHICLE_NOT_FOUND before creating a seat', async () => {
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([] as never);
+
+    await expect(service.createSeat(999, createInput())).rejects.toMatchObject({
+      response: { error: 'VEHICLE_NOT_FOUND' },
+    });
+    expect(prisma.ghe.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { target: ['xeId', 'tenGhe'] },
+    { target: 'Ghe_index_1' },
+    {
+      driverAdapterError: {
+        cause: {
+          kind: 'UniqueConstraintViolation',
+          constraint: { index: 'Ghe_index_1' },
+        },
+      },
+    },
+  ])('maps the vehicle-scoped duplicate index to a seat number conflict', async (meta) => {
+    vi.mocked(prisma.ghe.create).mockRejectedValueOnce(
+      prismaKnownError('P2002', meta),
+    );
+
+    const error = await service
+      .createSeat(12, createInput())
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'VEHICLE_SEAT_NUMBER_EXISTS',
+      message: 'Số ghế đã tồn tại trên xe này.',
+    });
+  });
+
+  it('does not convert an unrelated P2002 into a seat conflict', async () => {
+    const prismaError = prismaKnownError('P2002', { target: ['otherField'] });
+    vi.mocked(prisma.ghe.create).mockRejectedValueOnce(prismaError);
+
+    await expect(service.createSeat(12, createInput())).rejects.toBe(prismaError);
+  });
+
+  it('updates a seat only after confirming it belongs to the requested vehicle', async () => {
+    await service.updateSeat(12, 101, updateInput());
+
+    expect(prisma.ghe.findFirst).toHaveBeenCalledWith({
+      where: { gheId: 101, xeId: 12 },
+      select: { gheId: true },
+    });
+    expect(prisma.ghe.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          gheId: 101,
+          xeId: 12,
+          gheChuyenXes: { none: {} },
+        },
+        data: { tenGhe: 'A02', viTri: 'Tầng trên' },
+      }),
+    );
+    expect(vi.mocked(prisma.ghe.update).mock.calls[0][0].data).not.toHaveProperty(
+      'xeId',
+    );
+  });
+
+  it('returns VEHICLE_NOT_FOUND first when updating under a missing vehicle', async () => {
+    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
+
+    await expect(service.updateSeat(999, 101, updateInput())).rejects.toMatchObject({
+      response: { error: 'VEHICLE_NOT_FOUND' },
+    });
+    expect(prisma.ghe.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('returns VEHICLE_SEAT_NOT_FOUND for a missing or differently owned seat', async () => {
+    vi.mocked(prisma.ghe.findFirst).mockResolvedValueOnce(null);
+
+    await expect(service.updateSeat(12, 999, updateInput())).rejects.toMatchObject({
+      response: { error: 'VEHICLE_SEAT_NOT_FOUND' },
+    });
+    expect(prisma.ghe.update).not.toHaveBeenCalled();
+  });
+
+  it('allows keeping the current seat number', async () => {
+    await service.updateSeat(12, 101, updateInput({ seatNumber: 'A01' }));
+
+    expect(prisma.ghe.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { tenGhe: 'A01', viTri: 'Tầng trên' } }),
+    );
+  });
+
+  it('maps duplicate seat numbers during update to VEHICLE_SEAT_NUMBER_EXISTS', async () => {
+    vi.mocked(prisma.ghe.update).mockRejectedValueOnce(
+      prismaKnownError('P2002', { target: ['xeId', 'tenGhe'] }),
+    );
+
+    await expect(service.updateSeat(12, 101, updateInput())).rejects.toMatchObject({
+      response: { error: 'VEHICLE_SEAT_NUMBER_EXISTS' },
+    });
+  });
+
+  it('rejects updating a seat already referenced by a trip', async () => {
+    vi.mocked(prisma.gheChuyenXe.count).mockResolvedValueOnce(1);
+
+    await expect(service.updateSeat(12, 101, updateInput())).rejects.toMatchObject({
+      response: { error: 'VEHICLE_SEAT_IN_USE' },
+    });
+    expect(prisma.ghe.update).not.toHaveBeenCalled();
+  });
+
+  it('rechecks ownership when the atomic unused-seat update no longer matches', async () => {
+    vi.mocked(prisma.ghe.update).mockRejectedValueOnce(prismaKnownError('P2025'));
+
+    await expect(service.updateSeat(12, 101, updateInput())).rejects.toMatchObject({
+      response: { error: 'VEHICLE_SEAT_IN_USE' },
+    });
+    expect(prisma.ghe.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('deletes an unused seat for the requested vehicle', async () => {
+    await expect(service.deleteSeat(12, 101)).resolves.toBeUndefined();
+
+    expect(prisma.ghe.delete).toHaveBeenCalledWith({
+      where: { gheId: 101, xeId: 12 },
+      select: { gheId: true },
+    });
+  });
+
+  it('rejects deleting a seat already referenced by a trip', async () => {
+    vi.mocked(prisma.gheChuyenXe.count).mockResolvedValueOnce(1);
+
+    await expect(service.deleteSeat(12, 101)).rejects.toMatchObject({
+      response: { error: 'VEHICLE_SEAT_IN_USE' },
+    });
+    expect(prisma.ghe.delete).not.toHaveBeenCalled();
+  });
+
+  it('maps a delete-time foreign key race to VEHICLE_SEAT_IN_USE', async () => {
+    vi.mocked(prisma.ghe.delete).mockRejectedValueOnce(prismaKnownError('P2003'));
+
+    await expect(service.deleteSeat(12, 101)).rejects.toMatchObject({
+      response: { error: 'VEHICLE_SEAT_IN_USE' },
+    });
+  });
+
+  it('returns VEHICLE_SEAT_NOT_FOUND when delete no longer finds the owned seat', async () => {
+    vi.mocked(prisma.ghe.findFirst).mockResolvedValueOnce(null);
+
+    await expect(service.deleteSeat(12, 101)).rejects.toMatchObject({
+      response: { error: 'VEHICLE_SEAT_NOT_FOUND' },
+    });
+    expect(prisma.ghe.delete).not.toHaveBeenCalled();
+  });
+});

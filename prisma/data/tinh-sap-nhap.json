@@ -1,0 +1,589 @@
+[
+  {
+    "newProvinceCode": 1,
+    "newProvinceName": "Thành phố Hà Nội",
+    "oldProvinceCodes": [
+      1
+    ],
+    "oldProvinces": [
+      {
+        "code": 1,
+        "name": "Thành phố Hà Nội"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 4,
+    "newProvinceName": "Tỉnh Cao Bằng",
+    "oldProvinceCodes": [
+      4
+    ],
+    "oldProvinces": [
+      {
+        "code": 4,
+        "name": "Tỉnh Cao Bằng"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 8,
+    "newProvinceName": "Tỉnh Tuyên Quang",
+    "oldProvinceCodes": [
+      2,
+      8
+    ],
+    "oldProvinces": [
+      {
+        "code": 2,
+        "name": "Tỉnh Hà Giang"
+      },
+      {
+        "code": 8,
+        "name": "Tỉnh Tuyên Quang"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 11,
+    "newProvinceName": "Tỉnh Điện Biên",
+    "oldProvinceCodes": [
+      11
+    ],
+    "oldProvinces": [
+      {
+        "code": 11,
+        "name": "Tỉnh Điện Biên"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 12,
+    "newProvinceName": "Tỉnh Lai Châu",
+    "oldProvinceCodes": [
+      12
+    ],
+    "oldProvinces": [
+      {
+        "code": 12,
+        "name": "Tỉnh Lai Châu"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 14,
+    "newProvinceName": "Tỉnh Sơn La",
+    "oldProvinceCodes": [
+      14
+    ],
+    "oldProvinces": [
+      {
+        "code": 14,
+        "name": "Tỉnh Sơn La"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 15,
+    "newProvinceName": "Tỉnh Lào Cai",
+    "oldProvinceCodes": [
+      10,
+      15
+    ],
+    "oldProvinces": [
+      {
+        "code": 10,
+        "name": "Tỉnh Lào Cai"
+      },
+      {
+        "code": 15,
+        "name": "Tỉnh Yên Bái"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 19,
+    "newProvinceName": "Tỉnh Thái Nguyên",
+    "oldProvinceCodes": [
+      6,
+      19
+    ],
+    "oldProvinces": [
+      {
+        "code": 6,
+        "name": "Tỉnh Bắc Kạn"
+      },
+      {
+        "code": 19,
+        "name": "Tỉnh Thái Nguyên"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 20,
+    "newProvinceName": "Tỉnh Lạng Sơn",
+    "oldProvinceCodes": [
+      20
+    ],
+    "oldProvinces": [
+      {
+        "code": 20,
+        "name": "Tỉnh Lạng Sơn"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 22,
+    "newProvinceName": "Tỉnh Quảng Ninh",
+    "oldProvinceCodes": [
+      22
+    ],
+    "oldProvinces": [
+      {
+        "code": 22,
+        "name": "Tỉnh Quảng Ninh"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 24,
+    "newProvinceName": "Tỉnh Bắc Ninh",
+    "oldProvinceCodes": [
+      24,
+      27
+    ],
+    "oldProvinces": [
+      {
+        "code": 24,
+        "name": "Tỉnh Bắc Giang"
+      },
+      {
+        "code": 27,
+        "name": "Tỉnh Bắc Ninh"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 25,
+    "newProvinceName": "Tỉnh Phú Thọ",
+    "oldProvinceCodes": [
+      17,
+      25,
+      26
+    ],
+    "oldProvinces": [
+      {
+        "code": 17,
+        "name": "Tỉnh Hoà Bình"
+      },
+      {
+        "code": 25,
+        "name": "Tỉnh Phú Thọ"
+      },
+      {
+        "code": 26,
+        "name": "Tỉnh Vĩnh Phúc"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 31,
+    "newProvinceName": "Thành phố Hải Phòng",
+    "oldProvinceCodes": [
+      30,
+      31
+    ],
+    "oldProvinces": [
+      {
+        "code": 30,
+        "name": "Tỉnh Hải Dương"
+      },
+      {
+        "code": 31,
+        "name": "Thành phố Hải Phòng"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 33,
+    "newProvinceName": "Tỉnh Hưng Yên",
+    "oldProvinceCodes": [
+      33,
+      34
+    ],
+    "oldProvinces": [
+      {
+        "code": 33,
+        "name": "Tỉnh Hưng Yên"
+      },
+      {
+        "code": 34,
+        "name": "Tỉnh Thái Bình"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 37,
+    "newProvinceName": "Tỉnh Ninh Bình",
+    "oldProvinceCodes": [
+      35,
+      36,
+      37
+    ],
+    "oldProvinces": [
+      {
+        "code": 35,
+        "name": "Tỉnh Hà Nam"
+      },
+      {
+        "code": 36,
+        "name": "Tỉnh Nam Định"
+      },
+      {
+        "code": 37,
+        "name": "Tỉnh Ninh Bình"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 38,
+    "newProvinceName": "Tỉnh Thanh Hóa",
+    "oldProvinceCodes": [
+      38
+    ],
+    "oldProvinces": [
+      {
+        "code": 38,
+        "name": "Tỉnh Thanh Hóa"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 40,
+    "newProvinceName": "Tỉnh Nghệ An",
+    "oldProvinceCodes": [
+      40
+    ],
+    "oldProvinces": [
+      {
+        "code": 40,
+        "name": "Tỉnh Nghệ An"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 42,
+    "newProvinceName": "Tỉnh Hà Tĩnh",
+    "oldProvinceCodes": [
+      42
+    ],
+    "oldProvinces": [
+      {
+        "code": 42,
+        "name": "Tỉnh Hà Tĩnh"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 44,
+    "newProvinceName": "Tỉnh Quảng Trị",
+    "oldProvinceCodes": [
+      44,
+      45
+    ],
+    "oldProvinces": [
+      {
+        "code": 44,
+        "name": "Tỉnh Quảng Bình"
+      },
+      {
+        "code": 45,
+        "name": "Tỉnh Quảng Trị"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 46,
+    "newProvinceName": "Thành phố Huế",
+    "oldProvinceCodes": [
+      46
+    ],
+    "oldProvinces": [
+      {
+        "code": 46,
+        "name": "Thành phố Huế"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 48,
+    "newProvinceName": "Thành phố Đà Nẵng",
+    "oldProvinceCodes": [
+      48,
+      49
+    ],
+    "oldProvinces": [
+      {
+        "code": 48,
+        "name": "Thành phố Đà Nẵng"
+      },
+      {
+        "code": 49,
+        "name": "Tỉnh Quảng Nam"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 51,
+    "newProvinceName": "Tỉnh Quảng Ngãi",
+    "oldProvinceCodes": [
+      51,
+      62
+    ],
+    "oldProvinces": [
+      {
+        "code": 51,
+        "name": "Tỉnh Quảng Ngãi"
+      },
+      {
+        "code": 62,
+        "name": "Tỉnh Kon Tum"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 52,
+    "newProvinceName": "Tỉnh Gia Lai",
+    "oldProvinceCodes": [
+      52,
+      64
+    ],
+    "oldProvinces": [
+      {
+        "code": 52,
+        "name": "Tỉnh Bình Định"
+      },
+      {
+        "code": 64,
+        "name": "Tỉnh Gia Lai"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 56,
+    "newProvinceName": "Tỉnh Khánh Hòa",
+    "oldProvinceCodes": [
+      56,
+      58
+    ],
+    "oldProvinces": [
+      {
+        "code": 56,
+        "name": "Tỉnh Khánh Hòa"
+      },
+      {
+        "code": 58,
+        "name": "Tỉnh Ninh Thuận"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 66,
+    "newProvinceName": "Tỉnh Đắk Lắk",
+    "oldProvinceCodes": [
+      54,
+      66
+    ],
+    "oldProvinces": [
+      {
+        "code": 54,
+        "name": "Tỉnh Phú Yên"
+      },
+      {
+        "code": 66,
+        "name": "Tỉnh Đắk Lắk"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 68,
+    "newProvinceName": "Tỉnh Lâm Đồng",
+    "oldProvinceCodes": [
+      60,
+      67,
+      68
+    ],
+    "oldProvinces": [
+      {
+        "code": 60,
+        "name": "Tỉnh Bình Thuận"
+      },
+      {
+        "code": 67,
+        "name": "Tỉnh Đắk Nông"
+      },
+      {
+        "code": 68,
+        "name": "Tỉnh Lâm Đồng"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 75,
+    "newProvinceName": "Tỉnh Đồng Nai",
+    "oldProvinceCodes": [
+      70,
+      75
+    ],
+    "oldProvinces": [
+      {
+        "code": 70,
+        "name": "Tỉnh Bình Phước"
+      },
+      {
+        "code": 75,
+        "name": "Tỉnh Đồng Nai"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 79,
+    "newProvinceName": "Thành phố Hồ Chí Minh",
+    "oldProvinceCodes": [
+      74,
+      77,
+      79
+    ],
+    "oldProvinces": [
+      {
+        "code": 74,
+        "name": "Tỉnh Bình Dương"
+      },
+      {
+        "code": 77,
+        "name": "Tỉnh Bà Rịa - Vũng Tàu"
+      },
+      {
+        "code": 79,
+        "name": "Thành phố Hồ Chí Minh"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 80,
+    "newProvinceName": "Tỉnh Tây Ninh",
+    "oldProvinceCodes": [
+      72,
+      80
+    ],
+    "oldProvinces": [
+      {
+        "code": 72,
+        "name": "Tỉnh Tây Ninh"
+      },
+      {
+        "code": 80,
+        "name": "Tỉnh Long An"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 82,
+    "newProvinceName": "Tỉnh Đồng Tháp",
+    "oldProvinceCodes": [
+      82,
+      87
+    ],
+    "oldProvinces": [
+      {
+        "code": 82,
+        "name": "Tỉnh Tiền Giang"
+      },
+      {
+        "code": 87,
+        "name": "Tỉnh Đồng Tháp"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 86,
+    "newProvinceName": "Tỉnh Vĩnh Long",
+    "oldProvinceCodes": [
+      83,
+      84,
+      86
+    ],
+    "oldProvinces": [
+      {
+        "code": 83,
+        "name": "Tỉnh Bến Tre"
+      },
+      {
+        "code": 84,
+        "name": "Tỉnh Trà Vinh"
+      },
+      {
+        "code": 86,
+        "name": "Tỉnh Vĩnh Long"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 91,
+    "newProvinceName": "Tỉnh An Giang",
+    "oldProvinceCodes": [
+      89,
+      91
+    ],
+    "oldProvinces": [
+      {
+        "code": 89,
+        "name": "Tỉnh An Giang"
+      },
+      {
+        "code": 91,
+        "name": "Tỉnh Kiên Giang"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 92,
+    "newProvinceName": "Thành phố Cần Thơ",
+    "oldProvinceCodes": [
+      92,
+      93,
+      94
+    ],
+    "oldProvinces": [
+      {
+        "code": 92,
+        "name": "Thành phố Cần Thơ"
+      },
+      {
+        "code": 93,
+        "name": "Tỉnh Hậu Giang"
+      },
+      {
+        "code": 94,
+        "name": "Tỉnh Sóc Trăng"
+      }
+    ]
+  },
+  {
+    "newProvinceCode": 96,
+    "newProvinceName": "Tỉnh Cà Mau",
+    "oldProvinceCodes": [
+      95,
+      96
+    ],
+    "oldProvinces": [
+      {
+        "code": 95,
+        "name": "Tỉnh Bạc Liêu"
+      },
+      {
+        "code": 96,
+        "name": "Tỉnh Cà Mau"
+      }
+    ]
+  }
+]

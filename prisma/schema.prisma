@@ -1,0 +1,1204 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../apps/api/src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model NhaXe {
+  nhaXeId                  Int                       @id @default(autoincrement()) @db.Int
+  maNhaXe                  String                    @unique @db.VarChar(50)
+  tenNhaXe                 String                    @db.VarChar(150)
+  thongTinLienHe           String?                   @db.Text
+  cauHinhHanhLy            String?                   @db.Text
+  trangThai                String                    @db.VarChar(30)
+  createdAt                DateTime                  @default(now()) @db.DateTime(0)
+  updatedAt                DateTime                  @default(now()) @updatedAt @db.DateTime(0)
+  xes                      Xe[]
+  loaiXes                  LoaiXe[]
+  tuyenXes                 TuyenXe[]
+  nhanViens                NhanVien[]
+  khuyenMais               KhuyenMai[]
+  diemGiaoNhanHangs        DiemGiaoNhanHang[]
+  donGiaoDichs             DonGiaoDich[]
+  cauHinhQuyenVaiTroNhaXes CauHinhQuyenVaiTroNhaXe[]
+  cuocTroChuyens           CuocTroChuyen[]
+  diemDonTras              DiemDonTra[]
+  aiKnowledgeDocuments     AiKnowledgeDocument[]
+}
+
+model LoaiXe {
+  loaiXeId                   Int       @id @default(autoincrement()) @db.Int
+  nhaXeId                    Int       @db.Int
+  tenLoai                    String    @db.VarChar(100)
+  moTa                       String?   @db.VarChar(500)
+  sucChuaXeMayMacDinh        Int       @default(0) @db.Int
+  sucChuaHangCongKenhMacDinh Int       @default(0) @db.Int
+  sucChuaHangNheMacDinh      Int       @default(0) @db.Int
+  createdAt                  DateTime  @default(now()) @db.DateTime(0)
+  updatedAt                  DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe                      NhaXe     @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  xes                        Xe[]
+  bangGias                   BangGia[]
+
+  @@unique([nhaXeId, tenLoai], map: "LoaiXe_nhaXeId_tenLoai_key")
+  @@unique([nhaXeId, loaiXeId], map: "LoaiXe_nhaXeId_loaiXeId_key")
+}
+
+model Xe {
+  xeId            Int              @id @default(autoincrement()) @db.Int
+  bienSoXe        String           @unique @db.VarChar(15)
+  trangThai       String           @db.VarChar(30)
+  nhaXeId         Int              @db.Int
+  loaiXeId        Int              @db.Int
+  createdAt       DateTime         @default(now()) @db.DateTime(0)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe           NhaXe            @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  loaiXe          LoaiXe           @relation(fields: [nhaXeId, loaiXeId], references: [nhaXeId, loaiXeId], onDelete: Restrict, onUpdate: Restrict)
+  ghes            Ghe[]
+  chuyenXes       ChuyenXe[]
+  taiNguyenMedias TaiNguyenMedia[]
+
+  @@unique([nhaXeId, xeId], map: "Xe_nhaXeId_xeId_key")
+  @@index([nhaXeId, loaiXeId], map: "Xe_nhaXeId_loaiXeId_idx")
+}
+
+model Ghe {
+  gheId        Int           @id @default(autoincrement()) @db.Int
+  maGhe        String        @unique @db.VarChar(50)
+  tenGhe       String        @db.VarChar(50)
+  viTri        String?       @db.VarChar(50)
+  xeId         Int           @db.Int
+  tang         Int           @default(1) @db.Int
+  toaDoX       Int?          @db.Int
+  toaDoY       Int?          @db.Int
+  createdAt    DateTime      @default(now()) @db.DateTime(0)
+  updatedAt    DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  xe           Xe            @relation(fields: [xeId], references: [xeId], onDelete: Restrict, onUpdate: Restrict)
+  gheChuyenXes GheChuyenXe[]
+
+  @@unique([xeId, tenGhe], map: "Ghe_index_1")
+  @@unique([xeId, tang, toaDoX, toaDoY], map: "Ghe_xeId_tang_toaDoX_toaDoY_key")
+}
+
+model TuyenXe {
+  tuyenXeId            Int                   @id @default(autoincrement()) @db.Int
+  maTuyenXe            String                @db.VarChar(50)
+  diemDi               String                @db.VarChar(100)
+  diemDen              String                @db.VarChar(100)
+  thoiGianChayPhut     Int?                  @db.Int
+  trangThai            String                @db.VarChar(30)
+  nhaXeId              Int                   @db.Int
+  createdAt            DateTime              @default(now()) @db.DateTime(0)
+  updatedAt            DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe                NhaXe                 @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  phieuGuiHangs        PhieuGuiHang[]
+  chuyenXes            ChuyenXe[]
+  bangGias             BangGia[]
+  diemGiaoNhanTuyenXes DiemGiaoNhanTuyenXe[]
+  tuyenXeDiemDungs     TuyenXeDiemDung[]
+  bangCuocGuiHangs     BangCuocGuiHang[]
+
+  @@unique([nhaXeId, maTuyenXe], map: "TuyenXe_index_2")
+  @@unique([nhaXeId, tuyenXeId], map: "TuyenXe_nhaXeId_tuyenXeId_key")
+}
+
+model ChuyenXe {
+  chuyenXeId          Int            @id @default(autoincrement()) @db.Int
+  maChuyenXe          String         @unique @db.VarChar(50)
+  ngayKhoiHanh        DateTime       @db.Date
+  gioKhoiHanh         DateTime       @db.Time(0)
+  gioDen              DateTime?      @db.Time(0)
+  nhanGuiHang         Boolean        @default(false)
+  sucChuaXeMay        Int            @db.Int
+  sucChuaHangCongKenh Int            @db.Int
+  sucChuaHangNhe      Int            @db.Int
+  trangThai           String         @db.VarChar(30)
+  nhaXeId             Int            @db.Int
+  tuyenXeId           Int            @db.Int
+  xeId                Int            @db.Int
+  createdAt           DateTime       @default(now()) @db.DateTime(0)
+  updatedAt           DateTime       @default(now()) @updatedAt @db.DateTime(0)
+  xe                  Xe             @relation(fields: [nhaXeId, xeId], references: [nhaXeId, xeId], onDelete: Restrict, onUpdate: Restrict)
+  tuyenXe             TuyenXe        @relation(fields: [nhaXeId, tuyenXeId], references: [nhaXeId, tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  gheChuyenXes        GheChuyenXe[]
+  giuChos             GiuCho[]
+  phieuGuiHangs       PhieuGuiHang[]
+  phanHois            PhanHoi[]
+
+  diemDonTraChuyenXes DiemDonTraChuyenXe[]
+
+  @@index([trangThai, ngayKhoiHanh, gioKhoiHanh], map: "ChuyenXe_departure_due_idx")
+}
+
+model GheChuyenXe {
+  gheChuyenXeId Int      @id @default(autoincrement()) @db.Int
+  trangThai     String   @db.VarChar(30)
+  chuyenXeId    Int      @db.Int
+  gheId         Int      @db.Int
+  tang          Int?     @db.Int
+  toaDoX        Int?     @db.Int
+  toaDoY        Int?     @db.Int
+  giuChoId      Int?     @db.Int
+  createdAt     DateTime @default(now()) @db.DateTime(0)
+  updatedAt     DateTime @default(now()) @updatedAt @db.DateTime(0)
+  chuyenXe      ChuyenXe @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  ghe           Ghe      @relation(fields: [gheId], references: [gheId], onDelete: Restrict, onUpdate: Restrict)
+  giuCho        GiuCho?  @relation(fields: [giuChoId], references: [giuChoId], onDelete: SetNull, onUpdate: Restrict)
+  ves           Ve[]
+
+  @@unique([chuyenXeId, gheId], map: "GheChuyenXe_index_3")
+  @@index([giuChoId], map: "GheChuyenXe_giuChoId_idx")
+}
+
+model GiuCho {
+  giuChoId     Int           @id @default(autoincrement()) @db.Int
+  tokenHash    String        @unique @db.Char(64)
+  chuyenXeId   Int           @db.Int
+  khachHangId  Int?          @db.Int
+  hetHanLuc    DateTime      @db.DateTime(3)
+  trangThai    String        @default("DANG_GIU") @db.VarChar(30)
+  createdAt    DateTime      @default(now()) @db.DateTime(3)
+  updatedAt    DateTime      @default(now()) @updatedAt @db.DateTime(3)
+  chuyenXe     ChuyenXe      @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  khachHang    KhachHang?    @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  gheChuyenXes GheChuyenXe[]
+
+  @@index([chuyenXeId, hetHanLuc], map: "GiuCho_chuyenXeId_hetHanLuc_idx")
+  @@index([khachHangId], map: "GiuCho_khachHangId_idx")
+}
+
+model BangGia {
+  bangGiaId  Int       @id @default(autoincrement()) @db.Int
+  giaNiemYet Decimal   @db.Decimal(18, 2)
+  tuNgay     DateTime  @db.Date
+  denNgay    DateTime? @db.Date
+  trangThai  String    @db.VarChar(30)
+  nhaXeId    Int       @db.Int
+  tuyenXeId  Int       @db.Int
+  loaiXeId   Int       @db.Int
+  createdAt  DateTime  @default(now()) @db.DateTime(0)
+  updatedAt  DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  tuyenXe    TuyenXe   @relation(fields: [nhaXeId, tuyenXeId], references: [nhaXeId, tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  loaiXe     LoaiXe    @relation(fields: [nhaXeId, loaiXeId], references: [nhaXeId, loaiXeId], onDelete: Restrict, onUpdate: Restrict)
+  ves        Ve[]
+
+  @@index([nhaXeId, tuyenXeId], map: "BangGia_nhaXeId_tuyenXeId_idx")
+  @@index([nhaXeId, loaiXeId], map: "BangGia_nhaXeId_loaiXeId_idx")
+  @@index([tuyenXeId, loaiXeId], map: "BangGia_index_4")
+}
+
+model TaiKhoan {
+  taiKhoanId                   Int                           @id @default(autoincrement()) @db.Int
+  soDienThoai                  String                        @db.VarChar(16)
+  matKhau                      String                        @db.VarChar(255)
+  email                        String?                       @db.VarChar(150)
+  loaiTaiKhoan                 LoaiTaiKhoan                  @default(KHACH_HANG)
+  daXacThucSoDienThoai         Boolean
+  trangThai                    TrangThaiTaiKhoan             @default(HOAT_DONG)
+  khoaDenNgay                  DateTime?                     @db.Date
+  lyDoKhoa                     String?                       @db.VarChar(255)
+  createdAt                    DateTime                      @default(now()) @db.DateTime(0)
+  updatedAt                    DateTime                      @default(now()) @updatedAt @db.DateTime(0)
+  khachHang                    KhachHang?
+  nhanVien                     NhanVien?
+  taiKhoanVaiTros              TaiKhoanVaiTro[]
+  phienDangNhaps               PhienDangNhap[]
+  lichSuTrangThaiPhieuGuiHangs LichSuTrangThaiPhieuGuiHang[]
+  lichSuTrangThaiPhieuDatVes   LichSuTrangThaiPhieuDatVe[]
+  lichSuTrangThaiVes           LichSuTrangThaiVe[]
+  tinNhanHoTros                TinNhanHoTro[]
+  phanChuyenGuiHangs           LichSuPhanChuyenGuiHang[]
+  taiNguyenMediaDaTao          TaiNguyenMedia[]
+
+  @@unique([soDienThoai, loaiTaiKhoan], map: "TaiKhoan_soDienThoai_loaiTaiKhoan_key")
+  @@unique([email, loaiTaiKhoan], map: "TaiKhoan_email_loaiTaiKhoan_key")
+}
+
+// Registry for server-owned Cloudinary assets. Phase 1 exposes public vehicle images only.
+model TaiNguyenMedia {
+  taiNguyenMediaId   String    @id @db.VarChar(36)
+  yeuCauId           String    @db.VarChar(36)
+  nhaXeId            Int       @db.Int
+  xeId               Int       @db.Int
+  taiKhoanTaoId      Int       @db.Int
+  mucDich            String    @default("ANH_XE") @db.VarChar(30)
+  trangThai          String    @db.VarChar(30)
+  tenCloud           String    @db.VarChar(128)
+  thuMuc             String    @db.VarChar(255)
+  cloudinaryPublicId String    @unique @db.VarChar(500)
+  cloudinaryAssetId  String?   @unique @db.VarChar(128)
+  sha256             String    @db.Char(64)
+  urlCongKhai        String?   @db.VarChar(1000)
+  phienBan           BigInt?   @db.BigInt
+  kichThuoc          Int?      @db.Int
+  chieuRong          Int?      @db.Int
+  chieuCao           Int?      @db.Int
+  dinhDang           String?   @db.VarChar(20)
+  daGoLuc            DateTime? @db.DateTime(3)
+  createdAt          DateTime  @default(now()) @db.DateTime(3)
+  updatedAt          DateTime  @updatedAt @db.DateTime(3)
+  xe                 Xe        @relation(fields: [nhaXeId, xeId], references: [nhaXeId, xeId], onDelete: Cascade, onUpdate: Restrict)
+  taiKhoanTao        TaiKhoan  @relation(fields: [taiKhoanTaoId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([nhaXeId, yeuCauId], map: "TaiNguyenMedia_tenant_request_key")
+  @@index([nhaXeId, xeId, trangThai], map: "TaiNguyenMedia_vehicle_status_idx")
+}
+
+model PhienDangNhap {
+  phienDangNhapId  Int            @id @default(autoincrement()) @db.Int
+  sessionId        String         @unique @db.Char(36)
+  refreshTokenHash String         @unique @db.Char(64)
+  hetHanLuc        DateTime       @db.DateTime(3)
+  thuHoiLuc        DateTime?      @db.DateTime(3)
+  tokenThayTheId   Int?           @unique @db.Int
+  taiKhoanId       Int            @db.Int
+  createdAt        DateTime       @default(now()) @db.DateTime(3)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.DateTime(3)
+  taiKhoan         TaiKhoan       @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+  tokenThayThe     PhienDangNhap? @relation("PhienDangNhapRotation", fields: [tokenThayTheId], references: [phienDangNhapId], onDelete: Restrict, onUpdate: Restrict)
+  tokenGoc         PhienDangNhap? @relation("PhienDangNhapRotation")
+
+  @@index([taiKhoanId, thuHoiLuc, hetHanLuc], map: "PhienDangNhap_account_active_idx")
+}
+
+model YeuCauOtp {
+  yeuCauOtpId    Int       @id @default(autoincrement()) @db.Int
+  challengeId    String    @unique @db.Char(36)
+  soDienThoai    String    @db.VarChar(16)
+  mucDich        String    @db.VarChar(30)
+  maOtpHash      String    @db.Char(64)
+  soLanThu       Int       @default(0) @db.Int
+  hetHanLuc      DateTime  @db.DateTime(3)
+  daXacThucLuc   DateTime? @db.DateTime(3)
+  proofHash      String?   @unique @db.Char(64)
+  proofHetHanLuc DateTime? @db.DateTime(3)
+  daSuDungLuc    DateTime? @db.DateTime(3)
+  createdAt      DateTime  @default(now()) @db.DateTime(3)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.DateTime(3)
+
+  @@unique([soDienThoai, mucDich], map: "YeuCauOtp_soDienThoai_mucDich_key")
+  @@index([soDienThoai, mucDich, updatedAt], map: "YeuCauOtp_phone_purpose_updated_idx")
+}
+
+model KhachHang {
+  khachHangId        Int                 @id @default(autoincrement()) @db.Int
+  maKhachHang        String              @unique @db.VarChar(50)
+  hoTen              String?             @db.VarChar(100)
+  ngaySinh           DateTime?           @db.Date
+  gioiTinh           String?             @db.VarChar(10)
+  diaChi             String?             @db.VarChar(255)
+  cccd               String?             @db.Char(12)
+  diemTichLuy        Int                 @default(0) @db.Int
+  taiKhoanId         Int                 @unique @db.Int
+  createdAt          DateTime            @default(now()) @db.DateTime(0)
+  updatedAt          DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  taiKhoan           TaiKhoan            @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+  donGiaoDichs       DonGiaoDich[]
+  suDungKhuyenMais   SuDungKhuyenMai[]
+  thongBaoNguoiNhans ThongBaoNguoiNhan[]
+  cuocTroChuyens     CuocTroChuyen[]
+  phanHois           PhanHoi[]
+  giuChos            GiuCho[]
+  aiChatSessions     AiChatSession[]
+}
+
+model NhanVien {
+  nhanVienId               Int             @id @default(autoincrement()) @db.Int
+  maNhanVien               String          @db.VarChar(50)
+  hoTen                    String?         @db.VarChar(100)
+  cccd                     String?         @db.Char(12)
+  ngaySinh                 DateTime?       @db.Date
+  gioiTinh                 String?         @db.VarChar(10)
+  chucVu                   String?         @db.VarChar(50)
+  ngayVaoLam               DateTime?       @db.Date
+  ngayNghiViec             DateTime?       @db.Date
+  trangThaiLamViec         String          @db.VarChar(30)
+  nhaXeId                  Int?            @db.Int
+  taiKhoanId               Int             @unique @db.Int
+  createdAt                DateTime        @default(now()) @db.DateTime(0)
+  updatedAt                DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe                    NhaXe?          @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoan                 TaiKhoan        @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+  cuocTroChuyens           CuocTroChuyen[]
+  phieuGuiHangXacNhanCuocs PhieuGuiHang[]  @relation("ShipmentPricingActor")
+  thanhToanXacNhans        ThanhToan[]     @relation("ShipmentCashActor")
+
+  @@unique([nhaXeId, maNhanVien], map: "NhanVien_index_5")
+}
+
+model VaiTro {
+  vaiTroId                 Int                       @id @default(autoincrement()) @db.Int
+  tenVaiTro                String                    @unique @db.VarChar(50)
+  moTa                     String?                   @db.VarChar(255)
+  createdAt                DateTime                  @default(now()) @db.DateTime(0)
+  updatedAt                DateTime                  @default(now()) @updatedAt @db.DateTime(0)
+  taiKhoanVaiTros          TaiKhoanVaiTro[]
+  vaiTroQuyens             VaiTroQuyen[]
+  cauHinhQuyenVaiTroNhaXes CauHinhQuyenVaiTroNhaXe[]
+}
+
+model Quyen {
+  quyenId                         Int                              @id @default(autoincrement()) @db.Int
+  tenQuyen                        String                           @unique @db.VarChar(100)
+  moTa                            String?                          @db.VarChar(255)
+  createdAt                       DateTime                         @default(now()) @db.DateTime(0)
+  updatedAt                       DateTime                         @default(now()) @updatedAt @db.DateTime(0)
+  vaiTroQuyens                    VaiTroQuyen[]
+  cauHinhQuyenVaiTroNhaXeChiTiets CauHinhQuyenVaiTroNhaXeChiTiet[]
+}
+
+model TaiKhoanVaiTro {
+  taiKhoanId Int      @db.Int
+  vaiTroId   Int      @db.Int
+  taiKhoan   TaiKhoan @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+  vaiTro     VaiTro   @relation(fields: [vaiTroId], references: [vaiTroId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([taiKhoanId, vaiTroId])
+}
+
+model VaiTroQuyen {
+  vaiTroId Int    @db.Int
+  quyenId  Int    @db.Int
+  vaiTro   VaiTro @relation(fields: [vaiTroId], references: [vaiTroId], onDelete: Restrict, onUpdate: Restrict)
+  quyen    Quyen  @relation(fields: [quyenId], references: [quyenId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([vaiTroId, quyenId])
+}
+
+model CauHinhQuyenVaiTroNhaXe {
+  nhaXeId  Int                              @db.Int
+  vaiTroId Int                              @db.Int
+  nhaXe    NhaXe                            @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  vaiTro   VaiTro                           @relation(fields: [vaiTroId], references: [vaiTroId], onDelete: Restrict, onUpdate: Restrict)
+  chiTiets CauHinhQuyenVaiTroNhaXeChiTiet[]
+
+  @@id([nhaXeId, vaiTroId])
+  @@index([vaiTroId])
+}
+
+model CauHinhQuyenVaiTroNhaXeChiTiet {
+  nhaXeId  Int                     @db.Int
+  vaiTroId Int                     @db.Int
+  quyenId  Int                     @db.Int
+  cauHinh  CauHinhQuyenVaiTroNhaXe @relation(fields: [nhaXeId, vaiTroId], references: [nhaXeId, vaiTroId], onDelete: Cascade, onUpdate: Restrict)
+  quyen    Quyen                   @relation(fields: [quyenId], references: [quyenId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([nhaXeId, vaiTroId, quyenId])
+  @@index([quyenId])
+}
+
+model KhuyenMai {
+  khuyenMaiId       Int               @id @default(autoincrement()) @db.Int
+  tenChuongTrinh    String            @db.VarChar(150)
+  maKhuyenMai       String            @db.VarChar(50)
+  phamViApDung      String            @db.VarChar(30)
+  hinhThucApDung    String            @db.VarChar(30)
+  loaiGiamGia       String            @db.VarChar(30)
+  giaTriGiam        Decimal           @db.Decimal(18, 2)
+  giamToiDa         Decimal?          @db.Decimal(18, 2)
+  giaTriDonToiThieu Decimal?          @db.Decimal(18, 2)
+  dieuKienApDung    String?           @db.VarChar(500)
+  tuNgay            DateTime          @db.Date
+  denNgay           DateTime          @db.Date
+  trangThai         String            @db.VarChar(30)
+  nhaXeId           Int               @db.Int
+  soLuotToiDa       Int               @db.Int
+  soLuotDaSuDung    Int               @default(0) @db.Int
+  createdAt         DateTime          @default(now()) @db.DateTime(0)
+  updatedAt         DateTime          @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe             NhaXe             @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  phieuDatVes       PhieuDatVe[]
+  phieuGuiHangs     PhieuGuiHang[]
+  suDungKhuyenMais  SuDungKhuyenMai[]
+
+  @@unique([nhaXeId, maKhuyenMai], map: "KhuyenMai_index_6")
+}
+
+model SuDungKhuyenMai {
+  suDungKhuyenMaiId   Int        @id @default(autoincrement()) @db.Int
+  khuyenMaiId         Int        @db.Int
+  phieuDatVeId        Int        @unique(map: "SuDungKhuyenMai_phieuDatVeId_key") @db.Int
+  khachHangId         Int?       @db.Int
+  // Null for signed-in customers without a verified account phone; khachHangId remains their identity key.
+  soDienThoaiChuanHoa String?    @db.VarChar(16)
+  soTienGiam          Decimal    @db.Decimal(18, 2)
+  createdAt           DateTime   @default(now()) @db.DateTime(0)
+  khuyenMai           KhuyenMai  @relation(fields: [khuyenMaiId], references: [khuyenMaiId], onDelete: Restrict, onUpdate: Restrict)
+  phieuDatVe          PhieuDatVe @relation(fields: [phieuDatVeId], references: [phieuDatVeId], onDelete: Restrict, onUpdate: Restrict)
+  khachHang           KhachHang? @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([khuyenMaiId, soDienThoaiChuanHoa], map: "SuDungKhuyenMai_khuyenMaiId_soDienThoaiChuanHoa_key")
+  @@unique([khuyenMaiId, khachHangId], map: "SuDungKhuyenMai_khuyenMaiId_khachHangId_key")
+}
+
+model DonGiaoDich {
+  donGiaoDichId        Int           @id @default(autoincrement()) @db.Int
+  maDonGiaoDich        String        @unique @db.VarChar(50)
+  comboCode            String?       @db.VarChar(50)
+  ngayTao              DateTime      @db.DateTime(0)
+  tongTien             Decimal       @db.Decimal(18, 2)
+  trangThai            String        @db.VarChar(30)
+  tenKhachHang         String        @db.VarChar(100)
+  soDienThoaiKhachHang String        @db.VarChar(16)
+  emailKhachHang       String?       @db.VarChar(150)
+  khachHangId          Int?          @db.Int
+  nhaXeId              Int           @db.Int
+  createdAt            DateTime      @default(now()) @db.DateTime(0)
+  updatedAt            DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe                NhaXe         @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  khachHang            KhachHang?    @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  phieuDatVe           PhieuDatVe?
+  phieuGuiHang         PhieuGuiHang?
+  thanhToans           ThanhToan[]
+
+  @@index([comboCode], map: "DonGiaoDich_comboCode_idx")
+}
+
+model PhieuDatVe {
+  phieuDatVeId        Int                         @id @default(autoincrement()) @db.Int
+  maPhieuDatVe        String                      @unique @db.VarChar(50)
+  ngayDat             DateTime                    @db.DateTime(0)
+  soLuongVeBanDau     Int                         @db.Int
+  tongTienBanDau      Decimal                     @db.Decimal(18, 2)
+  soTienGiamKhuyenMai Decimal                     @default(0) @db.Decimal(18, 2)
+  trangThai           String                      @db.VarChar(30)
+  khuyenMaiId         Int?                        @db.Int
+  donGiaoDichId       Int                         @unique @db.Int
+  createdAt           DateTime                    @default(now()) @db.DateTime(0)
+  updatedAt           DateTime                    @default(now()) @updatedAt @db.DateTime(0)
+  donGiaoDich         DonGiaoDich                 @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
+  khuyenMai           KhuyenMai?                  @relation(fields: [khuyenMaiId], references: [khuyenMaiId], onDelete: Restrict, onUpdate: Restrict)
+  ves                 Ve[]
+  suDungKhuyenMai     SuDungKhuyenMai?
+  lichSuTrangThais    LichSuTrangThaiPhieuDatVe[]
+}
+
+model Ve {
+  veId              Int                 @id @default(autoincrement()) @db.Int
+  maVe              String              @unique @db.VarChar(50)
+  diemDon           String?             @db.VarChar(255)
+  diemDonChuyenXeId Int?                @db.Int
+  diemTraChuyenXeId Int?                @db.Int
+  diemDonSnapshot   Json?               @db.Json
+  diemTraSnapshot   Json?               @db.Json
+  giaNiemYet        Decimal             @db.Decimal(18, 2)
+  giaThucTe         Decimal             @db.Decimal(18, 2)
+  trangThai         String              @db.VarChar(30)
+  phieuDatVeId      Int                 @db.Int
+  gheChuyenXeId     Int                 @db.Int
+  bangGiaApDungId   Int                 @db.Int
+  createdAt         DateTime            @default(now()) @db.DateTime(0)
+  updatedAt         DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  phieuDatVe        PhieuDatVe          @relation(fields: [phieuDatVeId], references: [phieuDatVeId], onDelete: Restrict, onUpdate: Restrict)
+  gheChuyenXe       GheChuyenXe         @relation(fields: [gheChuyenXeId], references: [gheChuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  bangGiaApDung     BangGia             @relation(fields: [bangGiaApDungId], references: [bangGiaId], onDelete: Restrict, onUpdate: Restrict)
+  thanhToans        ThanhToan[]
+  diemDonChuyenXe   DiemDonTraChuyenXe? @relation("Ve_DiemDonChuyenXe", fields: [diemDonChuyenXeId], references: [diemDonTraChuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  diemTraChuyenXe   DiemDonTraChuyenXe? @relation("Ve_DiemTraChuyenXe", fields: [diemTraChuyenXeId], references: [diemDonTraChuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  lichSuTrangThais  LichSuTrangThaiVe[]
+
+  @@index([diemDonChuyenXeId], map: "Ve_diemDonChuyenXeId_idx")
+  @@index([diemTraChuyenXeId], map: "Ve_diemTraChuyenXeId_idx")
+}
+
+model LichSuTrangThaiPhieuDatVe {
+  lichSuTrangThaiPhieuDatVeId Int        @id @default(autoincrement()) @db.Int
+  phieuDatVeId                Int        @db.Int
+  trangThaiCu                 String?    @db.VarChar(30)
+  trangThaiMoi                String     @db.VarChar(30)
+  thoiDiem                    DateTime   @db.DateTime(0)
+  nguonThayDoi                String     @db.VarChar(20)
+  taiKhoanId                  Int?       @db.Int
+  lyDo                        String     @db.VarChar(255)
+  laOverride                  Boolean    @default(false)
+  maThaoTac                   String     @db.Char(36)
+  phieuDatVe                  PhieuDatVe @relation(fields: [phieuDatVeId], references: [phieuDatVeId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoan                    TaiKhoan?  @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([maThaoTac, phieuDatVeId], map: "LichSuTrangThaiPhieuDatVe_maThaoTac_phieuDatVeId_key")
+}
+
+model LichSuTrangThaiVe {
+  lichSuTrangThaiVeId Int       @id @default(autoincrement()) @db.Int
+  veId                Int       @db.Int
+  trangThaiCu         String?   @db.VarChar(30)
+  trangThaiMoi        String    @db.VarChar(30)
+  thoiDiem            DateTime  @db.DateTime(0)
+  nguonThayDoi        String    @db.VarChar(20)
+  taiKhoanId          Int?      @db.Int
+  lyDo                String    @db.VarChar(255)
+  laOverride          Boolean   @default(false)
+  maThaoTac           String    @db.Char(36)
+  ve                  Ve        @relation(fields: [veId], references: [veId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoan            TaiKhoan? @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([maThaoTac, veId], map: "LichSuTrangThaiVe_maThaoTac_veId_key")
+}
+
+model DiemGiaoNhanHang {
+  diemGiaoNhanHangId        Int                       @id @default(autoincrement()) @db.Int
+  maDiem                    String                    @db.VarChar(50)
+  tenDiem                   String                    @db.VarChar(150)
+  diaChi                    String                    @db.VarChar(255)
+  tinhThanh                 String                    @db.VarChar(100)
+  quanHuyen                 String?                   @db.VarChar(100)
+  phuongXa                  String?                   @db.VarChar(100)
+  maTinhThanh               String?                   @db.VarChar(20)
+  maPhuongXa                String?                   @db.VarChar(20)
+  viDo                      Decimal?                  @db.Decimal(10, 7)
+  kinhDo                    Decimal?                  @db.Decimal(10, 7)
+  trangThai                 TrangThaiDiemGiaoNhanHang
+  nhaXeId                   Int                       @db.Int
+  createdAt                 DateTime                  @default(now()) @db.DateTime(0)
+  updatedAt                 DateTime                  @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe                     NhaXe                     @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  phieuGuiHangsTheoDiemGui  PhieuGuiHang[]            @relation("DiemGiaoNhanGuiPhieu")
+  phieuGuiHangsTheoDiemNhan PhieuGuiHang[]            @relation("DiemGiaoNhanNhanPhieu")
+  tuyenXeDiemGiaoNhaps      DiemGiaoNhanTuyenXe[]
+
+  @@unique([nhaXeId, maDiem], map: "DiemGiaoNhanHang_nhaXeId_maDiem_key")
+}
+
+model DiemGiaoNhanTuyenXe {
+  diemGiaoNhanTuyenXeId Int                @id @default(autoincrement()) @db.Int
+  vaiTro                VaiTroDiemGiaoNhan
+  tuyenXeId             Int                @db.Int
+  diemGiaoNhanHangId    Int                @db.Int
+  createdAt             DateTime           @default(now()) @db.DateTime(0)
+  updatedAt             DateTime           @default(now()) @updatedAt @db.DateTime(0)
+  tuyenXe               TuyenXe            @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  diemGiaoNhanHang      DiemGiaoNhanHang   @relation(fields: [diemGiaoNhanHangId], references: [diemGiaoNhanHangId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tuyenXeId, diemGiaoNhanHangId], map: "DiemGiaoNhanTuyenXe_tuyenXeId_diemGiaoNhanHangId_key")
+  @@index([diemGiaoNhanHangId], map: "DiemGiaoNhanTuyenXe_diemGiaoNhanHangId_idx")
+}
+
+model BangCuocGuiHang {
+  bangCuocGuiHangId   Int                  @id @default(autoincrement()) @db.Int
+  tuyenXeId           Int                  @db.Int
+  loaiHangHoaId       Int                  @db.Int
+  khoiLuongTu         Decimal              @db.Decimal(10, 2)
+  khoiLuongDen        Decimal?             @db.Decimal(10, 2)
+  mucCuoc             Decimal              @db.Decimal(18, 2)
+  tuNgay              DateTime             @db.Date
+  denNgay             DateTime?            @db.Date
+  trangThai           TrangThaiBangCuoc
+  createdAt           DateTime             @default(now()) @db.DateTime(0)
+  updatedAt           DateTime             @default(now()) @updatedAt @db.DateTime(0)
+  tuyenXe             TuyenXe              @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  loaiHangHoa         LoaiHangHoa          @relation(fields: [loaiHangHoaId], references: [loaiHangHoaId], onDelete: Restrict, onUpdate: Restrict)
+  chiTietCuocGuiHangs ChiTietCuocGuiHang[]
+
+  @@unique([bangCuocGuiHangId, loaiHangHoaId], map: "BangCuocGuiHang_rate_type_key")
+  @@index([tuyenXeId], map: "BangCuocGuiHang_tuyenXeId_idx")
+  @@index([loaiHangHoaId], map: "BangCuocGuiHang_loaiHangHoaId_idx")
+}
+
+model PhieuGuiHang {
+  phieuGuiHangId        Int                           @id @default(autoincrement()) @db.Int
+  maVanDon              String                        @unique @db.VarChar(50)
+  tenNguoiNhan          String                        @db.VarChar(100)
+  soDienThoaiNguoiNhan  String                        @db.VarChar(16)
+  ngayGui               DateTime                      @db.DateTime(0)
+  cuocChinh             Decimal                       @db.Decimal(18, 2)
+  phiDichVu             Decimal                       @db.Decimal(18, 2)
+  soTienGiam            Decimal                       @db.Decimal(18, 2)
+  tongPhi               Decimal                       @db.Decimal(18, 2)
+  nguoiTraCuoc          NguoiTraCuoc
+  ghiChu                String?                       @db.VarChar(500)
+  trangThai             TrangThaiPhieuGuiHang
+  chuyenXeId            Int?                          @db.Int
+  diemGuiId             Int                           @db.Int
+  diemNhanId            Int                           @db.Int
+  khuyenMaiId           Int?                          @db.Int
+  donGiaoDichId         Int                           @unique @db.Int
+  createdAt             DateTime                      @default(now()) @db.DateTime(0)
+  updatedAt             DateTime                      @default(now()) @updatedAt @db.DateTime(0)
+  donGiaoDich           DonGiaoDich                   @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
+  chuyenXe              ChuyenXe?                     @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  diemGui               DiemGiaoNhanHang              @relation("DiemGiaoNhanGuiPhieu", fields: [diemGuiId], references: [diemGiaoNhanHangId], onDelete: Restrict, onUpdate: Restrict)
+  diemNhan              DiemGiaoNhanHang              @relation("DiemGiaoNhanNhanPhieu", fields: [diemNhanId], references: [diemGiaoNhanHangId], onDelete: Restrict, onUpdate: Restrict)
+  khuyenMai             KhuyenMai?                    @relation(fields: [khuyenMaiId], references: [khuyenMaiId], onDelete: Restrict, onUpdate: Restrict)
+  tuyenXeId             Int?                          @db.Int
+  hanMangHangDen        DateTime?                     @db.DateTime(0)
+  ngayDuKienGui         DateTime?                     @db.Date
+  cuocDuTinh            Decimal?                      @db.Decimal(18, 2)
+  thoiDiemXacNhanCuoc   DateTime?                     @db.DateTime(0)
+  nhanVienXacNhanCuocId Int?                          @db.Int
+  tuyenXe               TuyenXe?                      @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  nhanVienXacNhanCuoc   NhanVien?                     @relation("ShipmentPricingActor", fields: [nhanVienXacNhanCuocId], references: [nhanVienId], onDelete: Restrict, onUpdate: Restrict)
+  lichSuPhanChuyens     LichSuPhanChuyenGuiHang[]
+  yeuCauTaos            YeuCauTaoPhieuGuiHang[]
+  hangHoas              HangHoa[]
+  chiTietCuocGuiHangs   ChiTietCuocGuiHang[]
+  phanHois              PhanHoi[]
+  lichSuTrangThais      LichSuTrangThaiPhieuGuiHang[]
+
+  @@index([tuyenXeId])
+  @@index([trangThai, hanMangHangDen])
+  @@index([diemGuiId], map: "PhieuGuiHang_diemGuiId_idx")
+  @@index([diemNhanId], map: "PhieuGuiHang_diemNhanId_idx")
+}
+
+model ChiTietCuocGuiHang {
+  chiTietCuocGuiHangId Int             @id @default(autoincrement()) @db.Int
+  phieuGuiHangId       Int             @db.Int
+  loaiHangHoaId        Int             @db.Int
+  bangCuocGuiHangId    Int             @db.Int
+  khoiLuongTinhCuoc    Decimal         @db.Decimal(10, 2)
+  soTienCuoc           Decimal         @db.Decimal(18, 2)
+  createdAt            DateTime        @default(now()) @db.DateTime(0)
+  updatedAt            DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  phieuGuiHang         PhieuGuiHang    @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
+  loaiHangHoa          LoaiHangHoa     @relation(fields: [loaiHangHoaId], references: [loaiHangHoaId], onDelete: Restrict, onUpdate: Restrict)
+  bangCuocGuiHang      BangCuocGuiHang @relation(fields: [bangCuocGuiHangId, loaiHangHoaId], references: [bangCuocGuiHangId, loaiHangHoaId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([phieuGuiHangId, loaiHangHoaId], map: "ChiTietCuocGuiHang_shipment_type_key")
+  @@index([bangCuocGuiHangId, loaiHangHoaId], map: "ChiTietCuocGuiHang_rate_type_idx")
+}
+
+model LichSuTrangThaiPhieuGuiHang {
+  lichSuTrangThaiId Int                   @id @default(autoincrement()) @db.Int
+  trangThai         TrangThaiPhieuGuiHang
+  thoiGian          DateTime              @db.DateTime(0)
+  ghiChu            String?               @db.VarChar(500)
+  phieuGuiHangId    Int                   @db.Int
+  taiKhoanId        Int?                  @db.Int
+  createdAt         DateTime              @default(now()) @db.DateTime(0)
+  phieuGuiHang      PhieuGuiHang          @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoan          TaiKhoan?             @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([phieuGuiHangId, thoiGian], map: "LichSuTrangThaiPhieuGuiHang_phieu_thoiGian_idx")
+  @@index([taiKhoanId, thoiGian], map: "LichSuTrangThaiPhieuGuiHang_taiKhoan_thoiGian_idx")
+}
+
+model LoaiHangHoa {
+  loaiHangHoaId       Int                  @id @default(autoincrement()) @db.Int
+  tenLoai             String               @db.VarChar(100)
+  moTa                String?              @db.VarChar(500)
+  trangThai           String               @db.VarChar(30)
+  nhomSucChua         NhomSucChuaHangHoa
+  createdAt           DateTime             @default(now()) @db.DateTime(0)
+  updatedAt           DateTime             @default(now()) @updatedAt @db.DateTime(0)
+  hangHoas            HangHoa[]
+  bangCuocGuiHangs    BangCuocGuiHang[]
+  chiTietCuocGuiHangs ChiTietCuocGuiHang[]
+
+  @@unique([tenLoai], map: "LoaiHangHoa_index_8")
+}
+
+model HangHoa {
+  hangHoaId        Int              @id @default(autoincrement()) @db.Int
+  tenHang          String           @db.VarChar(150)
+  soLuong          Int              @db.Int
+  khoiLuong        Decimal          @db.Decimal(10, 2)
+  chieuDai         Decimal?         @db.Decimal(10, 2)
+  chieuRong        Decimal?         @db.Decimal(10, 2)
+  chieuCao         Decimal?         @db.Decimal(10, 2)
+  khoiLuongKhaiBao Decimal?         @db.Decimal(10, 2)
+  chieuDaiKhaiBao  Decimal?         @db.Decimal(10, 2)
+  chieuRongKhaiBao Decimal?         @db.Decimal(10, 2)
+  chieuCaoKhaiBao  Decimal?         @db.Decimal(10, 2)
+  khoiLuongThucTe  Decimal?         @db.Decimal(10, 2)
+  chieuDaiThucTe   Decimal?         @db.Decimal(10, 2)
+  chieuRongThucTe  Decimal?         @db.Decimal(10, 2)
+  chieuCaoThucTe   Decimal?         @db.Decimal(10, 2)
+  giaTriKhaiBao    Decimal?         @db.Decimal(18, 2)
+  moTa             String?          @db.VarChar(500)
+  phieuGuiHangId   Int              @db.Int
+  loaiHangHoaId    Int              @db.Int
+  createdAt        DateTime         @default(now()) @db.DateTime(0)
+  updatedAt        DateTime         @default(now()) @updatedAt @db.DateTime(0)
+  phieuGuiHang     PhieuGuiHang     @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
+  loaiHangHoa      LoaiHangHoa      @relation(fields: [loaiHangHoaId], references: [loaiHangHoaId], onDelete: Restrict, onUpdate: Restrict)
+  hinhAnhHangHoas  HinhAnhHangHoa[]
+}
+
+model HinhAnhHangHoa {
+  hinhAnhId Int      @id @default(autoincrement()) @db.Int
+  duongDan  String   @db.VarChar(500)
+  thuTu     Int?     @db.Int
+  hangHoaId Int      @db.Int
+  createdAt DateTime @default(now()) @db.DateTime(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.DateTime(0)
+  hangHoa   HangHoa  @relation(fields: [hangHoaId], references: [hangHoaId], onDelete: Restrict, onUpdate: Restrict)
+}
+
+model ThanhToan {
+  thanhToanId       Int         @id @default(autoincrement()) @db.Int
+  soTien            Decimal     @db.Decimal(18, 2)
+  phuongThuc        String      @db.VarChar(30)
+  maGiaoDichSePay   String?     @unique(map: "ThanhToan_maGiaoDichSePay_key") @db.VarChar(100)
+  loaiGiaoDich      String      @db.VarChar(30)
+  thoiGian          DateTime    @db.DateTime(0)
+  thoiDiemHoanTat   DateTime?   @db.DateTime(0)
+  trangThai         String      @db.VarChar(30)
+  laQuyetToanHopLe  Boolean     @default(false)
+  donGiaoDichId     Int         @db.Int
+  veId              Int?        @db.Int
+  createdAt         DateTime    @default(now()) @db.DateTime(0)
+  updatedAt         DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  donGiaoDich       DonGiaoDich @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
+  nhanVienXacNhanId Int?        @db.Int
+  nhanVienXacNhan   NhanVien?   @relation("ShipmentCashActor", fields: [nhanVienXacNhanId], references: [nhanVienId], onDelete: Restrict, onUpdate: Restrict)
+  ve                Ve?         @relation(fields: [veId], references: [veId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([loaiGiaoDich, trangThai, laQuyetToanHopLe, thoiDiemHoanTat], map: "ThanhToan_revenue_report_idx")
+}
+
+model ThongBao {
+  eventKey   String?             @unique @db.VarChar(100)
+  category   String              @default("SYSTEM") @db.VarChar(30)
+  bookingId  Int?
+  ticketId   Int?
+  thongBaoId Int                 @id @default(autoincrement()) @db.Int
+  tieuDe     String              @db.VarChar(150)
+  noiDung    String              @db.Text
+  thoiGian   DateTime            @db.DateTime(0)
+  trangThai  String              @db.VarChar(30)
+  createdAt  DateTime            @default(now()) @db.DateTime(0)
+  updatedAt  DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  nguoiNhans ThongBaoNguoiNhan[]
+}
+
+model ThongBaoNguoiNhan {
+  thongBaoNguoiNhanId Int       @id @default(autoincrement()) @db.Int
+  daDoc               Boolean
+  thoiGianDoc         DateTime? @db.DateTime(0)
+  thongBaoId          Int       @db.Int
+  khachHangId         Int       @db.Int
+  createdAt           DateTime  @default(now()) @db.DateTime(0)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  thongBao            ThongBao  @relation(fields: [thongBaoId], references: [thongBaoId], onDelete: Restrict, onUpdate: Restrict)
+  khachHang           KhachHang @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([thongBaoId, khachHangId], map: "ThongBaoNguoiNhan_index_9")
+}
+
+model CuocTroChuyen {
+  cuocTroChuyenId Int            @id @default(autoincrement()) @db.Int
+  maCuocTroChuyen String         @unique(map: "CuocTroChuyen_maCuocTroChuyen_key") @db.VarChar(50)
+  tieuDe          String?        @db.VarChar(255)
+  trangThai       String         @default("CHO_TIEP_NHAN") @db.VarChar(30)
+  kenhHoTro       String         @default("WEB") @db.VarChar(20)
+  cheDoChat       String         @default("NGUOI_THAT") @db.VarChar(30)
+  khachHangId     Int            @db.Int
+  nhanVienId      Int?           @db.Int
+  nhaXeId         Int            @db.Int
+  dongLuc         DateTime?      @db.DateTime(0)
+  createdAt       DateTime       @default(now()) @db.DateTime(0)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.DateTime(0)
+  khachHang       KhachHang      @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  nhanVien        NhanVien?      @relation(fields: [nhanVienId], references: [nhanVienId], onDelete: Restrict, onUpdate: Restrict)
+  nhaXe           NhaXe          @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  tinNhans        TinNhanHoTro[]
+
+  @@index([nhaXeId, trangThai], map: "CuocTroChuyen_nhaXe_trangThai_idx")
+  @@index([khachHangId, trangThai], map: "CuocTroChuyen_khachHang_trangThai_idx")
+  @@index([nhanVienId, trangThai], map: "CuocTroChuyen_nhanVien_trangThai_idx")
+}
+
+model TinNhanHoTro {
+  tinNhanId       Int           @id @default(autoincrement()) @db.Int
+  cuocTroChuyenId Int           @db.Int
+  taiKhoanGuiId   Int           @db.Int
+  loaiNguoiGui    String        @db.VarChar(30)
+  loaiTinNhan     String        @default("VAN_BAN") @db.VarChar(30)
+  noiDung         String        @db.Text
+  tepDinhKemUrl   String?       @db.VarChar(500)
+  trangThai       String        @default("DA_GUI") @db.VarChar(30)
+  daDocLuc        DateTime?     @db.DateTime(0)
+  clientMessageId String?       @unique(map: "TinNhanHoTro_clientMessageId_key") @db.VarChar(64)
+  createdAt       DateTime      @default(now()) @db.DateTime(0)
+  updatedAt       DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  cuocTroChuyen   CuocTroChuyen @relation(fields: [cuocTroChuyenId], references: [cuocTroChuyenId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoanGui     TaiKhoan      @relation(fields: [taiKhoanGuiId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([cuocTroChuyenId, createdAt], map: "TinNhanHoTro_cuocTroChuyen_createdAt_idx")
+}
+
+model LuuTruTinNhanHoTroCu {
+  tinNhanId     Int      @id @db.Int
+  noiDung       String   @db.Text
+  thoiGianCu    DateTime @db.DateTime(0)
+  trangThaiCu   String   @db.VarChar(30)
+  khachHangIdCu Int      @db.Int
+  createdAtCu   DateTime @db.DateTime(0)
+  updatedAtCu   DateTime @db.DateTime(0)
+  archivedAt    DateTime @default(now()) @db.DateTime(0)
+}
+
+model PhanHoi {
+  phanHoiId      Int           @id @default(autoincrement()) @db.Int
+  mucDanhGia     Int           @db.Int
+  noiDung        String?       @db.VarChar(1000)
+  thoiGian       DateTime      @db.DateTime(0)
+  trangThai      String        @db.VarChar(30)
+  traLoi         String?       @db.Text
+  thoiGianTraLoi DateTime?     @db.DateTime(0)
+  nguoiTraLoi    String?       @db.VarChar(100)
+  khachHangId    Int           @db.Int
+  chuyenXeId     Int?          @db.Int
+  phieuGuiHangId Int?          @db.Int
+  createdAt      DateTime      @default(now()) @db.DateTime(0)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  khachHang      KhachHang     @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  chuyenXe       ChuyenXe?     @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  phieuGuiHang   PhieuGuiHang? @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
+}
+
+model LienHe {
+  lienHeId    Int      @id @default(autoincrement()) @db.Int
+  hoTen       String   @db.VarChar(100)
+  soDienThoai String   @db.VarChar(20)
+  email       String?  @db.VarChar(150)
+  tieuDe      String   @db.VarChar(200)
+  noiDung     String   @db.Text
+  trangThai   String   @default("CHO_XU_LY") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @db.DateTime(0)
+  updatedAt   DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+enum TrangThaiTaiKhoan {
+  HOAT_DONG
+  TAM_KHOA
+  BI_KHOA
+}
+
+enum LoaiTaiKhoan {
+  KHACH_HANG
+  QUAN_TRI
+}
+
+enum TrangThaiDiemGiaoNhanHang {
+  HOAT_DONG
+  TAM_NGUNG
+}
+
+enum VaiTroDiemGiaoNhan {
+  GUI_HANG
+  NHAN_HANG
+  CA_HAI
+}
+
+enum TrangThaiBangCuoc {
+  HOAT_DONG
+  TAM_NGUNG
+  HET_HIEU_LUC
+}
+
+enum TrangThaiPhieuGuiHang {
+  MOI_TAO
+  DA_TIEP_NHAN
+  DANG_VAN_CHUYEN
+  DA_GIAO
+  DA_HUY
+}
+
+enum NguoiTraCuoc {
+  NGUOI_GUI
+  NGUOI_NHAN
+}
+
+enum NhomSucChuaHangHoa {
+  XE_MAY
+  HANG_CONG_KENH
+  HANG_NHE
+}
+
+model LichSuPhanChuyenGuiHang {
+  lichSuPhanChuyenGuiHangId Int          @id @default(autoincrement())
+  phieuGuiHangId            Int
+  chuyenXeTruocId           Int?
+  chuyenXeSauId             Int?
+  taiKhoanId                Int?
+  lyDo                      String?      @db.VarChar(500)
+  thoiGian                  DateTime     @default(now()) @db.DateTime(0)
+  phieuGuiHang              PhieuGuiHang @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoan                  TaiKhoan?    @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([phieuGuiHangId, thoiGian])
+}
+
+model YeuCauTaoPhieuGuiHang {
+  yeuCauTaoPhieuGuiHangId Int           @id @default(autoincrement())
+  phamVi                  String        @db.VarChar(100)
+  key                     String        @db.VarChar(100)
+  payloadHash             String        @db.Char(64)
+  phieuGuiHangId          Int?
+  ketQua                  Json?
+  createdAt               DateTime      @default(now()) @db.DateTime(0)
+  hetHanLuc               DateTime      @db.DateTime(0)
+  phieuGuiHang            PhieuGuiHang? @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([phamVi, key])
+}
+
+model DanhMucDiaDiem {
+  diaDiemId          Int                  @id @default(autoincrement()) @db.Int
+  maDiaDiem          String               @unique(map: "DanhMucDiaDiem_maDiaDiem_key") @db.VarChar(50)
+  code               Int                  @db.Int
+  tenDiaDiem         String               @db.VarChar(150)
+  tenKhongDau        String               @db.VarChar(150)
+  capDiaDiem         String               @db.VarChar(50)
+  laDiaDanhCu        Boolean              @default(false)
+  chuThichSapNhap    String?              @db.VarChar(255)
+  noiBat             Boolean              @default(false)
+  thuTuHienThi       Int                  @default(0) @db.Int
+  trangThai          String               @default("HOAT_DONG") @db.VarChar(30)
+  diaDiemChaId       Int?                 @db.Int
+  createdAt          DateTime             @default(now()) @db.DateTime(0)
+  updatedAt          DateTime             @default(now()) @updatedAt @db.DateTime(0)
+  diaDiemCha         DanhMucDiaDiem?      @relation("DanhMucDiaDiem_ChaCon", fields: [diaDiemChaId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+  danhMucCon         DanhMucDiaDiem[]     @relation("DanhMucDiaDiem_ChaCon")
+  bangSapNhapMoi     BangSapNhapDiaDiem[] @relation("BangSapNhap_DiaDiemMoi")
+  bangSapNhapCu      BangSapNhapDiaDiem[] @relation("BangSapNhap_DiaDiemCu")
+  diemDonTrasTheoMoi DiemDonTra[]         @relation("DiemDonTra_DiaDiemMoi")
+  diemDonTrasTheoCu  DiemDonTra[]         @relation("DiemDonTra_DiaDiemCu")
+
+  @@unique([code, laDiaDanhCu], map: "DanhMucDiaDiem_code_laDiaDanhCu_key")
+  @@index([diaDiemChaId], map: "DanhMucDiaDiem_diaDiemChaId_idx")
+  @@index([laDiaDanhCu, capDiaDiem], map: "DanhMucDiaDiem_laDiaDanhCu_capDiaDiem_idx")
+  @@index([tenKhongDau], map: "DanhMucDiaDiem_tenKhongDau_idx")
+}
+
+model BangSapNhapDiaDiem {
+  bangSapNhapDiaDiemId Int            @id @default(autoincrement()) @db.Int
+  diaDiemMoiId         Int            @db.Int
+  diaDiemCuId          Int            @db.Int
+  createdAt            DateTime       @default(now()) @db.DateTime(0)
+  diaDiemMoi           DanhMucDiaDiem @relation("BangSapNhap_DiaDiemMoi", fields: [diaDiemMoiId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+  diaDiemCu            DanhMucDiaDiem @relation("BangSapNhap_DiaDiemCu", fields: [diaDiemCuId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([diaDiemCuId], map: "BangSapNhapDiaDiem_diaDiemCuId_key")
+  @@unique([diaDiemMoiId, diaDiemCuId], map: "BangSapNhapDiaDiem_moi_cu_key")
+  @@index([diaDiemCuId], map: "BangSapNhapDiaDiem_diaDiemCuId_idx")
+}
+
+model DiemDonTra {
+  diemDonTraId        Int                  @id @default(autoincrement()) @db.Int
+  maDiem              String               @db.VarChar(50)
+  tenDiem             String               @db.VarChar(150)
+  loaiDiem            String               @db.VarChar(50)
+  diaChi              String               @db.VarChar(255)
+  diaDiemMoiId        Int                  @db.Int
+  diaDiemCuId         Int                  @db.Int
+  viDo                Decimal?             @db.Decimal(10, 7)
+  kinhDo              Decimal?             @db.Decimal(10, 7)
+  soDienThoai         String?              @db.VarChar(20)
+  trangThai           String               @default("HOAT_DONG") @db.VarChar(30)
+  nhaXeId             Int                  @db.Int
+  benTrungChuyenId    Int?                 @db.Int
+  createdAt           DateTime             @default(now()) @db.DateTime(0)
+  updatedAt           DateTime             @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe               NhaXe                @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  diaDiemMoi          DanhMucDiaDiem       @relation("DiemDonTra_DiaDiemMoi", fields: [diaDiemMoiId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+  diaDiemCu           DanhMucDiaDiem       @relation("DiemDonTra_DiaDiemCu", fields: [diaDiemCuId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+  diemDonTraChuyenXes DiemDonTraChuyenXe[]
+  benTrungChuyen      DiemDonTra?          @relation("DiemDonTra_BenTrungChuyen", fields: [benTrungChuyenId], references: [diemDonTraId], onDelete: Restrict, onUpdate: Restrict)
+  diemTrungChuyens    DiemDonTra[]         @relation("DiemDonTra_BenTrungChuyen")
+  tuyenXeDiemDungs    TuyenXeDiemDung[]
+
+  @@unique([nhaXeId, maDiem], map: "DiemDonTra_nhaXeId_maDiem_key")
+  @@index([diaDiemMoiId], map: "DiemDonTra_diaDiemMoiId_idx")
+  @@index([diaDiemCuId], map: "DiemDonTra_diaDiemCuId_idx")
+  @@index([trangThai], map: "DiemDonTra_trangThai_idx")
+  @@index([benTrungChuyenId], map: "DiemDonTra_benTrungChuyenId_idx")
+}
+
+model DiemDonTraChuyenXe {
+  diemDonTraChuyenXeId Int        @id @default(autoincrement()) @db.Int
+  chuyenXeId           Int        @db.Int
+  diemDonTraId         Int        @db.Int
+  loaiDiem             String     @db.VarChar(20)
+  thoiGianDuKien       DateTime?  @db.Time(0)
+  phutLech             Int        @default(0) @db.Int
+  phutCoMatTruoc       Int        @default(15) @db.Int
+  nhanKhach            Boolean    @default(true)
+  ghiChu               String?    @db.VarChar(255)
+  thuTu                Int        @default(1) @db.Int
+  phuPhi               Decimal    @default(0.00) @db.Decimal(18, 2)
+  createdAt            DateTime   @default(now()) @db.DateTime(0)
+  updatedAt            DateTime   @default(now()) @updatedAt @db.DateTime(0)
+  chuyenXe             ChuyenXe   @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  diemDonTra           DiemDonTra @relation(fields: [diemDonTraId], references: [diemDonTraId], onDelete: Restrict, onUpdate: Restrict)
+  vesDon               Ve[]       @relation("Ve_DiemDonChuyenXe")
+  vesTra               Ve[]       @relation("Ve_DiemTraChuyenXe")
+
+  @@unique([chuyenXeId, diemDonTraId, loaiDiem], map: "DiemDonTraChuyenXe_chuyen_diem_loai_key")
+  @@index([chuyenXeId, loaiDiem], map: "DiemDonTraChuyenXe_chuyenXeId_loaiDiem_idx")
+  @@index([diemDonTraId], map: "DiemDonTraChuyenXe_diemDonTraId_idx")
+}
+
+model TuyenXeDiemDung {
+  tuyenXeDiemDungId Int        @id @default(autoincrement()) @db.Int
+  tuyenXeId         Int        @db.Int
+  diemDonTraId      Int        @db.Int
+  loaiDiem          String     @db.VarChar(20)
+  phutLech          Int        @db.Int
+  thuTu             Int        @default(1) @db.Int
+  phuPhi            Decimal    @default(0.00) @db.Decimal(18, 2)
+  phutCoMatTruoc    Int        @default(15) @db.Int
+  nhanKhach         Boolean    @default(true)
+  ghiChu            String?    @db.VarChar(255)
+  createdAt         DateTime   @default(now()) @db.DateTime(0)
+  updatedAt         DateTime   @default(now()) @updatedAt @db.DateTime(0)
+  tuyenXe           TuyenXe    @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  diemDonTra        DiemDonTra @relation(fields: [diemDonTraId], references: [diemDonTraId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tuyenXeId, diemDonTraId, loaiDiem], map: "TuyenXeDiemDung_tuyen_diem_loai_key")
+  @@index([tuyenXeId, loaiDiem], map: "TuyenXeDiemDung_tuyenXeId_loaiDiem_idx")
+  @@index([diemDonTraId], map: "TuyenXeDiemDung_diemDonTraId_idx")
+}
+
+// Durable email work; delivery never runs inside payment transactions.
+model EmailThongBao {
+  emailThongBaoId Int       @id @default(autoincrement())
+  eventKey        String    @unique @db.VarChar(100)
+  nguoiNhan       String    @db.VarChar(150)
+  tieuDe          String    @db.VarChar(150)
+  noiDung         String    @db.Text
+  trangThai       String    @default("PENDING") @db.VarChar(30)
+  soLanThu        Int       @default(0)
+  thuLaiLuc       DateTime  @default(now()) @db.DateTime(3)
+  leaseToken      String?   @db.VarChar(36)
+  leaseUntil      DateTime? @db.DateTime(3)
+  createdAt       DateTime  @default(now()) @db.DateTime(3)
+  updatedAt       DateTime  @updatedAt @db.DateTime(3)
+
+  @@index([trangThai, thuLaiLuc])
+}
+
+// Session-bound Android registration. Tokens never leave the backend API.
+model ThietBiThongBao {
+  thietBiThongBaoId Int      @id @default(autoincrement())
+  tokenHash         String   @unique @db.Char(64)
+  token             String   @db.Text
+  khachHangId       Int
+  taiKhoanId        Int
+  sessionId         String   @db.Char(36)
+  hoatDong          Boolean  @default(true)
+  createdAt         DateTime @default(now()) @db.DateTime(3)
+  updatedAt         DateTime @updatedAt @db.DateTime(3)
+
+  @@index([khachHangId, hoatDong])
+}
+
+model PushThongBao {
+  pushThongBaoId    Int       @id @default(autoincrement())
+  eventKey          String    @unique @db.VarChar(180)
+  thongBaoId        Int
+  khachHangId       Int
+  thietBiThongBaoId Int
+  sessionId         String    @db.Char(36)
+  tokenHash         String    @db.Char(64)
+  trangThai         String    @default("PENDING") @db.VarChar(30)
+  leaseToken        String?   @db.Char(36)
+  leaseUntil        DateTime? @db.DateTime(3)
+  createdAt         DateTime  @default(now()) @db.DateTime(3)
+  updatedAt         DateTime  @updatedAt @db.DateTime(3)
+
+  @@index([trangThai, createdAt])
+}
+
+model AiKnowledgeDocument {
+  id            Int                 @id @default(autoincrement()) @db.Int
+  documentCode  String              @unique @db.VarChar(100)
+  title         String              @db.VarChar(255)
+  category      String              @db.VarChar(50)
+  scope         String              @default("GLOBAL") @db.VarChar(20)
+  nhaXeId       Int?                @db.Int
+  hierarchyPath String              @db.VarChar(500)
+  rawContent    String              @db.Text
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now()) @db.DateTime(0)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe         NhaXe?              @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Cascade, onUpdate: Restrict)
+  chunks        AiKnowledgeChunk[]
+
+  @@index([nhaXeId])
+  @@index([category, scope, isActive])
+}
+
+model AiKnowledgeChunk {
+  id              Int                 @id @default(autoincrement()) @db.Int
+  documentId      Int                 @db.Int
+  chunkIndex      Int                 @db.Int
+  headerPrefix    String              @db.VarChar(500)
+  rawContent      String              @db.Text
+  groundedContent String              @db.Text
+  embedding       Json
+  embeddingModel  String              @default("jina-embeddings-v3") @db.VarChar(50)
+  createdAt       DateTime            @default(now()) @db.DateTime(0)
+  updatedAt       DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  document        AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+}
+
+model AiChatSession {
+  id           Int             @id @default(autoincrement()) @db.Int
+  sessionToken String          @unique @db.VarChar(64)
+  khachHangId  Int?            @db.Int
+  status       String          @default("ACTIVE") @db.VarChar(30)
+  createdAt    DateTime        @default(now()) @db.DateTime(0)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  khachHang    KhachHang?      @relation(fields: [khachHangId], references: [khachHangId], onDelete: SetNull, onUpdate: Restrict)
+  messages     AiChatMessage[]
+
+  @@index([khachHangId])
+  @@index([sessionToken])
+}
+
+model AiChatMessage {
+  id                   Int           @id @default(autoincrement()) @db.Int
+  sessionId            Int           @db.Int
+  role                 String        @db.VarChar(20)
+  content              String        @db.Text
+  intent               String?       @db.VarChar(50)
+  citations            Json?
+  toolCalls            Json?
+  requiresHumanHandoff Boolean       @default(false)
+  latencyMs            Int?          @db.Int
+  createdAt            DateTime      @default(now()) @db.DateTime(0)
+  session              AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@index([sessionId, createdAt])
+}
+
+model AiChatRequest {
+  id              Int       @id @default(autoincrement()) @db.Int
+  requestId       String    @unique @db.VarChar(64)
+  payloadHash     String    @db.Char(64)
+  status          String    @default("PROCESSING") @db.VarChar(30)
+  sessionToken    String?   @db.VarChar(64)
+  taiKhoanId      Int?      @db.Int
+  khachHangId     Int?      @db.Int
+  recoveryKeyHash String?   @db.Char(64)
+  responsePayload Json?
+  errorMessage    String?   @db.Text
+  errorCode       String?   @db.VarChar(50)
+  leaseUntil      DateTime? @db.DateTime(0)
+  createdAt       DateTime  @default(now()) @db.DateTime(0)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  expiresAt       DateTime  @db.DateTime(0)
+
+  @@index([taiKhoanId, status])
+  @@index([sessionToken])
+  @@index([expiresAt])
+}
+
+model AiChatbotSetting {
+  id                   Int      @id @default(1) @db.Int
+  idempotencyTtlDays   Int      @default(7) @db.Int
+  leaseDurationSeconds Int      @default(60) @db.Int
+  contextHistoryLimit  Int      @default(10) @db.Int
+  temperature          Decimal  @default(0.15) @db.Decimal(3, 2)
+  updatedAt            DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+

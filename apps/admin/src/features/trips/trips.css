@@ -1,0 +1,50 @@
+.trips-seat-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--admin-space-component-gap);
+}
+
+@media (max-width: 640px) {
+  .trips-seat-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.trips-seat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--admin-space-summary-card-padding);
+  border-radius: var(--admin-radius-card);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  text-align: center;
+}
+
+.trips-seat-card__count {
+  font-size: var(--admin-type-metric-compact-size);
+  font-weight: var(--admin-type-metric-compact-weight);
+  color: var(--admin-text-strong);
+  line-height: var(--admin-type-metric-compact-line-height);
+}
+
+.trips-seat-card__label {
+  font-size: var(--admin-type-helper-size);
+  color: var(--admin-text-muted);
+  margin-top: var(--admin-space-title-copy-gap);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.trips-seat-card--available .trips-seat-card__count {
+  color: #10b981;
+}
+
+.trips-seat-card--held .trips-seat-card__count {
+  color: #f59e0b;
+}
+
+.trips-seat-card--booked .trips-seat-card__count {
+  color: #ef4444;
+}
+

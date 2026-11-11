@@ -1,0 +1,1635 @@
+import crypto from 'node:crypto';
+
+function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
+import 'dotenv/config';
+import bcrypt from 'bcrypt';
+import { ensureDemoPayment } from './demo-revenue.mjs';
+import { runSeedShipmentsNetwork } from './seed-shipments-network.mjs';
+import { getVehicleSeatLayout } from './lib/seat-layouts.mjs';
+import { databaseConfig } from './lib/db-config.mjs';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import {
+  ADMIN_PERMISSION_CATALOG,
+  ADMIN_ROLE_DEFAULT_PERMISSION_KEYS,
+} from '../apps/api/dist/auth/permissions/permission-catalog.js';
+
+const TZ = 'Asia/Ho_Chi_Minh';
+const PASSWORD = 'VexGo@123';
+const IMAGE_URLS = {
+  dienTu:
+    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=640&q=80',
+  thucPham:
+    'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=640&q=80',
+  quanAo:
+    'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=640&q=80',
+};
+
+const operatorDefs = [
+  { code: 'FUTA', name: 'Phương Trang', prefix: '30F', city: 'TP.HCM' },
+  { code: 'TB', name: 'Thành Bưởi', prefix: '51B', city: 'Đà Lạt' },
+  { code: 'HM', name: 'Hoa Mai', prefix: '29A', city: 'Vũng Tàu' },
+];
+
+const routeDefsByOperator = {
+  FUTA: [
+    ['TP.HCM', 'Đà Lạt', 'HOAT_DONG', 420],
+    ['Đà Lạt', 'TP.HCM', 'HOAT_DONG', 420],
+    ['TP.HCM', 'Nha Trang', 'TAM_NGUNG', 540],
+  ],
+  TB: [
+    ['Đà Lạt', 'TP.HCM', 'HOAT_DONG', 420],
+    ['TP.HCM', 'Đà Lạt', 'HOAT_DONG', 420],
+    ['Đà Lạt', 'Nha Trang', 'TAM_NGUNG', 240],
+  ],
+  HM: [
+    ['Vũng Tàu', 'TP.HCM', 'HOAT_DONG', 150],
+    ['TP.HCM', 'Vũng Tàu', 'HOAT_DONG', 150],
+    ['Vũng Tàu', 'Đà Lạt', 'TAM_NGUNG', 360],
+  ],
+};
+
+const branchDefsByOperator = {
+  FUTA: [
+    { diaChi: '12 Đường Nguyễn Huệ, Phường Sài Gòn, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Sài Gòn', maTinhThanh: '79', maPhuongXa: '26740', routeCity: 'TP.HCM' },
+    { diaChi: '45 Đường Trần Phú, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '128 Đường Điện Biên Phủ, Phường Gia Định, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Gia Định', maTinhThanh: '79', maPhuongXa: '26944', routeCity: 'TP.HCM' },
+    { diaChi: '18 Đường Phan Đình Phùng, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '77 Đường Lê Lợi, Phường Vũng Tàu, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Vũng Tàu', maTinhThanh: '79', maPhuongXa: '26506', routeCity: 'Vũng Tàu' },
+  ],
+  TB: [
+    { diaChi: '45 Đường Trần Phú, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '91 Đường Võ Văn Tần, Phường Xuân Hòa, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Xuân Hòa', maTinhThanh: '79', maPhuongXa: '27139', routeCity: 'TP.HCM' },
+    { diaChi: '31 Đường Phan Đình Phùng, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '128 Đường Điện Biên Phủ, Phường Gia Định, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Gia Định', maTinhThanh: '79', maPhuongXa: '26944', routeCity: 'TP.HCM' },
+    { diaChi: '16 Đường Thái Phiên, Phường Lâm Viên - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Lâm Viên - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24778', routeCity: 'Đà Lạt' },
+  ],
+  HM: [
+    { diaChi: '12 Đường Trần Hưng Đạo, Phường Vũng Tàu, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Vũng Tàu', maTinhThanh: '79', maPhuongXa: '26506', routeCity: 'Vũng Tàu' },
+    { diaChi: '25 Đường Nguyễn Thị Minh Khai, Phường Sài Gòn, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Sài Gòn', maTinhThanh: '79', maPhuongXa: '26740', routeCity: 'TP.HCM' },
+    { diaChi: '88 Đường Hoàng Hoa Thám, Phường Vũng Tàu, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Vũng Tàu', maTinhThanh: '79', maPhuongXa: '26506', routeCity: 'Vũng Tàu' },
+    { diaChi: '31 Đường Phan Đình Phùng, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '91 Đường Võ Văn Tần, Phường Xuân Hòa, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Xuân Hòa', maTinhThanh: '79', maPhuongXa: '27139', routeCity: 'TP.HCM' },
+  ],
+};
+
+const roleDefs = [
+  ['SUPER_ADMIN', 'Quản trị hệ thống'],
+  ['NHA_XE_ADMIN', 'Quản trị nhà xe'],
+  ['NHAN_VIEN_DIEU_HANH', 'Nhân viên điều hành'],
+  ['NHAN_VIEN_BAN_VE', 'Nhân viên bán vé'],
+  ['NHAN_VIEN_CSKH', 'Nhân viên chăm sóc khách hàng'],
+  ['NHAN_VIEN_PHU_XE', 'Nhân viên phụ xe'],
+  ['NHAN_VIEN_KINH_DOANH', 'Nhân viên kinh doanh'],
+  ['KHACH_HANG', 'Khách hàng'],
+];
+
+const vehicleTypeDefs = [
+  ['GHẾ NGỒI', 'Xe ghế ngồi tiêu chuẩn'],
+  ['GIƯỜNG NẰM', 'Xe giường nằm đường dài'],
+  ['LIMOUSINE', 'Xe limousine tiện nghi'],
+];
+
+const vehicleCapacityDefaults = {
+  'GHẾ NGỒI': {
+    sucChuaXeMayMacDinh: 1,
+    sucChuaHangCongKenhMacDinh: 5,
+    sucChuaHangNheMacDinh: 45,
+  },
+  'GIƯỜNG NẰM': {
+    sucChuaXeMayMacDinh: 2,
+    sucChuaHangCongKenhMacDinh: 8,
+    sucChuaHangNheMacDinh: 80,
+  },
+  LIMOUSINE: {
+    sucChuaXeMayMacDinh: 0,
+    sucChuaHangCongKenhMacDinh: 2,
+    sucChuaHangNheMacDinh: 30,
+  },
+};
+
+const cargoTypeDefs = [
+  ['BƯU PHẨM', 'Bưu phẩm đóng gói thông thường'],
+  ['THỰC PHẨM', 'Thực phẩm khô, đóng gói kín'],
+  ['THƯ TÍN', 'Thư từ và hồ sơ'],
+  ['HẢI SẢN', 'Hải sản được đóng gói phù hợp'],
+  ['ĐIỆN TỬ', 'Thiết bị điện tử'],
+  ['QUẦN ÁO', 'Quần áo và phụ kiện'],
+  ['HÀNG GIA DỤNG', 'Đồ dùng gia đình'],
+];
+
+const customerNames = [
+  'Nguyễn Minh Anh',
+  'Trần Quốc Huy',
+  'Lê Hoàng Phúc',
+  'Phạm Ngọc Mai',
+  'Võ Thanh Tùng',
+  'Đặng Khánh Linh',
+  'Bùi Gia Bảo',
+  'Đỗ Thùy Dương',
+  'Hồ Nhật Nam',
+  'Nguyễn Thảo Vy',
+  'Trần Đức Minh',
+  'Lý Quỳnh Như',
+  'Phan Anh Khoa',
+  'Huỳnh Kim Chi',
+  'Mai Thành Đạt',
+  'Dương Ngọc Trâm',
+  'Vũ Hoàng Long',
+  'Đinh Tú Anh',
+  'Cao Minh Quân',
+  'Tạ Bảo Châu',
+];
+
+const employeeNames = [
+  'Nguyễn Văn An',
+  'Trần Thị Bình',
+  'Lê Minh Cường',
+  'Phạm Thị Duyên',
+  'Võ Quốc Em',
+  'Đặng Gia Hân',
+  'Bùi Thành Khang',
+];
+
+function localDate(year, month, day, hour = 0, minute = 0) {
+  // Store the fixed UTC instant corresponding to Asia/Ho_Chi_Minh local time.
+  return new Date(Date.UTC(year, month - 1, day, hour - 7, minute, 0));
+}
+
+function tripDepartureDate(trip) {
+  const date = new Date(trip.ngayKhoiHanh);
+  const time = new Date(trip.gioKhoiHanh);
+  return localDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), time.getUTCHours(), time.getUTCMinutes());
+}
+
+function selectTripAfter(trips, preferredIndex, minimumDeparture, excludedTripId = null, inclusive = false) {
+  const candidates = trips.filter((trip) => {
+    const departure = tripDepartureDate(trip).getTime();
+    const minimum = minimumDeparture.getTime();
+    return trip.chuyenXeId !== excludedTripId && (inclusive ? departure >= minimum : departure > minimum);
+  });
+  if (!candidates.length) return null;
+  return candidates[preferredIndex % candidates.length];
+}
+
+function dateOnly(year, month, day) {
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function timeOnly(hour, minute = 0) {
+  return new Date(Date.UTC(1970, 0, 1, hour, minute, 0));
+}
+
+function pad(value, width) {
+  return String(value).padStart(width, '0');
+}
+
+function money(value) {
+  return String(Math.round(value));
+}
+
+function decimal(value) {
+  return String(value);
+}
+
+function seatCode(index) {
+  const section = String.fromCharCode(65 + Math.floor(index / 20));
+  return `${section}${pad((index % 20) + 1, 2)}`;
+}
+
+async function passwordHash(password) {
+  return bcrypt.hash(password, 10);
+}
+
+const prisma = new PrismaClient({ adapter: new PrismaMariaDb(databaseConfig()) });
+const counts = new Map();
+const scenarios = [];
+
+function count(model, action = 'upsert') {
+  const key = `${model}:${action}`;
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+
+async function upsertBy(db, model, where, create, update = {}) {
+  const delegateName = `${model[0].toLowerCase()}${model.slice(1)}`;
+  const record = await db[delegateName].upsert({ where, create, update });
+  count(model, 'upsert');
+  return record;
+}
+
+async function findOrCreate(db, model, where, create, update = {}) {
+  const delegateName = `${model[0].toLowerCase()}${model.slice(1)}`;
+  const existing = await db[delegateName].findFirst({ where });
+  if (existing) {
+    const keys = Object.keys(update);
+    if (keys.length) {
+      const updated = await db[delegateName].update({ where: { [`${model[0].toLowerCase()}${model.slice(1)}Id`]: existing[`${model[0].toLowerCase()}${model.slice(1)}Id`] }, data: update });
+      count(model, 'update');
+      return updated;
+    }
+    count(model, 'existing');
+    return existing;
+  }
+  const created = await db[delegateName].create({ data: create });
+  count(model, 'create');
+  return created;
+}
+
+function byId(model, id) {
+  const primaryKeys = { HinhAnhHangHoa: 'hinhAnhId' };
+  return { [primaryKeys[model] ?? `${model[0].toLowerCase()}${model.slice(1)}Id`]: id };
+}
+
+async function seedOperators(db) {
+  const result = {};
+  for (const definition of operatorDefs) {
+    result[definition.code] = await upsertBy(
+      db,
+      'NhaXe',
+      { maNhaXe: definition.code },
+      {
+        maNhaXe: definition.code,
+        tenNhaXe: definition.name,
+        thongTinLienHe: `Tổng đài demo ${definition.code}: +84900000${definition.code === 'FUTA' ? '001' : definition.code === 'TB' ? '002' : '003'}`,
+        trangThai: 'HOAT_DONG',
+      },
+      { tenNhaXe: definition.name, trangThai: 'HOAT_DONG' },
+    );
+  }
+  return result;
+}
+
+async function seedVehicleTypes(db, operators) {
+  const result = {};
+  for (const definition of operatorDefs) {
+    const nhaXeId = operators[definition.code].nhaXeId;
+    result[definition.code] = {};
+    for (const [name, description] of vehicleTypeDefs) {
+      const capacityDefaults = vehicleCapacityDefaults[name];
+      result[definition.code][name] = await upsertBy(
+        db,
+        'LoaiXe',
+        { nhaXeId_tenLoai: { nhaXeId, tenLoai: name } },
+        { nhaXeId, tenLoai: name, moTa: description, ...capacityDefaults },
+        { moTa: description, ...capacityDefaults },
+      );
+    }
+  }
+  return result;
+}
+
+async function seedRoles(db) {
+  const result = {};
+  for (const [name, description] of roleDefs) {
+    result[name] = await upsertBy(
+      db,
+      'VaiTro',
+      { tenVaiTro: name },
+      { tenVaiTro: name, moTa: description },
+      { moTa: description },
+    );
+  }
+  return result;
+}
+
+async function seedPermissionCatalog(db) {
+  for (const definition of ADMIN_PERMISSION_CATALOG) {
+    await upsertBy(
+      db,
+      'Quyen',
+      { tenQuyen: definition.key },
+      { tenQuyen: definition.key, moTa: definition.description },
+      { moTa: definition.description },
+    );
+  }
+}
+
+async function seedDefaultRolePermissions(db, roles) {
+  for (const [roleName, permissionKeys] of Object.entries(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS)) {
+    const role = roles[roleName];
+    if (!role || permissionKeys.length === 0) continue;
+    for (const key of permissionKeys) {
+      const permission = await db.quyen.findUnique({ where: { tenQuyen: key } });
+      if (permission) {
+        await db.vaiTroQuyen.upsert({
+          where: { vaiTroId_quyenId: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId } },
+          create: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId },
+          update: {},
+        });
+      }
+    }
+  }
+}
+
+async function seedAccounts(db, operators, roles) {
+  const accounts = { customers: [], employees: [], superAdmin: null };
+  const hash = await passwordHash(PASSWORD);
+  const superAccount = await upsertBy(
+    db,
+    'TaiKhoan',
+    { soDienThoai_loaiTaiKhoan: { soDienThoai: '+84900000000', loaiTaiKhoan: 'QUAN_TRI' } },
+    {
+      soDienThoai: '+84900000000',
+      matKhau: hash,
+      email: 'superadmin@vexgo.test',
+      loaiTaiKhoan: 'QUAN_TRI',
+      daXacThucSoDienThoai: true,
+      trangThai: 'HOAT_DONG',
+    },
+    { matKhau: hash, email: 'superadmin@vexgo.test', loaiTaiKhoan: 'QUAN_TRI', trangThai: 'HOAT_DONG' },
+  );
+  const superEmployeeCode = deterministicUuid('NV', 'SYSTEM', 0);
+  const superEmployee = await upsertBy(
+    db,
+    'NhanVien',
+    { taiKhoanId: superAccount.taiKhoanId },
+    {
+      maNhanVien: superEmployeeCode,
+      hoTen: 'Quản trị viên VexGo',
+      cccd: '000000000000',
+      ngaySinh: dateOnly(1988, 1, 1),
+      chucVu: 'Quản trị hệ thống',
+      ngayVaoLam: dateOnly(2024, 1, 1),
+      trangThaiLamViec: 'DANG_LAM_VIEC',
+      nhaXeId: null,
+      taiKhoanId: superAccount.taiKhoanId,
+    },
+    {
+      maNhanVien: superEmployeeCode,
+      hoTen: 'Quản trị viên VexGo',
+      cccd: '000000000000',
+      ngaySinh: dateOnly(1988, 1, 1),
+      chucVu: 'Quản trị hệ thống',
+      ngayVaoLam: dateOnly(2024, 1, 1),
+      trangThaiLamViec: 'DANG_LAM_VIEC',
+      nhaXeId: null,
+      taiKhoanId: superAccount.taiKhoanId,
+    },
+  );
+  accounts.superAdmin = superAccount;
+  await upsertBy(
+    db,
+    'TaiKhoanVaiTro',
+    { taiKhoanId_vaiTroId: { taiKhoanId: superAccount.taiKhoanId, vaiTroId: roles.SUPER_ADMIN.vaiTroId } },
+    { taiKhoanId: superAccount.taiKhoanId, vaiTroId: roles.SUPER_ADMIN.vaiTroId },
+  );
+
+  for (let opIndex = 0; opIndex < operatorDefs.length; opIndex += 1) {
+    const definition = operatorDefs[opIndex];
+    const operator = operators[definition.code];
+    const employeeRoles = [
+      'NHA_XE_ADMIN',
+      'NHAN_VIEN_BAN_VE',
+      'NHAN_VIEN_BAN_VE',
+      'NHAN_VIEN_CSKH',
+      'NHAN_VIEN_PHU_XE',
+      'NHAN_VIEN_KINH_DOANH',
+      'NHAN_VIEN_BAN_VE',
+    ];
+    const employeePositions = [
+      'Quản lý điều hành',
+      'Nhân viên bán vé',
+      'Nhân viên bán vé',
+      'Chăm sóc khách hàng',
+      'Phụ xe tuyến',
+      'Nhân viên kinh doanh',
+      'Nhân viên bán vé',
+    ];
+    for (let employeeIndex = 0; employeeIndex < employeeRoles.length; employeeIndex += 1) {
+      const employeeCode = deterministicUuid('NV', definition.code, employeeIndex);
+      const phone = `+8491${pad(opIndex * 100 + employeeIndex + 1, 7)}`;
+      const roleName = employeeRoles[employeeIndex];
+      const isFormer = employeeIndex === 6;
+      const birthDate = dateOnly(1985 + employeeIndex, 2 + opIndex, 3 + employeeIndex);
+      const cccd = `00000000${pad(opIndex * 10 + employeeIndex + 1, 4)}`;
+      const employeeEmail =
+        employeeIndex === 0
+          ? `admin.${definition.code.toLowerCase()}@vexgo.test`
+          : `${definition.code.toLowerCase()}.nv${pad(employeeIndex + 1, 2)}@vexgo.test`;
+      const account = await upsertBy(
+        db,
+        'TaiKhoan',
+        { soDienThoai_loaiTaiKhoan: { soDienThoai: phone, loaiTaiKhoan: 'QUAN_TRI' } },
+        {
+          soDienThoai: phone,
+          matKhau: hash,
+          email: employeeEmail,
+          loaiTaiKhoan: 'QUAN_TRI',
+          daXacThucSoDienThoai: !isFormer,
+          trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
+        },
+        {
+          matKhau: hash,
+          email: employeeEmail,
+          loaiTaiKhoan: 'QUAN_TRI',
+          trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
+        },
+      );
+      const employee = await upsertBy(
+        db,
+        'NhanVien',
+        { taiKhoanId: account.taiKhoanId },
+        {
+          maNhanVien: employeeCode,
+          hoTen: employeeNames[employeeIndex],
+          cccd: cccd,
+          ngaySinh: birthDate,
+          chucVu: employeePositions[employeeIndex],
+          ngayVaoLam: dateOnly(2025, 1, 15),
+          trangThaiLamViec: isFormer ? 'DA_NGHI_VIEC' : 'DANG_LAM_VIEC',
+          nhaXeId: operator.nhaXeId,
+          taiKhoanId: account.taiKhoanId,
+        },
+        {
+          maNhanVien: employeeCode,
+          hoTen: employeeNames[employeeIndex],
+          cccd: cccd,
+          ngaySinh: birthDate,
+          chucVu: employeePositions[employeeIndex],
+          ngayVaoLam: dateOnly(2025, 1, 15),
+          trangThaiLamViec: isFormer ? 'DA_NGHI_VIEC' : 'DANG_LAM_VIEC',
+          taiKhoanId: account.taiKhoanId,
+        },
+      );
+      await upsertBy(
+        db,
+        'TaiKhoanVaiTro',
+        { taiKhoanId_vaiTroId: { taiKhoanId: account.taiKhoanId, vaiTroId: roles[roleName].vaiTroId } },
+        { taiKhoanId: account.taiKhoanId, vaiTroId: roles[roleName].vaiTroId },
+      );
+      accounts.employees.push({ ...employee, account, roleName, operatorCode: definition.code });
+    }
+  }
+
+  for (let index = 0; index < customerNames.length; index += 1) {
+    const code = deterministicUuid('KH', index);
+    const phone = `+8492${pad(index + 1, 7)}`;
+    const existingCustomer = await db.khachHang.findUnique({ where: { maKhachHang: code }, include: { taiKhoan: true } });
+    const customerBirthDate = dateOnly(1970 + (index % 25), 1 + (index % 12), 1 + (index % 26));
+    const customerCccd = `000000${pad(index + 1, 6)}`;
+    const accountData = {
+      soDienThoai: phone,
+      matKhau: hash,
+      email: `kh${pad(index + 1, 6)}@vexgo.test`,
+      loaiTaiKhoan: 'KHACH_HANG',
+      daXacThucSoDienThoai: index !== 19,
+      trangThai: index === 18 ? 'TAM_KHOA' : 'HOAT_DONG',
+    };
+    const account = existingCustomer
+      ? await db.taiKhoan.update({ where: byId('TaiKhoan', existingCustomer.taiKhoanId), data: accountData })
+      : await upsertBy(db, 'TaiKhoan', { soDienThoai_loaiTaiKhoan: { soDienThoai: phone, loaiTaiKhoan: 'KHACH_HANG' } }, accountData, { matKhau: accountData.matKhau, email: accountData.email, loaiTaiKhoan: 'KHACH_HANG', daXacThucSoDienThoai: accountData.daXacThucSoDienThoai, trangThai: accountData.trangThai });
+    count('TaiKhoan', existingCustomer ? 'update' : 'upsert');
+    const customer = await upsertBy(
+      db,
+      'KhachHang',
+      { maKhachHang: code },
+      { maKhachHang: code, hoTen: customerNames[index], cccd: customerCccd, ngaySinh: customerBirthDate, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
+      { hoTen: customerNames[index], cccd: customerCccd, ngaySinh: customerBirthDate, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
+    );
+    await upsertBy(
+      db,
+      'TaiKhoanVaiTro',
+      { taiKhoanId_vaiTroId: { taiKhoanId: account.taiKhoanId, vaiTroId: roles.KHACH_HANG.vaiTroId } },
+      { taiKhoanId: account.taiKhoanId, vaiTroId: roles.KHACH_HANG.vaiTroId },
+    );
+    accounts.customers.push({ ...customer, account, initialName: customerNames[index], initialPhone: phone });
+  }
+  return accounts;
+}
+
+async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
+  const vehicleConfigs = [
+    { type: 'GHẾ NGỒI', seats: 29, status: 'HOAT_DONG' },
+    { type: 'GIƯỜNG NẰM', seats: 22, status: 'HOAT_DONG' },
+    { type: 'LIMOUSINE', seats: 16, status: 'HOAT_DONG' },
+    { type: 'GHẾ NGỒI', seats: 45, status: 'HOAT_DONG' },
+    { type: 'GIƯỜNG NẰM', seats: 34, status: 'HOAT_DONG' },
+    { type: 'LIMOUSINE', seats: 20, status: 'BAO_TRI' },
+  ];
+  const vehicles = {};
+  const routes = {};
+  const trips = {};
+  for (const definition of operatorDefs) {
+    const operator = operators[definition.code];
+    vehicles[definition.code] = [];
+    for (let index = 0; index < vehicleConfigs.length; index += 1) {
+      const config = vehicleConfigs[index];
+      const plate = `${definition.prefix}-${pad(123 + index, 3)}.${pad(index + 45, 2)}`;
+      const vehicle = await upsertBy(
+        db,
+        'Xe',
+        { bienSoXe: plate },
+        { bienSoXe: plate, trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[definition.code][config.type].loaiXeId },
+        { trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[definition.code][config.type].loaiXeId },
+      );
+      const targetLayout = getVehicleSeatLayout(definition.code, config.type, config.seats);
+      const existingSeats = await db.ghe.findMany({
+        where: { xeId: vehicle.xeId },
+        orderBy: { gheId: 'asc' },
+      });
+
+      const needsRename = existingSeats.length > 0 && (
+        existingSeats.length !== targetLayout.length ||
+        existingSeats.some((g, i) => targetLayout[i] && g.tenGhe !== targetLayout[i].tenGhe)
+      );
+      if (needsRename) {
+        for (const g of existingSeats) {
+          await db.ghe.update({
+            where: { gheId: g.gheId },
+            data: { tenGhe: `TMP_${g.gheId}`, toaDoX: null, toaDoY: null },
+          });
+        }
+      }
+
+      const seats = [];
+      const updateCount = Math.min(existingSeats.length, targetLayout.length);
+      for (let i = 0; i < updateCount; i++) {
+        const spec = targetLayout[i];
+        const updated = await db.ghe.update({
+          where: { gheId: existingSeats[i].gheId },
+          data: {
+            tenGhe: spec.tenGhe,
+            viTri: spec.viTri,
+            tang: spec.tang,
+            toaDoX: spec.toaDoX,
+            toaDoY: spec.toaDoY,
+          },
+        });
+        seats.push(updated);
+      }
+
+      for (let i = existingSeats.length; i < targetLayout.length; i++) {
+        const spec = targetLayout[i];
+        const created = await db.ghe.create({
+          data: {
+            maGhe: deterministicUuid('GHE', vehicle.bienSoXe, spec.tenGhe),
+            tenGhe: spec.tenGhe,
+            viTri: spec.viTri,
+            tang: spec.tang,
+            toaDoX: spec.toaDoX,
+            toaDoY: spec.toaDoY,
+            xeId: vehicle.xeId,
+          },
+        });
+        seats.push(created);
+      }
+
+      if (existingSeats.length > targetLayout.length) {
+        const primaryGheIds = existingSeats.slice(0, targetLayout.length).map((g) => g.gheId);
+        for (let i = targetLayout.length; i < existingSeats.length; i++) {
+          const extraGhe = existingSeats[i];
+          const tickets = await db.ve.findMany({
+            where: { gheChuyenXe: { gheId: extraGhe.gheId } },
+            include: { gheChuyenXe: true },
+          });
+
+          for (const ticket of tickets) {
+            const tripId = ticket.gheChuyenXe.chuyenXeId;
+            const replacementGheChuyenXe = await db.gheChuyenXe.findFirst({
+              where: {
+                chuyenXeId: tripId,
+                gheId: { in: primaryGheIds },
+                trangThai: 'TRONG',
+              },
+            });
+            if (replacementGheChuyenXe) {
+              await db.ve.update({
+                where: { veId: ticket.veId },
+                data: { gheChuyenXeId: replacementGheChuyenXe.gheChuyenXeId },
+              });
+              await db.gheChuyenXe.update({
+                where: { gheChuyenXeId: replacementGheChuyenXe.gheChuyenXeId },
+                data: { trangThai: ticket.gheChuyenXe.trangThai },
+              });
+            }
+          }
+
+          await db.gheChuyenXe.deleteMany({ where: { gheId: extraGhe.gheId } });
+          await db.ghe.delete({ where: { gheId: extraGhe.gheId } });
+        }
+      }
+
+      vehicles[definition.code].push({ ...vehicle, seats, type: config.type });
+    }
+
+    const routeDefs = routeDefsByOperator[definition.code];
+    routes[definition.code] = [];
+    for (let routeIndex = 0; routeIndex < routeDefs.length; routeIndex += 1) {
+      const [from, to, status, durationMinutes] = routeDefs[routeIndex];
+      const code = deterministicUuid('TX', definition.code, routeIndex);
+      const route = await findOrCreate(
+        db,
+        'TuyenXe',
+        { nhaXeId: operator.nhaXeId, maTuyenXe: code },
+        { maTuyenXe: code, diemDi: from, diemDen: to, thoiGianChayPhut: durationMinutes ?? null, trangThai: status, nhaXeId: operator.nhaXeId },
+        { diemDi: from, diemDen: to, thoiGianChayPhut: durationMinutes ?? null, trangThai: status },
+      );
+      routes[definition.code].push(route);
+    }
+
+    trips[definition.code] = [];
+    for (let dayOffset = 0; dayOffset < 8; dayOffset += 1) {
+      const day = 22 + dayOffset;
+      let sequence = 1;
+      for (let routeIndex = 0; routeIndex < 2; routeIndex += 1) {
+        for (const hour of [7, 13]) {
+          const vehicle = vehicles[definition.code][(dayOffset + routeIndex + (hour === 13 ? 1 : 0)) % 5];
+          const route = routes[definition.code][routeIndex];
+          const duration = route.thoiGianChayPhut ?? 420;
+          const arrHour = (hour + Math.floor(duration / 60)) % 24;
+          const arrMin = duration % 60;
+          const code = deterministicUuid('CX', definition.code, day, sequence);
+          sequence += 1;
+          const trip = await upsertBy(
+            db,
+            'ChuyenXe',
+            { maChuyenXe: code },
+            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), ...tripCapacitySnapshot(vehicleTypes, definition.code, vehicle.type, routeIndex === 0 && route.trangThai === 'HOAT_DONG'), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), ...tripCapacitySnapshot(vehicleTypes, definition.code, vehicle.type, routeIndex === 0 && route.trangThai === 'HOAT_DONG'), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+          );
+          const tripSeats = [];
+          for (const seat of vehicle.seats) {
+            const tripSeat = await upsertBy(
+              db,
+              'GheChuyenXe',
+              { chuyenXeId_gheId: { chuyenXeId: trip.chuyenXeId, gheId: seat.gheId } },
+              {
+                trangThai: 'TRONG',
+                chuyenXeId: trip.chuyenXeId,
+                gheId: seat.gheId,
+                tang: seat.tang,
+                toaDoX: seat.toaDoX,
+                toaDoY: seat.toaDoY,
+              },
+              {
+                trangThai: 'TRONG',
+                tang: seat.tang,
+                toaDoX: seat.toaDoX,
+                toaDoY: seat.toaDoY,
+              },
+            );
+            tripSeats.push(tripSeat);
+          }
+          trips[definition.code].push({ ...trip, vehicle, route, tripSeats });
+        }
+      }
+    }
+  }
+  return { vehicles, routes, trips };
+}
+
+async function seedPrices(db, operators, routes, vehicleTypes) {
+  const prices = new Map();
+  const typeDelta = { 'GHẾ NGỒI': 0, 'GIƯỜNG NẰM': 70000, LIMOUSINE: 140000 };
+  for (const definition of operatorDefs) {
+    for (let routeIndex = 0; routeIndex < routes[definition.code].length; routeIndex += 1) {
+      const route = routes[definition.code][routeIndex];
+      for (const [typeName, type] of Object.entries(vehicleTypes[definition.code])) {
+        const amount = 180000 + routeIndex * 20000 + typeDelta[typeName];
+        const price = await findOrCreate(
+          db,
+          'BangGia',
+          { tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId, tuNgay: dateOnly(2026, 9, 1), denNgay: null },
+          { giaNiemYet: decimal(amount), tuNgay: dateOnly(2026, 9, 1), denNgay: null, trangThai: 'HOAT_DONG', nhaXeId: operators[definition.code].nhaXeId, tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId },
+          { giaNiemYet: decimal(amount), trangThai: 'HOAT_DONG' },
+        );
+        prices.set(`${route.tuyenXeId}:${type.loaiXeId}`, price);
+      }
+    }
+  }
+  return prices;
+}
+
+function tripCapacitySnapshot(vehicleTypes, operatorCode, typeName, acceptsShipments) {
+  const type = vehicleTypes[operatorCode][typeName];
+  return {
+    nhanGuiHang: acceptsShipments,
+    sucChuaXeMay: type.sucChuaXeMayMacDinh,
+    sucChuaHangCongKenh: type.sucChuaHangCongKenhMacDinh,
+    sucChuaHangNhe: type.sucChuaHangNheMacDinh,
+  };
+}
+
+async function seedBranchesRatesCargo(db, operators, routes) {
+  const points = {};
+  const rates = new Map();
+  const weightRanges = [
+    [0, 1, 30000],
+    [1.01, 5, 50000],
+    [5.01, 10, 80000],
+    [10.01, 20, 120000],
+    [20.01, 50, 180000],
+    [50.01, null, 250000],
+  ];
+
+  const cargo = {};
+  for (const [name, description] of cargoTypeDefs) {
+    cargo[name] = await upsertBy(
+      db,
+      'LoaiHangHoa',
+      { tenLoai: name },
+      { tenLoai: name, moTa: description, trangThai: 'HOAT_DONG', nhomSucChua: 'HANG_NHE' },
+      { moTa: description, trangThai: 'HOAT_DONG', nhomSucChua: 'HANG_NHE' },
+    );
+  }
+
+  for (const definition of operatorDefs) {
+    const operator = operators[definition.code];
+    points[definition.code] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const code = deterministicUuid('DGNH-BC', definition.code, index + 1);
+      const { routeCity: _routeCity, ...location } = branchDefsByOperator[definition.code][index];
+      const pointData = { maDiem: code, tenDiem: `${definition.name} ${index + 1}`, ...location, trangThai: index === 4 ? 'TAM_NGUNG' : 'HOAT_DONG', nhaXeId: operator.nhaXeId };
+      const point = await findOrCreate(
+        db,
+        'DiemGiaoNhanHang',
+        { nhaXeId: operator.nhaXeId, maDiem: code },
+        pointData,
+        pointData,
+      );
+      points[definition.code].push(point);
+    }
+
+    const route = routes[definition.code][0];
+    const sender = points[definition.code][0];
+    const receiver = points[definition.code][1];
+    const senderCity = branchDefsByOperator[definition.code][0].routeCity;
+    const receiverCity = branchDefsByOperator[definition.code][1].routeCity;
+    if (route.diemDi !== senderCity || route.diemDen !== receiverCity) {
+      throw new Error(`Seed shipment points do not match route direction for ${definition.code}`);
+    }
+    for (const [point, role] of [[sender, 'GUI_HANG'], [receiver, 'NHAN_HANG']]) {
+      await findOrCreate(
+        db,
+        'DiemGiaoNhanTuyenXe',
+        { tuyenXeId: route.tuyenXeId, diemGiaoNhanHangId: point.diemGiaoNhanHangId },
+        { tuyenXeId: route.tuyenXeId, diemGiaoNhanHangId: point.diemGiaoNhanHangId, vaiTro: role },
+        { vaiTro: role },
+      );
+    }
+
+    for (let weightIndex = 0; weightIndex < weightRanges.length; weightIndex += 1) {
+      const [fromWeight, toWeight, base] = weightRanges[weightIndex];
+      for (const cargoType of Object.values(cargo)) {
+        const rateData = {
+          tuyenXeId: route.tuyenXeId,
+          loaiHangHoaId: cargoType.loaiHangHoaId,
+          khoiLuongTu: decimal(fromWeight),
+          khoiLuongDen: toWeight === null ? null : decimal(toWeight),
+          tuNgay: dateOnly(2026, 9, 1),
+          denNgay: null,
+        };
+        const rate = await findOrCreate(
+          db,
+          'BangCuocGuiHang',
+          rateData,
+          { ...rateData, mucCuoc: decimal(base), trangThai: 'HOAT_DONG' },
+          { mucCuoc: decimal(base), trangThai: 'HOAT_DONG' },
+        );
+        rates.set(shippingRateKey(definition.code, weightIndex, cargoType.loaiHangHoaId), rate);
+      }
+    }
+  }
+  await assertNoOverlappingShipmentRates(db);
+  return { points, rates, cargo };
+}
+
+async function seedPromotions(db, operators) {
+  const result = {};
+  for (const definition of operatorDefs) {
+    const operator = operators[definition.code];
+    result[definition.code] = [];
+    const promotionDefs = [
+      { code: `${definition.code}10`, name: 'Ưu đãi đặt vé 10%', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 10, max: 50000, from: dateOnly(2026, 9, 1), to: dateOnly(2026, 12, 31), status: 'HOAT_DONG', quota: 100 },
+      { code: `${definition.code}FIX30K`, name: 'Giảm 30.000 đồng tiền vé', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'SO_TIEN', value: 30000, max: null, from: dateOnly(2026, 9, 1), to: dateOnly(2026, 12, 31), status: 'HOAT_DONG', quota: 200 },
+      { code: `${definition.code}NOVEMBER`, name: 'Ưu đãi tháng 11', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 5, max: 30000, from: dateOnly(2026, 11, 1), to: dateOnly(2026, 12, 31), status: 'HOAT_DONG', quota: 50 },
+      { code: `${definition.code}OLD`, name: 'Chương trình cũ hết hạn', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'SO_TIEN', value: 30000, max: null, from: dateOnly(2026, 1, 1), to: dateOnly(2026, 2, 1), status: 'HOAT_DONG', quota: 25 },
+      { code: `${definition.code}PAUSE`, name: 'Ưu đãi đang tạm ngưng', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 15, max: 70000, from: dateOnly(2026, 9, 1), to: dateOnly(2026, 12, 31), status: 'TAM_NGUNG', quota: 25 },
+    ];
+    for (const item of promotionDefs) {
+      const promotionData = {
+        tenChuongTrinh: item.name,
+        maKhuyenMai: item.code,
+        phamViApDung: item.scope,
+        hinhThucApDung: item.apply,
+        loaiGiamGia: item.kind,
+        giaTriGiam: decimal(item.value),
+        giamToiDa: item.max === null ? null : decimal(item.max),
+        giaTriDonToiThieu: null,
+        dieuKienApDung: 'Dữ liệu demo, chỉ áp dụng cho tiền vé.',
+        tuNgay: item.from,
+        denNgay: item.to,
+        trangThai: item.status,
+        nhaXeId: operator.nhaXeId,
+        soLuotToiDa: item.quota,
+      };
+      const promotion = await findOrCreate(
+        db,
+        'KhuyenMai',
+        { nhaXeId: operator.nhaXeId, maKhuyenMai: item.code },
+        { ...promotionData, soLuotDaSuDung: 0 },
+        promotionData,
+      );
+      result[definition.code].push(promotion);
+    }
+  }
+  return result;
+}
+
+const shippingPlans = [
+  { status: 'MOI_TAO', trip: 0, note: 'Mới tạo, chờ tiếp nhận tại điểm gửi' },
+  { status: 'MOI_TAO', trip: 1, note: 'Mới tạo, chờ tiếp nhận tại điểm gửi' },
+  { status: 'DANG_VAN_CHUYEN', trip: 2, note: 'Đang vận chuyển giữa hai điểm' },
+  { status: 'DA_GIAO', trip: 3, note: 'Đã giao tại điểm nhận' },
+  { status: 'DA_HUY', trip: 4, note: 'Đơn gửi hàng đã hủy' },
+  { status: 'DANG_VAN_CHUYEN', trip: 5, note: 'Đang vận chuyển giữa hai điểm' },
+  { status: 'DA_GIAO', trip: 6, note: 'Đã giao thành công tại điểm nhận' },
+  { status: 'DA_TIEP_NHAN', trip: 7, note: 'Đã tiếp nhận tại điểm gửi' },
+];
+
+const cargoKindsByShipment = [
+  ['ĐIỆN TỬ', 'THỰC PHẨM'],
+  ['THỰC PHẨM'],
+  ['THƯ TÍN', 'ĐIỆN TỬ'],
+  ['HẢI SẢN'],
+  ['HÀNG GIA DỤNG', 'QUẦN ÁO'],
+  ['ĐIỆN TỬ'],
+  ['QUẦN ÁO', 'BƯU PHẨM'],
+  ['THỰC PHẨM', 'THỰC PHẨM', 'THỰC PHẨM'],
+];
+
+const weightRanges = [
+  { from: 0, to: 1, actual: 0.5 },
+  { from: 1.01, to: 5, actual: 3 },
+  { from: 5.01, to: 10, actual: 7 },
+  { from: 10.01, to: 20, actual: 15 },
+  { from: 20.01, to: 50, actual: 30 },
+  { from: 50.01, to: null, actual: 60 },
+];
+
+function shippingRateKey(operatorCode, weightIndex, cargoTypeId) {
+  return `${operatorCode}:${weightIndex}:${cargoTypeId}`;
+}
+
+function cargoKindsFor(shippingOrdinal) {
+  return cargoKindsByShipment[shippingOrdinal];
+}
+
+function cargoWeightForIndex(itemIndex) {
+  return 0.5 + itemIndex * 0.75;
+}
+
+function cargoGroupsForKinds(cargoKinds, cargoTypes) {
+  const groups = new Map();
+  cargoKinds.forEach((cargoTypeName, itemIndex) => {
+    const cargoType = cargoTypes[cargoTypeName];
+    if (!cargoType) throw new Error(`Unknown LoaiHangHoa in shipment seed: ${cargoTypeName}`);
+
+    const group = groups.get(cargoTypeName) ?? {
+      cargoTypeName,
+      loaiHangHoaId: cargoType.loaiHangHoaId,
+      khoiLuongTinhCuoc: 0,
+    };
+    group.khoiLuongTinhCuoc += cargoWeightForIndex(itemIndex) * (itemIndex + 1);
+    groups.set(cargoTypeName, group);
+  });
+  return [...groups.values()].map((group) => ({
+    ...group,
+    khoiLuongTinhCuoc: Number(group.khoiLuongTinhCuoc.toFixed(2)),
+  }));
+}
+
+function weightIndexForTotal(totalWeight) {
+  const index = weightRanges.findIndex((range) => totalWeight >= range.from && (range.to === null || totalWeight <= range.to));
+  if (index < 0) throw new Error(`No BangCuocGuiHang weight range covers ${totalWeight}kg`);
+  return index;
+}
+
+async function findUniqueShipmentRate(db, { routeId, cargoGroup, sendDate }) {
+  const matchingRates = await db.bangCuocGuiHang.findMany({
+    where: {
+      tuyenXeId: routeId,
+      loaiHangHoaId: cargoGroup.loaiHangHoaId,
+      trangThai: 'HOAT_DONG',
+      khoiLuongTu: { lte: cargoGroup.khoiLuongTinhCuoc },
+      tuNgay: { lte: sendDate },
+      AND: [
+        { OR: [{ khoiLuongDen: null }, { khoiLuongDen: { gte: cargoGroup.khoiLuongTinhCuoc } }] },
+        { OR: [{ denNgay: null }, { denNgay: { gte: sendDate } }] },
+      ],
+    },
+    select: { bangCuocGuiHangId: true, mucCuoc: true },
+  });
+  if (matchingRates.length !== 1) {
+    throw new Error(`Expected exactly one active BangCuocGuiHang for route ${routeId}, type ${cargoGroup.loaiHangHoaId}, ${cargoGroup.khoiLuongTinhCuoc}kg on ${sendDate.toISOString().slice(0, 10)}; found ${matchingRates.length}.`);
+  }
+  return matchingRates[0];
+}
+
+async function assertNoOverlappingShipmentRates(db) {
+  const conflicts = await db.$queryRaw`
+    SELECT COUNT(*) AS value
+    FROM BangCuocGuiHang a
+    JOIN BangCuocGuiHang b
+      ON a.bangCuocGuiHangId < b.bangCuocGuiHangId
+     AND a.tuyenXeId = b.tuyenXeId
+     AND a.loaiHangHoaId = b.loaiHangHoaId
+     AND a.tuNgay <= COALESCE(b.denNgay, DATE('9999-12-31'))
+     AND b.tuNgay <= COALESCE(a.denNgay, DATE('9999-12-31'))
+     AND a.khoiLuongTu <= COALESCE(b.khoiLuongDen, CAST(99999999.99 AS DECIMAL(10, 2)))
+     AND b.khoiLuongTu <= COALESCE(a.khoiLuongDen, CAST(99999999.99 AS DECIMAL(10, 2)))
+  `;
+  if (Number(conflicts[0]?.value ?? 0) !== 0) {
+    throw new Error(`Shipment rate preflight found ${conflicts[0].value} overlapping inclusive weight/effective-date bands.`);
+  }
+}
+
+function shipmentHistoryFor(status, sentAt, trip) {
+  const history = [{ trangThai: 'MOI_TAO', thoiGian: sentAt, ghiChu: 'Vận đơn được tạo từ dữ liệu demo.' }];
+  const receivedAt = new Date(sentAt.getTime() + 10 * 60 * 1000);
+  if (status === 'DA_TIEP_NHAN' || status === 'DANG_VAN_CHUYEN' || status === 'DA_GIAO') {
+    history.push({ trangThai: 'DA_TIEP_NHAN', thoiGian: receivedAt, ghiChu: 'Hàng đã được tiếp nhận tại điểm gửi.' });
+  }
+  if (status === 'DANG_VAN_CHUYEN' || status === 'DA_GIAO') {
+    const departureAt = tripDepartureDate(trip);
+    history.push({ trangThai: 'DANG_VAN_CHUYEN', thoiGian: departureAt, ghiChu: 'Hàng bắt đầu di chuyển theo chuyến xe.' });
+    if (status === 'DA_GIAO') {
+      const duration = trip.route.thoiGianChayPhut ?? 0;
+      history.push({ trangThai: 'DA_GIAO', thoiGian: new Date(departureAt.getTime() + duration * 60 * 1000), ghiChu: 'Hàng đã đến điểm nhận.' });
+    }
+  }
+  if (status === 'DA_HUY') {
+    history.push({ trangThai: 'DA_HUY', thoiGian: receivedAt, ghiChu: 'Vận đơn demo đã bị hủy.' });
+  }
+  return history;
+}
+
+async function replaceShipmentHistory(db, shipment, history) {
+  await db.$transaction(async (tx) => {
+    await tx.lichSuTrangThaiPhieuGuiHang.deleteMany({ where: { phieuGuiHangId: shipment.phieuGuiHangId } });
+    await tx.lichSuTrangThaiPhieuGuiHang.createMany({
+      data: history.map((entry) => ({ ...entry, phieuGuiHangId: shipment.phieuGuiHangId })),
+    });
+  });
+  count('LichSuTrangThaiPhieuGuiHang', 'replace');
+}
+
+async function replaceShipmentFeeDetails(db, shipment, feeDetails) {
+  if (feeDetails.length === 0) throw new Error(`Shipment ${shipment.maVanDon} has no fee details.`);
+  await db.$transaction(async (tx) => {
+    await tx.chiTietCuocGuiHang.deleteMany({ where: { phieuGuiHangId: shipment.phieuGuiHangId } });
+    await tx.chiTietCuocGuiHang.createMany({
+      data: feeDetails.map((detail) => ({
+        phieuGuiHangId: shipment.phieuGuiHangId,
+        loaiHangHoaId: detail.loaiHangHoaId,
+        bangCuocGuiHangId: detail.rate.bangCuocGuiHangId,
+        khoiLuongTinhCuoc: decimal(detail.khoiLuongTinhCuoc),
+        soTienCuoc: decimal(detail.soTienCuoc),
+      })),
+    });
+  });
+  count('ChiTietCuocGuiHang', 'replace');
+}
+
+function customerSnapshot(customer) {
+  return {
+    tenKhachHang: customer.hoTen,
+    soDienThoaiKhachHang: customer.account.soDienThoai,
+    emailKhachHang: customer.account.email,
+  };
+}
+
+async function ensureImage(db, hangHoa, url, order) {
+  const existing = await db.hinhAnhHangHoa.findFirst({ where: { hangHoaId: hangHoa.hangHoaId, duongDan: url } });
+  const data = { duongDan: url, thuTu: order, hangHoaId: hangHoa.hangHoaId };
+  if (existing) {
+    await db.hinhAnhHangHoa.update({ where: byId('HinhAnhHangHoa', existing.hinhAnhId), data });
+    count('HinhAnhHangHoa', 'update');
+    return existing;
+  }
+  const created = await db.hinhAnhHangHoa.create({ data });
+  count('HinhAnhHangHoa', 'create');
+  return created;
+}
+
+async function ensurePayment(db, data) {
+  const { payment, operation } = await ensureDemoPayment(db, data);
+  if (operation !== 'preserve') count('ThanhToan', operation);
+  return payment;
+}
+
+async function ensureCargo(db, shipment, cargoType, itemIndex, operatorCode) {
+  const names = {
+    'BƯU PHẨM': ['Hồ sơ hợp đồng', 'Bưu phẩm chuyển phát'],
+    'THỰC PHẨM': ['Cà phê rang xay', 'Bánh đặc sản'],
+    'THƯ TÍN': ['Thư mời hội nghị', 'Hồ sơ giấy tờ'],
+    'HẢI SẢN': ['Cá khô đóng gói', 'Mực một nắng'],
+    'ĐIỆN TỬ': ['Tai nghe không dây', 'Máy tính bảng'],
+    'QUẦN ÁO': ['Áo khoác mùa đông', 'Bộ quần áo thể thao'],
+    'HÀNG GIA DỤNG': ['Bộ ly thủy tinh', 'Nồi inox gia dụng'],
+  };
+  const name = names[cargoType][itemIndex % names[cargoType].length];
+  const itemData = {
+    tenHang: `${name} ${operatorCode}-${itemIndex + 1}`,
+    soLuong: itemIndex + 1,
+    khoiLuong: decimal(cargoWeightForIndex(itemIndex)),
+    chieuDai: decimal(20 + itemIndex * 5),
+    chieuRong: decimal(15 + itemIndex * 3),
+    chieuCao: decimal(10 + itemIndex * 2),
+    giaTriKhaiBao: decimal(200000 + itemIndex * 150000),
+    moTa: `Hàng hóa demo thuộc nhóm ${cargoType}.`,
+    phieuGuiHangId: shipment.phieuGuiHangId,
+    loaiHangHoaId: shipment.cargoTypes[cargoType].loaiHangHoaId,
+  };
+  const existing = await db.hangHoa.findFirst({ where: { phieuGuiHangId: shipment.phieuGuiHangId, tenHang: itemData.tenHang } });
+  const item = existing
+    ? await db.hangHoa.update({ where: byId('HangHoa', existing.hangHoaId), data: itemData })
+    : await db.hangHoa.create({ data: itemData });
+  count('HangHoa', existing ? 'update' : 'create');
+  const imageKind = cargoType === 'ĐIỆN TỬ' ? IMAGE_URLS.dienTu : cargoType === 'THỰC PHẨM' || cargoType === 'HẢI SẢN' ? IMAGE_URLS.thucPham : IMAGE_URLS.quanAo;
+  await ensureImage(db, item, imageKind, 1);
+  if (itemIndex % 2 === 0) await ensureImage(db, item, IMAGE_URLS.quanAo, 2);
+  return item;
+}
+
+async function removeObsoleteShipmentCargo(db, shipmentId, retainedCargoIds) {
+  const obsolete = await db.hangHoa.findMany({
+    where: { phieuGuiHangId: shipmentId, hangHoaId: { notIn: retainedCargoIds } },
+    select: { hangHoaId: true },
+  });
+  if (obsolete.length === 0) return;
+
+  const obsoleteIds = obsolete.map((item) => item.hangHoaId);
+  const deleted = await db.$transaction(async (tx) => {
+    const images = await tx.hinhAnhHangHoa.deleteMany({ where: { hangHoaId: { in: obsoleteIds } } });
+    const items = await tx.hangHoa.deleteMany({
+      where: { phieuGuiHangId: shipmentId, hangHoaId: { in: obsoleteIds } },
+    });
+    return { images: images.count, items: items.count };
+  });
+  if (deleted.images > 0) count('HinhAnhHangHoa', 'delete');
+  if (deleted.items > 0) count('HangHoa', 'delete');
+}
+
+async function seedTransactions(db, operators, accounts, fleet, prices, logistics) {
+  const ticketSizes = [1, 2, 1, 5, 2, 3, 1];
+  const allTransactionCodes = [];
+  const exchangeOldByOperator = new Map();
+  for (const definition of operatorDefs) {
+    const existingTickets = await db.ve.findMany({ where: { maVe: { startsWith: `${definition.code}-PDV-` } }, select: { gheChuyenXeId: true } });
+    for (const gheChuyenXeId of new Set(existingTickets.map((ticket) => ticket.gheChuyenXeId))) {
+      await db.gheChuyenXe.update({ where: byId('GheChuyenXe', gheChuyenXeId), data: { trangThai: 'TRONG' } });
+    }
+  }
+  for (let opIndex = 0; opIndex < operatorDefs.length; opIndex += 1) {
+    const definition = operatorDefs[opIndex];
+    const operator = operators[definition.code];
+    const activeTrips = fleet.trips[definition.code];
+    const outboundTrips = activeTrips.filter((trip) => trip.route.tuyenXeId === fleet.routes[definition.code][0].tuyenXeId);
+    const operatorCustomers = accounts.customers;
+    for (let txIndex = 0; txIndex < 15; txIndex += 1) {
+      const hasTicket = txIndex <= 6 || txIndex >= 13;
+      const hasShipping = txIndex >= 7;
+      const isCombined = txIndex >= 13;
+      const shippingOrdinal = txIndex - 7;
+      const shipPlan = hasShipping ? shippingPlans[shippingOrdinal] : null;
+      const customerIndex = txIndex === 13 ? opIndex * 5 + 4 : opIndex * 5 + txIndex;
+      const customer = operatorCustomers[customerIndex % operatorCustomers.length];
+      const day = 22 + Math.floor(txIndex / 5);
+      const minute = (txIndex % 5) * 10;
+      const stamp = `${pad(day, 2)}092026${pad(10 + Math.floor(txIndex / 5), 2)}${pad(minute, 2)}`;
+      const sequence = pad(txIndex + 1, 4);
+      const transactionCode = deterministicUuid('GD', definition.code, txIndex);
+      const transactionTime = localDate(2026, 9, day, 10 + Math.floor(txIndex / 5), minute);
+      if (txIndex === 4 || txIndex === 13) {
+        const staleTransaction = await db.donGiaoDich.findUnique({ where: { maDonGiaoDich: transactionCode } });
+        if (staleTransaction) await db.thanhToan.deleteMany({ where: { donGiaoDichId: staleTransaction.donGiaoDichId, loaiGiaoDich: { in: ['THU_CHENH_LECH', 'HOAN_TIEN'] } } });
+      }
+      const oldExchangeTrip = txIndex === 13 ? exchangeOldByOperator.get(definition.code)?.trip : null;
+      const combinedTrip = isCombined && shipPlan
+        ? selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, oldExchangeTrip?.chuyenXeId ?? null, true)
+        : null;
+      if (isCombined && !combinedTrip) throw new Error(`No shared booking/shipment trip for ${transactionCode}`);
+      const ticketPlan = [];
+      let ticketSubtotal = 0;
+      let chargeTicketSubtotal = 0;
+      if (hasTicket) {
+        const size = txIndex <= 6 ? ticketSizes[txIndex] : txIndex === 13 ? 2 : 1;
+        const preferredTripIndex = txIndex === 4 ? 9 : txIndex === 13 ? 26 : txIndex * 2;
+        const trip = combinedTrip ?? selectTripAfter(activeTrips, preferredTripIndex, transactionTime, oldExchangeTrip?.chuyenXeId);
+        if (!trip) throw new Error(`No departure after booking time for ${transactionCode}`);
+        const typeId = trip.vehicle.loaiXeId;
+        const price = prices.get(`${trip.route.tuyenXeId}:${typeId}`);
+        if (!price) throw new Error(`Missing BangGia for ${definition.code} trip ${trip.maChuyenXe}`);
+        for (let ticketIndex = 0; ticketIndex < size; ticketIndex += 1) {
+          const tripSeat = trip.tripSeats[(txIndex * 3 + ticketIndex) % trip.tripSeats.length];
+          const cancelled = (txIndex === 3 && ticketIndex === 2) || (txIndex === 4 && ticketIndex === 0);
+          const priceAmount = Number(price.giaNiemYet);
+          ticketSubtotal += priceAmount;
+          if (!(txIndex === 13 && ticketIndex === 0)) chargeTicketSubtotal += priceAmount;
+          ticketPlan.push({
+            trip,
+            tripSeat,
+            price,
+            priceAmount,
+            cancelled,
+            ticketIndex,
+            code: deterministicUuid('VE', definition.code, txIndex, ticketIndex),
+          });
+        }
+      }
+
+      let shippingData = null;
+      let shippingTotal = 0;
+      if (shipPlan) {
+        const cargoKinds = cargoKindsFor(shippingOrdinal);
+        const cargoGroups = cargoGroupsForKinds(cargoKinds, logistics.cargo);
+        const pointSend = logistics.points[definition.code][0];
+        const pointReceive = logistics.points[definition.code][1];
+        const sendDate = dateOnly(2026, 9, day);
+        const feeDetails = await Promise.all(cargoGroups.map(async (group) => {
+          const weightIndex = weightIndexForTotal(group.khoiLuongTinhCuoc);
+          const configuredRate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, group.loaiHangHoaId));
+          if (!configuredRate) throw new Error(`Missing BangCuocGuiHang for ${transactionCode} / ${group.cargoTypeName}`);
+          const rate = await findUniqueShipmentRate(db, {
+            routeId: fleet.routes[definition.code][0].tuyenXeId,
+            cargoGroup: group,
+            sendDate,
+          });
+          if (rate.bangCuocGuiHangId !== configuredRate.bangCuocGuiHangId) {
+            throw new Error(`Shipment rate preflight selected unexpected BangCuocGuiHang ${rate.bangCuocGuiHangId} for ${transactionCode} / ${group.cargoTypeName}.`);
+          }
+          return {
+            ...group,
+            rate,
+            soTienCuoc: Number(rate.mucCuoc),
+          };
+        }));
+        const trip = combinedTrip ?? selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, null, true);
+        if (!trip) throw new Error(`No shipment-enabled departure after creation for ${transactionCode}`);
+        const serviceFee = 0;
+        shippingTotal = feeDetails.reduce((total, detail) => total + detail.soTienCuoc, 0);
+        shippingData = {
+          shipPlan,
+          serviceFee,
+          feeDetails,
+          trip,
+          pointSend,
+          pointReceive,
+          cargoKinds,
+          cargoTypes: logistics.cargo,
+        };
+      }
+      const exchangeOld = txIndex === 13 ? exchangeOldByOperator.get(definition.code) : null;
+      if (txIndex === 13 && !exchangeOld) throw new Error(`Missing old ticket for exchange scenario ${definition.code}`);
+      const changeDifference = txIndex === 13 ? Number(ticketPlan[0].priceAmount) - Number(exchangeOld.ve.giaThucTe) : 0;
+      const total = chargeTicketSubtotal + shippingTotal + changeDifference;
+      const paymentState = txIndex === 5 ? 'PENDING' : txIndex === 8 ? 'FAILED' : 'SUCCESS';
+      const snapshot = customerSnapshot(customer);
+      const transaction = await upsertBy(
+        db,
+        'DonGiaoDich',
+        { maDonGiaoDich: transactionCode },
+        { maDonGiaoDich: transactionCode, ngayTao: transactionTime, tongTien: decimal(total), trangThai: paymentState === 'SUCCESS' ? 'DA_THANH_TOAN' : paymentState === 'FAILED' ? 'THAT_BAI' : 'CHO_THANH_TOAN', ...snapshot, khachHangId: customer.khachHangId, nhaXeId: operator.nhaXeId },
+        { ngayTao: transactionTime, tongTien: decimal(total), trangThai: paymentState === 'SUCCESS' ? 'DA_THANH_TOAN' : paymentState === 'FAILED' ? 'THAT_BAI' : 'CHO_THANH_TOAN', ...snapshot, khachHangId: customer.khachHangId, nhaXeId: operator.nhaXeId },
+      );
+
+      let booking = null;
+      let tickets = [];
+      if (hasTicket) {
+        const bookingCode = deterministicUuid('PDV', definition.code, txIndex);
+        booking = await upsertBy(
+          db,
+          'PhieuDatVe',
+          { maPhieuDatVe: bookingCode },
+          { maPhieuDatVe: bookingCode, ngayDat: transactionTime, soLuongVeBanDau: ticketPlan.length, tongTienBanDau: decimal(ticketSubtotal), trangThai: paymentState === 'SUCCESS' ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN', khuyenMaiId: null, donGiaoDichId: transaction.donGiaoDichId },
+          { ngayDat: transactionTime, soLuongVeBanDau: ticketPlan.length, tongTienBanDau: decimal(ticketSubtotal), trangThai: paymentState === 'SUCCESS' ? 'DA_THANH_TOAN' : 'CHO_THAN_TOAN', khuyenMaiId: null },
+        );
+        for (const ticket of ticketPlan) {
+          const existingSeatTicket = await db.ve.findFirst({ where: { gheChuyenXeId: ticket.tripSeat.gheChuyenXeId } });
+          if (existingSeatTicket && existingSeatTicket.maVe !== ticket.code && existingSeatTicket.trangThai !== 'HUY') {
+            const existingSeat = await db.gheChuyenXe.findUnique({ where: byId('GheChuyenXe', ticket.tripSeat.gheChuyenXeId), select: { trangThai: true } });
+            if (existingSeat?.trangThai === 'DA_DAT') throw new Error(`Active seat collision on ${ticket.code} and ${existingSeatTicket.maVe}`);
+          }
+          const ve = await upsertBy(
+            db,
+            'Ve',
+            { maVe: ticket.code },
+            { maVe: ticket.code, diemDon: ticket.trip.route.diemDi === 'TP.HCM' ? 'Bến xe Miền Đông mới' : `Văn phòng ${definition.name} ${ticket.trip.route.diemDi}`, giaNiemYet: decimal(ticket.priceAmount), giaThucTe: decimal(ticket.priceAmount), trangThai: ticket.cancelled ? 'HUY' : 'DA_DAT', phieuDatVeId: booking.phieuDatVeId, gheChuyenXeId: ticket.tripSeat.gheChuyenXeId, bangGiaApDungId: ticket.price.bangGiaId },
+            { diemDon: ticket.trip.route.diemDi === 'TP.HCM' ? 'Bến xe Miền Đông mới' : `Văn phòng ${definition.name} ${ticket.trip.route.diemDi}`, giaNiemYet: decimal(ticket.priceAmount), giaThucTe: decimal(ticket.priceAmount), trangThai: ticket.cancelled ? 'HUY' : 'DA_DAT', phieuDatVeId: booking.phieuDatVeId, gheChuyenXeId: ticket.tripSeat.gheChuyenXeId, bangGiaApDungId: ticket.price.bangGiaId },
+          );
+          tickets.push(ve);
+          if (txIndex === 4 && ticket.cancelled) {
+            exchangeOldByOperator.set(definition.code, { ve, trip: ticket.trip, tripSeat: ticket.tripSeat });
+          }
+          await db.gheChuyenXe.update({ where: byId('GheChuyenXe', ticket.tripSeat.gheChuyenXeId), data: { trangThai: ticket.cancelled ? 'TRONG' : 'DA_DAT' } });
+          count('GheChuyenXe', 'update');
+        }
+      }
+
+      let shipment = null;
+      if (shippingData) {
+        const shipmentCode = deterministicUuid('VD', definition.code, txIndex);
+        const shipmentData = {
+          maVanDon: shipmentCode,
+          tenNguoiNhan: `Người nhận ${definition.code}-${shippingOrdinal + 1}`,
+          soDienThoaiNguoiNhan: `+8493${pad(opIndex * 10 + shippingOrdinal + 1, 7)}`,
+          ngayGui: transactionTime,
+          cuocChinh: decimal(shippingTotal),
+          phiDichVu: decimal(shippingData.serviceFee),
+          soTienGiam: decimal(0),
+          tongPhi: decimal(shippingTotal),
+          nguoiTraCuoc: shippingOrdinal % 2 === 0 ? 'NGUOI_GUI' : 'NGUOI_NHAN',
+          ghiChu: shippingData.shipPlan.note,
+          trangThai: shippingData.shipPlan.status,
+          chuyenXeId: shippingData.trip.chuyenXeId,
+          diemGuiId: shippingData.pointSend.diemGiaoNhanHangId,
+          diemNhanId: shippingData.pointReceive.diemGiaoNhanHangId,
+          khuyenMaiId: null,
+          donGiaoDichId: transaction.donGiaoDichId,
+        };
+        shipment = await upsertBy(db, 'PhieuGuiHang', { maVanDon: shipmentCode }, shipmentData, shipmentData);
+        await replaceShipmentHistory(db, shipment, shipmentHistoryFor(shippingData.shipPlan.status, transactionTime, shippingData.trip));
+        const cargoKinds = shippingData.cargoKinds;
+        const cargoShipment = { ...shipment, cargoTypes: logistics.cargo };
+        const retainedCargoIds = [];
+        for (let itemIndex = 0; itemIndex < cargoKinds.length; itemIndex += 1) {
+          const item = await ensureCargo(db, cargoShipment, cargoKinds[itemIndex], itemIndex, definition.code);
+          retainedCargoIds.push(item.hangHoaId);
+        }
+        await removeObsoleteShipmentCargo(db, shipment.phieuGuiHangId, retainedCargoIds);
+        await replaceShipmentFeeDetails(db, shipment, shippingData.feeDetails);
+      }
+
+      if (paymentState === 'FAILED' || paymentState === 'PENDING') {
+        await ensurePayment(db, { soTien: decimal(total), phuongThuc: paymentState === 'FAILED' ? 'VNPAY' : 'MOMO', loaiGiaoDich: 'THANH_TOAN', thoiGian: transactionTime, trangThai: paymentState === 'FAILED' ? 'THAT_BAI' : 'DANG_XU_LY', donGiaoDichId: transaction.donGiaoDichId, veId: null });
+      } else {
+        const initialAmount = changeDifference ? total - changeDifference : total;
+        await ensurePayment(db, { soTien: decimal(initialAmount), phuongThuc: ['MOMO', 'VNPAY', 'ZALOPAY', 'TIEN_MAT'][txIndex % 4], loaiGiaoDich: 'THANH_TOAN', thoiGian: transactionTime, trangThai: 'THANH_CONG', donGiaoDichId: transaction.donGiaoDichId, veId: null });
+        if (txIndex === 13) {
+          const exchangeNew = tickets[0];
+          if (!exchangeOld || !exchangeNew || exchangeOld.trip.chuyenXeId === ticketPlan[0].trip.chuyenXeId) {
+            throw new Error(`Invalid exchange scenario for ${definition.code}: old and new trip must differ`);
+          }
+          if (changeDifference !== 0) {
+            await ensurePayment(db, { soTien: decimal(Math.abs(changeDifference)), phuongThuc: 'VNPAY', loaiGiaoDich: changeDifference > 0 ? 'THU_CHENH_LECH' : 'HOAN_TIEN', thoiGian: localDate(2026, 9, day, 11 + Math.floor(txIndex / 5), minute), trangThai: 'THANH_CONG', donGiaoDichId: transaction.donGiaoDichId, veId: exchangeNew.veId });
+          }
+          scenarios.push({ type: 'doi-ve-that-chenh-lech', khachHangId: customer.khachHangId, maDonGiaoDich: transactionCode, veCu: exchangeOld.ve.maVe, veMoi: exchangeNew.maVe, chuyenXeCu: exchangeOld.trip.maChuyenXe, chuyenXeMoi: ticketPlan[0].trip.maChuyenXe, giaVeCu: Number(exchangeOld.ve.giaThucTe), giaVeMoi: Number(exchangeNew.giaThucTe), giaVeMoiKhongDoi: Number(ticketPlan.slice(1).reduce((sum, ticket) => sum + ticket.priceAmount, 0)), phiGuiHang: shippingTotal, thanhToanDichVuMoi: initialAmount, tongTienGiaoDich: total, soTienChenhLech: changeDifference, loaiGiaoDich: changeDifference > 0 ? 'THU_CHENH_LECH' : changeDifference < 0 ? 'HOAN_TIEN' : null });
+        }
+        const cancelledTicket = tickets.find((ticket) => ticket.trangThai === 'HUY');
+        if (cancelledTicket && txIndex !== 4) {
+          await ensurePayment(db, { soTien: decimal(Number(cancelledTicket.giaThucTe)), phuongThuc: 'MOMO', loaiGiaoDich: 'HOAN_TIEN', thoiGian: localDate(2026, 9, day, 12, minute), trangThai: 'THANH_CONG', donGiaoDichId: transaction.donGiaoDichId, veId: cancelledTicket.veId });
+          scenarios.push({ type: 'huy-rieng-mot-ve-hoan-tien', maDonGiaoDich: transactionCode, maVe: cancelledTicket.maVe });
+        }
+      }
+      if (ticketPlan.length === 5) scenarios.push({ type: 'booking-5-ve', maDonGiaoDich: transactionCode, maPhieuDatVe: booking.maPhieuDatVe, maVe: tickets.map((ticket) => ticket.maVe) });
+      if (shippingData?.shipPlan.status === 'MOI_TAO') scenarios.push({ type: 'gui-hang-moi-tao', maDonGiaoDich: transactionCode, maVanDon: shipment.maVanDon });
+      if (shippingData?.shipPlan.status === 'DA_GIAO') scenarios.push({ type: 'gui-hang-da-giao', maDonGiaoDich: transactionCode, maVanDon: shipment.maVanDon });
+      allTransactionCodes.push(transactionCode);
+    }
+  }
+  return allTransactionCodes;
+}
+
+async function applyCustomerSnapshotChange(db, accounts) {
+  const customer = accounts.customers[0];
+  await db.khachHang.update({ where: byId('KhachHang', customer.khachHangId), data: { hoTen: 'Nguyễn Minh Anh (đã cập nhật)' } });
+  await db.taiKhoan.update({ where: byId('TaiKhoan', customer.account.taiKhoanId), data: { soDienThoai: '+84929999999', email: 'kh000001.updated@vexgo.test' } });
+  count('KhachHang', 'snapshot-update');
+  count('TaiKhoan', 'snapshot-update');
+}
+
+function printSummary(transactionCodes) {
+  console.log(`Seed timezone: ${TZ}`);
+  console.log(`Password policy: shared development password hashed with bcrypt (10 rounds); plaintext is never stored.`);
+  console.log(`Transactions: ${transactionCodes.length}`);
+  console.log(`Scenarios: ${JSON.stringify(scenarios)}`);
+  console.log('Operations:');
+  for (const [key, value] of [...counts.entries()].sort()) console.log(`  ${key}=${value}`);
+}
+
+async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
+  const hmOutbound = await findOrCreate(
+    db,
+    'TuyenXe',
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: deterministicUuid('TX', 'HM', 3) },
+    {
+      maTuyenXe: deterministicUuid('TX', 'HM', 3),
+      diemDi: 'TP.HCM',
+      diemDen: 'Đà Lạt',
+      thoiGianChayPhut: 420,
+      trangThai: 'HOAT_DONG',
+      nhaXeId: operators.HM.nhaXeId,
+    },
+    { diemDi: 'TP.HCM', diemDen: 'Đà Lạt', thoiGianChayPhut: 420, trangThai: 'HOAT_DONG' },
+  );
+
+  const hmInbound = await findOrCreate(
+    db,
+    'TuyenXe',
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: deterministicUuid('TX', 'HM', 4) },
+    {
+      maTuyenXe: deterministicUuid('TX', 'HM', 4),
+      diemDi: 'Đà Lạt',
+      diemDen: 'TP.HCM',
+      thoiGianChayPhut: 420,
+      trangThai: 'HOAT_DONG',
+      nhaXeId: operators.HM.nhaXeId,
+    },
+    { diemDi: 'Đà Lạt', diemDen: 'TP.HCM', thoiGianChayPhut: 420, trangThai: 'HOAT_DONG' },
+  );
+
+  const hmPrices = [
+    { route: hmOutbound, typeName: 'GHẾ NGỒI', price: 190000 },
+    { route: hmOutbound, typeName: 'GIƯỜNG NẰM', price: 260000 },
+    { route: hmOutbound, typeName: 'LIMOUSINE', price: 330000 },
+    { route: hmInbound, typeName: 'GHẾ NGỒI', price: 190000 },
+    { route: hmInbound, typeName: 'GIƯỜNG NẰM', price: 260000 },
+    { route: hmInbound, typeName: 'LIMOUSINE', price: 330000 },
+  ];
+
+  for (const { route, typeName, price } of hmPrices) {
+    const loaiXe = vehicleTypes.HM[typeName];
+    if (!loaiXe) continue;
+    await findOrCreate(
+      db,
+      'BangGia',
+      {
+        tuyenXeId: route.tuyenXeId,
+        loaiXeId: loaiXe.loaiXeId,
+        tuNgay: dateOnly(2026, 9, 1),
+        denNgay: null,
+      },
+      {
+        giaNiemYet: decimal(price),
+        tuNgay: dateOnly(2026, 9, 1),
+        denNgay: null,
+        trangThai: 'HOAT_DONG',
+        nhaXeId: operators.HM.nhaXeId,
+        tuyenXeId: route.tuyenXeId,
+        loaiXeId: loaiXe.loaiXeId,
+      },
+      { giaNiemYet: decimal(price), trangThai: 'HOAT_DONG' },
+    );
+  }
+
+  const futaOutbound = routes.FUTA[0];
+  const futaInbound = routes.FUTA[1];
+  const tbOutbound = routes.TB[1];
+  const tbInbound = routes.TB[0];
+  const tripDate = dateOnly(2026, 10, 7);
+
+  const pickVehicle = (operatorCode, typeName, seatCount) => {
+    return vehicles[operatorCode].find(
+      (v) => v.type === typeName && (seatCount ? v.seats.length === seatCount : true),
+    );
+  };
+
+  const tripsDef = [
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0001'), route: futaOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0001'), route: tbOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0001'), route: hmOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0002'), route: futaOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0002'), route: tbOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0002'), route: hmOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0003'), route: futaOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0003'), route: tbOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0003'), route: hmOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'LIMOUSINE', seats: 16 },
+
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0004'), route: futaInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0004'), route: tbInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0004'), route: hmInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0005'), route: futaInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0005'), route: tbInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0005'), route: hmInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+  ];
+
+  for (const def of tripsDef) {
+    const vehicle = pickVehicle(def.op, def.type, def.seats);
+    if (!vehicle) continue;
+    const operator = operators[def.op];
+    const capacitySnapshot = tripCapacitySnapshot(vehicleTypes, def.op, vehicle.type, false);
+    const trip = await upsertBy(
+      db,
+      'ChuyenXe',
+      { maChuyenXe: def.code },
+      {
+        maChuyenXe: def.code,
+        ngayKhoiHanh: tripDate,
+        gioKhoiHanh: timeOnly(def.hour, def.min),
+        gioDen: timeOnly(def.arrHour, def.arrMin),
+        ...capacitySnapshot,
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: operator.nhaXeId,
+        tuyenXeId: def.route.tuyenXeId,
+        xeId: vehicle.xeId,
+      },
+      {
+        ngayKhoiHanh: tripDate,
+        gioKhoiHanh: timeOnly(def.hour, def.min),
+        gioDen: timeOnly(def.arrHour, def.arrMin),
+        ...capacitySnapshot,
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: operator.nhaXeId,
+        tuyenXeId: def.route.tuyenXeId,
+        xeId: vehicle.xeId,
+      },
+    );
+
+    for (const seat of vehicle.seats) {
+      await upsertBy(
+        db,
+        'GheChuyenXe',
+        { chuyenXeId_gheId: { chuyenXeId: trip.chuyenXeId, gheId: seat.gheId } },
+        {
+          trangThai: 'TRONG',
+          chuyenXeId: trip.chuyenXeId,
+          gheId: seat.gheId,
+          tang: seat.tang,
+          toaDoX: seat.toaDoX,
+          toaDoY: seat.toaDoY,
+        },
+        {
+          trangThai: 'TRONG',
+          tang: seat.tang,
+          toaDoX: seat.toaDoX,
+          toaDoY: seat.toaDoY,
+        },
+      );
+    }
+  }
+}
+
+async function seedSupportChat(db, operators, accounts) {
+  const futaOperator = operators.FUTA;
+  const tbOperator = operators.TB;
+  const customer1 = accounts.customers[0];
+  const customer2 = accounts.customers[1];
+
+  const futaCskh = accounts.employees.find(
+    (e) => e.operatorCode === 'FUTA' && e.roleName === 'NHAN_VIEN_CSKH',
+  );
+  const tbCskh = accounts.employees.find(
+    (e) => e.operatorCode === 'TB' && e.roleName === 'NHAN_VIEN_CSKH',
+  );
+
+  if (!futaOperator || !customer1 || !futaCskh) return;
+
+  // 1. Cuộc trò chuyện đang xử lý giữa customer1 và CSKH Phương Trang
+  const conv1 = await upsertBy(
+    db,
+    'CuocTroChuyen',
+    { maCuocTroChuyen: deterministicUuid('CTC', 1) },
+    {
+      maCuocTroChuyen: deterministicUuid('CTC', 1),
+      tieuDe: 'Hỏi về đón trả tận nơi tại Đà Lạt',
+      trangThai: 'DANG_XU_LY',
+      kenhHoTro: 'WEB',
+      cheDoChat: 'NGUOI_THAT',
+      khachHangId: customer1.khachHangId,
+      nhanVienId: futaCskh.nhanVienId,
+      nhaXeId: futaOperator.nhaXeId,
+    },
+    {
+      trangThai: 'DANG_XU_LY',
+      nhanVienId: futaCskh.nhanVienId,
+    },
+  );
+
+  await upsertBy(
+    db,
+    'TinNhanHoTro',
+    { clientMessageId: 'msg-seed-futa-001' },
+    {
+      clientMessageId: 'msg-seed-futa-001',
+      cuocTroChuyenId: conv1.cuocTroChuyenId,
+      taiKhoanGuiId: customer1.account.taiKhoanId,
+      loaiNguoiGui: 'KHACH_HANG',
+      loaiTinNhan: 'VAN_BAN',
+      noiDung: 'Chào nhà xe Phương Trang, chuyến 22h tối nay từ TP.HCM đi Đà Lạt có trung chuyển tận nơi khách sạn không ạ?',
+      trangThai: 'DA_DOC',
+      daDocLuc: new Date(),
+    },
+    {
+      noiDung: 'Chào nhà xe Phương Trang, chuyến 22h tối nay từ TP.HCM đi Đà Lạt có trung chuyển tận nơi khách sạn không ạ?',
+    },
+  );
+
+  await upsertBy(
+    db,
+    'TinNhanHoTro',
+    { clientMessageId: 'msg-seed-futa-002' },
+    {
+      clientMessageId: 'msg-seed-futa-002',
+      cuocTroChuyenId: conv1.cuocTroChuyenId,
+      taiKhoanGuiId: futaCskh.account.taiKhoanId,
+      loaiNguoiGui: 'NHAN_VIEN',
+      loaiTinNhan: 'VAN_BAN',
+      noiDung: 'Dạ chào bạn, Phương Trang có hỗ trợ trung chuyển miễn phí trong bán kính 5km trung tâm Đà Lạt nhé ạ. Bạn cho mình xin mã vé để kiểm tra nha!',
+      trangThai: 'DA_DOC',
+      daDocLuc: new Date(),
+    },
+    {
+      noiDung: 'Dạ chào bạn, Phương Trang có hỗ trợ trung chuyển miễn phí trong bán kính 5km trung tâm Đà Lạt nhé ạ. Bạn cho mình xin mã vé để kiểm tra nha!',
+    },
+  );
+
+  // 2. Cuộc trò chuyện đang chờ tiếp nhận giữa customer1 và Thành Bưởi
+  if (tbOperator) {
+    const conv2 = await upsertBy(
+      db,
+      'CuocTroChuyen',
+      { maCuocTroChuyen: deterministicUuid('CTC', 2) },
+      {
+        maCuocTroChuyen: deterministicUuid('CTC', 2),
+        tieuDe: 'Hỏi về quy định mang thú cưng',
+        trangThai: 'CHO_TIEP_NHAN',
+        kenhHoTro: 'MOBILE',
+        cheDoChat: 'NGUOI_THAT',
+        khachHangId: customer1.khachHangId,
+        nhanVienId: null,
+        nhaXeId: tbOperator.nhaXeId,
+      },
+      {
+        trangThai: 'CHO_TIEP_NHAN',
+      },
+    );
+
+    await upsertBy(
+      db,
+      'TinNhanHoTro',
+      { clientMessageId: 'msg-seed-tb-001' },
+      {
+        clientMessageId: 'msg-seed-tb-001',
+        cuocTroChuyenId: conv2.cuocTroChuyenId,
+        taiKhoanGuiId: customer1.account.taiKhoanId,
+        loaiNguoiGui: 'KHACH_HANG',
+        loaiTinNhan: 'VAN_BAN',
+        noiDung: 'Chào nhà xe Thành Bưởi, mình có thể mang 1 bé mèo nhỏ đựng trong lồng chuyên dụng lên xe limousine không ạ?',
+        trangThai: 'DA_GUI',
+      },
+      {
+        noiDung: 'Chào nhà xe Thành Bưởi, mình có thể mang 1 bé mèo nhỏ đựng trong lồng chuyên dụng lên xe limousine không ạ?',
+      },
+    );
+  }
+
+  // 3. Cuộc trò chuyện đã đóng giữa customer2 và Phương Trang
+  if (customer2) {
+    await upsertBy(
+      db,
+      'CuocTroChuyen',
+      { maCuocTroChuyen: deterministicUuid('CTC', 3) },
+      {
+        maCuocTroChuyen: deterministicUuid('CTC', 3),
+        tieuDe: 'Hỏi về hoàn hủy vé',
+        trangThai: 'DA_DONG',
+        kenhHoTro: 'WEB',
+        cheDoChat: 'NGUOI_THAT',
+        khachHangId: customer2.khachHangId,
+        nhanVienId: futaCskh.nhanVienId,
+        nhaXeId: futaOperator.nhaXeId,
+        dongLuc: new Date(),
+      },
+      {
+        trangThai: 'DA_DONG',
+      },
+    );
+  }
+}
+
+async function main() {
+  await prisma.$connect();
+  const operators = await seedOperators(prisma);
+  const vehicleTypes = await seedVehicleTypes(prisma, operators);
+  const roles = await seedRoles(prisma);
+  await seedPermissionCatalog(prisma);
+  await seedDefaultRolePermissions(prisma, roles);
+  const accounts = await seedAccounts(prisma, operators, roles);
+  const fleet = await seedVehiclesAndRoutes(prisma, operators, vehicleTypes);
+  const prices = await seedPrices(prisma, operators, fleet.routes, vehicleTypes);
+  const cargoAndLogistics = await seedBranchesRatesCargo(prisma, operators, fleet.routes);
+  const promotions = await seedPromotions(prisma, operators);
+  void promotions;
+  const transactions = await seedTransactions(prisma, operators, accounts, fleet, prices, cargoAndLogistics);
+  await applyCustomerSnapshotChange(prisma, accounts);
+  await seedOctoberTrips(prisma, operators, fleet.vehicles, vehicleTypes, fleet.routes);
+  await seedSupportChat(prisma, operators, accounts);
+  await runSeedShipmentsNetwork();
+  printSummary(transactions);
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

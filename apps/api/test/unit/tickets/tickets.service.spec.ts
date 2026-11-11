@@ -1,0 +1,1018 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TicketsService } from '../../../src/tickets/tickets.service.js';
+import type { PrismaService } from '../../../src/prisma/prisma.service.js';
+import type { ConfigService } from '@nestjs/config';
+
+describe('TicketsService', () => {
+  const mockCustomer = {
+    khachHangId: 10,
+    taiKhoanId: 1,
+  };
+
+  const sampleTicket = {
+    veId: 1,
+    maVe: 'VE-001',
+    giaNiemYet: '250000',
+    giaThucTe: '250000',
+    trangThai: 'DA_DAT',
+    diemDon: 'Bến xe Miền Đông',
+    phieuDatVeId: 101,
+    gheChuyenXeId: 11,
+    bangGiaApDungId: 2,
+    createdAt: new Date('2026-09-20T10:00:00.000Z'),
+    updatedAt: new Date('2026-09-20T10:05:00.000Z'),
+    phieuDatVe: {
+      phieuDatVeId: 101,
+      donGiaoDichId: 201,
+      maPhieuDatVe: 'PDV-101',
+      trangThai: 'DA_THANH_TOAN',
+      tongTienBanDau: '250000',
+      soTienGiamKhuyenMai: '25000',
+      khuyenMai: { maKhuyenMai: 'SAVE50' },
+      donGiaoDich: {
+        donGiaoDichId: 201,
+        trangThai: 'DA_THANH_TOAN',
+        tongTien: '250000',
+        tenKhachHang: 'Nguyễn Văn A',
+        soDienThoaiKhachHang: '0901234567',
+        khachHangId: 10,
+        khachHang: {
+          khachHangId: 10,
+          taiKhoanId: 1,
+        },
+        nhaXe: {
+          nhaXeId: 1,
+          tenNhaXe: 'Phương Trang',
+        },
+        thanhToans: [
+          {
+            thanhToanId: 301,
+            soTien: '250000',
+            phuongThuc: 'MOMO',
+            trangThai: 'THANH_CONG',
+          },
+        ],
+      },
+    },
+    gheChuyenXe: {
+      gheChuyenXeId: 11,
+      ghe: { soGhe: 'A01', tenGhe: 'A01', viTri: 'Tầng dưới' },
+      chuyenXe: {
+        chuyenXeId: 50,
+        maChuyenXe: 'CX-50',
+        ngayKhoiHanh: new Date('2026-09-25T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        tuyenXe: {
+          diemDi: 'TP.HCM',
+          diemDen: 'Đà Lạt',
+          nhaXe: { tenNhaXe: 'Phương Trang' },
+        },
+        xe: {
+          loaiXe: { tenLoai: 'GIƯỜNG NẰM' },
+        },
+      },
+    },
+  };
+
+  const prisma = {
+    thongBao: {
+      upsert: vi.fn().mockImplementation(
+        async ({ create }: { create: { thoiGian: Date } }) => ({
+          thongBaoId: 1,
+          thoiGian: create.thoiGian,
+        }),
+      ),
+    },
+    emailThongBao: { upsert: vi.fn() },
+    thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
+    pushThongBao: { upsert: vi.fn() },
+    phanHoi: { findMany: vi.fn().mockResolvedValue([]) },
+    khachHang: {
+      findUnique: vi.fn(),
+    },
+    ve: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      updateMany: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    gheChuyenXe: {
+      update: vi.fn(),
+    },
+    phieuDatVe: {
+      update: vi.fn(),
+    },
+    phieuGuiHang: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    donGiaoDich: {
+      update: vi.fn(),
+    },
+    lichSuTrangThaiVe: {
+      create: vi.fn(),
+    },
+    lichSuTrangThaiPhieuDatVe: {
+      create: vi.fn(),
+    },
+    lichSuTrangThaiPhieuGuiHang: {
+      create: vi.fn().mockResolvedValue({}),
+    },
+    thanhToan: {
+      create: vi.fn(),
+    },
+    $queryRaw: vi.fn().mockResolvedValue([{ donGiaoDichId: 201 }]),
+    $transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(prisma)),
+  };
+
+  const config = {
+    get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
+  };
+  const refundProcessor = { enqueueRefund: vi.fn() };
+  const shipmentCancellation = {
+    cancelAttachedCargoSelectionInTransaction: vi.fn(),
+  };
+
+  const service = new TicketsService(
+    prisma as unknown as PrismaService,
+    config as unknown as ConfigService,
+    refundProcessor as never,
+    shipmentCancellation as never,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.phanHoi.findMany.mockResolvedValue([]);
+    prisma.ve.updateMany.mockResolvedValue({ count: 1 });
+    prisma.thanhToan.create.mockResolvedValue({ thanhToanId: 77 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('findCustomerTickets', () => {
+    it('hydrates one scoped review for every seat of a trip with one batch query', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(2);
+      prisma.ve.findMany.mockResolvedValue([
+        sampleTicket,
+        { ...sampleTicket, veId: 2 },
+      ]);
+      prisma.phanHoi.findMany.mockResolvedValue([
+        {
+          phanHoiId: 71,
+          chuyenXeId: 50,
+          mucDanhGia: 4,
+          noiDung: 'Saved',
+          thoiGian: new Date('2026-10-20T08:00:00Z'),
+          trangThai: 'AN',
+        },
+        {
+          phanHoiId: 70,
+          chuyenXeId: 50,
+          mucDanhGia: 3,
+          noiDung: 'Older',
+          thoiGian: new Date('2026-10-19T08:00:00Z'),
+          trangThai: 'HIEN_THI',
+        },
+      ]);
+      const result = await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+      });
+      expect(result.data.map((ticket) => ticket.review)).toEqual([
+        {
+          reviewId: 71,
+          tripId: 50,
+          rating: 4,
+          comment: 'Saved',
+          createdAt: '2026-10-20T08:00:00.000Z',
+          status: 'AN',
+        },
+        {
+          reviewId: 71,
+          tripId: 50,
+          rating: 4,
+          comment: 'Saved',
+          createdAt: '2026-10-20T08:00:00.000Z',
+          status: 'AN',
+        },
+      ]);
+      expect(prisma.phanHoi.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.phanHoi.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { khachHangId: 10, chuyenXeId: { in: [50] } },
+          orderBy: [{ thoiGian: 'desc' }, { phanHoiId: 'desc' }],
+        }),
+      );
+    });
+
+    it('returns explicit null for a ticket without a customer review', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+      expect(
+        (await service.findCustomerTicketById(1, 1)).data.review,
+      ).toBeNull();
+      expect(prisma.phanHoi.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { khachHangId: 10, chuyenXeId: { in: [50] } },
+        }),
+      );
+    });
+
+    it('does not query or disclose reviews through public ticket lookup', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+      const result = await service.lookupTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+      });
+      expect(result.data.review).toBeNull();
+      expect(prisma.phanHoi.findMany).not.toHaveBeenCalled();
+    });
+
+    it('checks ticket ownership before reading any review', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+      await expect(service.findCustomerTicketById(999, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.phanHoi.findMany).not.toHaveBeenCalled();
+    });
+
+    it('does not query reviews for an empty ticket page', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(0);
+      prisma.ve.findMany.mockResolvedValue([]);
+      expect((await service.findCustomerTickets(1, { page: 1, pageSize: 10 })).data).toEqual([]);
+      expect(prisma.phanHoi.findMany).not.toHaveBeenCalled();
+    });
+
+    it.each([50, 902])(
+      'returns the seat-related tripId %i in every ticket reader',
+      async (tripId) => {
+        const ticket = {
+          ...sampleTicket,
+          gheChuyenXe: {
+            ...sampleTicket.gheChuyenXe,
+            chuyenXe: {
+              ...sampleTicket.gheChuyenXe.chuyenXe,
+              chuyenXeId: tripId,
+            },
+          },
+        };
+        prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+        prisma.ve.count.mockResolvedValue(1);
+        prisma.ve.findMany.mockResolvedValue([ticket]);
+        prisma.ve.findUnique.mockResolvedValue(ticket);
+
+        const list = await service.findCustomerTickets(1, {
+          page: 1,
+          pageSize: 10,
+        });
+        const detail = await service.findCustomerTicketById(1, ticket.veId);
+        const lookup = await service.lookupTicket({
+          ticketCode: ticket.maVe,
+          phoneNumber: '0901234567',
+        });
+        for (const mapped of [list.data[0], detail.data, lookup.data]) {
+          expect(mapped).toMatchObject({ ticketId: 1, bookingId: 101, tripId });
+        }
+      },
+    );
+
+    it('returns null rather than a fabricated tripId if the trip relation is unavailable', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        gheChuyenXe: { ...sampleTicket.gheChuyenXe, chuyenXe: null },
+      });
+
+      const result = await service.findCustomerTicketById(1, sampleTicket.veId);
+      expect(result.data.tripId).toBeNull();
+    });
+
+    it('throws NotFoundException when customer profile does not exist', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.findCustomerTickets(999, { page: 1, pageSize: 10 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns paginated tickets for authenticated customer', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      const result = await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+      });
+
+      expect(result.data).toHaveLength(1);
+      const ticket = result.data[0];
+      expect(ticket.ticketId).toBe(1);
+      expect(ticket.ticketCode).toBe('VE-001');
+      expect(ticket.seatNumber).toBe('A01');
+      expect(ticket.route).toBe('TP.HCM - Đà Lạt');
+      expect(ticket.busCompanyName).toBe('Phương Trang');
+      expect(ticket.price).toBe(250000);
+      expect(ticket).toMatchObject({
+        promotionCode: 'SAVE50',
+        originalTicketSubtotal: 250000,
+        discountAmount: 25000,
+        ticketSubtotal: 225000,
+      });
+      expect(result.meta.totalItems).toBe(1);
+    });
+
+    it('orders by createdAt desc and veId desc by default', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      await service.findCustomerTickets(1, { page: 1, pageSize: 10 });
+
+      expect(prisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ createdAt: 'desc' }, { veId: 'desc' }],
+          include: expect.objectContaining({
+            phieuDatVe: expect.objectContaining({
+              include: expect.objectContaining({
+                donGiaoDich: expect.objectContaining({
+                  include: expect.objectContaining({
+                    thanhToans: {
+                      where: {
+                        loaiGiaoDich: 'THANH_TOAN',
+                        trangThai: 'THANH_CONG',
+                      },
+                      orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+                      take: 1,
+                    },
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('orders by price and direction when requested', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'price',
+        sortDirection: 'asc',
+      });
+
+      expect(prisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ giaThucTe: 'asc' }, { veId: 'asc' }],
+        }),
+      );
+    });
+
+    it('orders by departureTime and direction when requested', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureTime',
+        sortDirection: 'desc',
+      });
+
+      expect(prisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [
+            { gheChuyenXe: { chuyenXe: { ngayKhoiHanh: 'desc' } } },
+            { gheChuyenXe: { chuyenXe: { gioKhoiHanh: 'desc' } } },
+            { veId: 'desc' },
+          ],
+        }),
+      );
+    });
+  });
+
+  describe('findCustomerTicketById', () => {
+    it('throws NotFoundException when ticket does not exist', async () => {
+      prisma.ve.findUnique.mockResolvedValue(null);
+
+      await expect(service.findCustomerTicketById(1, 999)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws ForbiddenException when ticket belongs to another customer', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            khachHang: { taiKhoanId: 888 },
+          },
+        },
+      });
+
+      await expect(service.findCustomerTicketById(1, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('denies account history access to a ticket from an unlinked guest booking', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            khachHangId: null,
+            khachHang: null,
+          },
+        },
+      });
+
+      await expect(service.findCustomerTicketById(1, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('returns ticket detail wrapped in data envelope when authorized', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      const result = await service.findCustomerTicketById(1, 1);
+      expect(result.data.ticketId).toBe(1);
+      expect(result.data.seatNumber).toBe('A01');
+      expect(result.data.passengerName).toBe('Nguyễn Văn A');
+    });
+  });
+
+  describe('lookupTicket', () => {
+    it('throws NotFoundException when ticket code does not exist', async () => {
+      prisma.ve.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.lookupTicket({
+          ticketCode: 'INVALID',
+          phoneNumber: '0901234567',
+        }),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TICKET_NOT_FOUND',
+          message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+        },
+      });
+    });
+
+    it('throws NotFoundException when phone number does not match', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      await expect(
+        service.lookupTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0999999999',
+        }),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TICKET_NOT_FOUND',
+          message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+        },
+      });
+    });
+
+    it('returns ticket wrapped in data envelope when ticket code and phone match', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-24T07:00:00.000Z'));
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      const result = await service.lookupTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '+84901234567',
+      });
+
+      expect(result.data.ticketId).toBe(1);
+      expect(result.data.ticketCode).toBe('VE-001');
+      expect(result.data.route).toBe('TP.HCM - Đà Lạt');
+      expect(result.data.cancellation).toMatchObject({
+        eligible: true,
+        cancelFeeRate: 0.2,
+        cancelFee: 50000,
+        refundAmount: 200000,
+      });
+    });
+
+    it.each([
+      ['exactly 2.5 hours', '2026-09-24T22:30:00.000Z', 0.2],
+      ['exactly 4 hours', '2026-09-24T21:00:00.000Z', 0.2],
+      ['exactly 12 hours', '2026-09-24T13:00:00.000Z', 0.2],
+      ['exactly 24 hours', '2026-09-24T01:00:00.000Z', 0.2],
+      ['more than 24 hours', '2026-09-24T00:59:59.999Z', 0.1],
+    ])(
+      'quotes the correct fee %s before departure',
+      async (_label, now, rate) => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(now));
+        prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+        const result = await service.lookupTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+        });
+
+        expect(result.data.cancellation.cancelFeeRate).toBe(rate);
+      },
+    );
+
+    it('derives arrivalTime accurately from route durationMinutes in lookupTicket', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-24T00:00:00.000Z'));
+      const ticketWithDuration = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            tuyenXe: {
+              ...sampleTicket.gheChuyenXe.chuyenXe.tuyenXe,
+              thoiGianChayPhut: 480,
+            },
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticketWithDuration);
+
+      const result = await service.lookupTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+      });
+
+      expect(result.data.departureTime).toBe('2026-09-25T01:00:00.000Z');
+      expect(result.data.arrivalTime).toBe('2026-09-25T09:00:00.000Z');
+    });
+  });
+
+  describe('cancelTicket', () => {
+    it.each([
+      { now: '2026-09-23T00:00:00Z', phone: '0900000000', rate: 0.1, paid: true, error: 'TICKET_NOT_FOUND' },
+      { now: '2026-09-24T22:45:00Z', phone: '0901234567', rate: 0.2, paid: true, error: 'CANCELLATION_CUTOFF_PASSED' },
+      { now: '2026-09-24T07:00:00Z', phone: '0901234567', rate: 0.1, paid: true, error: 'CANCELLATION_QUOTE_EXPIRED' },
+      { now: '2026-09-23T00:00:00Z', phone: '0901234567', rate: 0.1, paid: false, error: 'REFUND_SOURCE_NOT_FOUND' },
+    ])('keeps $error protection when cargo is already cancelled', async ({ now, phone, rate, paid, error }) => {
+      vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(now));
+      prisma.ve.findUnique.mockResolvedValue({ ...sampleTicket, phieuDatVe: { ...sampleTicket.phieuDatVe,
+        donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich, phieuGuiHang: { trangThai: 'DA_HUY' }, thanhToans: paid ? sampleTicket.phieuDatVe.donGiaoDich.thanhToans : [] },
+      } });
+      await expect(service.cancelTicket({ ticketCode: 'VE-001', phoneNumber: phone, expectedCancelFeeRate: rate })).rejects.toMatchObject({ response: { error } });
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.donGiaoDich.update).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+      expect(refundProcessor.enqueueRefund).not.toHaveBeenCalled();
+    });
+
+    it('locks the order before rereading current cargo instead of trusting the discovered ticket', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      const current = { ...sampleTicket, phieuDatVe: { ...sampleTicket.phieuDatVe,
+        donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich, phieuGuiHang: { trangThai: 'DA_TIEP_NHAN' } },
+      } };
+      prisma.ve.findUnique.mockResolvedValueOnce(sampleTicket).mockResolvedValueOnce(current);
+      await expect(service.cancelTicket({ ticketCode: 'VE-001', phoneNumber: '0901234567', expectedCancelFeeRate: 0.1 })).rejects.toMatchObject({ response: { error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' } });
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(prisma.ve.findUnique.mock.invocationCallOrder[1]);
+      expect(prisma.ve.findUnique.mock.calls[1][0]).toMatchObject({ where: { veId: 1 }, include: expect.any(Object) });
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each(['DA_TIEP_NHAN', 'DANG_VAN_CHUYEN', 'DA_GIAO'])('blocks every ticket with handed-over cargo %s including zero fare', async (status) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      const ticket = { ...sampleTicket, giaThucTe: '0', phieuDatVe: {
+        ...sampleTicket.phieuDatVe, donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich,
+          phieuGuiHang: { trangThai: status },
+        },
+      } };
+      prisma.ve.findUnique.mockResolvedValue(ticket);
+      await expect(service.cancelTicket({ ticketCode: ticket.maVe, phoneNumber: '0901234567', expectedCancelFeeRate: 0.1 })).rejects.toMatchObject({
+        response: { error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' },
+      });
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.gheChuyenXe.update).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+      expect(prisma.lichSuTrangThaiVe.create).not.toHaveBeenCalled();
+      expect(refundProcessor.enqueueRefund).not.toHaveBeenCalled();
+      const lookup = await service.findCustomerTicketById(1, 1);
+      expect(lookup.data.cancellation).toMatchObject({ eligible: false, reason: 'ACTIVE_SHIPMENT' });
+    });
+
+    it('allows cancelling ticket with MOI_TAO cargo and auto-cancels the attached cargo when all tickets are cancelled', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      prisma.ve.count.mockResolvedValue(0);
+      const ticket = {
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            phieuGuiHang: { phieuGuiHangId: 77, maVanDon: 'VD-77', trangThai: 'MOI_TAO' },
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket);
+      const res = await service.cancelTicket({
+        ticketCode: ticket.maVe,
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1,
+      });
+      expect(res.data.status).toBe('HUY');
+      expect(prisma.phieuGuiHang.updateMany).toHaveBeenCalledWith({
+        where: { phieuGuiHangId: 77, trangThai: 'MOI_TAO' },
+        data: expect.objectContaining({ trangThai: 'DA_HUY' }),
+      });
+    });
+
+    it('applies selected cargo cancellation in the same transaction as a partial ticket cancellation', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            phieuGuiHang: { phieuGuiHangId: 77, trangThai: 'MOI_TAO' },
+          },
+        },
+      });
+      shipmentCancellation.cancelAttachedCargoSelectionInTransaction.mockResolvedValue({
+        status: 'MOI_TAO', cancelledItemIds: [101], remainingItemsCount: 1,
+      });
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001', phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1, cargoItemIds: [101],
+      });
+
+      expect(shipmentCancellation.cancelAttachedCargoSelectionInTransaction).toHaveBeenCalledWith(
+        prisma, 201, [101], expect.any(Date),
+      );
+      expect(result.data.cargoCancellation).toEqual({
+        status: 'MOI_TAO', cancelledItemIds: [101], remainingItemsCount: 1,
+      });
+    });
+
+    it('rejects a per-item cargo selection when cancelling the last ticket', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      prisma.ve.count.mockResolvedValue(0);
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      await expect(service.cancelTicket({
+        ticketCode: 'VE-001', phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1, cargoItemIds: [101],
+      })).rejects.toMatchObject({ response: { error: 'CARGO_SELECTION_NOT_APPLICABLE' } });
+      expect(shipmentCancellation.cancelAttachedCargoSelectionInTransaction).not.toHaveBeenCalled();
+      expect(refundProcessor.enqueueRefund).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when ticket does not exist', async () => {
+      prisma.ve.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'INVALID',
+          phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when ticket is already cancelled', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        trangThai: 'HUY',
+      });
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects cancellation less than 2.5 hours before departure', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-24T22:45:00.000Z'));
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.2,
+        }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          error: 'CANCELLATION_CUTOFF_PASSED',
+        }),
+      });
+    });
+
+    it('charges 20 percent from 2.5 through 24 hours before departure', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-24T07:00:00.000Z'));
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+      prisma.ve.count.mockResolvedValue(0);
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.2,
+      });
+
+      expect(result.data.cancelFee).toBe(50000);
+      expect(result.data.refundAmount).toBe(200000);
+    });
+
+    it('cancels ticket atomically and queues a 10 percent refund over 24 hours before departure', async () => {
+      const futureTicket = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: new Date('2029-01-01T00:00:00.000Z'),
+            gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(futureTicket);
+      prisma.ve.count.mockResolvedValue(0);
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1,
+      });
+
+      expect(prisma.ve.updateMany).toHaveBeenCalledWith({
+        where: { veId: 1, trangThai: { not: 'HUY' } },
+        data: { trangThai: 'HUY' },
+      });
+      expect(prisma.gheChuyenXe.update).toHaveBeenCalledWith({
+        where: { gheChuyenXeId: 11 },
+        data: { trangThai: 'TRONG' },
+      });
+      expect(result.data.status).toBe('HUY');
+      expect(result.data.cancelFee).toBe(25000);
+      expect(result.data.refundAmount).toBe(225000);
+      expect(prisma.thanhToan.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          phuongThuc: 'MOMO',
+          loaiGiaoDich: 'HOAN_TIEN',
+          trangThai: 'DANG_XU_LY',
+          donGiaoDichId: 201,
+          veId: 1,
+        }),
+      });
+      expect(
+        prisma.thanhToan.create.mock.calls[0][0].data.soTien.toString(),
+      ).toBe('225000');
+      expect(refundProcessor.enqueueRefund).toHaveBeenCalledWith(77);
+    });
+
+    it('returns conflict when another request has already cancelled the ticket', async () => {
+      const futureTicket = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: new Date('2029-01-01T00:00:00.000Z'),
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(futureTicket);
+      prisma.ve.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1,
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects with ConflictException when expectedCancelFeeRate does not match current quote rate', async () => {
+      // 20 hours away -> fee rate is 0.2 (20%)
+      const twentyHoursFromNow = new Date(Date.now() + 20 * 60 * 60 * 1000);
+      const ticket20h = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket20h);
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1, // user thought fee was 10%
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+    });
+
+    it('proceeds when expectedCancelFeeRate matches current quote rate', async () => {
+      const twentyHoursFromNow = new Date(Date.now() + 20 * 60 * 60 * 1000);
+      const ticket20h = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket20h);
+      prisma.ve.updateMany.mockResolvedValue({ count: 1 });
+      prisma.ve.count.mockResolvedValue(0);
+      prisma.thanhToan.create.mockResolvedValue({ thanhToanId: 88 });
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.2, // matches 20%
+      });
+
+      expect(result.data.cancelFeeRate).toBe(0.2);
+      expect(result.data.status).toBe('HUY');
+    });
+
+    it('rejects with BadRequestException when departure is less than 2.5 hours away', async () => {
+      const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const ticket2h = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twoHoursFromNow,
+            gioKhoiHanh: twoHoursFromNow,
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket2h);
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.2,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('cancels multiple selected tickets atomically when ticketCodes is provided', async () => {
+      const twentyHoursFromNow = new Date(Date.now() + 20 * 60 * 60 * 1000);
+      const ticketA = {
+        ...sampleTicket,
+        veId: 1,
+        maVe: 'VE-001',
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          gheChuyenXeId: 11,
+          ghe: { soGhe: 'A01', tenGhe: 'A01', viTri: 'Tầng dưới' },
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+      const ticketB = {
+        ...sampleTicket,
+        veId: 2,
+        maVe: 'VE-002',
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          gheChuyenXeId: 12,
+          ghe: { soGhe: 'A02', tenGhe: 'A02', viTri: 'Tầng dưới' },
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+
+      prisma.ve.findUnique.mockResolvedValue(ticketA);
+      prisma.ve.findMany.mockResolvedValue([ticketA, ticketB]);
+      prisma.ve.updateMany.mockResolvedValue({ count: 1 });
+      prisma.ve.count.mockResolvedValue(0);
+      prisma.thanhToan.create.mockResolvedValue({ thanhToanId: 99 });
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001',
+        ticketCodes: ['VE-001', 'VE-002'],
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.2,
+      });
+
+      expect(result.data.status).toBe('HUY');
+      expect(result.data.cancelledTicketCodes).toEqual(['VE-001', 'VE-002']);
+      expect(result.data.cancelledSeatNumbers).toEqual(['A01', 'A02']);
+      expect(prisma.ve.updateMany).toHaveBeenCalledTimes(2);
+      expect(prisma.gheChuyenXe.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('cancels only the specific single ticket when ticketCodes contains exactly one ticket differing from reference', async () => {
+      const twentyHoursFromNow = new Date(Date.now() + 20 * 60 * 60 * 1000);
+      const ticketA = {
+        ...sampleTicket,
+        veId: 1,
+        maVe: 'VE-001',
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          gheChuyenXeId: 11,
+          ghe: { soGhe: 'A01', tenGhe: 'A01', viTri: 'Tầng dưới' },
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+      const ticketB = {
+        ...sampleTicket,
+        veId: 2,
+        maVe: 'VE-002',
+        gheChuyenXeId: 12,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          gheChuyenXeId: 12,
+          ghe: { soGhe: 'A02', tenGhe: 'A02', viTri: 'Tầng dưới' },
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+
+      prisma.ve.findUnique.mockResolvedValue(ticketA);
+      prisma.ve.findMany.mockResolvedValue([ticketB]);
+      prisma.ve.updateMany.mockResolvedValue({ count: 1 });
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.thanhToan.create.mockResolvedValue({ thanhToanId: 99 });
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001',
+        ticketCodes: ['VE-002'],
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.2,
+      });
+
+      expect(result.data.status).toBe('HUY');
+      expect(result.data.cancelledTicketCodes).toEqual(['VE-002']);
+      expect(result.data.cancelledSeatNumbers).toEqual(['A02']);
+      expect(prisma.ve.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.gheChuyenXe.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { gheChuyenXeId: 12 },
+          data: { trangThai: 'TRONG' },
+        }),
+      );
+      expect(prisma.phieuDatVe.update).not.toHaveBeenCalled();
+    });
+  });
+});

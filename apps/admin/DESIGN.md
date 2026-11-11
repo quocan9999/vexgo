@@ -1,0 +1,398 @@
+# VexGo Admin Design System
+
+`DESIGN.md` is the source of truth for Admin typography, spacing, shared UI patterns, and responsive behavior. No feature route is a golden reference. Features may have different layouts when their workflows require them, while using the same tokens and shared component contracts.
+
+## Migration status — 23/10/2026
+
+Final technical checkpoint (25/10/2026): Admin/API typecheck, lint and build PASS; selected backend unit regression 116 tests PASS. Local UI/component/integration/E2E/browser and HTTP/SQL runtime remain unverified. Current handoff and acceptance boundaries: [ADMIN_UI_HANDOFF.md](ADMIN_UI_HANDOFF.md). Deferred-check statements below describe earlier checkpoints.
+
+Current acceptance (25/10/2026): the user approved the platform dashboard and reported smoke of all eleven migrated forms and RBAC. Presentation acceptance does not establish API/DB or complete regression verification. Implementation cleanup is complete for this scope; deferred checks remain NOT RUN BY REQUEST. See the current handoff at the top of LEGACY_INVENTORY.md; older pending/retained notes below describe previous checkpoints.
+
+Canonical ownership checkpoint: ui/action-button.tsx and ui/status-badge.tsx are the only Admin Button/Badge primitive owners; old ui/button.tsx and ui/badge.tsx were retired. Resource actions/pagination/states/sheets, resource-filters and ResourceSheetForm are the active patterns. Legacy wrapper/focus-engine/toolbar implementations were removed after updating their direct test contracts. Initial registry tables below remain historical; current cleanup limits are at the top of LEGACY_INVENTORY.md. Deferred automated checks have not run.
+
+Legacy retirement checkpoint (24/10/2026): platform dashboard presentation was approved by the user. Seven disconnected legacy wrappers/Badge and old SearchInput/SelectFilter exports were removed with exclusive CSS. Remaining legacy Button/actions/dialog-focus helper/skeleton/toolbar-summary code is retained for direct test consumers; it is not a route design standard. Current ownership and test migration debt are listed at the top of LEGACY_INVENTORY.md. Runtime/automated verification limits remain unchanged.
+
+Auth follow-up (24/10/2026): login uses canonical Field/Input/Button, retains its branded layout and inline authentication errors; restricted-account logout uses canonical Button and operation-error toast. See AUTH_DASHBOARD_AUDIT.md for the historical audit.
+
+Platform dashboard implementation (24/10/2026): the user subsequently authorized replacing the prototype. `/` now uses real platform-only company/administrator aggregates through the guarded overview API, four KPIs, six-month onboarding bars, a missing-administrator action list and recent company table/mobile cards. Canonical Card/Button/Table/Badge/Resource states; no new primitive/chart engine. Counts are current snapshot values; only onboarding is time-bucketed. Fixed bar plot geometry is a data-visualization exception. Fixture fallback, fixture file, old global dashboard stylesheet and unmeasured health label were removed. Contract and verification limits: PLATFORM_DASHBOARD.md. Status: implemented, pending user smoke; API/DB/browser runtime not verified.
+
+Platform overview refinement: use three elevated metric Cards with soft pastel icon containers, large tabular numbers and status breakdown pills. Recent companies and onboarding share the main row with enhanced bar geometry and company avatar initials. FilterToolbar uses compact 11px uppercase labels, streamlined search and 38px select triggers across all CRUD views. API semantics and contracts are unchanged.
+
+Platform Command Center & Bento Grid upgrade (08/11/2026): Upgraded Super Admin Dashboard to Bento Grid 8:4 layout with Context Command Bar (scope chip, live status, auto-refresh 30s/60s/Off, timestamp, ResourceRefreshAction). Main 8-column area hosts Recent Companies and Onboarding Chart; 4-column side area hosts Administrator attention alert list (with full-coverage positive fallback) and Platform Quick Actions shortcuts (`/bus-companies`, `/admin-accounts`, `/rbac`, `/reviews`). Synchronized design rhythm with Tenant Operational Dashboard.
+
+Tenant Operational Dashboard (08/11/2026): Added dedicated Dispatch & Operations Dashboard at `/` for tenant-scoped admin sessions. Four operational KPI metric Cards (Today Trips, Seat Load Factor % with progress bar, Cargo Shipments, Estimated Daily Revenue), real-time Auto-Refresh toggle (30s/60s/Off), Urgent Dispatch Alerts card (expiring booking reservations, unassigned cargo waybills, low occupancy departing trips), Upcoming Trips schedule table with quick seat-map shortcuts, and 1-click Dispatch Quick Actions. Distinguishes real-time operations command center from retrospective financial revenue analytics (`/revenue-reports`).
+
+Forms, Dialogs & Detail Sheets refinement: canonical Input, Textarea, Select, Field, Combobox, Dialog, AlertDialog, and Sheet primitives use card background surfaces, subtle 2xs/xl shadows, Sapphire focus halos (`focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15`), 13px bold field labels, and frosted glass/blurred backdrop overlays. Mobile drawer navigation preserves deep navy branding. API semantics and accessibility contracts are strictly preserved.
+
+Specialized Workspaces refinement: Seat map workspaces (`/vehicles/:id/seats`, `/trips/:id/seats`) feature realistic coach cabin outlines with cockpit driver compartments, radial corridor canvas patterns, and status-colored seat nodes with tactile hover scales. Revenue reports (`/revenue-reports`) replace solid blue blocks with elevated gradient-tinted KPI cards, pastel icon containers, drop-shadow SVG chart lines, and frosted tooltips. Support chat (`/support-chat`) adopts modern master-detail card panels, gradient customer avatars, and rounded sapphire/card message bubbles. All real-time, optimistic-mutation, and test contracts are preserved.
+
+Responsive Verification (Phase 5): Desktop (1440px) and Mobile (375px) layouts verified across auth, shell, tables, sheets, and specialized workspaces using Chrome DevTools. Desktop maintains 252px deep navy navigation, multi-column metrics, and expanded data tables. Mobile switches to collapsible drawer navigation, full-width sheets (100vw), vertical filter stacks, and card-based data representations without horizontal scroll leakage.
+
+Breadcrumb Navigation & Header Refinement: Redundant uppercase eyebrows and duplicate visual page titles were eliminated from page bodies to reclaim vertical real estate. The sticky header breadcrumb navigation is the canonical location indicator, featuring interactive workspace links, contextual group indicators, precise screen names (`BREADCRUMB_SECTION_LABELS`), and hierarchical multi-segment support for nested routes. Screen-reader headings (`h1.sr-only`) and accessibility landmark contracts are strictly preserved.
+
+Dedicated Detail Pages Pattern: All resource inspection and management workflows have completed full migration from transient slide-out drawers (sheets) to canonical, deep-linkable Dedicated Detail Pages with Bento Grid layouts across all 11 modules:
+- Platform & Administration: `/bus-companies/:id` (`BusCompanyWorkspace`), `/admin-accounts/:id` (`AdminAccountWorkspace`), `/shipments/rates/:id` (`ShipmentRateWorkspace`).
+- Vehicles & Network: `/vehicles/:id` (`VehicleWorkspace`), `/vehicle-types/:id` (`VehicleTypeWorkspace`), `/routes/:id` (`RouteWorkspace`), `/stations/:id` (`StationWorkspace`).
+- Operations & Logistics: `/trips/:id` (`TripWorkspace`), `/shipments/:id` (`ShipmentWorkspace`), `/fare-prices/:id` (`FarePriceWorkspace`), `/customers/:id` (`CustomerWorkspace`).
+Each workspace features a prominent Hero Card (identity badge, primary metric, status badges, contextual action buttons: Back, Edit dialog, Status toggle alertdialog, Refresh), multi-panel Bento Grid cards, reactive state synchronization, and hierarchical breadcrumb integration. Standard forms and destructive alerts remain in focused dialogs.
+
+Dedicated Create Pages & Centered Modal Dialogs Pattern: Slide-over right drawers (sheets) have been eliminated from all resource creation and modification workflows due to spatial constraints. The system standardizes on two canonical patterns:
+- Dedicated Create Pages (`/vehicles/create`, `/trips/create`, `/shipments/create`): Used for complex workflows requiring interactive visual canvas editors (e.g. coach cabin seat layouts) or multi-point itinerary route timelines. These pages utilize 2-column widescreen layouts with real-time preview and deep-linking capabilities.
+- Centered Modal Dialogs (`ResourceModalDialog`): Used for standard create/edit forms with semantic width tiers: `md` (448px, seat edits, role assignment), `lg` (512px, bus companies, routes, vehicle types, fare prices), `xl` (576px, shipment rates, stations, admin accounts, trip edits), `2xl` (672px, promotions 2-column grid), and `3xl` (768px, stop list itinerary matrix). Form layouts use `ResourceModalForm` to pin non-shrinking action footers outside scrollable fields with `max-h-[90vh]` boundary protection.
+
+Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY_INVENTORY.md). Historical baseline registry rows below do not establish current usage or approval. Mounted legacy primitives, unconsumed branches, disconnected files and test dependencies are listed separately in that report.
+
+RBAC cleanup (24/10/2026): shared role selector and permission matrix now use canonical presentation exclusively; their legacy branches and exclusive stylesheet were removed. Optional resource appearance props remain for existing callers. Existing presentation tests were adapted but not executed; this cleanup does not establish runtime approval.
+
+Modal form layout: `components/admin/resource-modal-form.tsx` (`ResourceModalForm`) owns bounded form height, independently scrolling fields and a non-shrinking footer outside the field viewport. Use it inside `ResourceModalDialog` for form actions that must remain visible; do not put sticky/fixed action bars over the field scroll area. It retains a native form element, form refs, submit semantics and feature-owned footer content.
+
+The target is a unified shadcn/ui system using the existing `base-nova` configuration and Base UI foundation, customized for VexGo. This document defines the target contract; it does not claim existing CSS/components already implement it. The first complete migration slice is `/vehicles`. Review that slice before expanding to other routes.
+
+Light theme is the initial migration scope. Existing `.dark` variables do not establish dark-mode support. Keep Inter, JetBrains Mono for exact identifiers, Lucide icons, blue primary actions and navy navigation. Do not add another primitive engine or replace working domain behavior just to match a library example.
+
+Authority: current user scope and repository security/API rules → this design contract and registry → implementations meeting that contract → feature composition. Existing route screenshots and historical feature instructions are evidence, not design authority.
+
+## Typography
+
+- Font family: Plus Jakarta Sans with Inter fallback through `--font-sans`, configured in the Admin root layout.
+- Use JetBrains Mono through `--admin-font-mono` for visible, exact identifiers users copy or compare:
+  - resource codes and visible IDs, including employee/customer/account IDs, vehicle type IDs, and citizen ID numbers;
+  - ticket/booking/waybill references, vehicle plates, seat codes, and permission keys.
+- Keep names, contact details, labels, dates, amounts, and explanatory text in Plus Jakarta Sans / Inter.
+- Apply the semantic roles below across Admin. Table body text defaults to 13px.
+- Primary line-height ratios are `1.2`, `1.35`, and `1.5`; role-specific ratios in the table keep section, helper, and compact table text aligned with the proposal.
+- Use weight primitives 400, 500, 600, and 700. Prefer the role weight token when applying a semantic type role.
+- Keep interface copy at 12px or larger. Brand wordmarks, compact identifying marks, and standalone icon glyphs may keep deliberate sizes.
+
+| Role             |                                 Size | Line height |    Weight |
+| ---------------- | -----------------------------------: | ----------: | --------: |
+| Display          | 32px; 28px at ≤900px; 24px at ≤700px |         1.2 |       700 |
+| Page title       |                 28px; 24px at ≤700px |         1.2 |       700 |
+| Section heading  |                                 20px |         1.3 |       600 |
+| Component title  |                                 16px |        1.35 |       600 |
+| Body             |                                 14px |         1.5 |       400 |
+| Secondary body   |                                 13px |        1.45 |       400 |
+| Form label       |                                 13px |        1.35 |       600 |
+| Helper / error   |                                 12px |         1.4 | 400 / 500 |
+| Table header     |                                 12px |        1.35 |       600 |
+| Table body       |                                 13px |        1.45 |       400 |
+| Button           |                                 14px |         1.2 |       600 |
+| Badge / caption  |                                 12px |        1.35 | 600 / 500 |
+| Dashboard metric |                 24–32px by hierarchy |         1.2 | 600 / 700 |
+
+Semantic typography variables live in `src/styles/admin-tokens.css` with the `--admin-type-<role>-size`, `-line-height`, and `-weight` pattern. The display role supports the login showcase heading. Brand wordmarks and identifying marks may keep a smaller deliberate size.
+
+Letter spacing is reserved for optical heading tightening and uppercase labels. Remove incidental tracking from ordinary body copy and controls; use at most the shared tight heading value and uppercase label value.
+
+## Spacing
+
+Use the 4px spacing scale in rem units:
+
+| Token             | Value | Token              | Value |
+| ----------------- | ----: | ------------------ | ----: |
+| `--admin-space-1` |   4px | `--admin-space-6`  |  24px |
+| `--admin-space-2` |   8px | `--admin-space-7`  |  32px |
+| `--admin-space-3` |  12px | `--admin-space-8`  |  40px |
+| `--admin-space-4` |  16px | `--admin-space-9`  |  48px |
+| `--admin-space-5` |  20px | `--admin-space-10` |  64px |
+
+Semantic aliases map common Admin spacing to the scale:
+
+| Alias                 |     Desktop |                      Mobile |
+| --------------------- | ----------: | --------------------------: |
+| Page inline           |        32px |                        16px |
+| Page block            |        32px |                        24px |
+| Section gap           |        24px |                        20px |
+| Component gap         |        16px |                        16px |
+| Field gap             |        12px |                        12px |
+| Label–control gap     |         8px |                         8px |
+| Toolbar / control gap |        12px |                         8px |
+| Page action padding   |  8px / 16px |                  8px / 16px |
+| Card padding          |        20px |                        16px |
+| Dialog padding        |        24px |                        16px |
+| Table cell X / Y      | 16px / 12px | Card fallback, 16px padding |
+
+Aliases also cover summary, state, notice, control, sheet, form, and sidebar spacing. Use these aliases instead of adding new per-feature spacing values. Shared page action buttons use 8px vertical and 16px horizontal padding with content-sized width. Page-specific spacing exceptions are reserved for data visualization or a workspace with a distinct layout. The dashboard status chart keeps its responsive donut-to-legend composition gap; seat assignment keeps seat dimensions and grid geometry specific to that workflow.
+
+Tiny local offsets may remain for optical alignment of inline icons and native controls. They do not define reusable layout spacing and should not be reused as gaps or padding.
+
+## Token and component ownership
+
+Within each migration slice, migrate design changes in this order:
+
+1. Define or adjust primitive tokens and semantic aliases in `src/styles/admin-tokens.css`.
+2. Apply them to shared primitives.
+3. Apply them to shared components and shared patterns.
+4. Migrate feature styles to the shared tokens and component contracts.
+
+Then inspect affected consumers before removing legacy selectors, aliases or adapters. Do not change all runtime tokens globally before verifying the pilot. During transition, scope new theme mappings to the migrated container where necessary; portal-rendered popovers/dialogs must receive the same theme scope. Do not declare a migrated route complete while its overlays still use a different theme.
+
+Shared shell and component styles belong in `src/styles/admin-components.css` or the owning shared component stylesheet. Feature stylesheets own domain layout and workspace details; they must not become dependencies of shared components.
+
+Undefined custom properties may be mapped only when the existing intended value is identifiable. Current compatibility mappings preserve their prior rendering:
+
+- `--admin-radius-card` maps to existing `--admin-radius-panel` (10px).
+- `--admin-surface` maps to the existing app `--background` value.
+- `--admin-surface-muted` maps to the existing `#f8fafc` fallback used by the seat workspace.
+- The former `--admin-font-size-lg` use is represented by the semantic section-heading role.
+
+The mappings above describe legacy compatibility. New components follow the semantic theme and geometry contract below; do not copy legacy geometry into a new component by default.
+
+## Shared Admin patterns
+
+Location selectors use `components/ui/searchable-combobox.tsx` (Base UI Combobox with the existing shadcn theme) through `features/locations/components/location-picker.tsx`. Reuse this primitive for searchable selections; API/catalogue loading stays in the feature. Location options show the current province as the primary line and predecessor names on a smaller muted secondary line, e.g. Tây Ninh / Long An - cũ. Old provinces are searchable aliases rather than separate options. Location IDs/version semantics and consumer inventory: [LOCATION_CATALOG.md](../api/LOCATION_CATALOG.md). This addition is implemented and pending user visual smoke.
+
+Shared components under `src/components/admin/`, `src/components/ui/`, and `src/components/data-filters/` own reusable visual and accessibility behavior. Reuse the shared page header/actions, detail action, table skeleton, result summary, status badge, pagination, filter controls, detail sheet, form dialog, and confirmation dialog when the use case matches.
+
+- Detail sheet action groups align to the end, wrap when needed, and use the shared action gap. Filter searches stop growing at their defined maximum, while select and date triggers keep a stable width as values and result counts change. Toolbars with many controls may use the compact density variant on desktop and wrap on narrower screens.
+- Domain labels, API calls, validation, and business state remain with the feature.
+- Extend a shared component when the same use case needs a missing option.
+- A feature may use a dedicated workspace for a distinct workflow such as a seat map, dashboard, or editor; keep its typography and normal spacing on the shared system.
+- No route or feature is a visual authority for the rest of Admin.
+
+## Interaction and accessibility
+
+- Searchable location menus use a small leading location icon, a semibold primary name and muted 12px secondary names. Keep selected rows distinct with a light primary surface and a filled check indicator; hover/keyboard highlight remains visible. Menus are viewport-bounded, scroll independently and may exceed a narrow trigger up to the available viewport width. Retain the existing form control heights and semantic focus/invalid states.
+
+- CRUD lists use a desktop table with a mobile card fallback where a table no longer reads well.
+- Search and filters precede the result count; display the count in one location.
+- Pagination communicates range, total, and current page. Navigation controls have accessible names.
+- The desktop sidebar can collapse to a centered icon rail; preserve its preference across routes and keep compact navigation labels available to assistive technology. Tablet stays compact, and mobile uses the navigation drawer.
+- Keep the sidebar brand and divider fixed above an independently scrollable menu. Use the 24px sidebar navigation offset below the divider; long menus must remain reachable by wheel, touch and keyboard on short viewports.
+- Status labels use the shared badge pattern and map domain state in the feature.
+- Forms have associated labels, invalid state, linked error descriptions, and clear submit feedback.
+- Dialogs and sheets have an accessible title, contain focus while open, and support the shared Escape/backdrop behavior.
+- Detail sheet headers show the title and close action. Category eyebrow labels belong to page headers.
+- Icon-only buttons have an accessible name. Loading, success, and error states use appropriate live-region semantics.
+- Nonessential animation respects `prefers-reduced-motion`.
+
+## Responsive review
+
+Review affected routes at 1440×900 and 375×667. Check header hierarchy, actions, filters, result count, loading/error/empty/success states, table/card text, detail sheets, dialogs, overflow, and touchable controls. Evaluate each route against this document and the shared component contract; do not compare it to a feature reference page.
+
+## Semantic theme target
+
+`src/styles/admin-tokens.css` owns the canonical Admin values; `src/app/globals.css` exposes them through shadcn semantic variables and Tailwind mappings. During implementation, define each value once and reference it through aliases. Do not maintain separate neutral shadcn and blue Admin themes inside the same migrated surface.
+
+The following values are the light-theme target for the pilot, not a claim that runtime has already changed. Foreground/background pairs must be checked in their actual component states; ordinary text needs 4.5:1 contrast and meaningful control/focus boundaries need 3:1 where applicable.
+
+| Role / shadcn semantic name              | Target                            | Existing Admin alias / migration action                                             |
+| ---------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
+| `background`                             | `#f8fafc` canvas                  | `--admin-canvas`; Slate-50 canvas separate from cards                               |
+| `foreground`                             | `#0f172a`                         | `--admin-ink`; Slate-900 high contrast text                                        |
+| `card`, `popover`                        | `#ffffff`                         | `--admin-surface` surface alias, with `--admin-shadow-sm` elevation                 |
+| `card-foreground`, `popover-foreground`  | `#1e293b`                         | `--admin-text-strong`                                                               |
+| `primary` / `primary-foreground`         | `#2563eb` / `#ffffff`             | `--admin-blue` Sapphire Blue; hover `#1d4ed8`, active `#1e40af`                     |
+| `secondary` / `secondary-foreground`     | `#ffffff` / `#1e293b`             | Secondary/outline actions keep visible border and soft shadow                       |
+| `muted` / `muted-foreground`             | `#f1f5f9` / `#64748b`             | Muted surface and readable secondary copy                                           |
+| `accent` / `accent-foreground`           | `#eff6ff` / `#2563eb`             | `--admin-blue-soft`; hover/selection                                                |
+| `border`                                 | `#e2e8f0`                         | `--admin-border`, separators                                                        |
+| `input`                                  | `#cbd5e1`                         | Visible interactive boundary; distinct from decorative separators                   |
+| `ring`                                   | `#2563eb`                         | 2px visible focus indicator with 2px offset where layout allows                     |
+| `destructive` / `destructive-foreground` | `#dc2626` / `#ffffff`             | `--admin-danger`                                                                    |
+| `sidebar` / `sidebar-foreground`         | `#0f172a` / `#94a3b8`             | `--admin-navy` Deep Slate luxury enterprise background                              |
+| `sidebar-accent` / foreground            | `#1e293b` / `#ffffff`             | Active item marker `#3b82f6` with soft glow / `aria-current`                        |
+| `sidebar-primary` / foreground           | `#2563eb` / `#ffffff`             | Brand/action accent                                                                 |
+| `sidebar-border` / `sidebar-ring`        | `#1e293b` / `#3b82f6`             | Divider and focus on dark surface                                                   |
+| `chart-1`                                | `#2563eb`                         | Revenue series; distinguish series with labels/line styles as needed                |
+| Success foreground / soft / border       | `#059669` / `#ecfdf5` / `#a7f3d0` | Explicit success tokens (Emerald 600)                                               |
+| Warning foreground / soft / border       | `#d97706` / `#fffbeb` / `#fde68a` | Explicit warning tokens (Amber 600)                                                 |
+| Danger foreground / soft / border        | `#dc2626` / `#fef2f2` / `#fecaca` | Error/critical state (Red 600)                                                      |
+| Neutral foreground / soft / border       | `#475569` / `#f1f5f9` / `#cbd5e1` | Neutral state, not every unrecognized domain enum                                   |
+
+Unneeded chart colors are added when a real chart needs multiple series, rather than inventing data or categories. Unknown CSS names such as `--admin-text-default` must be resolved by intended role; do not introduce an alias merely to silence an undefined-variable search.
+
+## Geometry and density target
+
+Keep the typography/spacing roles above. Size variants express context; using the same variant gives the same geometry across Button, Input, Select and date triggers.
+
+| Variant       |                            Control height |         Text | Use                                                               |
+| ------------- | ----------------------------------------: | -----------: | ----------------------------------------------------------------- |
+| `sm`          |                                      32px |         13px | Compact desktop row actions; preserve a usable hit target         |
+| `default`     |                                      40px |         14px | Forms, page actions and ordinary desktop toolbars                 |
+| `comfortable` |                                      44px |         14px | Touch-oriented controls and mobile main actions                   |
+| Icon control  | Same height and width as its size variant | Icon 16–20px | Accessible name required; no shrinking button to the glyph bounds |
+
+- Control radius: 8px; card/panel and dialog/sheet inner corners: 12px; badge: pill. The existing 10px panel value is legacy until migrated.
+- Default control horizontal padding: 12px; page actions: 16px. No arbitrary `min-width: 120px` for all actions; width follows label/content except explicit full-width mobile actions.
+- Form labels remain 13px/600 and body text 14px. New chart axis labels are at least 12px; marker visuals and hit regions may have different sizes.
+- Touch controls should normally have a 44×44px interactive area. Dense desktop exceptions must remain usable and be reviewed for spacing, focus and mobile adaptation.
+- Button variants: default/primary, secondary, outline, ghost, destructive, link. Keep legacy prop names only through a documented adapter. `loading` exposes busy state and feedback; disabled without loading does not use progress cursor.
+- Default density is standard. Compact density is for dense desktop data areas, not a global font reduction. Mobile uses comfortable main controls and wrapping/stacking toolbars.
+- Surface depth is restrained: border and subtle shadow for cards; clear overlay/backdrop for modal surfaces. Do not add decoration to fill empty header space.
+
+## Shared interaction contracts
+
+| Pattern                  | Required behavior                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fields                   | Persistent label, required state, helper/error linkage, invalid state, compatible autocomplete; preserve values on failed submit                                                                                                                                                                      |
+| Validation               | Keep inline errors; after failed submit focus the first invalid field or linked error summary for long forms; do not steal focus on every change                                                                                                                                                      |
+| Select/filters           | Label and selected value are clear; consistent sizes; support keyboard; no feature-specific copies; loading/options errors remain explicit                                                                                                                                                            |
+| Tabs                     | IDs and tab–panel linkage, selected state, roving focus, ArrowLeft/Right and Home/End; keep API/data loading in feature                                                                                                                                                                               |
+| Dialog/Sheet/AlertDialog | Accessible title, focus containment/return, Escape/backdrop policy, scroll ownership, pending-dismiss protection; nested popup remains usable                                                                                                                                                         |
+| Table/cards              | Shared headers/sort/state/action styles; `aria-sort`; same labels, status mapping and authorized actions in desktop and mobile views                                                                                                                                                                  |
+| Pagination               | One result summary per list context; current page/range/total, accessible previous/next actions; no independent feature visual variants                                                                                                                                                               |
+| Status                   | Feature maps real API enum to Vietnamese label/tone. Never assume an unknown enum is a known successful or failed state                                                                                                                                                                               |
+| Feedback                 | Operation results use the shared Sonner host at bottom-right, once per result; no success banners in page/sheet flow. Keep linked inline field validation and contextual loading/error/empty/permission states. New and migrated screens follow this rule; legacy consumers move per migration ledger |
+| Tooltip/chart            | Hover/focus/touch access as appropriate; Escape dismiss; tooltip remains within viewport; retain keyboard and tabular alternatives for charts                                                                                                                                                         |
+| Workspace                | One intentional scroll owner per pane; short/mobile viewport and virtual keyboard must not hide essential actions                                                                                                                                                                                     |
+
+Opening a create form is not a reason to change tenant scope, code generation, departure scheduling, settlement or refund rules. Preserve current behavior and fix domain issues only with their actual contract/evidence.
+
+## Date-only contract and migration
+
+User decision confirmed on 23/10/2026: **target date-only UI and DTO/API format is `DD-MM-YYYY`**, for example `23-10-2026`. Existing `YYYY-MM-DD` DTOs predate that decision and are migration work, not the permanent target. Full timestamps continue to use ISO 8601 with `Z` or offset. Month/quarter summaries may use `MM-YYYY` / `Quý N/YYYY` as period labels, not date-only API values.
+
+- Maintain an endpoint-level migration ledger listing request/query/response fields, current format, target format, Admin/Customer consumers, change status and verification evidence before changing a wire contract.
+- Move DTO validation, strict calendar parsing/serialization, service adapters, response mapping, API docs and all consumers of that endpoint together. Do not upgrade just the Admin display or just the DTO.
+- Until an endpoint is migrated, keep its existing wire format and mark it pending. This is a transition rule, not approval to create new legacy contracts. New date-only contracts use the target format.
+- Native `input[type=date]`, database DATE and internal date calculations may retain an internal representation suited to them; convert explicitly at boundaries. A native control's locale-dependent display alone does not guarantee the exact visible target format.
+- Parse day/month/year explicitly, reject impossible dates and malformed padding, handle leap years, and compare normalized date values. Never rely on `new Date('DD-MM-YYYY')`, lexical sorting of that string, or guessing between formats.
+- Keep the backend business timezone and timestamp semantics unchanged. Do not convert timestamps to date-only merely to match the UI format.
+- Date filters use shared SingleDateFilter/DateRangeFilter compositions; their implementation can change during migration while maintaining the endpoint contract in the service layer.
+
+## Component ownership and registry
+
+`components/ui/` owns canonical shadcn primitives. `components/admin/` owns Admin compositions. `components/data-filters/` owns filter compositions. Features own API, permissions, state, validation rules, labels and domain-specific layouts. A wrapper is justified by a shared contract, not by a preference for another component name.
+
+Registry states:
+
+- **legacy**: existing implementation; retained for unmigrated consumers. This is not a claim that all its behavior is wrong.
+- **planned**: target contract exists; implementation has not been verified.
+- **migrating**: canonical replacement is in progress; list actual migrated consumers and remaining adapters.
+- **approved**: implementation meets contract and has evidence for affected consumers, responsive states and keyboard behavior. Record evidence and approval; package installation alone is insufficient.
+
+Initial baseline registry (before the pilot implementation below):
+
+| Pattern                                   | Current owner                                                      | Status              | Target / pilot consumer                                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Button / Badge                            | `components/ui/button.tsx`, `badge.tsx`                            | legacy              | Canonical shadcn variants; `/vehicles`                                                                                                                     |
+| Input / Field / Label / Textarea / Select | Native markup in features                                          | planned replacement | Canonical primitives + error contract; vehicle form/filter                                                                                                 |
+| Dialog engine                             | `admin-dialog-primitive.tsx`                                       | legacy              | Dialog/Sheet/AlertDialog primitives; verify close refs, pending state and nested filters                                                                   |
+| Form/detail/confirmation patterns         | `AdminFormDialog`, `AdminDetailSheet`, `AdminConfirmDialog`        | legacy              | Shared compositions over the new engine; vehicle create/edit/detail/status actions                                                                         |
+| Filter toolbar/search/select/date         | `components/data-filters/`                                         | legacy              | Keep appropriate composition API; implement new theme/size/keyboard contracts                                                                              |
+| Page header/create/refresh/detail actions | `components/admin/`                                                | legacy              | Preserve role and labels; use new primitives                                                                                                               |
+| Table/cards/sort/pagination               | Shared CSS and feature markup + `AdminPagination`                  | legacy              | Shared presentation contracts, feature columns/actions                                                                                                     |
+| Alert/Skeleton/empty/success              | Shared skeleton + feature styles                                   | legacy              | Canonical state compositions; vehicle states                                                                                                               |
+| Money/generated code field                | `AdminMoneyInput`, `AdminGeneratedCodeField`                       | legacy              | Keep domain behavior, migrate underlying Input/Field/Button when consumed                                                                                  |
+| Tabs                                      | `components/ui/tabs.tsx`                                           | migrating           | Customer, booking and vehicle-seat views use canonical Tabs; migrate remaining tabs by route slice                                                         |
+| Tooltip                                   | `components/ui/tooltip.tsx` + `components/admin/admin-sidebar-link.tsx` | migrating         | Base UI hover/focus/Escape engine; sidebar rail opts in; existing chart/domain tooltips remain feature-owned until their own review                            |
+| Popover                                   | `components/ui/popover.tsx` + `components/admin/admin-account-popover.tsx` | migrating     | Mobile account summary uses shared Base UI focus/dismiss engine; existing date/filter compositions keep their current adapter until reviewed                  |
+| Shell/sidebar                             | `SuperAdminLayout` + `features/super-admin-layout/admin-shell.css` | migrating           | Canonical Button, Sheet mobile navigation and ResourceConfirmation; preserve permission/tenant/navigation preference behavior; evidence in UI_MIGRATION.md |
+| Support chat / revenue chart              | Feature workspaces                                                 | approved            | Presentation approved; retain domain data/layout; see UI_MIGRATION.md                                                                                       |
+| Tenant RBAC matrix                        | `features/tenant-rbac/` + shared RBAC components                   | approved            | All tenant and platform RBAC routes use the shared Resource role selector, matrix and scope navigation                                                      |
+| Vehicle seat workspace                    | `features/vehicles/components/vehicle-seats-management.tsx`        | migrating           | User approved presentation; responsive and keyboard review remains pending; see UI_MIGRATION.md                                                         |
+| Trip seat workspace                       | `features/trips/components/trip-seats-management.tsx`              | migrating           | User approved presentation; responsive and keyboard review remains pending; see UI_MIGRATION.md                                                          |
+| Bus companies                              | `features/bus-companies/components/`                              | migrating           | Resource list/detail/create/edit/status controls; responsive and keyboard review pending                                                               |
+| Platform RBAC                             | Platform RBAC feature workspaces                                   | migrating           | All three routes use the shared Resource scope navigation; latest shared navigation slice awaits user visual review; see UI_MIGRATION.md                     |
+
+For each pattern entering `migrating`, add canonical path, migrated and remaining consumer paths, adapter (if any), evidence and removal condition to this registry or its linked ledger. Adapter removal requires zero remaining consumers and verified replacement behavior. Do not maintain two styling or focus engines for the same migrated component.
+
+### Vehicles pilot — user approved
+
+Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and `VehicleFormDialog` use canonical shadcn primitives and shared Resource patterns. The user approved the pilot presentation and bottom-right toast on 23/10/2026; remaining runtime verification limits are recorded in the ledger. This approval does not approve every Admin route. Existing `ui/button.tsx`, `ui/badge.tsx`, Admin dialog/filter/pagination patterns remain legacy for their other consumers; do not copy them into new features. New consumers use the canonical paths in the ledger. No endpoint date-only contract is switched by the vehicles pilot; its API timestamps remain ISO and the visible date portion uses `DD-MM-YYYY`.
+
+### Vehicle types — user approved
+
+`/vehicle-types` now consumes the canonical Resource actions/states/pagination/Sheet, resource filters, Table/Card, Field/Input and the new `components/ui/textarea.tsx` primitive. Textarea follows the same control radius, font and focus/error contract; it is adapted from the official base-nova registry. Feature-native `vehicle-types.css` has no remaining consumers and is removed. The user approved the presentation on 23/10/2026; verification and remaining runtime limits are recorded in the migration ledger. Existing API, permissions, tenant principal and capacity validation remain unchanged.
+
+### Routes — user approved
+
+`/routes` uses canonical Resource patterns, filters, Table/Card, Field/Input/Select and nested Sheet/confirmation. Generated codes use `components/admin/resource-generated-code-field.tsx`: disabled Input and existing preview hook, without changing code allocation or submit contracts. `AdminGeneratedCodeField` remains legacy only for trips until that consumer migrates. New generated-code consumers use the canonical Resource field. Feature-native `routes.css` is removed after its last consumer migrated. Route permissions, tenant scope, positive duration parsing and status confirmation rules remain unchanged; see the ledger for evidence and remaining runtime checks.
+
+### Fare prices — user approved
+
+`/fare-prices` uses canonical Resource patterns, resource filters, Table/Card, Field/Input/Select and nested Sheet/confirmation. Price remains a positive integer VND input; effective state remains backend-owned. Removed feature-native CSS after migrating all consumers. Date-only API remains legacy YYYY-MM-DD pending coordinated migration; list/detail labels use DD-MM-YYYY. See UI_MIGRATION.md for evidence and runtime limits. Routes presentation was approved by the user on 23/10/2026.
+
+### Trips — user approved
+
+`/trips` uses canonical Resource patterns, Table/Card, resource filters, nested Sheet/confirmation, generated-code Field and the migrated shared SingleDateFilter. Existing domain services and legacy date-only API contracts are retained. `/trips/[tripId]/seats` is a separate read-only workspace migration; see UI_MIGRATION.md for its approval and verification state. Shared seat-summary styles remain for the trip detail sheet. Removed unused trip CRUD styles; see ledger for scope and skipped checks. Fare-price presentation approved by the user on 23/10/2026.
+
+### Trip seat workspace — migrating
+
+`/trips/[tripId]/seats` uses canonical Button, Badge, Card, Skeleton and ResourceState with the shared Admin page header. The read-only view retains trip context, seat totals and backend status filtering, and renders saved 2D coordinates grouped by floor with an accessible status legend. Legacy seats without coordinates receive a deterministic display-only fallback grid. Its empty copy distinguishes an empty trip inventory from a filter with no matches. Responsive/keyboard review for the map is pending in UI_MIGRATION.md.
+
+### Bus companies — user approved
+
+`/bus-companies` uses shared Resource actions/states/pagination, resource filters, Table/Card, ResourceSheet for detail/create/edit, AlertDialog, Field/Input/Select and bottom-right toast. Existing platform-owned Super Admin permissions, services, request behavior and create/edit/status rules remain unchanged. Pending submissions prevent dismissal. Responsive/keyboard review is pending because the Admin server was stopped. `bus-companies.css` was removed after its `.table-error` style was temporarily retained for `/admin-accounts`; that final legacy consumer and the global rule were removed in the admin-accounts migration. See UI_MIGRATION.md for checks not run and review status.
+
+### Admin accounts — user approved
+
+`/admin-accounts` uses canonical Resource actions, states, pagination, filters, sort controls, Table/Card, Sheet, AlertDialog, Field/Input/Select/Checkbox and bottom-right toast. Super Admin permission checks, platform scope, services, API payloads, tenant-role filtering, validation and pending-submit guards remain unchanged. Removed `admin-accounts-management.module.css` after moving route presentation to canonical components and utilities. Review and verification limits are recorded in UI_MIGRATION.md.
+
+### Customers — user approved
+
+`/customers` list and CustomerDetails use canonical Resource patterns, Table/Card, filters, pagination and Sheet. Existing read-only operational use case, tenant scope and API remain unchanged. The linked activity workspace /customers/[id] and its tabs remain legacy; shared customer CSS is retained for those consumers. Trips presentation approved by the user on 23/10/2026. See migration ledger for evidence and skipped checks.
+
+### Customer activity workspace — user approved
+
+`/customers/[id]` and its four tabs consume canonical components; `ui/tabs.tsx` is the canonical Tabs primitive adapted from official base-nova with the Admin sizing/focus contract. Other legacy tabs migrate to this primitive in their own slice. `data-filters/resource-sort.tsx` owns mobile sort composition shared across the three history tabs. All customer CSS consumers have migrated; customers.css is removed. API/domain rules remain unchanged. See ledger for evidence and skipped checks.
+
+### Support chat — user approved
+
+`/support-chat` uses canonical controls/states/confirmation and retains its domain two-pane messaging layout in admin-chat-messenger.module.css. Unlike CRUD, the workspace owns bounded viewport height (100dvh minus 248px, minimum 30rem mobile / 28rem desktop) and independently scrolling inbox/transcript; mobile shows one pane at a time. No status aggregates are inferred from one loaded page. Read-only accounts retain read-only presentation. Customer activity workspace approved by the user on 24/10/2026; see ledger for chat evidence and limits.
+
+### Booking management list and details — approved
+
+`/booking-management` booking/ticket lists use canonical Tabs, Table/Card and Resource patterns. Shared DateRangeFilter and LabeledSelectFilter now expose opt-in appearance=resource; legacy remains default for unmigrated consumers. These adapters share state/callbacks and existing Base UI engine, and are removed after the last legacy consumer migrates. List and detail CSS removed after consumer inventory. Booking/ticket detail routes now compose canonical information cards, linked records, refund groups and history; presentation approved on 24/10/2026. Booking list approved on 24/10/2026. Support chat presentation approved by the user on 24/10/2026. See ledger for evidence and skipped checks.
+
+### Shell geometry and navigation (Sapphire Midnight Redesign)
+
+- Desktop sidebar width 252px, collapsed/tablet rail 76px; tablet rail applies from 701–1180px. Mobile ≤700px uses a left Sheet up to 320px wide, leaving at least 32px of backdrop.
+- Sapphire Midnight Visuals: Sidebar features deep Slate Navy gradient surface (`linear-gradient(180deg, #0b1120 0%, #0d1527 50%, #090e1a 100%)`) with delicate boundary border (`border-r border-white/[0.08]`).
+- Information Architecture: Operational navigation is organized into 4 semantic clusters:
+  1. *Điều độ & Bán vé*: Chuyến xe (`/trips`), Quản lý phiếu đặt vé & vé (`/booking-management`), Gửi hàng (`/shipments`).
+  2. *Đội xe & Tuyến đường*: Tuyến xe (`/routes`), Bến bãi & Điểm đón trả (`/stations`), Danh sách xe (`/vehicles`), Loại xe (`/vehicle-types`).
+  3. *Kinh doanh & Bảng giá*: Bảng giá vé (`/fare-prices`), Khuyến mãi (`/promotions`), Báo cáo doanh thu (`/revenue-reports`).
+  4. *Khách hàng & Dịch vụ*: Khách hàng (`/customers`), Chăm sóc khách hàng (`/support-chat`), Đánh giá & Phản hồi (`/reviews`).
+- Active State: Sapphire Glow Pill with soft light indigo gradient (`linear-gradient(90deg, rgba(37,99,235,0.18), rgba(37,99,235,0.08))`), thin border (`border-blue-500/25`), and bright icon tint (`text-blue-400` with drop-shadow).
+- Navigation Purity: Left sidebar is exclusively dedicated to operational routing; the redundant bottom user profile card was removed in favor of the unified Header User Dropdown Popover.
+- Collapsed Rail Mode: Centers squircle icon action pills (44x44px, radius 10px), centers brand mark, preserves subtle cluster separation dividers, and employs shared Base UI Tooltips on hover/focus.
+- Sidebar link focus outline must sit inside the link bounds so the scroll container cannot clip it. Collapsed desktop and tablet rail links use the shared Tooltip on hover and keyboard focus, with Escape dismissal and a portal outside the scroll clip. Expanded desktop and mobile Sheet links keep visible labels and disable the tooltip. Do not add native title tooltips alongside this primitive.
+- Header inner minimum height 68px desktop / 64px mobile, plus the 1px border; its centered 1510px maximum container and page-inline padding align with page content. Header styling is isolated in `features/super-admin-layout/components/admin-header.module.css`. Show authenticated scope, current section and account identity; truncate long text. Do not add a tenant switcher to tenant scope.
+- Header User Dropdown Popover (Option 1): Unified `AdminAccountPopover` on both desktop and mobile viewports. On the Header bar, displays an interactive Avatar trigger button (initial, online presence dot `#10b981`, and chevron) minimizing horizontal footprint. Clicking opens a rich popover card showing authenticated full name, styled role badge, contact info (email/phone), and a prominent red Logout action. A screen-reader/keyboard-accessible logout button is retained for assistive technology and automated test contracts.
+- Header Language Switcher: Placed adjacent to the account avatar popover with `var(--admin-space-2)` spacing, `AdminLanguageSwitcher` provides an interactive language selector pill (`Languages` icon, current locale badge "VI" / "EN", and chevron). Clicking opens a compact popover menu to switch between Tiếng Việt and English with clean active states and checkmark indicators; light dismiss on outside click and Escape.
+- Mobile Sheet uses the canonical focus/scroll-lock engine, closes on link selection, Escape/backdrop, and returns focus to the menu trigger. Returning to desktop closes the mobile overlay. Desktop collapse preference keeps its existing storage behavior.
+- Logout executes immediately without confirmation (user decision). Disable the action while pending, guard repeated requests and use bottom-right error toast. No feature content or API authorization rules are changed by the shell migration.
+
+Shell/header typography maps to the existing role table above. Ratios 1.4 and 1.45 are valid for helper and secondary body; the three primary ratios are not an exclusive list. This mapping uses existing semantic tokens without changing their global values:
+
+| Shell/header element | Typography role |
+| --- | --- |
+| Brand context, mobile workspace context, account role | Helper (12px / 1.4 / 400) |
+| Sidebar group label | Badge (12px / 1.35 / 600), uppercase tracking retained |
+| Sidebar link | Secondary body (13px / 1.45), with medium 500 navigation emphasis |
+| Desktop workspace label, account name, avatar identifying letter | Form label (13px / 1.35 / 600) |
+| Breadcrumb | Secondary body (13px / 1.45 / 400); current section uses semibold 600 emphasis |
+| Logout and skip-navigation link | Button (14px / 1.2 / 600) |
+| VexGo wordmark and brand mark | Deliberate brand-size exceptions: 18px and 22px; display line-height 1.2 and bold 700 |
+
+## Rollout and completion gates
+
+1. Documentation/contract foundation: this step; no runtime tokens or DTOs are changed by documentation alone.
+2. Build only primitives required by `/vehicles`; migrate list/filter/mobile cards/create/edit/detail/confirmation and every relevant state as one slice.
+3. Review the pilot with the user before expanding. Record concrete viewport/keyboard/state evidence and any pending checks; typecheck/build alone do not establish UI readiness.
+4. Migrate shell and equivalent CRUD groups; then customer/booking/trip/shipment/promotion/RBAC workflows; then specialized chat/report workspaces. Keep dashboard data-source work separate; do not fabricate runtime data or add F13.
+5. Remove legacy only after consumer inventory and review. Update this registry with actual status, not intended progress.
+
+Within each implementation slice: inspect consumers/impact before edits, implement, run permitted scoped checks, review responsive and keyboard behavior, self-review, then report evidence and remaining limits. Test types follow current user authorization; this document does not authorize integration/E2E/UI test suites by itself. Do not claim unobserved role/runtime states passed. Date contract migration is separately tracked across both clients before any affected endpoint is switched.
+
+### Promotions — user approved
+
+`/promotions` composes canonical list/filter/Table/Card/Sheet/confirmation patterns. Operation feedback uses bottom-right toast. AdminMoneyInput opts into canonical Input via appearance=resource, retaining one formatting/caret engine; legacy remains compatibility default until final consumer review. Existing DateRangeFilter resource adapter reused. The disconnected legacy PromotionDetailSheet and its exclusive stylesheet were removed on 24/10/2026 after checking source/test references; the live route remains unchanged. Booking/ticket details approved by user on 24/10/2026. See migration ledger for browser evidence and skipped checks.
+
+### Shipments — user approved
+
+`/shipments` composes canonical Resource patterns for list, search/status filter, Table/mobile Card, detail Sheet and nested confirmation. Cargo, fee breakdown and history retain their domain data in canonical cards/table; mobile fee cells use 8px inline padding (16px from sm) to keep the three-column breakdown readable in a 375px Sheet. Removed unreferenced shipments.css. Payment gate and tenant/backend rules are unchanged. Promotions approved by user on 24/10/2026. See migration ledger for evidence and skipped checks.
+
+### Revenue reports — user approved
+
+`/revenue-reports` uses canonical Card/Table/Skeleton, Resource state/notice/actions and resource filter adapters. Six KPI hierarchy and domain chart geometry/tooltip remain feature-owned; tables retain horizontal scrolling on mobile for financial column comparison, bounded vertical scrolling (480px) and sticky headers. DateRangeFilter emptyValueLabel defaults to existing copy and supports accurate current-month presentation here. CSV placeholder uses shared bottom-right toast; no new export implementation. Shared daily display formatter uses DD-MM-YYYY; API date wire format unchanged. Shipments approved by user on 24/10/2026. See ledger for evidence and skipped checks.
+
+### Tenant RBAC — migrating
+
+`/tenant-rbac`, `/rbac`, `/rbac/tenants`, and `/rbac/tenants/[nhaXeId]` use the shared resource-mode role selector and permission matrix. Tenant and platform-tenant detail routes use canonical Card/Badge, Resource states/notices/actions/confirmation and bottom-right toast; the tenant picker uses real API data with shared Card/Field/Input patterns. Canonical checkbox.tsx and radio-group.tsx use the official shadcn base-nova/Base UI primitives and VexGo focus contract. Desktop role cards use RadioGroup; mobile reuses LabeledSelectFilter. Matrix scope and exact permission keys remain unchanged. Feature CSS was removed only from migrated route consumers; scope navigation uses the same Resource presentation on all platform RBAC routes. `/rbac`, `/rbac/tenants`, and `/rbac/tenants/[nhaXeId]` were approved by the user; the latest scope-navigation refinement awaits review. See ledger for evidence and skipped checks.
+
+### Platform RBAC — migrating
+
+`/rbac` uses the shared resource-mode role selector and permission matrix, Resource loading/error/confirmation patterns, and bottom-right success toast. `/rbac/tenants` uses canonical Card, Field/Input, Badge and Resource states for the real searchable tenant list. `/rbac/tenants/[nhaXeId]` uses those same Resource patterns for tenant identity, role selection, default/override/effective permission summaries, editing and confirmation. `PlatformRbacScopeNavigation` now uses the Resource presentation on all three routes; its previous legacy branch and feature CSS were removed after consumer inventory. Global role scope, permission keys, confirmation copy, service calls and API requests remain unchanged. All three platform RBAC routes have user-approved presentation; the latest shared navigation refinement awaits review. See the migration ledger for verification limits.

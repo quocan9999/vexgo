@@ -1,0 +1,731 @@
+'use client';
+
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Eye,
+  EyeOff,
+  FilterX,
+  MessageSquare,
+  MessageSquareQuote,
+  Star,
+  X,
+} from 'lucide-react';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import {
+  ResourceConfirmation,
+  ResourcePagination,
+  ResourceRefreshAction,
+  ResourceState,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+} from '@/components/admin/resource-ui';
+import {
+  SearchInput,
+  SelectFilter,
+  type FilterOption,
+} from '@/components/data-filters/resource-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTranslations } from 'next-intl';
+import { useReviews } from '../hooks/use-reviews';
+import type { AdminReviewSortKey, ReviewStatus } from '../types/review';
+import { ReviewStatsCards } from './review-stats-cards';
+
+function formatDate(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes} · ${day}-${month}-${year}`;
+  } catch {
+    return isoString;
+  }
+}
+
+function StarRating({ rating, title }: { rating: number; title: string }) {
+  return (
+    <div className="flex items-center gap-1.5" title={title}>
+      <div className="flex items-center text-amber-400">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            size={14}
+            className={
+              star <= rating
+                ? 'fill-amber-400 text-amber-400'
+                : 'text-muted-foreground/30'
+            }
+            aria-hidden="true"
+          />
+        ))}
+      </div>
+      <span className="font-semibold text-foreground text-xs">{rating}/5</span>
+    </div>
+  );
+}
+
+export function ReviewsManagement() {
+  const tReviews = useTranslations('reviews');
+  const tCommon = useTranslations('common');
+
+  const ratingOptions: FilterOption[] = [
+    { value: '5', label: tReviews('star5Label') },
+    { value: '4', label: tReviews('star4Label') },
+    { value: '3', label: tReviews('star3Label') },
+    { value: '2', label: tReviews('star2Label') },
+    { value: '1', label: tReviews('star1Label') },
+  ];
+
+  const statusOptions: FilterOption[] = [
+    { value: 'HIEN_THI', label: tReviews('statusVisible') },
+    { value: 'DA_AN', label: tReviews('statusHidden') },
+  ];
+
+  const commentOptions: FilterOption[] = [
+    { value: 'WITH_COMMENT', label: tReviews('withCommentLabel') },
+    { value: 'WITHOUT_COMMENT', label: tReviews('withoutCommentLabel') },
+  ];
+
+  const timeRangeOptions: FilterOption[] = [
+    { value: '7_DAYS', label: tReviews('last7Days') },
+    { value: '30_DAYS', label: tReviews('last30Days') },
+    { value: 'THIS_MONTH', label: tReviews('thisMonth') },
+  ];
+  const {
+    reviews,
+    stats,
+    meta,
+    loading,
+    refreshing,
+    error,
+    searchInput,
+    setSearchInput,
+    ratingFilter,
+    setRatingFilter,
+    statusFilter,
+    setStatusFilter,
+    busCompanyFilter,
+    setBusCompanyFilter,
+    routeFilter,
+    setRouteFilter,
+    hasCommentFilter,
+    setHasCommentFilter,
+    timeRangeFilter,
+    setTimeRangeFilter,
+    routeOptions,
+    busCompanyOptions,
+    setPage,
+    sortBy,
+    sortDirection,
+    handleSort,
+    moderatingReview,
+    setModeratingReview,
+    modifyingStatus,
+    handleToggleStatus,
+    replyingReview,
+    replyText,
+    setReplyText,
+    submittingReply,
+    openReplyModal,
+    closeReplyModal,
+    handleSaveReply,
+    handleDeleteReply,
+    refresh,
+    resetFilters,
+    isSuperAdmin,
+  } = useReviews();
+
+  const isFiltered = Boolean(
+    searchInput ||
+      ratingFilter ||
+      statusFilter ||
+      (isSuperAdmin && busCompanyFilter) ||
+      routeFilter ||
+      hasCommentFilter ||
+      timeRangeFilter,
+  );
+
+  function renderSortIcon(key: AdminReviewSortKey) {
+    if (sortBy !== key) {
+      return (
+        <span aria-hidden="true">
+          <ArrowUpDown size={14} />
+        </span>
+      );
+    }
+    return (
+      <span aria-hidden="true">
+        {sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+      </span>
+    );
+  }
+
+  function getAriaSort(key: AdminReviewSortKey): 'none' | 'ascending' | 'descending' {
+    if (sortBy !== key) return 'none';
+    return sortDirection === 'asc' ? 'ascending' : 'descending';
+  }
+
+  return (
+    <SuperAdminLayout activeSection="reviews">
+      <div className="admin-page-content admin-ui space-y-6">
+        <AdminPageHeader
+          actions={
+            <ResourceRefreshAction loading={refreshing} onClick={refresh} />
+          }
+          eyebrow={tReviews('eyebrow')}
+          title={tReviews('reviewsTitle')}
+          titleId="reviews-page-title"
+        />
+
+        {/* CSAT Metric Overview */}
+        <ReviewStatsCards stats={stats} />
+
+        {/* Reviews Table & Filters */}
+        <section
+          className="min-w-0"
+          aria-busy={loading || refreshing}
+          aria-labelledby="reviews-table-heading"
+        >
+          <h2 id="reviews-table-heading" className="sr-only">
+            {tReviews('reviewsListCaption')}
+          </h2>
+
+          <Card className="overflow-hidden border">
+            {/* Filter toolbar */}
+            <div className="border-b border-border divide-y divide-border">
+              {/* Row 1: Search keyword, Bus Company & Route filters */}
+              <div className="flex flex-wrap items-end gap-3 p-4 sm:p-5">
+                <SearchInput
+                  className="min-w-0 flex-[3_1_260px]"
+                  label={tReviews('searchReviewsLabel')}
+                  onChange={setSearchInput}
+                  placeholder={tReviews('searchPlaceholder')}
+                  value={searchInput}
+                />
+
+                {isSuperAdmin && busCompanyOptions.length > 0 && (
+                  <SelectFilter
+                    className="min-w-0 flex-[2_1_200px]"
+                    allLabel={tReviews('allStatuses')}
+                    label={tReviews('eyebrow')}
+                    onChange={(val) =>
+                      setBusCompanyFilter(val ? Number(val) : undefined)
+                    }
+                    options={busCompanyOptions}
+                    value={
+                      busCompanyFilter !== undefined
+                        ? String(busCompanyFilter)
+                        : ''
+                    }
+                  />
+                )}
+
+                {routeOptions.length > 0 && (
+                  <SelectFilter
+                    className="min-w-0 flex-[2_1_200px]"
+                    allLabel={tCommon('all')}
+                    label={tReviews('colTripRoute')}
+                    onChange={(val) => setRouteFilter(val ? Number(val) : undefined)}
+                    options={routeOptions}
+                    value={routeFilter !== undefined ? String(routeFilter) : ''}
+                  />
+                )}
+              </div>
+
+              {/* Row 2: 4 filter controls & reset action */}
+              <div className="flex flex-wrap items-end gap-3 p-4 sm:p-5 bg-muted/20">
+                <SelectFilter
+                  className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
+                  allLabel={tReviews('allStarRatings')}
+                  label={tReviews('filterRating')}
+                  onChange={(val) => setRatingFilter(val ? Number(val) : undefined)}
+                  options={ratingOptions}
+                  value={ratingFilter !== undefined ? String(ratingFilter) : ''}
+                />
+
+                <SelectFilter
+                  className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
+                  allLabel={tReviews('allCommentTypes')}
+                  label={tReviews('filterComment')}
+                  onChange={(val) =>
+                    setHasCommentFilter(
+                      val
+                        ? (val as 'ALL' | 'WITH_COMMENT' | 'WITHOUT_COMMENT')
+                        : undefined,
+                    )
+                  }
+                  options={commentOptions}
+                  value={hasCommentFilter ?? ''}
+                />
+
+                <SelectFilter
+                  className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
+                  allLabel={tReviews('allTimeRanges')}
+                  label={tReviews('filterTimeRange')}
+                  onChange={(val) =>
+                    setTimeRangeFilter(
+                      val
+                        ? (val as 'ALL' | '7_DAYS' | '30_DAYS' | 'THIS_MONTH')
+                        : undefined,
+                    )
+                  }
+                  options={timeRangeOptions}
+                  value={timeRangeFilter ?? ''}
+                />
+
+                <SelectFilter
+                  className="min-w-0 flex-[1_1_140px] sm:flex-[1_1_160px]"
+                  allLabel={tReviews('allStatuses')}
+                  label={tReviews('filterStatus')}
+                  onChange={(val) =>
+                    setStatusFilter(val ? (val as ReviewStatus) : undefined)
+                  }
+                  options={statusOptions}
+                  value={statusFilter ?? ''}
+                />
+
+                {isFiltered && (
+                  <div className="flex items-end pb-0.5">
+                    <Button
+                      onClick={resetFilters}
+                      size="sm"
+                      variant="outline"
+                      className="h-10 gap-1.5 whitespace-nowrap"
+                    >
+                      <FilterX size={14} />
+                      {tCommon('clearFilters')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Table Content */}
+            {loading && !refreshing ? (
+              <ResourceTableSkeleton resourceLabel={tReviews('unit')} />
+            ) : error ? (
+              <ResourceState error>
+                <p>{error}</p>
+                <Button onClick={refresh} size="sm" variant="outline">
+                  {tCommon('retry')}
+                </Button>
+              </ResourceState>
+            ) : reviews.length === 0 ? (
+              <ResourceState>
+                <p>
+                  {isFiltered
+                    ? tReviews('emptyFiltered')
+                    : tReviews('emptyNoData')}
+                </p>
+                {isFiltered && (
+                  <Button onClick={resetFilters} size="sm" variant="outline">
+                    {tCommon('clearFilters')}
+                  </Button>
+                )}
+              </ResourceState>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[180px]">{tReviews('colCustomer')}</TableHead>
+                        <TableHead className="min-w-[200px]">{tReviews('colTripRoute')}</TableHead>
+                        <TableHead
+                          aria-sort={getAriaSort('mucDanhGia')}
+                          className="w-[150px] cursor-pointer select-none"
+                          onClick={() => handleSort('mucDanhGia')}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span>{tReviews('colRating')}</span>
+                            {renderSortIcon('mucDanhGia')}
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[260px]">{tReviews('colComment')}</TableHead>
+                        <TableHead
+                          aria-sort={getAriaSort('thoiGian')}
+                          className="w-[170px] cursor-pointer select-none"
+                          onClick={() => handleSort('thoiGian')}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span>{tReviews('colCreatedAt')}</span>
+                            {renderSortIcon('thoiGian')}
+                          </div>
+                        </TableHead>
+                        <TableHead className="w-[130px]">{tReviews('colStatus')}</TableHead>
+                        <TableHead className="w-[110px] text-right">{tReviews('colActions')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                      {reviews.map((review) => (
+                        <TableRow key={review.id} className="text-[13px]">
+                          {/* Customer */}
+                          <TableCell className="align-top">
+                            <div className="font-semibold text-foreground">
+                              {review.customer.fullName}
+                            </div>
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {review.customer.phoneNumber}
+                            </div>
+                            {review.customer.email && (
+                              <div className="truncate text-xs text-muted-foreground/80 max-w-[160px]">
+                                {review.customer.email}
+                              </div>
+                            )}
+                          </TableCell>
+
+                          {/* Trip */}
+                          <TableCell className="align-top">
+                            {review.trip ? (
+                              <div className="space-y-1">
+                                <p className="font-medium text-foreground">
+                                  {review.trip.routeName}
+                                </p>
+                                <div className="text-xs text-muted-foreground">
+                                  <span>
+                                    {review.trip.departureTime} · {review.trip.departureDate}
+                                  </span>
+                                  {review.trip.licensePlate && (
+                                    <>
+                                      <span className="mx-1.5">·</span>
+                                      <span className="font-mono font-medium text-foreground">
+                                        {review.trip.licensePlate}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                                {isSuperAdmin && review.trip.busCompanyName && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {tReviews('eyebrow')}: <span className="text-foreground">{review.trip.busCompanyName}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">
+                                {tReviews('noTripInfo')}
+                              </span>
+                            )}
+                          </TableCell>
+
+                          {/* Rating */}
+                          <TableCell className="align-top">
+                            <StarRating rating={review.rating} title={tReviews('starRatingHint', { rating: review.rating })} />
+                          </TableCell>
+
+                          {/* Comment & Reply */}
+                          <TableCell className="align-top">
+                            {review.comment ? (
+                              <p className="line-clamp-3 leading-relaxed text-foreground">
+                                {review.comment}
+                              </p>
+                            ) : (
+                              <span className="text-xs italic text-muted-foreground">
+                                {tReviews('noCommentText')}
+                              </span>
+                            )}
+                            {review.reply && (
+                              <div className="mt-2 rounded-lg border border-blue-200/80 bg-blue-50/70 p-2.5 text-xs text-slate-800">
+                                <div className="flex items-center justify-between gap-2 font-semibold text-blue-900 mb-1">
+                                  <span className="flex items-center gap-1.5">
+                                    <MessageSquare size={13} className="text-[#0060c4]" />
+                                    {review.reply.responderName || tReviews('operatorReplied')}:
+                                  </span>
+                                  {review.reply.createdAt && (
+                                    <span className="text-[10px] text-muted-foreground font-normal">
+                                      {formatDate(review.reply.createdAt)}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="line-clamp-2 italic text-slate-700">
+                                  “{review.reply.content}”
+                                </p>
+                              </div>
+                            )}
+                          </TableCell>
+
+                          {/* Created at */}
+                          <TableCell className="align-top whitespace-nowrap text-muted-foreground">
+                            <div>{formatDate(review.createdAt)}</div>
+                            {review.isEdited && (
+                              <div className="text-[11px] text-muted-foreground/75 italic">
+                                {tReviews('editedLabel')}
+                              </div>
+                            )}
+                          </TableCell>
+
+                          {/* Status */}
+                          <TableCell className="align-top">
+                            {review.status === 'HIEN_THI' ? (
+                              <ResourceStatusBadge tone="active">
+                                {tReviews('statusVisible')}
+                              </ResourceStatusBadge>
+                            ) : (
+                              <ResourceStatusBadge tone="muted">
+                                {tReviews('statusHidden')}
+                              </ResourceStatusBadge>
+                            )}
+                          </TableCell>
+
+                          {/* Actions */}
+                          <TableCell className="align-top text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1">
+                              {!isSuperAdmin && (
+                                <Button
+                                  aria-label={tReviews('replyToReview', {
+                                    name: review.customer.fullName,
+                                  })}
+                                  onClick={() => openReplyModal(review)}
+                                  size="sm"
+                                  variant="ghost"
+                                  className={`h-8 gap-1.5 ${review.reply ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
+                                  title={review.reply ? tReviews('editReply') : tReviews('reply')}
+                                >
+                                  <MessageSquareQuote size={14} />
+                                  {review.reply ? tReviews('editReply') : tReviews('reply')}
+                                </Button>
+                              )}
+
+                              {isSuperAdmin && (
+                                review.status === 'HIEN_THI' ? (
+                                  <Button
+                                    aria-label={tReviews('hideReviewOf', {
+                                      name: review.customer.fullName,
+                                    })}
+                                    onClick={() => setModeratingReview(review)}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+                                  >
+                                    <EyeOff size={14} />
+                                    {tReviews('hideReview')}
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    aria-label={tReviews('unhideReviewOf', {
+                                      name: review.customer.fullName,
+                                    })}
+                                    onClick={() => setModeratingReview(review)}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 gap-1.5 text-muted-foreground hover:text-primary"
+                                  >
+                                    <Eye size={14} />
+                                    {tReviews('unhideReview')}
+                                  </Button>
+                                )
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination */}
+                <ResourcePagination
+                  currentPage={meta.page}
+                  disabled={loading || refreshing}
+                  onPageChange={setPage}
+                  pageSize={meta.pageSize}
+                  summaryLabel={tReviews('unit')}
+                  totalItems={meta.totalItems}
+                  totalPages={meta.totalPages}
+                />
+              </>
+            )}
+          </Card>
+        </section>
+
+        {/* Confirmation Dialog for Hiding / Unhiding Review */}
+        {moderatingReview && (
+          <ResourceConfirmation
+            busy={modifyingStatus}
+            description={
+              moderatingReview.status === 'HIEN_THI'
+                ? tReviews('confirmHideDesc', {
+                    name: moderatingReview.customer.fullName,
+                    rating: moderatingReview.rating,
+                  })
+                : tReviews('confirmUnhideDesc', {
+                    name: moderatingReview.customer.fullName,
+                    rating: moderatingReview.rating,
+                  })
+            }
+            footer={
+              <div className="flex items-center justify-end gap-3">
+                <Button
+                  disabled={modifyingStatus}
+                  onClick={() => setModeratingReview(null)}
+                  variant="outline"
+                >
+                  {tCommon('cancel')}
+                </Button>
+                <Button
+                  disabled={modifyingStatus}
+                  onClick={handleToggleStatus}
+                  variant={
+                    moderatingReview.status === 'HIEN_THI'
+                      ? 'destructive'
+                      : 'default'
+                  }
+                >
+                  {moderatingReview.status === 'HIEN_THI'
+                    ? tReviews('confirmHide')
+                    : tReviews('confirmUnhide')}
+                </Button>
+              </div>
+            }
+            onClose={() => setModeratingReview(null)}
+            title={
+              moderatingReview.status === 'HIEN_THI'
+                ? tReviews('hideModalTitle')
+                : tReviews('unhideModalTitle')
+            }
+          >
+            <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between font-semibold text-foreground">
+                <span>{moderatingReview.customer.fullName}</span>
+                <span className="font-mono">{moderatingReview.customer.phoneNumber}</span>
+              </div>
+              <div className="flex items-center gap-1 text-amber-500 font-medium">
+                <span>{tReviews('starRatingHint', { rating: moderatingReview.rating })}</span>
+              </div>
+              {moderatingReview.comment && (
+                <p className="italic text-muted-foreground line-clamp-2">
+                  &ldquo;{moderatingReview.comment}&rdquo;
+                </p>
+              )}
+            </div>
+          </ResourceConfirmation>
+        )}
+
+        {/* Reply Modal Dialog for Bus Company */}
+        {replyingReview && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+            onClick={closeReplyModal}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <MessageSquareQuote size={18} />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {replyingReview.reply
+                      ? tReviews('replyDialogTitleEdit')
+                      : tReviews('replyDialogTitleCreate')}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeReplyModal}
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Customer review preview */}
+              <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3.5 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800">
+                    {replyingReview.customer.fullName} · {replyingReview.rating}/5★
+                  </span>
+                  <span className="text-slate-400">
+                    {formatDate(replyingReview.createdAt)}
+                  </span>
+                </div>
+                {replyingReview.trip?.routeName && (
+                  <p className="text-slate-500">
+                    {tReviews('routeLabel', { route: replyingReview.trip.routeName })}
+                  </p>
+                )}
+                <p className="text-slate-700 italic border-t border-slate-200/60 pt-1.5">
+                  {replyingReview.comment
+                    ? `“${replyingReview.comment}”`
+                    : tReviews('onlyStarRatingNoComment')}
+                </p>
+              </div>
+
+              {/* Textarea */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">
+                  {tReviews('replyContentLabel')}
+                </label>
+                <textarea
+                  rows={4}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  maxLength={1000}
+                  placeholder={tReviews('replyPlaceholder')}
+                  className="w-full p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 text-sm resize-none"
+                />
+                <div className="flex justify-end text-[11px] text-slate-400 font-medium">
+                  {replyText.length}/1000 {tReviews('charCount')}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
+                {replyingReview.reply ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDeleteReply}
+                    disabled={submittingReply}
+                    className="text-rose-600 hover:bg-rose-50"
+                  >
+                    {tReviews('deleteReply')}
+                  </Button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={closeReplyModal}
+                    disabled={submittingReply}
+                  >
+                    {tCommon('cancel')}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSaveReply}
+                    disabled={submittingReply || !replyText.trim()}
+                    className="bg-primary hover:bg-primary/90 text-white font-bold"
+                  >
+                    {submittingReply ? tCommon('saving') : tReviews('saveReply')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </SuperAdminLayout>
+  );
+}

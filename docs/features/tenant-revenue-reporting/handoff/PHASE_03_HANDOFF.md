@@ -1,0 +1,64 @@
+# F12 — Phase 03 Handoff: final regression & user smoke
+
+- Phase: 03 — final regression, static review and smoke-test handoff
+- Status: DONE — `READY_FOR_USER_SMOKE`
+- Repo root (không worktree): `E:\Huit_Local\KhoaLuanCuNhan\SourceCode\vexgo`
+- Branch/HEAD/actual `origin/develop` SHA: `feature/tenant-revenue-reporting` / code HEAD `07e6158` (handoff commit follows) / `bc863de26fe9787f91e2078475f97c16d2f6423f`
+- Commits:
+  - `07e6158 fix(f12): bổ sung chú giải và kiểm chứng chính xác VND`
+  - Handoff/progress documentation commit created immediately after the code commit.
+- Files / API / Prisma schema & migrations changed:
+  - `apps/admin/src/features/revenue-reports/components/revenue-reports-dashboard.tsx` and `.module.css`: added a keyboard-focusable, screen-reader-labelled explanation that figures follow recorded transactions.
+  - `apps/api/test/unit/revenue-reports/revenue-reports.service.spec.ts`: added a backend unit regression for exact VND values above JavaScript's safe integer limit and rejection of fractional source prices.
+  - No endpoint, API contract, Prisma schema, migration, environment file, runtime mock or database data changed in Phase 03.
+- Money source, eligibility, timestamps, refund rules verified:
+  - Report remains backed by real payment, ticket, shipment and qualifying zero-value-ticket records; no fixture is used at runtime.
+  - Settled sales require a successful payment, valid settlement marker and completion timestamp. Pending, failed, late, duplicate and `CAN_DOI_SOAT` transactions are excluded. Discount snapshots are already reflected in recorded amounts and are not subtracted a second time.
+  - A successful refund reduces revenue only after provider success and uses its completion timestamp (`thoiDiemHoanTat`), not request creation time. Pending refunds do not reduce the report.
+  - There is no shipment-refund or cash-payment writer in the current source; the report does not invent either revenue/refund source.
+  - Refund-provider configuration was checked without printing secrets: `REFUND_PROVIDER_URL` is present but empty. No live refund can be exercised from this environment without provider configuration; refund behavior was covered only by the targeted unit suite.
+- Decimal/reconciliation invariant evidence:
+  - API calculations use `Prisma.Decimal`, validate whole-VND values and emit money as integer strings. The new unit case verifies `9007199254740993` remains exact and `'1.50'` source price fails closed with `REVENUE_SOURCE_DATA_INVALID`.
+  - Sale/refund splits reconcile to the ticket and shipment net totals. Mixed orders allocate ticket amounts to tickets and shipment fees to the correct shipment category; coupons are not subtracted twice.
+  - Date-only ranges are evaluated in `Asia/Ho_Chi_Minh` as a half-open local-time interval. Buckets use local date/month/quarter boundaries and include empty periods.
+- Tenant isolation / RBAC implications:
+  - Backend obtains `nhaXeId` only from the authenticated tenant principal and applies it to every report source query. The report query contract has `groupBy`, `fromDate` and `toDate`, with no tenant selector.
+  - Admin route/path access requires `revenue:read`; API authentication/authorization remains enforced by the existing backend guards. Targeted unit coverage includes tenant scoping and authorization outcomes.
+- Database target confirmed (`vexgo_feature12` + `_shadow`; **không để lộ secrets**):
+  - Safe read-only environment review confirms F12 database `vexgo_feature12`, shadow `vexgo_feature12_shadow`, API port 4019, Admin port 3018 and Admin data source `api`. Web is configured for port 3017.
+  - No database was connected, reset, reseeded or modified in Phase 03; no local environment file was overwritten. Shared MySQL/phpMyAdmin were left untouched (phpMyAdmin was previously found on 9090, not requested 8091).
+- Targeted UNIT test commands and PASS/FAIL/SKIPPED (no fabricated results):
+  - PASS — `npm run test --workspace=@vexgo/api -- test/unit/revenue-reports/revenue-reports.service.spec.ts test/unit/revenue-reports/revenue-reports.authorization.spec.ts test/unit/payments/payments.service.spec.ts test/unit/payments/refund-processor.service.spec.ts test/unit/auth/permission-catalog.spec.ts` — 5 files, 91 tests.
+  - Admin unit/component tests: SKIPPED BY REQUEST; UI/component tests are prohibited by the task instructions.
+  - Integration/E2E/API runtime/browser/UI automation: NOT RUN BY REQUEST.
+- Typecheck/lint/build/diff checks with outcomes:
+  - PASS — `npm run typecheck --workspace=@vexgo/api`
+  - PASS — `npm run lint --workspace=@vexgo/api`
+  - PASS — `npm run build --workspace=@vexgo/api`
+  - PASS — `npm run typecheck --workspace=@vexgo/admin`
+  - PASS — scoped Admin lint for `/revenue-reports`, revenue-report feature and changed Admin access/layout files.
+  - PASS — `npm run build --workspace=@vexgo/admin`; build output lists `/revenue-reports`.
+  - PASS — `git diff --check` and staged diff check; Git emitted only LF-to-CRLF notices.
+  - GitNexus pre-code-commit `detect-changes --scope all` reported CRITICAL on 3 changed files, 1 changed symbol and 632 affected flows. The exact `RevenueReportsDashboard` impact also returned unrelated symbols and paths (450 impacts, including 378 direct, 53 processes and 20 modules); context included unrelated access/process edges. Literal search found one actual route consumer in `apps/admin/src/app/revenue-reports/page.tsx` plus the component definition. The pre-commit hook subsequently reported the index at `ca402f0` as stale relative to code commit `07e6158`. This CRITICAL warning is retained as unresolved GitNexus/index evidence; it is not waived via `riskSharedAxes`, and no graph-clean claim is made.
+- Integration/E2E/browser/UI automation: **NOT RUN (requested)**
+- Static self-review findings and fixes:
+  - Final review found the dashboard lacked the locked definition disclosure; added the exact “theo giao dịch đã ghi nhận” hint with keyboard focus and accessible label.
+  - Added a meaningful monetary regression case that would fail if a large whole-VND value were converted through an imprecise JS number, and a negative case for fractional source prices.
+  - Rechecked tenant scope, settlement/refund eligibility, half-open Vietnam-local date boundaries, discount handling, mixed ticket/shipment reconciliation, response validation, permission gate and API-only data flow. No additional source change was needed.
+  - Static checks and builds do not verify a live browser, API process, database state, deployment or user permissions.
+- Manual UI smoke items handed to user (user will execute, do not report PASS):
+  - Start/check the F12 stack using Admin `http://localhost:3018`, API `http://localhost:4019` and Web `http://localhost:3017` as needed for authentication. Confirm the database URL still targets `vexgo_feature12` before using any demo data.
+  - Sign in as tenant A and tenant B and verify each sees only its own report. Verify an authorized employee with `revenue:read` can view it, while a user without the permission and an unauthenticated user are denied. Try the direct route and API; adding/changing `nhaXeId` must never expose another tenant's data.
+  - Manually call `GET /api/v1/revenue-reports?groupBy=day` and repeat with valid `fromDate=YYYY-MM-DD`, `toDate=YYYY-MM-DD` ranges and `groupBy=month` / `quarter`. Check unauthenticated/unauthorized access, invalid/reversed/over-366-day ranges and a tenant-selector query parameter. Treat these as user runtime checks; unit tests are not API runtime evidence.
+  - With real eligible demo records, verify a ticket sale, standalone shipment, mixed ticket/shipment order, coupon, zero-VND ticket, successful refund, pending refund, duplicate/late payment and `CAN_DOI_SOAT`. Confirm each amount is categorized once, only a successful completed refund reduces revenue on its completion date, and the mixed ticket/shipment totals reconcile. Do not fabricate source records or force a refund while the provider URL is empty.
+  - Check a Vietnam-local day boundary around 23:59/00:00, each filter grouping, empty period, loading, API error/retry, all six KPIs, one chart, both tables, negative net values if present, and the CSV placeholder feedback.
+  - Review layout at 1440×900 and 375×667, including keyboard focus on the disclosure hint and table horizontal scrolling. These UI checks are pending user execution.
+- Open gaps / risks / blockers:
+  - No blocker to handing the implementation to user smoke. Final status is `READY_FOR_USER_SMOKE`, not runtime-verified.
+  - GitNexus reported CRITICAL/broad unrelated graph reach and stale-index metadata as described above. The warning remains unresolved; literal source references and current diff scope are recorded as corroborating evidence, not as a waiver of the graph warning.
+  - Existing pre-F12 payment records were not backfilled when `laQuyetToanHopLe` was introduced with a false default, so older records can be excluded. Use only verified F12 demo data; if eligible data is absent, report that as a data/setup issue instead of filling the dashboard with mocks.
+  - Current source has no shipment-refund or cash-payment writer. Refund runtime smoke also depends on provider configuration, currently empty.
+  - No runtime Admin/API/database/browser smoke has been performed by Codex. User smoke is the next action.
+- Git status after implementation commit `07e6158`: only `PHASE_03_HANDOFF.md` and `PROGRESS.md` were modified; the Vietnamese Conventional documentation commit follows. Final clean/dirty status is verified after that commit and reported to the user.
+- Next phase (chỉ nếu DONE): Không có; dừng sau Phase 03 để người dùng tự smoke test. F13 không thuộc phạm vi.
+- Resume instructions after compaction: No implementation continuation is pending. If the user requests follow-up, first verify root branch/status/HEAD, then read `MASTER_SPEC.md`, `handoff/PROGRESS.md`, this latest handoff and only the newly requested phase spec; preserve the unit-only/no-browser policy and do not push, create a PR, merge or implement F13 unless separately requested.

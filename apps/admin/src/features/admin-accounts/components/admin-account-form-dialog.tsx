@@ -1,0 +1,592 @@
+'use client';
+
+import { ResourceModalForm } from '@/components/admin/resource-modal-form';
+
+import { LoaderCircle } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
+import { ResourceNotice, ResourceModalDialog } from '@/components/admin/resource-ui';
+import {
+  Field as UiField,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/action-button';
+import { useTranslations } from 'next-intl';
+import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
+import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
+import type { AdminRbacRole } from '@/features/platform-rbac/types/platform-rbac';
+import {
+  TENANT_RBAC_ROLE_NAMES,
+  type TenantRbacRoleName,
+} from '@/features/tenant-rbac/types/tenant-rbac';
+import {
+  AdminAccountApiError,
+  createAdminAccount,
+  updateAdminAccount,
+  type AdminAccountApiErrorDetail,
+} from '../services/admin-account-service';
+import type {
+  AdminAccount,
+  CreateAdminAccountInput,
+  UpdateAdminAccountInput,
+} from '../types/admin-account';
+
+type TenantRoleOption = Pick<AdminRbacRole, 'roleName' | 'description'> & {
+  roleName: TenantRbacRoleName;
+};
+
+type OptionsState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | {
+      status: 'success';
+      companies: Array<{ id: number; label: string }>;
+      roles: TenantRoleOption[];
+    };
+
+type Values = {
+  fullName: string;
+  phoneNumber: string;
+  password: string;
+  busCompanyId: string;
+  employeeCode: string;
+  position: string;
+  joinedAt: string;
+  dateOfBirth: string;
+  email: string;
+  citizenId: string;
+  roleNames: TenantRbacRoleName[];
+};
+
+type Field = keyof Values;
+type FieldErrors = Partial<Record<Field, string>>;
+
+const TENANT_ROLE_SET = new Set<string>(TENANT_RBAC_ROLE_NAMES);
+
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return (
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
+}
+
+function fieldErrorsFromDetails(details: AdminAccountApiErrorDetail[]) {
+  const errors: FieldErrors = {};
+  const supportedFields = new Set<Field>([
+    'fullName',
+    'phoneNumber',
+    'password',
+    'busCompanyId',
+    'employeeCode',
+    'position',
+    'joinedAt',
+    'dateOfBirth',
+    'email',
+    'citizenId',
+  ]);
+
+  for (const detail of details) {
+    if (supportedFields.has(detail.field as Field)) {
+      errors[detail.field as Field] = detail.message;
+    }
+  }
+
+  return errors;
+}
+
+function roleNameIsTenant(roleName: string): roleName is TenantRbacRoleName {
+  return TENANT_ROLE_SET.has(roleName);
+}
+
+function initialValues(account?: AdminAccount): Values {
+  return {
+    fullName: account?.fullName ?? '',
+    phoneNumber: '',
+    password: '',
+    busCompanyId: '',
+    employeeCode: '',
+    position: account?.employee?.position ?? '',
+    joinedAt: account?.employee?.joinedAt?.slice(0, 10) ?? '',
+    dateOfBirth: account?.dateOfBirth?.slice(0, 10) ?? '',
+    email: account?.email ?? '',
+    citizenId: account?.citizenId ?? '',
+    roleNames: [],
+  };
+}
+
+export function AdminAccountFormDialog({
+  account,
+  onClose,
+  onSaved,
+}: {
+  account?: AdminAccount;
+  onClose: () => void;
+  onSaved: (saved: AdminAccount) => void;
+}) {
+  const tAccounts = useTranslations('adminAccounts');
+  const tCommon = useTranslations('common');
+  const editing = account !== undefined;
+  const idPrefix = editing
+    ? `edit-admin-account-${account.accountId}`
+    : 'create-admin-account';
+  const submittingRef = useRef(false);
+  const [values, setValues] = useState<Values>(() => initialValues(account));
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [options, setOptions] = useState<OptionsState>(() =>
+    editing
+      ? { status: 'success', companies: [], roles: [] }
+      : { status: 'loading' },
+  );
+
+  useEffect(() => {
+    if (editing) return;
+
+    const controller = new AbortController();
+    Promise.all([
+      getBusCompanyFilterOptions(controller.signal),
+      getDefaultRolePermissions(controller.signal),
+    ])
+      .then(([companies, catalog]) => {
+        if (controller.signal.aborted) return;
+        const roles = catalog.roles.flatMap((role) =>
+          role.scope === 'tenant' && roleNameIsTenant(role.roleName)
+            ? [{ roleName: role.roleName, description: role.description }]
+            : [],
+        );
+        setOptions({ status: 'success', companies, roles });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setOptions({
+          status: 'error',
+          message:
+            error instanceof Error
+              ? error.message
+              : tAccounts('loadError'),
+        });
+      });
+
+    return () => controller.abort();
+  }, [editing, retryCount]);
+
+  function closeDialog() {
+    if (!submittingRef.current) onClose();
+  }
+
+  function retryOptions() {
+    setOptions({ status: 'loading' });
+    setRetryCount((count) => count + 1);
+  }
+
+  function updateField(field: Exclude<Field, 'roleNames'>, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError(null);
+  }
+
+  function toggleRole(roleName: TenantRbacRoleName) {
+    setValues((current) => ({
+      ...current,
+      roleNames: current.roleNames.includes(roleName)
+        ? current.roleNames.filter((role) => role !== roleName)
+        : [...current.roleNames, roleName],
+    }));
+    setFieldErrors((current) => ({ ...current, roleNames: undefined }));
+    setFormError(null);
+  }
+
+  function validate(): FieldErrors {
+    const errors: FieldErrors = {};
+    const fullName = values.fullName.trim();
+    const email = values.email.trim();
+    const citizenId = values.citizenId.trim();
+
+    if (!fullName) errors.fullName = tAccounts('validationFullNameRequired');
+    else if (fullName.length > 100) {
+      errors.fullName = tAccounts('validationFullNameMaxLength');
+    }
+
+    if (!editing) {
+      if (!/^\+84\d{9}$/.test(values.phoneNumber.trim())) {
+        errors.phoneNumber = tAccounts('validationPhoneFormat');
+      }
+      const passwordBytes = new TextEncoder().encode(values.password).length;
+      if (passwordBytes < 8 || passwordBytes > 72) {
+        errors.password = tAccounts('validationPasswordLength');
+      }
+      const busCompanyId = Number(values.busCompanyId);
+      if (
+        !Number.isSafeInteger(busCompanyId) ||
+        busCompanyId < 1 ||
+        options.status !== 'success' ||
+        !options.companies.some((company) => company.id === busCompanyId)
+      ) {
+        errors.busCompanyId = tAccounts('validationBusCompanyRequired');
+      }
+      const employeeCode = values.employeeCode.trim();
+      if (employeeCode && employeeCode.length > 50) {
+        errors.employeeCode = tAccounts('validationEmployeeCodeMaxLength');
+      }
+      if (options.status !== 'success' || options.roles.length === 0) {
+        errors.roleNames = tAccounts('validationRolesNotLoaded');
+      } else if (
+        values.roleNames.length === 0 ||
+        new Set(values.roleNames).size !== values.roleNames.length ||
+        values.roleNames.some(
+          (roleName) =>
+            !options.roles.some((role) => role.roleName === roleName),
+        )
+      ) {
+        errors.roleNames = tAccounts('validationRolesRequired');
+      }
+    }
+
+    if (values.position.trim().length > 100) {
+      errors.position = tAccounts('validationPositionMaxLength');
+    }
+    if (values.joinedAt && !isValidDate(values.joinedAt)) {
+      errors.joinedAt = tAccounts('validationJoinedAtInvalid');
+    }
+    if (values.dateOfBirth && !isValidDate(values.dateOfBirth)) {
+      errors.dateOfBirth = tAccounts('validationDateOfBirthInvalid');
+    }
+    if (
+      email &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 150)
+    ) {
+      errors.email = tAccounts('validationEmailInvalid');
+    }
+    if (citizenId && !/^\d{12}$/.test(citizenId)) {
+      errors.citizenId = tAccounts('validationCitizenIdFormat');
+    }
+
+    return errors;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submittingRef.current) return;
+
+    setFormError(null);
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const commonInput = {
+        fullName: values.fullName.trim(),
+        position: values.position.trim() || null,
+        joinedAt: values.joinedAt || null,
+        dateOfBirth: values.dateOfBirth || null,
+        email: values.email.trim() || null,
+        citizenId: values.citizenId.trim() || null,
+      };
+      const saved = editing
+        ? await updateAdminAccount(
+            account.accountId,
+            commonInput satisfies UpdateAdminAccountInput,
+          )
+        : await createAdminAccount({
+            ...commonInput,
+            phoneNumber: values.phoneNumber.trim(),
+            password: values.password,
+            busCompanyId: Number(values.busCompanyId),
+            ...(values.employeeCode.trim()
+              ? { employeeCode: values.employeeCode.trim() }
+              : {}),
+            roleNames: values.roleNames,
+          } satisfies CreateAdminAccountInput);
+      toast.success(
+        editing
+          ? tAccounts('updatedSuccess')
+          : tAccounts('createdSuccess'),
+      );
+      onSaved(saved);
+    } catch (requestError: unknown) {
+      if (requestError instanceof AdminAccountApiError) {
+        const serverErrors = fieldErrorsFromDetails(requestError.details);
+        if (requestError.code === 'PHONE_ALREADY_REGISTERED') {
+          serverErrors.phoneNumber = requestError.message;
+        } else if (requestError.code === 'EMAIL_ALREADY_REGISTERED') {
+          serverErrors.email = requestError.message;
+        } else if (requestError.code === 'EMPLOYEE_CODE_EXISTS') {
+          serverErrors.employeeCode = requestError.message;
+        }
+        setFieldErrors(serverErrors);
+        setFormError(
+          Object.keys(serverErrors).length > 0
+            ? tAccounts('checkMarkedFields')
+            : requestError.message,
+        );
+      } else {
+        setFormError(
+          requestError instanceof TypeError
+            ? tAccounts('networkError')
+            : requestError instanceof Error
+              ? requestError.message
+              : tAccounts('cannotSave'),
+        );
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  function textField(
+    field: Exclude<Field, 'roleNames'>,
+    label: string,
+    type: 'text' | 'email' | 'date' | 'password' | 'tel' = 'text',
+    required = false,
+  ) {
+    const fieldId = `${idPrefix}-${field}`;
+    return (
+      <UiField data-invalid={Boolean(fieldErrors[field])}>
+        <FieldLabel htmlFor={fieldId}>
+          {label}
+          {required && <span aria-hidden>*</span>}
+        </FieldLabel>
+        <Input
+          aria-describedby={fieldErrors[field] ? `${fieldId}-error` : undefined}
+          aria-invalid={Boolean(fieldErrors[field])}
+          autoComplete={field === 'password' ? 'new-password' : 'off'}
+          className={field === 'employeeCode' || field === 'citizenId' ? 'admin-data-mono' : undefined}
+          disabled={submitting}
+          id={fieldId}
+          maxLength={
+            field === 'fullName'
+              ? 100
+              : field === 'employeeCode'
+                ? 50
+                : undefined
+          }
+          onChange={(event) => updateField(field, event.target.value)}
+          required={required}
+          type={type}
+          value={values[field]}
+        />
+        <FieldError id={`${fieldId}-error`}>{fieldErrors[field]}</FieldError>
+      </UiField>
+    );
+  }
+
+  return (
+    <ResourceModalDialog
+      busy={submitting}
+      description={
+        editing
+          ? tAccounts('editDesc')
+          : tAccounts('createDesc')
+      }
+      preventDismiss={submitting}
+      title={editing ? tAccounts('editAccount') : tAccounts('createAccount')}
+      onClose={closeDialog}
+      size="xl"
+    >
+      <ResourceModalForm
+        noValidate
+        onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-5 -mb-5 flex justify-end gap-3 border-t bg-slate-50/80 dark:bg-slate-900/60 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6 shrink-0">
+            <Button
+              disabled={submitting}
+              onClick={closeDialog}
+              type="button"
+              variant="outline"
+            >
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              disabled={
+                submitting ||
+                (!editing &&
+                  (options.status !== 'success' ||
+                    options.companies.length === 0 ||
+                    options.roles.length === 0))
+              }
+              type="submit"
+            >
+              {submitting && (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="motion-safe:animate-spin"
+                  size={16}
+                />
+              )}
+              {submitting
+                ? tAccounts('savingRoles')
+                : editing
+                  ? tAccounts('saveChanges')
+                  : tAccounts('createButton')}
+            </Button>
+          </div>
+        }
+      >
+        {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
+        {textField('fullName', tAccounts('accountName'), 'text', true)}
+        {!editing && (
+          <>
+            {textField('phoneNumber', tAccounts('accountPhone'), 'tel', true)}
+            {textField('password', tAccounts('password'), 'password', true)}
+            <UiField data-invalid={Boolean(fieldErrors.busCompanyId)}>
+              <FieldLabel htmlFor={`${idPrefix}-busCompanyId`}>
+                {tAccounts('colCompany')} <span aria-hidden>*</span>
+              </FieldLabel>
+              <Select
+                disabled={
+                  submitting ||
+                  options.status !== 'success' ||
+                  options.companies.length === 0
+                }
+                onValueChange={(value) =>
+                  updateField('busCompanyId', String(value ?? ''))
+                }
+                value={values.busCompanyId || null}
+              >
+                <SelectTrigger
+                  aria-label={tAccounts('colCompany')}
+                  aria-required="true"
+                  aria-invalid={Boolean(fieldErrors.busCompanyId)}
+                  aria-describedby={
+                    fieldErrors.busCompanyId
+                      ? `${idPrefix}-busCompanyId-error`
+                      : undefined
+                  }
+                  id={`${idPrefix}-busCompanyId`}
+                >
+                  <SelectValue placeholder={tAccounts('selectCompany')}>
+                    {options.status === 'success'
+                      ? (options.companies.find(
+                          (company) =>
+                            String(company.id) === values.busCompanyId,
+                        )?.label ?? tAccounts('selectCompany'))
+                      : tAccounts('selectCompany')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {options.status === 'success' &&
+                      options.companies.map((company) => (
+                        <SelectItem
+                          key={company.id}
+                          value={String(company.id)}
+                        >
+                          {company.label}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldError id={`${idPrefix}-busCompanyId-error`}>
+                {fieldErrors.busCompanyId}
+              </FieldError>
+              {options.status === 'loading' && (
+                <p
+                  aria-live="polite"
+                  className="text-xs text-muted-foreground"
+                  role="status"
+                >
+                  {tAccounts('loadingCompanies')}
+                </p>
+              )}
+            </UiField>
+            {/* Employee code is auto-generated by the system as UUID v4 */}
+            <FieldSet
+              aria-invalid={Boolean(fieldErrors.roleNames)}
+              className="gap-3"
+            >
+              <FieldLegend>
+                {tAccounts('tenantRolesLegend')} <span aria-hidden>*</span>
+              </FieldLegend>
+              <FieldGroup className="gap-2">
+                {options.status === 'success' &&
+                  options.roles.map((role) => {
+                    const checkboxId = `${idPrefix}-role-${role.roleName}`;
+                    return (
+                      <UiField
+                        className="items-center rounded-lg border p-3"
+                        key={role.roleName}
+                        orientation="horizontal"
+                      >
+                        <Checkbox
+                          aria-describedby={
+                            fieldErrors.roleNames
+                              ? `${idPrefix}-roleNames-error`
+                              : undefined
+                          }
+                          aria-invalid={Boolean(fieldErrors.roleNames)}
+                          checked={values.roleNames.includes(role.roleName)}
+                          disabled={submitting}
+                          id={checkboxId}
+                          onCheckedChange={() => toggleRole(role.roleName)}
+                          value={role.roleName}
+                        />
+                        <FieldLabel
+                          className="cursor-pointer"
+                          htmlFor={checkboxId}
+                        >
+                          {role.description ?? role.roleName}
+                        </FieldLabel>
+                      </UiField>
+                    );
+                  })}
+              </FieldGroup>
+              <FieldError id={`${idPrefix}-roleNames-error`}>
+                {fieldErrors.roleNames}
+              </FieldError>
+            </FieldSet>
+            {options.status === 'success' && options.roles.length === 0 && (
+              <ResourceNotice kind="error">
+                {tAccounts('noRolesAvailable')}
+              </ResourceNotice>
+            )}
+            {options.status === 'success' && options.companies.length === 0 && (
+              <ResourceNotice kind="error">
+                {tAccounts('noCompaniesAvailable')}
+              </ResourceNotice>
+            )}
+            {options.status === 'error' && (
+              <ResourceNotice kind="error">
+                <div className="space-y-3">
+                  <p>{options.message}</p>
+                  <Button
+                    onClick={retryOptions}
+                    type="button"
+                    variant="outline"
+                  >
+                    {tAccounts('reloadCatalog')}
+                  </Button>
+                </div>
+              </ResourceNotice>
+            )}
+          </>
+        )}
+        {textField('position', tAccounts('position'))}
+        {textField('joinedAt', tAccounts('joinedAt'), 'date')}
+        {textField('dateOfBirth', tAccounts('dateOfBirth'), 'date')}
+        {textField('email', tAccounts('accountEmail'), 'email')}
+        {textField('citizenId', tAccounts('citizenId'))}
+      </ResourceModalForm>
+    </ResourceModalDialog>
+  );
+}

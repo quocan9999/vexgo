@@ -1,0 +1,45 @@
+# Feature 09 — Phase 01 Handoff: Shipment RBAC / Permission Foundation
+
+- **Phase / spec chính xác:** PHASE 01 — Shipment RBAC / permission foundation (`docs/features/feature-09-gui-hang-admin/spec/PHASE_01_RBAC_BACKEND_FOUNDATION.md`)
+- **Ngày giờ / trạng thái:** 09/10/2026 / READY
+- **Branch / worktree path / base origin/develop SHA:**
+  - Branch: `feature/shipment-management`
+  - Worktree: `E:\Huit_Local\KhoaLuanCuNhan\SourceCode\vexgo-feature09`
+  - Base `origin/develop` SHA: `f2edf7f8562a2e397f58b7c88568e7f1e6bd40c5`
+- **Ports đã xác minh:** Admin 3003; API 4003; MySQL 3306
+- **DB đã xác minh (tên, không đưa credential):** `vexgo_feature09`; shadow `vexgo_feature09_shadow`
+- **Source/rules đã đọc và khác biệt so develop:**
+  - `apps/api/src/auth/permissions/permission-catalog.ts`
+  - Bổ sung 2 quyền: `shipment:read`, `shipment:update` thuộc scope `tenant`.
+- **Changed files và logic đã hoàn tất:**
+  - `apps/api/src/auth/permissions/permission-catalog.ts`: Thêm `shipment:read` và `shipment:update` vào `ADMIN_PERMISSION_CATALOG`; gán mặc định cho `NHA_XE_ADMIN` và `NHAN_VIEN_DIEU_HANH` trong `ADMIN_ROLE_DEFAULT_PERMISSION_KEYS`. `SUPER_ADMIN` chỉ có platform scope, không có quyền operational này. Các role nhân viên khác và khách hàng không có quyền.
+  - `prisma/sync-permissions.mjs`: Script đồng bộ quyền idempotent vào DB (upsert Quyen và VaiTroQuyen mặc định, không chạm vào override tenant).
+  - `apps/api/test/unit/auth/permission-catalog.spec.ts`: Cập nhật assertions tương thích với danh mục quyền mới.
+  - `apps/api/test/unit/auth/shipment-rbac.spec.ts`: Bộ test targeted mới kiểm tra toàn diện scope, role defaults, role scope matching và từ chối `SUPER_ADMIN`.
+  - `docs/features/feature-09-gui-hang-admin/handoff/ENVIRONMENT_HANDOFF.md`: Tài liệu bàn giao môi trường worktree/database.
+  - `docs/features/feature-09-gui-hang-admin/handoff/PHASE_01_HANDOFF.md`: Tài liệu bàn giao Phase 01.
+- **DB / migrations / permission sync / seed đã chạy (tên, tác động, không secret):**
+  - Chạy `node prisma/sync-permissions.mjs` trên `vexgo_feature09`: upsert thành công `shipment:read` (ID 30) và `shipment:update` (ID 31), gán `VaiTroQuyen` cho `NHA_XE_ADMIN` và `NHAN_VIEN_DIEU_HANH`.
+  - Xác nhận tính idempotent bằng cách chạy lại nhiều lần không sinh lỗi hay nhân đôi dữ liệu.
+- **API contract, security scope, negative cases đã xác minh:**
+  - `SUPER_ADMIN` bị chặn khỏi tenant operational scope.
+  - `NHA_XE_ADMIN` và `NHAN_VIEN_DIEU_HANH` được cấp quyền operational.
+- **Component audit:** N/A (Phase 01 thuộc backend auth foundation).
+- **Targeted tests / commands / kết quả thực tế:**
+  - `npm exec -- vitest run test/unit/auth/permission-catalog.spec.ts`: 8/8 tests PASSED.
+  - `npm exec -- vitest run test/unit/auth/shipment-rbac.spec.ts`: 5/5 tests PASSED.
+  - `npm exec -- vitest run test/integration/admin-rbac/admin-rbac.spec.ts`: 7/7 tests PASSED.
+- **Browser responsive 1440x900 và 375x667:** N/A cho Phase 01.
+- **GitNexus impact / detect changes risk:**
+  - GitNexus impact đã chạy trên `ADMIN_PERMISSION_CATALOG` và `ADMIN_ROLE_DEFAULT_PERMISSION_KEYS`.
+  - Không có symbol/function nào bị phá vỡ.
+- **Self-review findings / fixes / unresolved:**
+  - Không lưu mật khẩu/credential/token vào code hay handoff.
+  - Không sửa Prisma migration lịch sử.
+  - Quyền được nạp đúng thông qua cơ chế RBAC sẵn có.
+- **Commit subject và cách tra SHA:**
+  - `feat(auth): bổ sung quyền quản lý gửi hàng theo nhà xe`
+- **Blockers / remaining scope / test chưa chạy:**
+  - Không có blocker.
+- **Next phase exact path / checklist preflight:**
+  - Phase 02: `docs/features/feature-09-gui-hang-admin/spec/PHASE_02_SHIPMENT_READ_APIS.md`

@@ -1,0 +1,1063 @@
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '../../../src/generated/prisma/client.js';
+import { BusCompaniesService } from '../../../src/bus-companies/bus-companies.service.js';
+import { BusCompanyQueryDto } from '../../../src/bus-companies/dto/bus-company-query.dto.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
+import { PrismaService } from '../../../src/prisma/prisma.service.js';
+
+describe('BusCompaniesService', () => {
+  const nhaXe = {
+    findMany: vi.fn(),
+    count: vi.fn(),
+    findUnique: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  };
+  const chuyenXe = {
+    findUnique: vi.fn(),
+  };
+  const getConfig = vi.fn().mockReturnValue('Asia/Ho_Chi_Minh');
+  const config = { get: getConfig } as unknown as ConfigService;
+  const service = new BusCompaniesService({
+    nhaXe,
+    chuyenXe,
+  } as unknown as PrismaService, config);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    getConfig.mockReturnValue('Asia/Ho_Chi_Minh');
+    nhaXe.findMany.mockResolvedValue([
+      {
+        nhaXeId: 1,
+        maNhaXe: 'NX001',
+        tenNhaXe: 'Nhà xe ABC',
+        thongTinLienHe: '0900000000',
+        trangThai: 'HOAT_DONG',
+        createdAt: new Date('2026-01-02T03:04:05.000Z'),
+        updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+      },
+    ]);
+    nhaXe.count.mockResolvedValue(11);
+    nhaXe.findUnique.mockResolvedValue(null);
+    nhaXe.create.mockResolvedValue({
+      nhaXeId: 7,
+      maNhaXe: 'NX007',
+      tenNhaXe: 'Nhà xe Mới',
+      thongTinLienHe: '0900000007',
+      trangThai: 'HOAT_DONG',
+      createdAt: new Date('2026-03-04T05:06:07.000Z'),
+      updatedAt: new Date('2026-03-04T05:06:07.000Z'),
+    });
+    nhaXe.update.mockResolvedValue({
+      nhaXeId: 7,
+      maNhaXe: 'NX007',
+      tenNhaXe: 'Nhà xe Đã sửa',
+      thongTinLienHe: '0900000008',
+      trangThai: 'HOAT_DONG',
+      createdAt: new Date('2026-03-04T05:06:07.000Z'),
+      updatedAt: new Date('2026-03-05T06:07:08.000Z'),
+    });
+  });
+
+  it('creates a bus company with Prisma field mapping and returns the GET response contract', async () => {
+    await expect(
+      service.create({
+        code: 'NX007',
+        name: 'Nhà xe Mới',
+        contactInfo: '0900000007',
+        status: 'HOAT_DONG',
+      }),
+    ).resolves.toEqual({
+      data: {
+        busCompanyId: 7,
+        code: 'NX007',
+        name: 'Nhà xe Mới',
+        contactInfo: '0900000007',
+        status: 'HOAT_DONG',
+        createdAt: '2026-03-04T05:06:07.000Z',
+        updatedAt: '2026-03-04T05:06:07.000Z',
+      },
+    });
+
+    expect(nhaXe.create).toHaveBeenCalledWith({
+      data: {
+        maNhaXe: 'NX007',
+        tenNhaXe: 'Nhà xe Mới',
+        thongTinLienHe: '0900000007',
+        trangThai: 'HOAT_DONG',
+      },
+      select: expect.objectContaining({
+        nhaXeId: true,
+        maNhaXe: true,
+        tenNhaXe: true,
+        thongTinLienHe: true,
+        trangThai: true,
+        createdAt: true,
+        updatedAt: true,
+      }),
+    });
+  });
+
+  it('maps the MariaDB adapter maNhaXe P2002 shape to the duplicate-code conflict contract', async () => {
+    nhaXe.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('duplicate code', {
+        code: 'P2002',
+        clientVersion: '7.10.0',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { index: 'NhaXe_maNhaXe_key' },
+            },
+          },
+        },
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await service.create({
+        code: 'NX007',
+        name: 'Nhà xe Mới',
+        status: 'HOAT_DONG',
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ConflictException);
+    if (!(caught instanceof ConflictException)) throw caught;
+    expect(caught.getStatus()).toBe(409);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_CODE_EXISTS',
+      message: 'Mã nhà xe đã tồn tại.',
+    });
+  });
+
+  it('does not map unrelated P2002 constraints to the bus-company code conflict', async () => {
+    const unrelatedUniqueError = new Prisma.PrismaClientKnownRequestError(
+      'unrelated unique constraint',
+      {
+        code: 'P2002',
+        clientVersion: '7.10.0',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { index: 'NhaXe_unrelated_key' },
+            },
+          },
+        },
+      },
+    );
+    nhaXe.create.mockRejectedValueOnce(unrelatedUniqueError);
+
+    await expect(
+      service.create({
+        code: 'NX007',
+        name: 'Nhà xe Mới',
+        status: 'HOAT_DONG',
+      }),
+    ).rejects.toBe(unrelatedUniqueError);
+  });
+
+  it('updates editable Prisma fields and returns the shared response mapping', async () => {
+    await expect(
+      service.update(7, {
+        code: 'NX007',
+        name: 'Nhà xe Đã sửa',
+        contactInfo: '0900000008',
+      }),
+    ).resolves.toEqual({
+      data: {
+        busCompanyId: 7,
+        code: 'NX007',
+        name: 'Nhà xe Đã sửa',
+        contactInfo: '0900000008',
+        status: 'HOAT_DONG',
+        createdAt: '2026-03-04T05:06:07.000Z',
+        updatedAt: '2026-03-05T06:07:08.000Z',
+      },
+    });
+
+    expect(nhaXe.update).toHaveBeenCalledWith({
+      where: { nhaXeId: 7 },
+      data: {
+        maNhaXe: 'NX007',
+        tenNhaXe: 'Nhà xe Đã sửa',
+        thongTinLienHe: '0900000008',
+      },
+      select: expect.objectContaining({
+        nhaXeId: true,
+        maNhaXe: true,
+        tenNhaXe: true,
+        thongTinLienHe: true,
+        trangThai: true,
+        createdAt: true,
+        updatedAt: true,
+      }),
+    });
+  });
+
+  it.each([
+    ['HOAT_DONG', 'TAM_NGUNG'],
+    ['TAM_NGUNG', 'HOAT_DONG'],
+  ] as const)(
+    'changes bus-company status from %s to %s and updates only trangThai',
+    async (_currentStatus, targetStatus) => {
+      nhaXe.update.mockResolvedValueOnce({
+        nhaXeId: 7,
+        maNhaXe: 'NX007',
+        tenNhaXe: 'Nhà xe Đã sửa',
+        thongTinLienHe: '0900000008',
+        trangThai: targetStatus,
+        createdAt: new Date('2026-03-04T05:06:07.000Z'),
+        updatedAt: new Date('2026-03-05T06:07:08.000Z'),
+      });
+
+      await expect(service.updateStatus(7, { status: targetStatus })).resolves.toEqual({
+        data: {
+          busCompanyId: 7,
+          code: 'NX007',
+          name: 'Nhà xe Đã sửa',
+          contactInfo: '0900000008',
+          status: targetStatus,
+          createdAt: '2026-03-04T05:06:07.000Z',
+          updatedAt: '2026-03-05T06:07:08.000Z',
+        },
+      });
+
+      expect(nhaXe.update).toHaveBeenCalledWith({
+        where: { nhaXeId: 7 },
+        data: { trangThai: targetStatus },
+        select: {
+          nhaXeId: true,
+          maNhaXe: true,
+          tenNhaXe: true,
+          thongTinLienHe: true,
+          trangThai: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    },
+  );
+
+  it('returns success when the requested status already matches the stored status', async () => {
+    nhaXe.update.mockResolvedValueOnce({
+      nhaXeId: 7,
+      maNhaXe: 'NX007',
+      tenNhaXe: 'Nhà xe Đã sửa',
+      thongTinLienHe: '0900000008',
+      trangThai: 'HOAT_DONG',
+      createdAt: new Date('2026-03-04T05:06:07.000Z'),
+      updatedAt: new Date('2026-03-05T06:07:08.000Z'),
+    });
+
+    await expect(service.updateStatus(7, { status: 'HOAT_DONG' })).resolves.toMatchObject({
+      data: { busCompanyId: 7, status: 'HOAT_DONG' },
+    });
+  });
+
+  it('maps a missing bus company during status update to the not-found contract', async () => {
+    nhaXe.update.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('record not found', {
+        code: 'P2025',
+        clientVersion: '7.10.0',
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await service.updateStatus(999, { status: 'TAM_NGUNG' });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(NotFoundException);
+    if (!(caught instanceof NotFoundException)) throw caught;
+    expect(caught.getStatus()).toBe(404);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
+  });
+
+  it('maps a maNhaXe P2002 from update to the duplicate-code conflict contract', async () => {
+    nhaXe.update.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('duplicate code', {
+        code: 'P2002',
+        clientVersion: '7.10.0',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { index: 'NhaXe_maNhaXe_key' },
+            },
+          },
+        },
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await service.update(7, {
+        code: 'OTHER',
+        name: 'Nhà xe Đã sửa',
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ConflictException);
+    if (!(caught instanceof ConflictException)) throw caught;
+    expect(caught.getStatus()).toBe(409);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_CODE_EXISTS',
+      message: 'Mã nhà xe đã tồn tại.',
+    });
+  });
+
+  it('propagates unrelated P2002 constraints from update', async () => {
+    const unrelatedUniqueError = new Prisma.PrismaClientKnownRequestError(
+      'unrelated unique constraint',
+      {
+        code: 'P2002',
+        clientVersion: '7.10.0',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { index: 'NhaXe_unrelated_key' },
+            },
+          },
+        },
+      },
+    );
+    nhaXe.update.mockRejectedValueOnce(unrelatedUniqueError);
+
+    await expect(
+      service.update(7, { code: 'NX007', name: 'Nhà xe Đã sửa' }),
+    ).rejects.toBe(unrelatedUniqueError);
+  });
+
+  it('maps Prisma P2025 to the bus-company not-found contract', async () => {
+    nhaXe.update.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('record not found', {
+        code: 'P2025',
+        clientVersion: '7.10.0',
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await service.update(999, { code: 'NX999', name: 'Không tồn tại' });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(NotFoundException);
+    if (!(caught instanceof NotFoundException)) throw caught;
+    expect(caught.getStatus()).toBe(404);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
+  });
+
+  it('maps the English response and applies search, status, pagination, and safe sorting', async () => {
+    const query = Object.assign(new BusCompanyQueryDto(), {
+      page: 2,
+      pageSize: 5,
+      search: '  NX001  ',
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      status: 'HOAT_DONG',
+    });
+
+    await expect(service.findAll(query)).resolves.toEqual({
+      data: [
+        {
+          busCompanyId: 1,
+          code: 'NX001',
+          name: 'Nhà xe ABC',
+          contactInfo: '0900000000',
+          status: 'HOAT_DONG',
+          createdAt: '2026-01-02T03:04:05.000Z',
+          updatedAt: '2026-02-03T04:05:06.000Z',
+        },
+      ],
+      meta: { page: 2, pageSize: 5, totalItems: 11, totalPages: 3 },
+    });
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { maNhaXe: { contains: 'NX001' } },
+            { tenNhaXe: { contains: 'NX001' } },
+            { thongTinLienHe: { contains: 'NX001' } },
+          ],
+          trangThai: 'HOAT_DONG',
+        },
+        skip: 5,
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { maNhaXe: { contains: 'NX001' } },
+          { tenNhaXe: { contains: 'NX001' } },
+          { thongTinLienHe: { contains: 'NX001' } },
+        ],
+        trangThai: 'HOAT_DONG',
+      },
+    });
+  });
+
+  it('loads and maps a detail record using its database id', async () => {
+    nhaXe.findUnique.mockResolvedValue({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Chi tiết',
+      thongTinLienHe: '0900000042',
+      trangThai: 'HOAT_DONG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42)).resolves.toEqual({
+      data: {
+        busCompanyId: 42,
+        code: 'NX042',
+        name: 'Nhà xe Chi tiết',
+        contactInfo: '0900000042',
+        status: 'HOAT_DONG',
+        createdAt: '2026-01-02T03:04:05.000Z',
+        updatedAt: '2026-02-03T04:05:06.000Z',
+      },
+    });
+    expect(nhaXe.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 42 } }),
+    );
+  });
+
+  it('returns the bus company not found contract when the id has no record', async () => {
+    let caught: unknown;
+    try {
+      await service.findOne(999);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(NotFoundException);
+    if (!(caught instanceof NotFoundException)) throw caught;
+    expect(caught.getStatus()).toBe(404);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
+    expect(nhaXe.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 999 } }),
+    );
+  });
+
+  it.each([
+    ['name', 'tenNhaXe'],
+    ['code', 'maNhaXe'],
+    ['status', 'trangThai'],
+    ['createdAt', 'createdAt'],
+  ] as const)(
+    'maps the %s sort key to a fixed Prisma field',
+    async (sortBy, field) => {
+      await service.findAll(
+        Object.assign(new BusCompanyQueryDto(), {
+          page: 1,
+          pageSize: 10,
+          sortBy,
+          sortDirection: 'asc',
+        }),
+      );
+
+      expect(nhaXe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { [field]: 'asc' } }),
+      );
+    },
+  );
+
+  it('filters by business-local dates using a half-open UTC range in both queries', async () => {
+    const createdFrom = '2026-01-01';
+    const createdTo = '2026-01-31';
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        createdFrom,
+        createdTo,
+      }),
+    );
+
+    const where = {
+      createdAt: {
+        gte: new Date('2025-12-31T17:00:00.000Z'),
+        lt: new Date('2026-01-31T17:00:00.000Z'),
+      },
+      trangThai: 'HOAT_DONG',
+    };
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where });
+  });
+
+  it('uses the configured business time zone instead of the server time zone', async () => {
+    getConfig.mockReturnValue('America/Los_Angeles');
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        createdFrom: '2026-01-01',
+      }),
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          createdAt: { gte: new Date('2026-01-01T08:00:00.000Z') },
+          trangThai: 'HOAT_DONG',
+        },
+      }),
+    );
+  });
+
+  it('falls back to Asia/Ho_Chi_Minh when the business time zone is not configured', async () => {
+    getConfig.mockReturnValue(undefined);
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        createdFrom: '2026-01-01',
+      }),
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          createdAt: { gte: new Date('2025-12-31T17:00:00.000Z') },
+          trangThai: 'HOAT_DONG',
+        },
+      }),
+    );
+  });
+
+  it('falls back to Asia/Ho_Chi_Minh when the business time zone is empty', async () => {
+    getConfig.mockReturnValue('');
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        createdFrom: '2026-01-01',
+      }),
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          createdAt: { gte: new Date('2025-12-31T17:00:00.000Z') },
+          trangThai: 'HOAT_DONG',
+        },
+      }),
+    );
+  });
+
+  it('keeps public company discovery active-only even when the client requests paused companies', async () => {
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        status: 'TAM_NGUNG',
+      }),
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { trangThai: 'HOAT_DONG' } }),
+    );
+  });
+
+  it('lets super admins filter inactive companies across all tenants', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: ['bus-company:read'],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        status: 'TAM_NGUNG',
+      }),
+      principal,
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { trangThai: 'TAM_NGUNG' } }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where: { trangThai: 'TAM_NGUNG' } });
+  });
+
+  it('keeps a Super Admin without bus-company:read on public active-only list scope', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: [],
+      nhanVienId: null,
+      nhaXeId: 901,
+    };
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        status: 'TAM_NGUNG',
+      }),
+      principal,
+    );
+
+    const publicWhere = { trangThai: 'HOAT_DONG' };
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: publicWhere }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where: publicWhere });
+  });
+
+  it('scopes a tenant principal to the trusted bus-company ID', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: 901,
+    };
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+      }),
+      principal,
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 901 } }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where: { nhaXeId: 901 } });
+  });
+
+  it('does not expose paused company details to anonymous callers', async () => {
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Chi tiết',
+      thongTinLienHe: '0900000042',
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('does not expose paused company details to a Super Admin without bus-company:read', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: [],
+      nhanVienId: null,
+      nhaXeId: 901,
+    };
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Tạm ngưng',
+      thongTinLienHe: null,
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42, principal)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('allows a Super Admin with bus-company:read to inspect a paused company', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: ['bus-company:read'],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Tạm ngưng',
+      thongTinLienHe: null,
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42, principal)).resolves.toMatchObject({
+      data: { busCompanyId: 42, status: 'TAM_NGUNG' },
+    });
+  });
+
+  it('hides another tenant company when a tenant principal requests its detail', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: 901,
+    };
+
+    await expect(service.findOne(902, principal)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(nhaXe.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('allows the owning tenant to inspect its own paused company', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: 901,
+    };
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 901,
+      maNhaXe: 'NX901',
+      tenNhaXe: 'Nhà xe Tạm ngưng',
+      thongTinLienHe: null,
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(901, principal)).resolves.toMatchObject({
+      data: { busCompanyId: 901, status: 'TAM_NGUNG' },
+    });
+  });
+
+  it('rejects tenant-admin company reads when the trusted principal has no tenant scope', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: null,
+    };
+
+    await expect(service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+      }),
+      principal,
+    )).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  describe('luggage rates', () => {
+    const tenantAdminPrincipal = {
+      taiKhoanId: 30,
+      sessionId: 'tenant-admin-3',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: ['luggage-rate:read', 'luggage-rate:update'],
+      nhanVienId: 300,
+      nhaXeId: 3,
+    };
+
+    const validUpdatePayload = {
+      default: {
+        packageS: 40_000,
+        packageM: 70_000,
+        packageL: 110_000,
+        packageXL: 160_000,
+      },
+      routes: {
+        '10': { inherit: false, packageS: 30_000 },
+      },
+    };
+
+    it('returns default fallback luggage rates when company has no custom configuration', async () => {
+      nhaXe.findUnique.mockResolvedValueOnce({
+        nhaXeId: 3,
+        tenNhaXe: 'Phương Trang',
+        cauHinhHanhLy: null,
+        tuyenXes: [
+          { tuyenXeId: 10, maTuyenXe: 'TX10', diemDi: 'SG', diemDen: 'ĐL' },
+        ],
+      });
+
+      const res = await service.getLuggageRates(3, tenantAdminPrincipal);
+      expect(res.data.busCompanyId).toBe(3);
+      expect(res.data.default.packageS).toBe(50_000);
+      expect(res.data.default.packageM).toBe(80_000);
+      expect(res.data.default.packageL).toBe(120_000);
+      expect(res.data.default.packageXL).toBe(180_000);
+      expect(res.data.availableRoutes).toHaveLength(1);
+      expect(res.data.availableRoutes[0].hasOverride).toBe(false);
+    });
+
+    it('updates company luggage configuration with custom rates and route overrides', async () => {
+      nhaXe.findUnique
+        .mockResolvedValueOnce({ nhaXeId: 3 })
+        .mockResolvedValueOnce({
+          nhaXeId: 3,
+          tenNhaXe: 'Phương Trang',
+          cauHinhHanhLy: JSON.stringify({
+            default: { packageS: 40_000, packageM: 70_000, packageL: 110_000, packageXL: 160_000 },
+            routes: { '10': { inherit: false, packageS: 30_000 } },
+          }),
+          tuyenXes: [
+            { tuyenXeId: 10, maTuyenXe: 'TX10', diemDi: 'SG', diemDen: 'ĐL' },
+          ],
+        });
+
+      const res = await service.updateLuggageRates(
+        3,
+        validUpdatePayload,
+        tenantAdminPrincipal,
+      );
+
+      expect(nhaXe.update).toHaveBeenCalledWith({
+        where: { nhaXeId: 3 },
+        data: expect.objectContaining({
+          cauHinhHanhLy: expect.stringContaining('"packageS":40000'),
+        }),
+      });
+      expect(res.data.default.packageS).toBe(40_000);
+      expect(res.data.availableRoutes[0].hasOverride).toBe(true);
+    });
+
+    it('allows tenant employee with only luggage-rate:update to update own company without luggage-rate:read', async () => {
+      const employeeUpdateOnly = {
+        taiKhoanId: 31,
+        sessionId: 'emp-update-only',
+        roles: ['NHAN_VIEN_DIEU_HANH'],
+        permissions: ['luggage-rate:update'],
+        nhanVienId: 301,
+        nhaXeId: 3,
+      };
+      nhaXe.findUnique
+        .mockResolvedValueOnce({ nhaXeId: 3 })
+        .mockResolvedValueOnce({
+          nhaXeId: 3,
+          tenNhaXe: 'Phương Trang',
+          cauHinhHanhLy: JSON.stringify(validUpdatePayload),
+          tuyenXes: [],
+        });
+
+      const res = await service.updateLuggageRates(
+        3,
+        validUpdatePayload,
+        employeeUpdateOnly,
+      );
+      expect(res.data.busCompanyId).toBe(3);
+      expect(nhaXe.update).toHaveBeenCalledTimes(1);
+
+      await expect(
+        service.getLuggageRates(3, employeeUpdateOnly),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'PERMISSION_FORBIDDEN',
+          message: 'Tài khoản không có quyền thực hiện thao tác này.',
+        },
+      });
+    });
+
+    it('blocks cross-tenant getLuggageRates and updateLuggageRates with TENANT_SCOPE_VIOLATION before touching DB', async () => {
+      nhaXe.findUnique.mockClear();
+      nhaXe.update.mockClear();
+
+      await expect(
+        service.getLuggageRates(99, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TENANT_SCOPE_VIOLATION',
+          message: 'Không được truy cập dữ liệu của nhà xe khác.',
+        },
+      });
+
+      await expect(
+        service.updateLuggageRates(99, validUpdatePayload, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TENANT_SCOPE_VIOLATION',
+          message: 'Không được truy cập dữ liệu của nhà xe khác.',
+        },
+      });
+
+      expect(nhaXe.findUnique).not.toHaveBeenCalled();
+      expect(nhaXe.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects SUPER_ADMIN, KHACH_HANG, and missing principal with ROLE_FORBIDDEN', async () => {
+      nhaXe.findUnique.mockClear();
+      nhaXe.update.mockClear();
+
+      const superAdmin = {
+        taiKhoanId: 1,
+        sessionId: 'super-admin',
+        roles: ['SUPER_ADMIN'],
+        permissions: ['luggage-rate:read', 'luggage-rate:update'],
+        nhanVienId: null,
+        nhaXeId: null,
+      };
+      const customer = {
+        taiKhoanId: 2,
+        sessionId: 'customer',
+        roles: ['KHACH_HANG'],
+        permissions: ['luggage-rate:read', 'luggage-rate:update'],
+        nhanVienId: null,
+        nhaXeId: null,
+      };
+
+      for (const principal of [undefined, superAdmin, customer]) {
+        await expect(
+          service.getLuggageRates(3, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'ROLE_FORBIDDEN' },
+        });
+        await expect(
+          service.updateLuggageRates(3, validUpdatePayload, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'ROLE_FORBIDDEN' },
+        });
+      }
+
+      expect(nhaXe.findUnique).not.toHaveBeenCalled();
+      expect(nhaXe.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects tenant principal missing nhaXeId or nhanVienId with TENANT_SCOPE_REQUIRED', async () => {
+      nhaXe.findUnique.mockClear();
+      nhaXe.update.mockClear();
+
+      const missingNhaXe = {
+        ...tenantAdminPrincipal,
+        nhaXeId: null,
+      };
+      const missingNhanVien = {
+        ...tenantAdminPrincipal,
+        nhanVienId: null,
+      };
+
+      for (const principal of [missingNhaXe, missingNhanVien]) {
+        await expect(
+          service.getLuggageRates(3, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'TENANT_SCOPE_REQUIRED' },
+        });
+        await expect(
+          service.updateLuggageRates(3, validUpdatePayload, principal),
+        ).rejects.toMatchObject({
+          response: { error: 'TENANT_SCOPE_REQUIRED' },
+        });
+      }
+
+      expect(nhaXe.findUnique).not.toHaveBeenCalled();
+      expect(nhaXe.update).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 BUS_COMPANY_NOT_FOUND when the tenant company record does not exist', async () => {
+      nhaXe.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.getLuggageRates(3, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
+        },
+      });
+
+      nhaXe.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.updateLuggageRates(3, validUpdatePayload, tenantAdminPrincipal),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
+        },
+      });
+    });
+
+    it('returns trip luggage rates with route override applied', async () => {
+      chuyenXe.findUnique.mockResolvedValueOnce({
+        chuyenXeId: 101,
+        tuyenXeId: 10,
+        tuyenXe: {
+          tuyenXeId: 10,
+          nhaXeId: 3,
+          nhaXe: {
+            nhaXeId: 3,
+            tenNhaXe: 'Phương Trang',
+            cauHinhHanhLy: JSON.stringify({
+              default: { packageS: 50_000, packageM: 80_000 },
+              routes: { '10': { inherit: false, packageS: 35_000 } },
+            }),
+          },
+        },
+      });
+
+      const res = await service.getTripLuggageRates(101);
+      expect(res.data.tripId).toBe(101);
+      expect(res.data.rates.packageS).toBe(35_000);
+      expect(res.data.packages[0].baseFee).toBe(35_000);
+    });
+  });
+
+});

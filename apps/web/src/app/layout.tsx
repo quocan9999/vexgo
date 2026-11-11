@@ -1,0 +1,16 @@
+import type { Metadata } from 'next';
+import './globals.css';
+import { AuthSessionProvider } from '@/features/auth/auth-session';
+
+export const metadata: Metadata = {
+  title: 'VexGo — Đặt vé xe khách',
+  description: 'Tìm chuyến, chọn ghế, thanh toán và gửi hàng cùng VexGo.',
+};
+
+export default function RootLayout({ children }: LayoutProps<'/'>) {
+  return (
+    <html lang="vi" className="h-full antialiased" data-scroll-behavior="smooth">
+      <body className="flex min-h-full flex-col bg-white font-sans text-slate-900"><AuthSessionProvider>{children}</AuthSessionProvider></body>
+    </html>
+  );
+}

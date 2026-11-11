@@ -1,0 +1,1017 @@
+import { enqueueCustomerNotice } from '../notifications/customer-notice.js';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Prisma } from '../generated/prisma/client.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { RefundProcessorService } from '../payments/refund-processor.service.js';
+import { lockPaymentOrder } from '../payments/payment-order-lock.js';
+import { ShipmentsService } from '../shipments/shipments.service.js';
+import {
+  combineDeparture,
+  computeArrival,
+  resolveBusinessTimeZone,
+} from '../common/time/business-date.js';
+import { generateUuidV1 } from '../common/uuid-v1.js';
+import type { TicketQueryDto } from './dto/ticket-query.dto.js';
+import type { TicketLookupQueryDto } from './dto/ticket-lookup-query.dto.js';
+import type { CancelTicketDto } from './dto/cancel-ticket.dto.js';
+
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('84') && digits.length >= 11) {
+    return '0' + digits.slice(2);
+  }
+  return digits;
+}
+
+function phonesMatch(phone1: string, phone2: string): boolean {
+  const d1 = normalizePhone(phone1);
+  const d2 = normalizePhone(phone2);
+  if (!d1 || !d2) return false;
+  return (
+    d1 === d2 ||
+    (d1.length >= 9 && d2.length >= 9 && d1.slice(-9) === d2.slice(-9))
+  );
+}
+
+const TICKET_INCLUDE = {
+  phieuDatVe: {
+    include: {
+      khuyenMai: { select: { maKhuyenMai: true } },
+      donGiaoDich: {
+        include: {
+          khachHang: true,
+          nhaXe: true,
+          phieuGuiHang: {
+            select: {
+              phieuGuiHangId: true,
+              maVanDon: true,
+              trangThai: true,
+              tongPhi: true,
+              hangHoas: {
+                include: { loaiHangHoa: true },
+              },
+            },
+          },
+          thanhToans: {
+            where: {
+              loaiGiaoDich: 'THANH_TOAN',
+              trangThai: 'THANH_CONG',
+            },
+            orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+            take: 1,
+          },
+        },
+      },
+    },
+  },
+  gheChuyenXe: {
+    include: {
+      ghe: true,
+      chuyenXe: {
+        include: {
+          tuyenXe: { include: { nhaXe: true } },
+          xe: { include: { loaiXe: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.VeInclude;
+
+type TicketRecord = Prisma.VeGetPayload<{ include: typeof TICKET_INCLUDE }>;
+
+type TicketReview = {
+  reviewId: number;
+  tripId: number;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  status: string;
+};
+
+type CancellationReason =
+  | 'ALREADY_CANCELLED'
+  | 'ACTIVE_SHIPMENT'
+  | 'ALREADY_DEPARTED'
+  | 'LESS_THAN_2_HOURS_30_MINUTES'
+  | 'LESS_THAN_4_HOURS'
+  | 'LESS_THAN_12_HOURS'
+  | 'DEPARTURE_TIME_UNAVAILABLE';
+
+type CancellationQuote = {
+  eligible: boolean;
+  reason?: CancellationReason;
+  cancelFeeRate: number;
+  cancelFee: Prisma.Decimal;
+  refundAmount: Prisma.Decimal;
+};
+
+function getCancellationQuote(
+  ticket: TicketRecord,
+  businessTimeZone: string,
+  now = new Date(),
+): CancellationQuote {
+  const price = new Prisma.Decimal(ticket.giaThucTe ?? ticket.giaNiemYet ?? 0);
+  const zero = new Prisma.Decimal(0);
+
+  if (ticket.trangThai === 'HUY') {
+    return {
+      eligible: false,
+      reason: 'ALREADY_CANCELLED',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  const trip = ticket.gheChuyenXe?.chuyenXe;
+  if (!trip?.ngayKhoiHanh || !trip?.gioKhoiHanh) {
+    return {
+      eligible: false,
+      reason: 'DEPARTURE_TIME_UNAVAILABLE',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  const departure = combineDeparture(
+    trip.ngayKhoiHanh,
+    trip.gioKhoiHanh,
+    businessTimeZone,
+  );
+  const hoursUntilDeparture =
+    (departure.getTime() - now.getTime()) / (60 * 60 * 1000);
+
+  if (hoursUntilDeparture <= 0) {
+    return {
+      eligible: false,
+      reason: 'ALREADY_DEPARTED',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  // Cutoff quy định: trước 2 giờ 30 phút (2.5 tiếng) được hủy online; dưới 2:30 liên hệ nhà xe
+  if (hoursUntilDeparture < 2.5) {
+    return {
+      eligible: false,
+      reason: 'LESS_THAN_4_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  const cancelFeeRate = hoursUntilDeparture <= 24 ? 0.2 : 0.1;
+  const shipment = ticket.phieuDatVe.donGiaoDich.phieuGuiHang;
+  if (
+    shipment &&
+    shipment.trangThai !== 'DA_HUY' &&
+    shipment.trangThai !== 'MOI_TAO'
+  ) {
+    return {
+      eligible: false,
+      reason: 'ACTIVE_SHIPMENT',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+  const cancelFee = price.mul(cancelFeeRate.toString()).toDecimalPlaces(0);
+
+  return {
+    eligible: true,
+    cancelFeeRate,
+    cancelFee,
+    refundAmount: price.minus(cancelFee),
+  };
+}
+
+function serializeCancellationQuote(quote: CancellationQuote) {
+  return {
+    eligible: quote.eligible,
+    reason: quote.reason,
+    cancelFeeRate: quote.cancelFeeRate,
+    cancelFee: Number(quote.cancelFee.toString()),
+    refundAmount: Number(quote.refundAmount.toString()),
+  };
+}
+
+@Injectable()
+export class TicketsService {
+  private readonly businessTimeZone: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    config: ConfigService,
+    private readonly refundProcessor: RefundProcessorService,
+    @Optional() private readonly shipmentsService?: ShipmentsService,
+  ) {
+    this.businessTimeZone = resolveBusinessTimeZone(
+      config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+  }
+
+  async findCustomerTickets(taiKhoanId: number, query: TicketQueryDto) {
+    const customer = await this.prisma.khachHang.findUnique({
+      where: { taiKhoanId },
+      select: { khachHangId: true },
+    });
+
+    if (!customer) {
+      throw new NotFoundException({
+        error: 'CUSTOMER_PROFILE_NOT_FOUND',
+        message: 'Không tìm thấy hồ sơ khách hàng.',
+      });
+    }
+
+    const where: Prisma.VeWhereInput = {
+      phieuDatVe: {
+        donGiaoDich: {
+          khachHangId: customer.khachHangId,
+        },
+      },
+    };
+
+    const andConditions: Prisma.VeWhereInput[] = [];
+
+    if (query.status) {
+      andConditions.push({
+        trangThai: { equals: query.status },
+      });
+    }
+
+    if (query.code) {
+      andConditions.push({
+        OR: [
+          { maVe: { contains: query.code } },
+          { phieuDatVe: { maPhieuDatVe: { contains: query.code } } },
+        ],
+      });
+    }
+
+    if (query.route) {
+      andConditions.push({
+        gheChuyenXe: {
+          chuyenXe: {
+            tuyenXe: {
+              OR: [
+                { diemDi: { contains: query.route } },
+                { diemDen: { contains: query.route } },
+              ],
+            },
+          },
+        },
+      });
+    }
+
+    if (query.departureDate) {
+      const targetDate = new Date(`${query.departureDate}T00:00:00.000Z`);
+      const nextDate = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
+      andConditions.push({
+        gheChuyenXe: {
+          chuyenXe: {
+            ngayKhoiHanh: {
+              gte: targetDate,
+              lt: nextDate,
+            },
+          },
+        },
+      });
+    }
+
+    if (query.search) {
+      const s = query.search.trim();
+      andConditions.push({
+        OR: [
+          { maVe: { contains: s } },
+          { phieuDatVe: { maPhieuDatVe: { contains: s } } },
+          {
+            gheChuyenXe: {
+              chuyenXe: {
+                tuyenXe: {
+                  OR: [
+                    { diemDi: { contains: s } },
+                    { diemDen: { contains: s } },
+                    { nhaXe: { tenNhaXe: { contains: s } } },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
+    }
+
+    const totalItems = await this.prisma.ve.count({ where });
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    const direction = query.sortDirection ?? 'desc';
+    let orderBy: Prisma.VeOrderByWithRelationInput[];
+    if (query.sortBy === 'price') {
+      orderBy = [{ giaThucTe: direction }, { veId: direction }];
+    } else if (query.sortBy === 'departureTime') {
+      orderBy = [
+        { gheChuyenXe: { chuyenXe: { ngayKhoiHanh: direction } } },
+        { gheChuyenXe: { chuyenXe: { gioKhoiHanh: direction } } },
+        { veId: direction },
+      ];
+    } else {
+      orderBy = [{ createdAt: direction }, { veId: direction }];
+    }
+
+    const tickets = await this.prisma.ve.findMany({
+      where,
+      include: TICKET_INCLUDE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      orderBy,
+    });
+
+    const reviews = await this.loadCustomerTripReviews(
+      customer.khachHangId,
+      tickets.flatMap((ticket) =>
+        ticket.gheChuyenXe?.chuyenXe
+          ? [ticket.gheChuyenXe.chuyenXe.chuyenXeId]
+          : [],
+      ),
+    );
+    const data = tickets.map((t) =>
+      this.mapTicket(t, reviews.get(t.gheChuyenXe?.chuyenXe?.chuyenXeId ?? 0)),
+    );
+
+    return {
+      data,
+      meta: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
+    };
+  }
+
+  async findCustomerTicketById(taiKhoanId: number, ticketId: number) {
+    const ticket = await this.prisma.ve.findUnique({
+      where: { veId: ticketId },
+      include: TICKET_INCLUDE,
+    });
+
+    if (!ticket) {
+      throw new NotFoundException({
+        error: 'TICKET_NOT_FOUND',
+        message: 'Không tìm thấy vé.',
+      });
+    }
+
+    const customer = ticket.phieuDatVe.donGiaoDich.khachHang;
+    if (!customer || customer.taiKhoanId !== taiKhoanId) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN_TICKET_ACCESS',
+        message: 'Bạn không có quyền truy cập vé này.',
+      });
+    }
+
+    const tripId = ticket.gheChuyenXe?.chuyenXe?.chuyenXeId;
+    const reviews = await this.loadCustomerTripReviews(
+      customer.khachHangId,
+      tripId ? [tripId] : [],
+    );
+    return {
+      data: this.mapTicket(ticket, tripId ? reviews.get(tripId) : null),
+    };
+  }
+
+  async lookupTicket(query: TicketLookupQueryDto) {
+    const rawCode = query.ticketCode.trim();
+    let ticket = await this.prisma.ve.findUnique({
+      where: { maVe: rawCode },
+      include: TICKET_INCLUDE,
+    });
+
+    if (!ticket && typeof this.prisma.ve.findFirst === 'function') {
+      ticket =
+        (await this.prisma.ve.findFirst({
+          where: {
+            OR: [
+              { phieuDatVe: { maPhieuDatVe: rawCode } },
+              { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+            ],
+            trangThai: { not: 'HUY' },
+          },
+          include: TICKET_INCLUDE,
+        })) ||
+        (await this.prisma.ve.findFirst({
+          where: {
+            OR: [
+              { phieuDatVe: { maPhieuDatVe: rawCode } },
+              { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+            ],
+          },
+          include: TICKET_INCLUDE,
+        }));
+    }
+
+    if (!ticket) {
+      throw new NotFoundException({
+        error: 'TICKET_NOT_FOUND',
+        message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+      });
+    }
+
+    const customerPhone =
+      ticket.phieuDatVe.donGiaoDich.soDienThoaiKhachHang || '';
+    if (!phonesMatch(customerPhone, query.phoneNumber)) {
+      throw new NotFoundException({
+        error: 'TICKET_NOT_FOUND',
+        message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+      });
+    }
+
+    const siblingTickets =
+      typeof this.prisma.ve.findMany === 'function' && ticket.phieuDatVeId
+        ? await this.prisma.ve.findMany({
+            where: { phieuDatVeId: ticket.phieuDatVeId },
+            include: TICKET_INCLUDE,
+            orderBy: { veId: 'asc' },
+          })
+        : [ticket];
+
+    const mappedTicket = this.mapTicket(ticket);
+    const bookingTickets =
+      Array.isArray(siblingTickets) && siblingTickets.length > 0
+        ? siblingTickets.map((t) => this.mapTicket(t))
+        : [mappedTicket];
+
+    return {
+      data: {
+        ...mappedTicket,
+        bookingTickets,
+      },
+    };
+  }
+
+  async cancelTicket(dto: CancelTicketDto) {
+    try {
+      // Discover only the reference before opening the transaction. Never hold
+      // ticket/seat read locks while waiting for the shared financial order lock.
+      const rawCode = dto.ticketCode.trim();
+      const referenceSelect = {
+        veId: true,
+        phieuDatVe: { select: { donGiaoDichId: true } },
+      } as const;
+      let reference = await this.prisma.ve.findUnique({
+        where: { maVe: rawCode },
+        select: referenceSelect,
+      });
+      if (!reference) {
+        reference = await this.prisma.ve.findFirst({
+          where: {
+            OR: [
+              { phieuDatVe: { maPhieuDatVe: rawCode } },
+              { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+            ],
+          },
+          select: referenceSelect,
+        });
+      }
+      if (!reference)
+        throw new NotFoundException({
+          error: 'TICKET_NOT_FOUND',
+          message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+        });
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          if (
+            !(await lockPaymentOrder(tx, reference.phieuDatVe.donGiaoDichId))
+          ) {
+            throw new NotFoundException({
+              error: 'TICKET_NOT_FOUND',
+              message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+            });
+          }
+          const isBatch =
+            Array.isArray(dto.ticketCodes) && dto.ticketCodes.length > 0;
+          let ticketsToCancel: TicketRecord[] = [];
+
+          if (isBatch) {
+            const rawTargetCodes = Array.from(
+              new Set(dto.ticketCodes!.map((c) => c.trim()).filter(Boolean)),
+            );
+            ticketsToCancel = await tx.ve.findMany({
+              where: {
+                maVe: { in: rawTargetCodes },
+                phieuDatVe: {
+                  donGiaoDichId: reference.phieuDatVe.donGiaoDichId,
+                },
+              },
+              include: TICKET_INCLUDE,
+            });
+            if (ticketsToCancel.length === 0) {
+              throw new NotFoundException({
+                error: 'TICKET_NOT_FOUND',
+                message:
+                  'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+              });
+            }
+          } else {
+            const ticket = await tx.ve.findUnique({
+              where: { veId: reference.veId },
+              include: TICKET_INCLUDE,
+            });
+            if (
+              !ticket ||
+              ticket.phieuDatVe.donGiaoDichId !==
+                reference.phieuDatVe.donGiaoDichId
+            ) {
+              throw new NotFoundException({
+                error: 'TICKET_NOT_FOUND',
+                message:
+                  'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+              });
+            }
+            ticketsToCancel = [ticket];
+          }
+
+          const customerPhone =
+            ticketsToCancel[0].phieuDatVe.donGiaoDich.soDienThoaiKhachHang ||
+            '';
+          if (!phonesMatch(customerPhone, dto.phoneNumber)) {
+            throw new NotFoundException({
+              error: 'TICKET_NOT_FOUND',
+              message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+            });
+          }
+
+          for (const t of ticketsToCancel) {
+            const quote = getCancellationQuote(
+              t,
+              this.businessTimeZone,
+              new Date(),
+            );
+            if (!quote.eligible) {
+              if (quote.reason === 'ACTIVE_SHIPMENT') {
+                throw new ConflictException({
+                  error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT',
+                  message:
+                    'Đơn có hàng gửi kèm còn hiệu lực. Vui lòng liên hệ nhà xe để được hỗ trợ hủy vé.',
+                });
+              }
+              const errors: Record<
+                Exclude<CancellationReason, 'ACTIVE_SHIPMENT'>,
+                { error: string; message: string }
+              > = {
+                ALREADY_CANCELLED: {
+                  error: 'TICKET_ALREADY_CANCELLED',
+                  message: isBatch
+                    ? `Vé ${t.maVe} đã được hủy trước đó.`
+                    : 'Vé này đã được hủy trước đó.',
+                },
+                ALREADY_DEPARTED: {
+                  error: 'TRIP_ALREADY_DEPARTED',
+                  message: 'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
+                },
+                LESS_THAN_2_HOURS_30_MINUTES: {
+                  error: 'CANCELLATION_CUTOFF_PASSED',
+                  message:
+                    'Chỉ có thể hủy vé trực tuyến trước giờ khởi hành ít nhất 2 giờ 30 phút. Quá thời gian này, vui lòng liên hệ nhà xe để được hỗ trợ.',
+                },
+                LESS_THAN_4_HOURS: {
+                  error: 'CANCELLATION_CUTOFF_PASSED',
+                  message:
+                    'Chỉ có thể hủy vé trực tuyến trước giờ khởi hành ít nhất 2 giờ 30 phút. Quá thời gian này, vui lòng liên hệ nhà xe để được hỗ trợ.',
+                },
+                LESS_THAN_12_HOURS: {
+                  error: 'CANCELLATION_CUTOFF_PASSED',
+                  message:
+                    'Chỉ có thể hủy vé trực tuyến trước giờ khởi hành ít nhất 2 giờ 30 phút. Quá thời gian này, vui lòng liên hệ nhà xe để được hỗ trợ.',
+                },
+                DEPARTURE_TIME_UNAVAILABLE: {
+                  error: 'DEPARTURE_TIME_UNAVAILABLE',
+                  message: 'Không thể xác định giờ khởi hành để hủy vé.',
+                },
+              };
+              throw new BadRequestException(errors[quote.reason!]);
+            }
+
+            if (quote.cancelFeeRate !== dto.expectedCancelFeeRate) {
+              throw new ConflictException({
+                error: 'CANCELLATION_QUOTE_EXPIRED',
+                message: `Mức phí hủy vé đã thay đổi (từ ${Math.round(dto.expectedCancelFeeRate * 100)}% thành ${Math.round(quote.cancelFeeRate * 100)}%) do thời gian đến lúc khởi hành đã thay đổi. Vui lòng xác nhận lại mức hoàn tiền mới.`,
+                details: {
+                  previousRate: dto.expectedCancelFeeRate,
+                  currentQuote: serializeCancellationQuote(quote),
+                },
+              });
+            }
+          }
+
+          const order = ticketsToCancel[0].phieuDatVe.donGiaoDich;
+          const originalPayment = order.thanhToans[0];
+          const isFreeSettledBooking =
+            !originalPayment &&
+            ticketsToCancel[0].phieuDatVe.trangThai === 'DA_THANH_TOAN' &&
+            order.trangThai === 'DA_THANH_TOAN' &&
+            order.tongTien !== null &&
+            order.tongTien !== undefined &&
+            new Prisma.Decimal(order.tongTien).isZero();
+          if (!originalPayment && !isFreeSettledBooking) {
+            throw new BadRequestException({
+              error: 'REFUND_SOURCE_NOT_FOUND',
+              message:
+                'Không tìm thấy giao dịch thanh toán thành công để hoàn tiền.',
+            });
+          }
+
+          const operationId = generateUuidV1();
+          const changedAt = new Date();
+          const reason =
+            dto.reason?.trim().slice(0, 255) || 'Khách yêu cầu hủy vé';
+          const refundIds: number[] = [];
+          const cancelledTicketCodes: string[] = [];
+          const cancelledSeatNumbers: string[] = [];
+          let totalCancelFee = new Prisma.Decimal(0);
+          let totalRefundAmount = new Prisma.Decimal(0);
+
+          for (const t of ticketsToCancel) {
+            const updateResult = await tx.ve.updateMany({
+              where: { veId: t.veId, trangThai: { not: 'HUY' } },
+              data: { trangThai: 'HUY' },
+            });
+            if (updateResult.count !== 1) {
+              throw new ConflictException({
+                error: 'TICKET_ALREADY_CANCELLED',
+                message: `Vé ${t.maVe} đã được hủy bởi một yêu cầu khác.`,
+              });
+            }
+
+            await tx.gheChuyenXe.update({
+              where: { gheChuyenXeId: t.gheChuyenXeId },
+              data: { trangThai: 'TRONG' },
+            });
+
+            await tx.lichSuTrangThaiVe.create({
+              data: {
+                veId: t.veId,
+                trangThaiCu: t.trangThai,
+                trangThaiMoi: 'HUY',
+                thoiDiem: changedAt,
+                nguonThayDoi: 'SYSTEM',
+                taiKhoanId: null,
+                lyDo: reason,
+                laOverride: false,
+                maThaoTac: operationId,
+              },
+            });
+
+            const quote = getCancellationQuote(
+              t,
+              this.businessTimeZone,
+              changedAt,
+            );
+            totalCancelFee = totalCancelFee.plus(quote.cancelFee);
+            totalRefundAmount = totalRefundAmount.plus(quote.refundAmount);
+            cancelledTicketCodes.push(t.maVe);
+            if (t.gheChuyenXe?.ghe?.tenGhe) {
+              cancelledSeatNumbers.push(t.gheChuyenXe.ghe.tenGhe);
+            }
+
+            if (originalPayment && !quote.refundAmount.isZero()) {
+              const refund = await tx.thanhToan.create({
+                data: {
+                  soTien: quote.refundAmount,
+                  phuongThuc: originalPayment.phuongThuc,
+                  loaiGiaoDich: 'HOAN_TIEN',
+                  thoiGian: changedAt,
+                  trangThai: 'DANG_XU_LY',
+                  donGiaoDichId: t.phieuDatVe.donGiaoDichId,
+                  veId: t.veId,
+                },
+              });
+              refundIds.push(refund.thanhToanId);
+            }
+            await enqueueCustomerNotice(tx, {
+              eventKey: `ticket-cancelled:${t.veId}`,
+              customerId: order.khachHangId,
+              email: order.emailKhachHang,
+              bookingId: t.phieuDatVeId,
+              ticketId: t.veId,
+              title: 'Hủy vé thành công',
+              content: `Vé ${t.maVe} đã được hủy. Phí hủy: ${quote.cancelFee.toString()} VND. ${quote.refundAmount.isZero() ? 'Không phát sinh khoản hoàn tiền.' : `Yêu cầu hoàn ${quote.refundAmount.toString()} VND đang được xử lý; đây chưa phải xác nhận tiền đã hoàn tất.`}`,
+            });
+          }
+
+          const remainingActiveTickets = await tx.ve.count({
+            where: {
+              phieuDatVeId: ticketsToCancel[0].phieuDatVeId,
+              trangThai: { not: 'HUY' },
+            },
+          });
+
+          if (dto.cargoItemIds?.length && remainingActiveTickets === 0) {
+            throw new BadRequestException({
+              error: 'CARGO_SELECTION_NOT_APPLICABLE',
+              message:
+                'Khi hủy toàn bộ vé trong đơn, gói hành lý Mới tạo sẽ được hủy toàn bộ. Vui lòng tải lại và xác nhận.',
+            });
+          }
+
+          let cargoCancellation: {
+            status: string;
+            cancelledItemIds: number[];
+            remainingItemsCount: number;
+          } | null = null;
+          if (dto.cargoItemIds?.length) {
+            if (!this.shipmentsService) {
+              throw new Error('ShipmentsService is required to cancel selected cargo.');
+            }
+            const cargoResult =
+              await this.shipmentsService.cancelAttachedCargoSelectionInTransaction(
+                tx,
+                order.donGiaoDichId,
+                dto.cargoItemIds,
+                changedAt,
+              );
+            cargoCancellation = {
+              status: cargoResult.status,
+              cancelledItemIds: cargoResult.cancelledItemIds,
+              remainingItemsCount: cargoResult.remainingItemsCount,
+            };
+          }
+
+          if (remainingActiveTickets === 0) {
+            await tx.phieuDatVe.update({
+              where: { phieuDatVeId: ticketsToCancel[0].phieuDatVeId },
+              data: { trangThai: 'DA_HUY' },
+            });
+            await tx.donGiaoDich.update({
+              where: {
+                donGiaoDichId: ticketsToCancel[0].phieuDatVe.donGiaoDichId,
+              },
+              data: { trangThai: 'DA_HUY' },
+            });
+            await tx.lichSuTrangThaiPhieuDatVe.create({
+              data: {
+                phieuDatVeId: ticketsToCancel[0].phieuDatVeId,
+                trangThaiCu: ticketsToCancel[0].phieuDatVe.trangThai,
+                trangThaiMoi: 'DA_HUY',
+                thoiDiem: changedAt,
+                nguonThayDoi: 'SYSTEM',
+                taiKhoanId: null,
+                lyDo: reason,
+                laOverride: false,
+                maThaoTac: operationId,
+              },
+            });
+
+            const attachedShipment = order.phieuGuiHang as
+              | { phieuGuiHangId?: number; trangThai?: string }
+              | null
+              | undefined;
+            if (
+              attachedShipment?.phieuGuiHangId &&
+              attachedShipment.trangThai === 'MOI_TAO'
+            ) {
+              const cancelledShipment = await tx.phieuGuiHang.updateMany({
+                where: {
+                  phieuGuiHangId: attachedShipment.phieuGuiHangId,
+                  trangThai: 'MOI_TAO',
+                },
+                data: {
+                  trangThai: 'DA_HUY',
+                  updatedAt: changedAt,
+                },
+              });
+              if (cancelledShipment.count !== 1) {
+                throw new ConflictException({
+                  error: 'CONCURRENT_STATUS_UPDATE',
+                  message: 'Trạng thái hành lý đã thay đổi. Vui lòng tải lại thông tin đơn.',
+                });
+              }
+              await tx.lichSuTrangThaiPhieuGuiHang.create({
+                data: {
+                  phieuGuiHangId: attachedShipment.phieuGuiHangId,
+                  trangThai: 'DA_HUY',
+                  thoiGian: changedAt,
+                  taiKhoanId: null,
+                  ghiChu: `Tự động hủy gói hành lý gửi kèm do đã hủy vé (${reason})`,
+                },
+              });
+              cargoCancellation = {
+                status: 'DA_HUY',
+                cancelledItemIds: order.phieuGuiHang?.hangHoas?.map((item) => item.hangHoaId) ?? [],
+                remainingItemsCount: 0,
+              };
+            }
+          }
+
+          return {
+            refundIds,
+            response: {
+              data: {
+                ticketId: ticketsToCancel[0].veId,
+                ticketCode: ticketsToCancel[0].maVe,
+                cancelledTicketCodes,
+                cancelledSeatNumbers,
+                status: 'HUY',
+                cancelFeeRate: dto.expectedCancelFeeRate,
+                cancelFee: Number(totalCancelFee.toString()),
+                refundAmount: Number(totalRefundAmount.toString()),
+                cargoCancellation,
+                message: totalRefundAmount.isZero()
+                  ? 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.'
+                  : 'Hủy vé thành công. Quý khách vui lòng liên hệ nhà xe để được hỗ trợ hoàn tiền.',
+              },
+            },
+          };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      if (Array.isArray(result.refundIds) && result.refundIds.length > 0) {
+        for (const refundId of result.refundIds) {
+          this.refundProcessor.enqueueRefund(refundId);
+        }
+      }
+      return result.response;
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'P2034'
+      ) {
+        throw new ConflictException({
+          error: 'TICKET_CANCELLATION_CONFLICT',
+          message:
+            'Vé đang được xử lý bởi một yêu cầu khác. Vui lòng kiểm tra lại.',
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async loadCustomerTripReviews(customerId: number, tripIds: number[]) {
+    const reviews = new Map<number, TicketReview>();
+    const ids = [
+      ...new Set(tripIds.filter((id) => Number.isInteger(id) && id > 0)),
+    ];
+    if (ids.length === 0) return reviews;
+    // One batch per page; never hydrate another customer's review or depend on
+    // moderation visibility to decide whether this customer already reviewed.
+    const rows = await this.prisma.phanHoi.findMany({
+      where: { khachHangId: customerId, chuyenXeId: { in: ids } },
+      select: {
+        phanHoiId: true,
+        chuyenXeId: true,
+        mucDanhGia: true,
+        noiDung: true,
+        thoiGian: true,
+        trangThai: true,
+      },
+      orderBy: [{ thoiGian: 'desc' }, { phanHoiId: 'desc' }],
+    });
+    for (const row of rows) {
+      if (row.chuyenXeId !== null && !reviews.has(row.chuyenXeId)) {
+        reviews.set(row.chuyenXeId, {
+          reviewId: row.phanHoiId,
+          tripId: row.chuyenXeId,
+          rating: row.mucDanhGia,
+          comment: row.noiDung,
+          createdAt: row.thoiGian.toISOString(),
+          status: row.trangThai,
+        });
+      }
+    }
+    return reviews;
+  }
+
+  private mapTicket(ticket: TicketRecord, review: TicketReview | null = null) {
+    const chuyenXe = ticket.gheChuyenXe?.chuyenXe;
+    const tuyenXe = chuyenXe?.tuyenXe;
+    const nhaXe = ticket.phieuDatVe?.donGiaoDich?.nhaXe ?? tuyenXe?.nhaXe;
+    const loaiXe = chuyenXe?.xe?.loaiXe;
+
+    let departureTime: string | null = null;
+    let arrivalTime: string | null = null;
+    if (chuyenXe?.ngayKhoiHanh && chuyenXe?.gioKhoiHanh) {
+      departureTime = combineDeparture(
+        chuyenXe.ngayKhoiHanh,
+        chuyenXe.gioKhoiHanh,
+        this.businessTimeZone,
+      ).toISOString();
+
+      arrivalTime = computeArrival(
+        chuyenXe.ngayKhoiHanh,
+        chuyenXe.gioKhoiHanh,
+        tuyenXe?.thoiGianChayPhut,
+        chuyenXe.gioDen,
+        this.businessTimeZone,
+      );
+    }
+
+    const route =
+      tuyenXe?.diemDi && tuyenXe?.diemDen
+        ? `${tuyenXe.diemDi} - ${tuyenXe.diemDen}`
+        : null;
+
+    const order = ticket.phieuDatVe?.donGiaoDich;
+    const latestPayment = order?.thanhToans?.[0];
+    const originalTicketSubtotal = Number(
+      ticket.phieuDatVe?.tongTienBanDau ?? 0,
+    );
+    const discountAmount = Number(ticket.phieuDatVe?.soTienGiamKhuyenMai ?? 0);
+    const shipment = order?.phieuGuiHang as
+      | {
+          phieuGuiHangId?: number;
+          maVanDon?: string;
+          trangThai?: string;
+          tongPhi?: Prisma.Decimal | number | string | null;
+          hangHoas?: Array<{
+            hangHoaId: number;
+            tenHang: string;
+            soLuong: number;
+            khoiLuong: Prisma.Decimal | number | string;
+            moTa?: string | null;
+            loaiHangHoa?: {
+              tenLoai?: string;
+              nhomSucChua?: string;
+            } | null;
+          }>;
+        }
+      | null
+      | undefined;
+    const isCargoCancelled = shipment?.trangThai === 'DA_HUY';
+    const cargoItems = isCargoCancelled
+      ? []
+      : (shipment?.hangHoas ?? []).map((h) => ({
+          id: h.hangHoaId,
+          name: h.tenHang,
+          quantity: h.soLuong,
+          weight: Number(h.khoiLuong),
+          category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
+          categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
+          note: h.moTa ?? null,
+        }));
+
+    return {
+      ticketId: ticket.veId,
+      ticketCode: ticket.maVe,
+      tripId: chuyenXe?.chuyenXeId ?? null,
+      busCompanyId: nhaXe?.nhaXeId ?? null,
+      bookingId: ticket.phieuDatVeId,
+      review,
+      bookingCode: ticket.phieuDatVe?.maPhieuDatVe ?? null,
+      promotionCode: ticket.phieuDatVe?.khuyenMai?.maKhuyenMai ?? null,
+      originalTicketSubtotal,
+      discountAmount,
+      ticketSubtotal: originalTicketSubtotal - discountAmount,
+      cargoFee: isCargoCancelled ? 0 : Number(shipment?.tongPhi ?? 0),
+      cargoWaybillCode: shipment?.maVanDon ?? null,
+      cargoStatus: shipment?.trangThai ?? null,
+      cargoItems,
+      route,
+      origin: tuyenXe?.diemDi ?? null,
+      destination: tuyenXe?.diemDen ?? null,
+      busCompanyName: nhaXe?.tenNhaXe ?? null,
+      vehicleType: loaiXe?.tenLoai ?? null,
+      departureTime,
+      arrivalTime,
+      seatNumber: ticket.gheChuyenXe?.ghe?.tenGhe ?? null,
+      seatPosition: ticket.gheChuyenXe?.ghe?.viTri ?? null,
+      price: Number(ticket.giaThucTe ?? ticket.giaNiemYet ?? 0),
+      status: ticket.trangThai,
+      bookingStatus: ticket.phieuDatVe?.trangThai ?? null,
+      paymentStatus: order?.trangThai ?? null,
+      paymentMethod: latestPayment?.phuongThuc ?? null,
+      pickup: ticket.diemDon ?? null,
+      dropoff:
+        (ticket.diemTraSnapshot as { tenDiem?: string } | null)?.tenDiem ??
+        tuyenXe?.diemDen ??
+        null,
+      diemDonSnapshot: ticket.diemDonSnapshot ?? null,
+      diemTraSnapshot: ticket.diemTraSnapshot ?? null,
+      passengerName: order?.tenKhachHang ?? null,
+      passengerPhone: order?.soDienThoaiKhachHang ?? null,
+      createdAt: ticket.createdAt.toISOString(),
+      updatedAt: ticket.updatedAt.toISOString(),
+      cancellation: serializeCancellationQuote(
+        getCancellationQuote(ticket, this.businessTimeZone),
+      ),
+    };
+  }
+}

@@ -1,0 +1,483 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  Eye,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  SearchX,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useRef, type ReactNode } from 'react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/action-button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/status-badge';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+
+export type ResourceModalDialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
+
+const MODAL_SIZE_CLASSES: Record<ResourceModalDialogSize, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
+};
+
+export function ResourceModalDialog({
+  children,
+  title,
+  description,
+  size = 'lg',
+  busy = false,
+  preventDismiss = false,
+  onClose,
+}: {
+  children: ReactNode;
+  title: string;
+  description?: string;
+  size?: ResourceModalDialogSize;
+  busy?: boolean;
+  preventDismiss?: boolean;
+  onClose: () => void;
+}) {
+  const t = useTranslations('common');
+  return (
+    <Dialog
+      open
+      onOpenChange={(open, event) => {
+        if (!open && preventDismiss) event.cancel();
+        else if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        aria-busy={busy}
+        className={cn(
+          MODAL_SIZE_CLASSES[size],
+          'flex max-h-[90vh] flex-col gap-0 p-0 overflow-hidden',
+        )}
+        showCloseButton={!preventDismiss}
+        closeLabel={t('close')}
+      >
+        <DialogHeader className="border-b px-5 py-4 sm:px-6">
+          <DialogTitle>{title}</DialogTitle>
+          {description && (
+            <DialogDescription className="mt-1">{description}</DialogDescription>
+          )}
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ResourceSheet({
+  children,
+  title,
+  description,
+  busy = false,
+  preventDismiss = false,
+  onClose,
+}: {
+  children: ReactNode;
+  title: string;
+  description: string;
+  busy?: boolean;
+  preventDismiss?: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet
+      open
+      onOpenChange={(open, event) => {
+        if (!open && preventDismiss) event.cancel();
+        else if (!open) onClose();
+      }}
+    >
+      <SheetContent aria-busy={busy} showCloseButton={!preventDismiss}>
+        <SheetHeader>
+          <SheetTitle>{title}</SheetTitle>
+          <SheetDescription>{description}</SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+          {children}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+export function ResourceConfirmation({
+  title,
+  description,
+  children,
+  footer,
+  busy = false,
+  cancelLabel,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  busy?: boolean;
+  cancelLabel?: string;
+  onClose: () => void;
+}) {
+  const tCommon = useTranslations('common');
+  const resolvedCancelLabel = cancelLabel ?? tCommon('cancel');
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  return (
+    <AlertDialog
+      open
+      onOpenChange={(open, event) => {
+        if (!open && busy) event.cancel();
+        else if (!open) onClose();
+      }}
+    >
+      <AlertDialogContent aria-busy={busy} initialFocus={cancelRef}>
+        <AlertDialogTitle>{title}</AlertDialogTitle>
+        <AlertDialogDescription>{description}</AlertDialogDescription>
+        {children}
+        {footer ? (
+          <AlertDialogFooter>{footer}</AlertDialogFooter>
+        ) : (
+          <Button
+            disabled={busy}
+            onClick={onClose}
+            ref={cancelRef}
+            variant="outline"
+          >
+            {resolvedCancelLabel}
+          </Button>
+        )}
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+export function ResourceStatusBadge({
+  tone,
+  children,
+}: {
+  tone: 'active' | 'muted' | 'warning' | 'danger';
+  children: ReactNode;
+}) {
+  return (
+    <Badge
+      variant={
+        tone === 'active'
+          ? 'success'
+          : tone === 'warning'
+            ? 'warning'
+            : tone === 'danger'
+              ? 'destructive'
+              : 'secondary'
+      }
+    >
+      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      {children}
+    </Badge>
+  );
+}
+
+export function ResourceCreateAction({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button onClick={onClick}>
+      <Plus aria-hidden />
+      {label}
+    </Button>
+  );
+}
+
+export function ResourceRefreshAction({
+  loading,
+  onClick,
+  label,
+}: {
+  loading: boolean;
+  onClick: () => void;
+  label?: string;
+}) {
+  const tCommon = useTranslations('common');
+  const displayLabel = label ?? tCommon('refresh');
+  return (
+    <Button
+      aria-busy={loading}
+      disabled={loading}
+      onClick={onClick}
+      variant="outline"
+    >
+      <RefreshCw
+        aria-hidden
+        className={loading ? 'motion-safe:animate-spin' : undefined}
+      />
+      {displayLabel}
+    </Button>
+  );
+}
+
+export function ResourceDetailAction({
+  resourceName,
+  onClick,
+  href,
+  label,
+  ariaLabel,
+}: {
+  resourceName?: string;
+  onClick?: () => void;
+  href?: string;
+  label?: string;
+  ariaLabel?: string;
+}) {
+  const tCommon = useTranslations('common');
+  const resolvedLabel = label ?? tCommon('viewDetails');
+  const fullAriaLabel =
+    ariaLabel ??
+    (resourceName ? `${resolvedLabel} ${resourceName}` : resolvedLabel);
+  if (href) {
+    return (
+      <Button
+        aria-label={fullAriaLabel}
+        nativeButton={false}
+        onClick={onClick}
+        render={<Link href={href} />}
+        size="sm"
+        variant="ghost"
+      >
+        <Eye aria-hidden />
+        {resolvedLabel}
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      aria-label={fullAriaLabel}
+      onClick={onClick}
+      size="sm"
+      variant="ghost"
+    >
+      <Eye aria-hidden />
+      {resolvedLabel}
+    </Button>
+  );
+}
+
+export function ResourceNotice({
+  children,
+  kind = 'success',
+}: {
+  children: ReactNode;
+  kind?: 'success' | 'error' | 'info';
+}) {
+  const Icon =
+    kind === 'error'
+      ? CircleAlert
+      : kind === 'success'
+        ? CheckCircle2
+        : CircleAlert;
+  return (
+    <Alert
+      className={
+        kind === 'success'
+          ? 'border-[var(--admin-success-border)] bg-[var(--admin-status-success-soft)] text-[var(--admin-status-success)]'
+          : ''
+      }
+      role={kind === 'error' ? 'alert' : 'status'}
+      variant={kind === 'error' ? 'destructive' : 'default'}
+    >
+      <Icon aria-hidden />
+      <AlertDescription className="text-current">{children}</AlertDescription>
+    </Alert>
+  );
+}
+
+export function ResourceState({
+  children,
+  error = false,
+  loading = false,
+}: {
+  children: ReactNode;
+  error?: boolean;
+  loading?: boolean;
+}) {
+  const Icon = loading ? LoaderCircle : error ? CircleAlert : SearchX;
+  return (
+    <div
+      className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground"
+      role={error ? 'alert' : 'status'}
+    >
+      <div
+        className={
+          error
+            ? 'grid size-12 place-items-center rounded-2xl bg-rose-50 text-rose-600 shadow-2xs'
+            : loading
+              ? 'grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600 shadow-2xs'
+              : 'grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-500 shadow-2xs'
+        }
+      >
+        <Icon
+          aria-hidden
+          className={loading ? 'size-6 motion-safe:animate-spin' : 'size-6'}
+        />
+      </div>
+      <div className="max-w-md space-y-1.5 leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+export function ResourceTableSkeleton({
+  resourceLabel,
+}: {
+  resourceLabel: string;
+}) {
+  const tCommon = useTranslations('common');
+  const loadingText = tCommon('loadingData', { resource: resourceLabel });
+  return (
+    <div
+      className="space-y-5 p-5"
+      role="status"
+      aria-label={loadingText}
+    >
+      <span className="sr-only">{loadingText}</span>
+      {Array.from({ length: 5 }, (_, row) => (
+        <div
+          aria-hidden
+          key={row}
+          className="grid grid-cols-3 gap-5 border-b pb-5 sm:grid-cols-5"
+        >
+          <Skeleton className="h-4" />
+          <Skeleton className="h-4" />
+          <Skeleton className="h-4" />
+          <Skeleton className="hidden h-4 sm:block" />
+          <Skeleton className="hidden h-4 sm:block" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ResourcePagination({
+  currentPage,
+  disabled = false,
+  onPageChange,
+  pageSize,
+  summaryLabel,
+  totalItems,
+  totalPages,
+  showingLabel,
+  ofLabel,
+  pageLabel,
+  prevPageLabel,
+  nextPageLabel,
+  locale = 'vi-VN',
+}: {
+  currentPage: number;
+  disabled?: boolean;
+  onPageChange: (page: number) => void;
+  pageSize: number;
+  summaryLabel: string;
+  totalItems: number;
+  totalPages: number;
+  showingLabel?: string;
+  ofLabel?: string;
+  pageLabel?: string;
+  prevPageLabel?: string;
+  nextPageLabel?: string;
+  locale?: string;
+}) {
+  const tCommon = useTranslations('common');
+  const displayShowing = showingLabel ?? tCommon('showing');
+  const displayOf = ofLabel ?? tCommon('of');
+  const displayPage = pageLabel ?? tCommon('page');
+  const displayPrev = prevPageLabel ?? tCommon('prevPage');
+  const displayNext = nextPageLabel ?? tCommon('nextPage');
+  const count = Math.max(0, totalItems);
+  const pages = Math.max(0, totalPages);
+  const page = count && pages ? Math.min(Math.max(1, currentPage), pages) : 0;
+  const first = page ? (page - 1) * Math.max(1, pageSize) + 1 : 0;
+  const last = page ? Math.min(page * Math.max(1, pageSize), count) : 0;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border bg-slate-50/40 p-3.5 text-[13px] text-muted-foreground sm:px-5">
+      <span aria-live="polite" className="text-slate-600">
+        {displayShowing}{' '}
+        <strong className="font-semibold text-foreground">
+          {first}–{last}
+        </strong>{' '}
+        {displayOf}{' '}
+        <strong className="font-semibold text-foreground">
+          {count.toLocaleString(locale)}
+        </strong>{' '}
+        {summaryLabel}
+      </span>
+      <nav
+        aria-label={`${displayPage} ${summaryLabel}`}
+        className="flex items-center gap-3"
+      >
+        <span className="text-slate-600">
+          {displayPage} <strong className="font-semibold text-foreground">{page}</strong> / {pages}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <Button
+            aria-label={displayPrev}
+            className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
+            disabled={disabled || page <= 1}
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            size="icon-sm"
+            variant="outline"
+          >
+            <ChevronLeft aria-hidden className="size-4" />
+          </Button>
+          <Button
+            aria-label={displayNext}
+            className="size-8 rounded-[var(--admin-radius-control)] border-border bg-card shadow-2xs hover:bg-slate-100"
+            disabled={disabled || page >= pages}
+            onClick={() => onPageChange(page + 1)}
+            size="icon-sm"
+            variant="outline"
+          >
+            <ChevronRight aria-hidden className="size-4" />
+          </Button>
+        </div>
+      </nav>
+    </div>
+  );
+}

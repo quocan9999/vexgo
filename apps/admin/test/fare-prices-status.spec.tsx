@@ -1,0 +1,422 @@
+import { expectOperationToast } from './canonical-test-helpers';
+// @vitest-environment jsdom
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import type { AnchorHTMLAttributes } from 'react';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { FarePriceWorkspace } from '@/features/fare-prices/components/fare-price-workspace';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+
+vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
+  SuperAdminLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+}));
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/fare-prices',
+  useRouter: () => ({ replace: vi.fn() }),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+const baseFare = {
+  farePriceId: 15,
+  listedPrice: 250000,
+  currency: 'VND',
+  validFrom: '2099-09-01',
+  validTo: null,
+  status: 'HOAT_DONG',
+  effectiveState: 'CHUA_HIEU_LUC',
+  route: {
+    routeId: 3,
+    code: 'SG-DL-01',
+    origin: 'TP.HCM',
+    destination: 'Đà Lạt',
+  },
+  vehicleType: { vehicleTypeId: 2, name: 'Limousine' },
+  createdAt: '2026-09-01T08:30:00.000Z',
+  updatedAt: '2026-09-02T08:30:00.000Z',
+};
+
+const routePage = {
+  data: [
+    {
+      routeId: 3,
+      code: 'SG-DL-01',
+      origin: 'TP.HCM',
+      destination: 'Đà Lạt',
+      status: 'HOAT_DONG',
+      busCompany: { busCompanyId: 1, code: 'FUTA', name: 'Phương Trang' },
+      createdAt: '2026-09-01T08:30:00.000Z',
+      updatedAt: '2026-09-02T08:30:00.000Z',
+    },
+  ],
+  meta: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 },
+};
+
+const vehicleTypePage = {
+  data: [
+    {
+      vehicleTypeId: 2,
+      name: 'Limousine',
+      description: null,
+      motorbikeCapacityDefault: 0,
+      bulkyCargoCapacityDefault: 0,
+      lightCargoCapacityDefault: 0,
+      createdAt: '2026-09-01T08:30:00.000Z',
+      updatedAt: '2026-09-02T08:30:00.000Z',
+    },
+  ],
+  meta: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 },
+};
+
+function response(body: unknown, ok = true, status = 200): Response {
+  return { ok, status, json: async () => body } as Response;
+}
+
+type ApiOptions = {
+  initialStatus?: 'HOAT_DONG' | 'TAM_NGUNG';
+  patchHandler?: (body: Record<string, unknown>) => Promise<Response>;
+};
+
+function installApi(options: ApiOptions = {}) {
+  setEmployeeAdminTestSession([
+    'fare-price:read',
+    'fare-price:update',
+    'route:read',
+    'vehicle-type:read',
+  ]);
+  vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
+  let currentFare = {
+    ...baseFare,
+    status: options.initialStatus ?? baseFare.status,
+    effectiveState:
+      options.initialStatus === 'TAM_NGUNG'
+        ? 'TAM_NGUNG'
+        : baseFare.effectiveState,
+  };
+  const requests: Array<{
+    path: string;
+    method: string;
+    body?: Record<string, unknown>;
+  }> = [];
+  let listRequests = 0;
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? 'GET';
+      const requestBody =
+        typeof init?.body === 'string'
+          ? (JSON.parse(init.body) as Record<string, unknown>)
+          : undefined;
+      requests.push({ path: url.pathname, method, body: requestBody });
+
+      if (
+        url.pathname === '/api/v1/fare-prices/15/status' &&
+        method === 'PATCH'
+      ) {
+        if (options.patchHandler)
+          return options.patchHandler(requestBody ?? {});
+        const status =
+          requestBody?.status === 'TAM_NGUNG' ? 'TAM_NGUNG' : 'HOAT_DONG';
+        currentFare = {
+          ...currentFare,
+          status,
+          effectiveState:
+            status === 'TAM_NGUNG' ? 'TAM_NGUNG' : 'CHUA_HIEU_LUC',
+          updatedAt: '2026-09-03T08:30:00.000Z',
+        };
+        return response({ data: currentFare });
+      }
+      if (url.pathname === '/api/v1/fare-prices/15' && method === 'GET') {
+        return response({ data: currentFare });
+      }
+      if (url.pathname === '/api/v1/fare-prices' && method === 'GET') {
+        listRequests += 1;
+        return response({
+          data: [currentFare],
+          meta: {
+            page: Number(url.searchParams.get('page') ?? 1),
+            pageSize: Number(url.searchParams.get('pageSize') ?? 10),
+            totalItems: 1,
+            totalPages: 1,
+          },
+        });
+      }
+      if (url.pathname === '/api/v1/routes') return response(routePage);
+      if (url.pathname === '/api/v1/vehicle-types')
+        return response(vehicleTypePage);
+      throw new Error(`Unexpected API request: ${method} ${url.pathname}`);
+    },
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return {
+    requests,
+    fetchMock,
+    getListRequests: () => listRequests,
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+beforeAll(() => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.removeAttribute('open');
+      this.dispatchEvent(new Event('close'));
+    },
+  });
+});
+
+describe('Fare Price status lifecycle behavior', () => {
+  it('shows the status-dependent target action in the detail workspace', async () => {
+    installApi();
+    render(<FarePriceWorkspace farePriceId={15} />);
+    expect(
+      await screen.findByRole('button', { name: 'Tạm ngưng' }),
+    ).toBeTruthy();
+
+    cleanup();
+    installApi({ initialStatus: 'TAM_NGUNG' });
+    render(<FarePriceWorkspace farePriceId={15} />);
+    expect(
+      await screen.findByRole('button', { name: 'Kích hoạt' }),
+    ).toBeTruthy();
+  });
+
+  it('cancels the confirmation without sending a request', async () => {
+    const api = installApi();
+    render(<FarePriceWorkspace farePriceId={15} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
+
+    const confirm = await screen.findByRole('alertdialog', {
+      name: /Tạm ngưng( bảng giá\?)?/i,
+    });
+    expect(
+      within(confirm).getByText(/(không còn được dùng để xác định giá áp dụng|Các chuyến xe tương lai có thể bị ảnh hưởng)/i),
+    ).toBeTruthy();
+    fireEvent.click(within(confirm).getByRole('button', { name: /Hủy/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('alertdialog', { name: /Tạm ngưng( bảng giá\?)?/i }),
+      ).toBeNull(),
+    );
+    expect(
+      api.requests.some(
+        (item) => item.path.endsWith('/status') && item.method === 'PATCH',
+      ),
+    ).toBe(false);
+  });
+
+  it('sends a single target-state request and updates the detail after success', async () => {
+    let resolvePatch: ((value: Response) => void) | undefined;
+    const api = installApi({
+      patchHandler: () =>
+        new Promise((resolve) => {
+          resolvePatch = resolve;
+        }),
+    });
+    const onUpdated = vi.fn();
+    render(<FarePriceWorkspace farePriceId={15} onUpdated={onUpdated} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: /Tạm ngưng( bảng giá\?)?/i,
+    });
+    const confirmButton = within(confirm).getByRole('button', {
+      name: /Tạm ngưng( bảng giá)?/i,
+    });
+
+    await act(async () => {
+      confirmButton.click();
+      confirmButton.click();
+    });
+    expect(confirm.getAttribute('aria-busy')).toBe('true');
+    expect(confirmButton.hasAttribute('disabled')).toBe(true);
+    const statusRequests = api.requests.filter(
+      (item) => item.path.endsWith('/status') && item.method === 'PATCH',
+    );
+    expect(statusRequests).toHaveLength(1);
+    expect(statusRequests[0]?.body).toEqual({ status: 'TAM_NGUNG' });
+
+    resolvePatch?.(
+      response({
+        data: {
+          ...baseFare,
+          status: 'TAM_NGUNG',
+          effectiveState: 'TAM_NGUNG',
+          updatedAt: '2026-09-03T08:30:00.000Z',
+        },
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('alertdialog', { name: /Tạm ngưng( bảng giá\?)?/i }),
+      ).toBeNull(),
+    );
+    expect(
+      screen.getAllByText(/(Trạng thái cấu hình|Trạng thái)/i).slice(-1)[0].nextElementSibling
+        ?.textContent,
+    ).toBe('Tạm ngưng');
+    await expectOperationToast('success', /Đã cập nhật bảng giá/);
+    expect(onUpdated).toHaveBeenCalled();
+  });
+
+  it('shows the activation-specific overlap error and leaves the detail unchanged', async () => {
+    installApi({
+      initialStatus: 'TAM_NGUNG',
+      patchHandler: async () =>
+        response(
+          {
+            statusCode: 409,
+            error: 'FARE_PRICE_OVERLAP',
+            message:
+              'Khoảng hiệu lực bị trùng với một bảng giá đang hoạt động.',
+          },
+          false,
+          409,
+        ),
+    });
+    render(<FarePriceWorkspace farePriceId={15} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: /Kích hoạt( bảng giá\?)?/i,
+    });
+    fireEvent.click(
+      within(confirm).getByRole('button', { name: /Kích hoạt( bảng giá)?/i }),
+    );
+
+    await expectOperationToast(
+      'error',
+      'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+    );
+    expect(
+      screen.getAllByText(/(Trạng thái cấu hình|Trạng thái)/i).slice(-1)[0].nextElementSibling
+        ?.textContent,
+    ).toBe('Tạm ngưng');
+  });
+
+  it('notifies onNotFound when status mutation returns 404', async () => {
+    installApi({
+      patchHandler: async () =>
+        response(
+          {
+            statusCode: 404,
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          },
+          false,
+          404,
+        ),
+    });
+    const onNotFound = vi.fn();
+    render(<FarePriceWorkspace farePriceId={15} onNotFound={onNotFound} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngưng' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: /Tạm ngưng( bảng giá\?)?/i,
+    });
+    fireEvent.click(
+      within(confirm).getByRole('button', { name: /Tạm ngưng( bảng giá)?/i }),
+    );
+
+    await expectOperationToast('error', 'Bảng giá không còn tồn tại.');
+    expect(onNotFound).toHaveBeenCalled();
+  });
+
+  it('maps concurrent modification and treats a stale same-state 200 as success', async () => {
+    installApi({
+      initialStatus: 'TAM_NGUNG',
+      patchHandler: async () =>
+        response(
+          {
+            statusCode: 409,
+            error: 'FARE_PRICE_CONCURRENT_MODIFICATION',
+            message:
+              'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng thử lại.',
+          },
+          false,
+          409,
+        ),
+    });
+    render(<FarePriceWorkspace farePriceId={15} />);
+    let activeBtn = await screen.findByRole('button', { name: 'Kích hoạt' });
+    fireEvent.click(activeBtn);
+    let confirm = await screen.findByRole('alertdialog', {
+      name: /Kích hoạt( bảng giá\?)?/i,
+    });
+    fireEvent.click(
+      within(confirm).getByRole('button', { name: /Kích hoạt( bảng giá)?/i }),
+    );
+    await expectOperationToast(
+      'error',
+      'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+    );
+    fireEvent.click(within(confirm).getByRole('button', { name: /Hủy/ }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('alertdialog', { name: /Kích hoạt( bảng giá\?)?/i }),
+      ).toBeNull(),
+    );
+    expect(
+      screen.getAllByText(/(Trạng thái cấu hình|Trạng thái)/i).slice(-1)[0].nextElementSibling
+        ?.textContent,
+    ).toBe('Tạm ngưng');
+
+    cleanup();
+    installApi({
+      initialStatus: 'TAM_NGUNG',
+      patchHandler: async () =>
+        response({
+          data: {
+            ...baseFare,
+            status: 'HOAT_DONG',
+            effectiveState: 'CHUA_HIEU_LUC',
+          },
+        }),
+    });
+    render(<FarePriceWorkspace farePriceId={15} />);
+    activeBtn = await screen.findByRole('button', { name: 'Kích hoạt' });
+    fireEvent.click(activeBtn);
+    confirm = await screen.findByRole('alertdialog', {
+      name: /Kích hoạt( bảng giá\?)?/i,
+    });
+    fireEvent.click(
+      within(confirm).getByRole('button', { name: /Kích hoạt( bảng giá)?/i }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('alertdialog', { name: /Kích hoạt( bảng giá\?)?/i }),
+      ).toBeNull(),
+    );
+    expect((await screen.findAllByText('Hoạt động')).length).toBeGreaterThan(0);
+    await expectOperationToast('success', /Đã cập nhật bảng giá/);
+  });
+});
