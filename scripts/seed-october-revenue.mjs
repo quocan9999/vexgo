@@ -3,20 +3,7 @@ import crypto from 'node:crypto';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import { ensureDemoPayment } from '../prisma/demo-revenue.mjs';
-
-function databaseConfig() {
-  const raw = process.env.DATABASE_URL ?? process.env.MIGRATION_URL;
-  if (!raw) throw new Error('MIGRATION_URL or DATABASE_URL is required');
-  const url = new URL(raw);
-  return {
-    host: url.hostname,
-    port: Number(url.port || 3306),
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
-    allowPublicKeyRetrieval: true,
-  };
-}
+import { databaseConfig } from '../prisma/lib/db-config.mjs';
 
 const prisma = new PrismaClient({ adapter: new PrismaMariaDb(databaseConfig()) });
 

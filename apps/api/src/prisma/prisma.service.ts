@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../generated/prisma/client.js';
+import { parseMariaDbPoolConfig } from './mariadb-pool-config.js';
 
 @Injectable()
 export class PrismaService
@@ -9,23 +10,10 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor(configService: ConfigService) {
-    const databaseUrl = new URL(
-      configService.getOrThrow<string>('DATABASE_URL'),
-    );
-
-    if (databaseUrl.protocol !== 'mysql:') {
-      throw new Error('DATABASE_URL must use the mysql: protocol');
-    }
+    const rawUrl = configService.getOrThrow<string>('DATABASE_URL');
 
     super({
-      adapter: new PrismaMariaDb({
-        host: databaseUrl.hostname,
-        port: Number(databaseUrl.port || 3306),
-        user: decodeURIComponent(databaseUrl.username),
-        password: decodeURIComponent(databaseUrl.password),
-        database: decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, '')),
-        allowPublicKeyRetrieval: true,
-      }),
+      adapter: new PrismaMariaDb(parseMariaDbPoolConfig(rawUrl)),
     });
   }
 

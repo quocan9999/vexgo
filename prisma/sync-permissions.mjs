@@ -5,9 +5,10 @@ import {
   ADMIN_PERMISSION_CATALOG,
   ADMIN_ROLE_DEFAULT_PERMISSION_KEYS,
 } from '../apps/api/dist/auth/permissions/permission-catalog.js';
+import { databaseConfig } from './lib/db-config.mjs';
 
 export async function syncPermissions(prismaClient) {
-  const db = prismaClient ?? new PrismaClient({ adapter: new PrismaMariaDb(process.env.DATABASE_URL) });
+  const db = prismaClient ?? new PrismaClient({ adapter: new PrismaMariaDb(databaseConfig()) });
   const results = {
     permissionsUpserted: 0,
     rolePermissionsUpserted: 0,

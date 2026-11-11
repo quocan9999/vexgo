@@ -2,17 +2,9 @@ import 'dotenv/config';
 import crypto from 'node:crypto';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import { databaseConfig } from '../prisma/lib/db-config.mjs';
 
-const url = new URL(process.env.DATABASE_URL ?? process.env.MIGRATION_URL);
-const config = {
-  host: url.hostname,
-  port: Number(url.port || 3306),
-  user: decodeURIComponent(url.username),
-  password: decodeURIComponent(url.password),
-  database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
-  allowPublicKeyRetrieval: true,
-};
-const prisma = new PrismaClient({ adapter: new PrismaMariaDb(config) });
+const prisma = new PrismaClient({ adapter: new PrismaMariaDb(databaseConfig()) });
 
 function deterministicUuid(...parts) {
   const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');

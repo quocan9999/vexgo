@@ -1,17 +1,10 @@
 import 'dotenv/config';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import { databaseConfig } from '../prisma/lib/db-config.mjs';
 
-const url = new URL(process.env.DATABASE_URL);
 const prisma = new PrismaClient({
-  adapter: new PrismaMariaDb({
-    host: url.hostname,
-    port: Number(url.port || 3306),
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
-    allowPublicKeyRetrieval: true,
-  }),
+  adapter: new PrismaMariaDb(databaseConfig()),
 });
 
 const UUID4_HEX32_REGEX = /^[0-9a-f]{32}$/;
