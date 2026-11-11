@@ -73,7 +73,8 @@ function createService() {
     $queryRaw: vi.fn(async (parts: TemplateStringsArray) => {
       const sql = parts.join('?');
       if (sql.includes('FROM NhaXe')) return [{ maNhaXe: 'FUTA' }];
-      if (sql.includes('FROM ChuyenXe')) return [{ code: 'FUTA-CX-20102026-0098' }];
+      if (sql.includes('FROM ChuyenXe'))
+        return [{ code: 'FUTA-CX-20102026-0098' }];
       return [{ xeId: 1 }];
     }),
     $executeRaw: vi.fn().mockResolvedValue(1),
@@ -112,18 +113,32 @@ describe('TripsService search', () => {
   it('matches HCM spelling aliases in the correct endpoint without broadening a former province', async () => {
     const { prisma, service } = createService();
     prisma.chuyenXe.findMany.mockResolvedValue([]);
-    await service.search({ from: 'Thành phố Hồ Chí Minh', to: 'Bình Dương',
-      page: 1, pageSize: 10, sortBy: 'departureTime', sortDirection: 'asc' });
-    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ tuyenXe: { AND: [
-        { OR: [
-          { diemDi: { contains: 'TP.HCM' } },
-          { diemDi: { contains: 'Hồ Chí Minh' } },
-          { diemDi: { contains: 'TP HCM' } },
-        ] },
-        { OR: [{ diemDen: { contains: 'Bình Dương' } }] },
-      ] } }),
-    }));
+    await service.search({
+      from: 'Thành phố Hồ Chí Minh',
+      to: 'Bình Dương',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tuyenXe: {
+            AND: [
+              {
+                OR: [
+                  { diemDi: { contains: 'TP.HCM' } },
+                  { diemDi: { contains: 'Hồ Chí Minh' } },
+                  { diemDi: { contains: 'TP HCM' } },
+                ],
+              },
+              { OR: [{ diemDen: { contains: 'Bình Dương' } }] },
+            ],
+          },
+        }),
+      }),
+    );
   });
 
   it('applies keyword and vehicle filters before pagination', async () => {
@@ -357,6 +372,145 @@ describe('TripsService search', () => {
       { id: 21, price: 300000 },
       { id: 24, price: 350000 },
     ]);
+  });
+
+  it('excludes trips whose departure time has passed (e.g. departs at 04:00 AM, searching at 05:15 AM)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-07T22:15:00.000Z'));
+
+    const { prisma, service } = createService();
+    const pastTrip = {
+      ...firstTrip,
+      chuyenXeId: 101,
+      ngayKhoiHanh: new Date('2026-11-08T00:00:00.000Z'),
+      gioKhoiHanh: new Date('1970-01-01T04:00:00.000Z'),
+      diemDonTraChuyenXes: [],
+    };
+    const upcomingTrip = {
+      ...firstTrip,
+      chuyenXeId: 102,
+      ngayKhoiHanh: new Date('2026-11-08T00:00:00.000Z'),
+      gioKhoiHanh: new Date('1970-01-01T06:00:00.000Z'),
+      diemDonTraChuyenXes: [],
+    };
+    prisma.chuyenXe.findMany.mockResolvedValue([pastTrip, upcomingTrip]);
+    prisma.bangGia.findMany.mockResolvedValue([]);
+
+    const result = await service.search({
+      page: 1,
+      pageSize: 10,
+      departureDate: '2026-11-08',
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    expect(result.data.map((t) => t.id)).toEqual([102]);
+    expect(result.meta.totalItems).toBe(1);
+  });
+
+  it('excludes trips whose earliest pickup point has passed even if main departure is in the future', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-07T22:15:00.000Z'));
+
+    const { prisma, service } = createService();
+    const tripWithEarlyPickup = {
+      ...firstTrip,
+      chuyenXeId: 201,
+      ngayKhoiHanh: new Date('2026-11-08T00:00:00.000Z'),
+      gioKhoiHanh: new Date('1970-01-01T06:00:00.000Z'),
+      diemDonTraChuyenXes: [
+        {
+          diemDonTraChuyenXeId: 1,
+          loaiDiem: 'DON',
+          phutLech: -120,
+          diemDonTra: {
+            tenDiem: 'Bến xe Miền Tây',
+            trangThai: 'HOAT_DONG',
+            diaChi: '',
+          },
+        },
+      ],
+    };
+    prisma.chuyenXe.findMany.mockResolvedValue([tripWithEarlyPickup]);
+    prisma.bangGia.findMany.mockResolvedValue([]);
+
+    const result = await service.search({
+      page: 1,
+      pageSize: 10,
+      departureDate: '2026-11-08',
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    expect(result.data).toEqual([]);
+    expect(result.meta.totalItems).toBe(0);
+  });
+
+  it('excludes trips when boarding at fromStationId whose departure time has passed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-07T22:15:00.000Z'));
+
+    const { prisma, service } = createService();
+    const trip = {
+      ...firstTrip,
+      chuyenXeId: 301,
+      ngayKhoiHanh: new Date('2026-11-08T00:00:00.000Z'),
+      gioKhoiHanh: new Date('1970-01-01T06:00:00.000Z'),
+      diemDonTraChuyenXes: [
+        {
+          diemDonTraChuyenXeId: 1,
+          diemDonTraId: 55,
+          loaiDiem: 'DON',
+          phutLech: -60,
+          diemDonTra: {
+            diemDonTraId: 55,
+            tenDiem: 'Trạm 55',
+            trangThai: 'HOAT_DONG',
+            diaChi: '',
+          },
+        },
+      ],
+    };
+    prisma.chuyenXe.findMany.mockResolvedValue([trip]);
+    prisma.bangGia.findMany.mockResolvedValue([]);
+    (prisma as any).diemDonTra = {
+      findUnique: vi
+        .fn()
+        .mockResolvedValue({ diemDonTraId: 55, tenDiem: 'Trạm 55' }),
+    };
+
+    const result = await service.search({
+      page: 1,
+      pageSize: 10,
+      departureDate: '2026-11-08',
+      fromStationId: 55,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    expect(result.data).toEqual([]);
+    expect(result.meta.totalItems).toBe(0);
+  });
+
+  it('rejects getCustomerSeats when trip departure time has passed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-07T22:15:00.000Z'));
+
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      ...firstTrip,
+      chuyenXeId: 401,
+      ngayKhoiHanh: new Date('2026-11-08T00:00:00.000Z'),
+      gioKhoiHanh: new Date('1970-01-01T04:00:00.000Z'),
+      diemDonTraChuyenXes: [],
+    });
+
+    await expect(service.getCustomerSeats(401)).rejects.toMatchObject({
+      response: {
+        error: 'TRIP_ALREADY_DEPARTED',
+        message: 'Chuyến xe này đã khởi hành.',
+      },
+    });
   });
 });
 
@@ -1644,7 +1798,8 @@ describe('TripsService.getSeats', () => {
             versions: ['current'],
             kind: 'province',
             isLegacy: false,
-            mergedFromText: 'Sáp nhập từ Bà Rịa - Vũng Tàu, Bình Dương, TP. Hồ Chí Minh',
+            mergedFromText:
+              'Sáp nhập từ Bà Rịa - Vũng Tàu, Bình Dương, TP. Hồ Chí Minh',
           },
         ],
         meta: { stale: false },
@@ -1664,7 +1819,9 @@ describe('TripsService.getSeats', () => {
     });
 
     const call1Where = prisma.chuyenXe.findMany.mock.calls[0][0].where;
-    const fromTerms1 = call1Where.tuyenXe.AND[0].OR.map((o: any) => o.diemDi.contains);
+    const fromTerms1 = call1Where.tuyenXe.AND[0].OR.map(
+      (o: any) => o.diemDi.contains,
+    );
     expect(fromTerms1).toContain('Bà Rịa - Vũng Tàu');
     expect(fromTerms1).not.toContain('Bình Dương');
 
@@ -1679,7 +1836,9 @@ describe('TripsService.getSeats', () => {
     });
 
     const call2Where = prisma.chuyenXe.findMany.mock.calls[1][0].where;
-    const fromTerms2 = call2Where.tuyenXe.AND[0].OR.map((o: any) => o.diemDi.contains);
+    const fromTerms2 = call2Where.tuyenXe.AND[0].OR.map(
+      (o: any) => o.diemDi.contains,
+    );
     expect(fromTerms2).toContain('Hồ Chí Minh');
     expect(fromTerms2).toContain('Bà Rịa - Vũng Tàu');
     expect(fromTerms2).toContain('Bình Dương');

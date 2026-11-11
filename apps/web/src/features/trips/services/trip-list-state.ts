@@ -116,3 +116,18 @@ export function buildRoundTripBookingHrefAfterSelection({
     returnId,
   });
 }
+
+export function isTripUpcoming(
+  trip: { departureDate?: string | null },
+  now = Date.now(),
+): boolean {
+  if (!trip?.departureDate) return false;
+  const depTime = new Date(trip.departureDate).getTime();
+  return !isNaN(depTime) && depTime > now;
+}
+
+export function filterUpcomingTrips<
+  T extends { departureDate?: string | null },
+>(trips: T[], now = Date.now()): T[] {
+  return trips.filter((trip) => isTripUpcoming(trip, now));
+}

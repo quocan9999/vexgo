@@ -18,7 +18,8 @@ export function getBusinessDate(
   }).formatToParts(now);
   const partValue = (type: Intl.DateTimeFormatPartTypes) => {
     const value = parts.find((part) => part.type === type)?.value;
-    if (!value) throw new Error(`Missing ${type} while resolving business date.`);
+    if (!value)
+      throw new Error(`Missing ${type} while resolving business date.`);
     return value;
   };
 
@@ -44,7 +45,8 @@ export function businessDateStartUtc(dateOnly: string, timeZone: string): Date {
     const parts = formatter.formatToParts(new Date(candidateUtc));
     const partValue = (type: Intl.DateTimeFormatPartTypes) => {
       const value = parts.find((part) => part.type === type)?.value;
-      if (!value) throw new Error(`Missing ${type} while resolving business date.`);
+      if (!value)
+        throw new Error(`Missing ${type} while resolving business date.`);
       return Number(value);
     };
     const representedAsUtc = Date.UTC(
@@ -84,12 +86,26 @@ export function computeArrival(
   fallbackGioDen: Date | null | undefined,
   businessTimeZone: string,
 ): string | null {
-  const depTime = combineDeparture(departureDate, departureTime, businessTimeZone);
-  if (durationMinutes != null && Number.isFinite(durationMinutes) && durationMinutes > 0) {
-    return new Date(depTime.getTime() + durationMinutes * 60 * 1000).toISOString();
+  const depTime = combineDeparture(
+    departureDate,
+    departureTime,
+    businessTimeZone,
+  );
+  if (
+    durationMinutes != null &&
+    Number.isFinite(durationMinutes) &&
+    durationMinutes > 0
+  ) {
+    return new Date(
+      depTime.getTime() + durationMinutes * 60 * 1000,
+    ).toISOString();
   }
   if (!fallbackGioDen) return null;
-  let arrTime = combineDeparture(departureDate, fallbackGioDen, businessTimeZone);
+  let arrTime = combineDeparture(
+    departureDate,
+    fallbackGioDen,
+    businessTimeZone,
+  );
   if (arrTime < depTime) {
     arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
   }
@@ -113,3 +129,63 @@ export function calculateClockTime(
   return new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds));
 }
 
+export function getTripEarliestDepartureTime(
+  trip: {
+    ngayKhoiHanh: Date;
+    gioKhoiHanh: Date;
+    diemDonTraChuyenXes?: Array<{
+      loaiDiem: string;
+      phutLech?: number | null;
+      diemDonTraId?: number;
+      diemDonTra?: {
+        trangThai?: string;
+        tenDiem?: string;
+      } | null;
+    }> | null;
+  },
+  businessTimeZone: string,
+  fromStationId?: number,
+): Date {
+  const baseDeparture = combineDeparture(
+    trip.ngayKhoiHanh,
+    trip.gioKhoiHanh,
+    businessTimeZone,
+  );
+
+  const customPoints = (trip.diemDonTraChuyenXes ?? []).filter(
+    (p) =>
+      p &&
+      p.loaiDiem === 'DON' &&
+      typeof p.phutLech === 'number' &&
+      (!p.diemDonTra ||
+        p.diemDonTra.trangThai === undefined ||
+        p.diemDonTra.trangThai === 'HOAT_DONG'),
+  );
+
+  if (fromStationId) {
+    const stationPoint = customPoints.find(
+      (p) => p.diemDonTraId === fromStationId,
+    );
+    if (stationPoint && typeof stationPoint.phutLech === 'number') {
+      const stationDeparture = new Date(
+        baseDeparture.getTime() + stationPoint.phutLech * 60 * 1000,
+      );
+      let earliestTime = baseDeparture.getTime();
+      for (const p of customPoints) {
+        const t = baseDeparture.getTime() + (p.phutLech ?? 0) * 60 * 1000;
+        if (t < earliestTime) earliestTime = t;
+      }
+      return new Date(Math.min(earliestTime, stationDeparture.getTime()));
+    }
+  }
+
+  let earliestTime = baseDeparture.getTime();
+  for (const p of customPoints) {
+    const t = baseDeparture.getTime() + (p.phutLech ?? 0) * 60 * 1000;
+    if (t < earliestTime) {
+      earliestTime = t;
+    }
+  }
+
+  return new Date(earliestTime);
+}

@@ -47,7 +47,6 @@ import {
 } from '@/features/tenant-rbac/types/tenant-rbac';
 import { useAdminAccounts } from '../hooks/use-admin-accounts';
 import type {
-  AdminAccount,
   AdminAccountSortKey,
   AdminAccountStatus,
 } from '../types/admin-account';

@@ -10,7 +10,6 @@ import {
 } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
 import { FarePriceWorkspace } from '@/features/fare-prices/components/fare-price-workspace';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 

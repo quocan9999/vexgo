@@ -84,7 +84,9 @@
     "platformAdmin": "Quản trị nền tảng",
     "tenantBusCompanyAria": "Nhà xe {name}",
     "busCompany": "Nhà xe",
-    "adminAccount": "Tài khoản Admin"
+    "adminAccount": "Tài khoản Admin",
+    "sort": "Sắp xếp theo",
+    "error": "Lỗi"
   },
   "nav": {
     "overview": "Tổng quan",
@@ -745,7 +747,8 @@
     "invalidTripId": "Mã chuyến xe không hợp lệ.",
     "busFront": "ĐẦU XE",
     "entryDoorIndicator": "Cửa lên ➔",
-    "seatMapForFloor": "Sơ đồ ghế {floor}"
+    "seatMapForFloor": "Sơ đồ ghế {floor}",
+    "seatMapTitle": "Sơ đồ ghế chuyến xe"
   },
   "bookings": {
     "bookingsTitle": "Quản lý đặt vé & Vé xe",
@@ -892,7 +895,9 @@
       "ticketNotFound": "Không tìm thấy vé trong nhà xe.",
       "loadError": "Không thể tải dữ liệu. Hãy thử lại.",
       "networkError": "Không thể kết nối đến máy chủ API. Vui lòng thử lại."
-    }
+    },
+    "tabListAria": "Danh sách tab quản lý đặt vé",
+    "ticketStatusPaid": "Đã thanh toán"
   },
   "shipments": {
     "shipmentsTitle": "Danh sách phiếu gửi hàng",
@@ -1427,7 +1432,9 @@
     "createBtnCreateNext": "Tạo tiếp đơn mới",
     "createBtnBackToList": "Về danh sách phiếu gửi",
     "createStatusReceived": "Đã tiếp nhận",
-    "createStatusPaid": "Đã thanh toán"
+    "createStatusPaid": "Đã thanh toán",
+    "receiver": "Người nhận",
+    "tableHeaderStatus": "Trạng thái"
   },
   "farePrices": {
     "farePricesTitle": "Quản lý bảng giá vé",
@@ -1525,7 +1532,8 @@
       "loadDetailsFailed": "Không thể tải thông tin bảng giá.",
       "updateFailed": "Không thể cập nhật bảng giá. Vui lòng thử lại.",
       "createFailed": "Không thể tạo bảng giá. Vui lòng thử lại."
-    }
+    },
+    "infoRoute": "Thông tin tuyến đường"
   },
   "promotions": {
     "promotionsTitle": "Chương trình khuyến mãi",
@@ -1725,7 +1733,8 @@
     "chartTooltipRefund": "Tiền hoàn",
     "reportLoadError": "Không tải được báo cáo",
     "accessDenied": "Không có quyền truy cập",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "successfulPaymentsNote": "Chỉ tính các giao dịch thanh toán thành công"
   },
   "busCompanies": {
     "busCompaniesTitle": "Quản lý nhà xe",
@@ -2246,7 +2255,8 @@
     "revoking": "Đang thu hồi…",
     "revokeRoles": "Thu hồi vai trò",
     "networkError": "Không thể kết nối đến máy chủ API. Vui lòng thử lại.",
-    "cannotUpdateStatus": "Không thể cập nhật trạng thái tài khoản."
+    "cannotUpdateStatus": "Không thể cập nhật trạng thái tài khoản.",
+    "cannotLoadRoles": "Không thể tải danh sách vai trò."
   },
   "rbac": {
     "rbacTitle": "Phân quyền vai trò",

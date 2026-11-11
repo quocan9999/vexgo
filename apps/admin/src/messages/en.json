@@ -84,7 +84,9 @@
     "platformAdmin": "Platform Administration",
     "tenantBusCompanyAria": "Bus operator {name}",
     "busCompany": "Bus Operator",
-    "adminAccount": "Admin Account"
+    "adminAccount": "Admin Account",
+    "sort": "Sort by",
+    "error": "Error"
   },
   "nav": {
     "overview": "Overview",
@@ -745,7 +747,8 @@
     "invalidTripId": "Invalid trip code.",
     "busFront": "FRONT",
     "entryDoorIndicator": "Entry ➔",
-    "seatMapForFloor": "Seat map for {floor}"
+    "seatMapForFloor": "Seat map for {floor}",
+    "seatMapTitle": "Trip seat map"
   },
   "bookings": {
     "bookingsTitle": "Booking & Ticket Management",
@@ -892,7 +895,9 @@
       "ticketNotFound": "Ticket not found in operator scope.",
       "loadError": "Failed to load data. Please retry.",
       "networkError": "Cannot connect to API server. Please try again."
-    }
+    },
+    "tabListAria": "Booking management tabs",
+    "ticketStatusPaid": "Paid"
   },
   "shipments": {
     "shipmentsTitle": "Shipment List",
@@ -1427,7 +1432,9 @@
     "createBtnCreateNext": "Create another shipment",
     "createBtnBackToList": "Back to shipment list",
     "createStatusReceived": "Received",
-    "createStatusPaid": "Paid"
+    "createStatusPaid": "Paid",
+    "receiver": "Receiver",
+    "tableHeaderStatus": "Status"
   },
   "farePrices": {
     "farePricesTitle": "Fare Price Management",
@@ -1525,7 +1532,8 @@
       "loadDetailsFailed": "Failed to load fare price details.",
       "updateFailed": "Failed to update fare price. Please try again.",
       "createFailed": "Failed to create fare price. Please try again."
-    }
+    },
+    "infoRoute": "Route information"
   },
   "promotions": {
     "promotionsTitle": "Promotions & Discounts",
@@ -1725,7 +1733,8 @@
     "chartTooltipRefund": "Refunds",
     "reportLoadError": "Failed to load report",
     "accessDenied": "Access denied",
-    "retry": "Try again"
+    "retry": "Try again",
+    "successfulPaymentsNote": "Only successful payment transactions are included"
   },
   "busCompanies": {
     "busCompaniesTitle": "Bus Company Management",
@@ -2246,7 +2255,8 @@
     "revoking": "Revoking…",
     "revokeRoles": "Revoke Roles",
     "networkError": "Unable to connect to API server. Please try again.",
-    "cannotUpdateStatus": "Failed to update account status."
+    "cannotUpdateStatus": "Failed to update account status.",
+    "cannotLoadRoles": "Failed to load roles list."
   },
   "rbac": {
     "rbacTitle": "Platform RBAC Management",

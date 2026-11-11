@@ -9,7 +9,6 @@ type AdminPageHeaderProps = {
 
 export function AdminPageHeader({
   actions,
-  eyebrow: _eyebrow,
   title,
   titleId,
 }: AdminPageHeaderProps) {
