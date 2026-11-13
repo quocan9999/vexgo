@@ -1,6 +1,6 @@
 import React from 'react';
 
-export interface VexGoLogoProps extends React.SVGProps<SVGSVGElement> {
+export interface VexGoLogoProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'white' | 'red' | 'navy' | 'mono';
   size?: number | string;
   showText?: boolean;
