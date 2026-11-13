@@ -24,6 +24,7 @@ import { useAuthSession } from '@/features/auth/auth-session';
 import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
 import { getLatestActivePaymentDraft } from '@/features/booking/services/payment-draft';
 import { CustomerLanguageSwitcher } from './customer-language-switcher';
+import { VexGoMark } from '@/components/ui/vexgo-logo';
 
 const emptySubscribe = () => () => {};
 const getClientSearch = () => (typeof window !== 'undefined' ? window.location.search : '');
@@ -365,16 +366,16 @@ export const CustomerHeader: React.FC = () => {
     : '/auth/login';
 
   return (
-    <header className="sticky top-0 z-50 bg-[#E60012] text-white border-b border-[#CC0010] shadow-md font-sans">
+    <header className="sticky top-0 z-50 bg-[#E8272B] text-white border-b border-[#CC1D20] shadow-md font-sans">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Logo bên trái */}
-        <Link href="/" className="flex items-center gap-2 sm:gap-3 min-w-0 mr-2">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-brand-light">
-            <Bus className="w-5 h-5 sm:w-6 sm:h-6 text-brand-light" />
+        <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0 mr-2 group">
+          <div className="flex-shrink-0 transition-transform group-hover:scale-105">
+            <VexGoMark size={38} variant="red" />
           </div>
-          <div className="flex items-center gap-1 sm:gap-1.5 font-bold text-lg sm:text-2xl tracking-tight truncate">
-            <span className="text-white truncate">Vex</span>
-            <span className="text-amber-400 truncate">Go</span>
+          <div className="flex items-center text-xl sm:text-2xl font-extrabold tracking-[-0.03em] truncate">
+            <span className="text-white">vex</span>
+            <b className="font-extrabold text-[#FFB81C]">go</b>
           </div>
         </Link>
 

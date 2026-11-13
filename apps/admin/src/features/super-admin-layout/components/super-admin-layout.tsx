@@ -39,6 +39,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { VexGoMark } from '@/components/ui/vexgo-logo';
 import '../admin-shell.css';
 import headerStyles from './admin-header.module.css';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
@@ -458,11 +459,13 @@ export function SuperAdminLayout({
           href={tenantScope ? (firstAccessibleTenantPath ?? '/') : '/'}
           onClick={closeMobileNavigation}
         >
-          <span className="brand-mark" aria-hidden="true">
-            V
+          <span className="brand-mark-wrapper flex-shrink-0" aria-hidden="true">
+            <VexGoMark size={36} variant="red" />
           </span>
           <span className="brand-copy">
-            <strong>VexGo</strong>{' '}
+            <span className="text-[19px] font-extrabold tracking-[-0.03em] leading-tight text-white">
+              vex<b className="font-extrabold text-[#FFB81C]">go</b>
+            </span>{' '}
             {brandContextLines.map((line, index) => (
               <small key={`${line}-${index}`}>{line}</small>
             ))}
