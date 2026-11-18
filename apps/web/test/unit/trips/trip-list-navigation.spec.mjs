@@ -73,6 +73,44 @@ test('trip list query sends the requested page and server-side sort', () => {
       sortDirection: 'asc',
     },
   );
+
+  assert.deepEqual(
+    buildTripListSearchParams({
+      origin: 'TP.HCM',
+      destination: 'Đà Lạt',
+      date: '2026-10-15',
+      page: 1,
+      sort: 'departure-desc',
+    }),
+    {
+      from: 'TP.HCM',
+      to: 'Đà Lạt',
+      departureDate: '2026-10-15',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'desc',
+    },
+  );
+
+  assert.deepEqual(
+    buildTripListSearchParams({
+      origin: 'TP.HCM',
+      destination: 'Đà Lạt',
+      date: '2026-10-15',
+      page: 1,
+      sort: 'price-desc',
+    }),
+    {
+      from: 'TP.HCM',
+      to: 'Đà Lạt',
+      departureDate: '2026-10-15',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'price',
+      sortDirection: 'desc',
+    },
+  );
 });
 
 test('trip list sends keyword and vehicle filters before server pagination', () => {
