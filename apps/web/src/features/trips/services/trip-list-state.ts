@@ -47,6 +47,10 @@ export function buildTripListSearchParams({
   fromAreaId?: number;
   toAreaId?: number;
 }): SearchTripsParams {
+  const isPriceSort =
+    sort === 'price' || sort === 'price-asc' || sort === 'price-desc';
+  const isDescSort = sort === 'departure-desc' || sort === 'price-desc';
+
   return {
     from: origin,
     to: destination,
@@ -63,8 +67,8 @@ export function buildTripListSearchParams({
     ...(operator !== 'all' ? { operator } : {}),
     page,
     pageSize: TRIPS_PAGE_SIZE,
-    sortBy: sort === 'price' ? 'price' : 'departureTime',
-    sortDirection: 'asc',
+    sortBy: isPriceSort ? 'price' : 'departureTime',
+    sortDirection: isDescSort ? 'desc' : 'asc',
   };
 }
 

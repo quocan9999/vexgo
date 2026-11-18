@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Filter,
   ChevronDown,
+  Check,
   MapPin,
   X,
   Bus,
@@ -252,6 +253,113 @@ function TripSlot({
   );
 }
 
+function DropdownSelect({
+  value,
+  options,
+  onChange,
+  compact = false,
+  align = 'left',
+}: {
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+  compact?: boolean;
+  align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selectedOption =
+    options.find((opt) => opt.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`flex items-center justify-between gap-2 bg-white border transition-colors outline-none cursor-pointer ${
+          open
+            ? 'border-[#f05123] ring-2 ring-[#f05123]/15'
+            : 'border-slate-200 hover:border-slate-300'
+        } ${
+          compact
+            ? 'min-w-[165px] rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-700'
+            : 'w-full rounded-lg px-3 py-2.5 text-sm text-slate-700'
+        }`}
+      >
+        <span className="truncate">{selectedOption?.label ?? ''}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-slate-400 transition-transform duration-150 ${
+            open ? 'rotate-180 text-[#f05123]' : ''
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className={`absolute top-full z-40 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg ${
+            align === 'right'
+              ? 'right-0 min-w-full'
+              : 'left-0 right-0 min-w-full'
+          }`}
+        >
+          {options.map((opt) => {
+            const isSelected = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors cursor-pointer ${
+                  isSelected
+                    ? 'bg-orange-50 font-semibold text-[#f05123]'
+                    : 'font-medium text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span className="truncate whitespace-nowrap">{opt.label}</span>
+                {isSelected && (
+                  <Check size={14} className="shrink-0 text-[#f05123]" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TripList() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -397,8 +505,8 @@ export function TripList() {
     setActiveTabKeyed({ key: routeKey, tab });
   }
 
-  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}\u0000${fromAreaId || ''}\u0000${toAreaId || ''}`;
-  const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}`;
+  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${sort}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}\u0000${fromAreaId || ''}\u0000${toAreaId || ''}`;
+  const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}\u0000${sort}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}`;
   const outboundPage =
     outboundPageState.searchKey === outboundSearchKey
       ? outboundPageState.page
@@ -660,6 +768,14 @@ export function TripList() {
           vehicleType,
           timeRange,
           operator,
+          {
+            fromLocationId,
+            toLocationId,
+            fromStationId,
+            toStationId,
+            fromAreaId,
+            toAreaId,
+          },
         );
         setOutboundTrips((prev) => [...prev, ...response.trips]);
         setOutboundMeta(response.meta);
@@ -705,9 +821,7 @@ export function TripList() {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               {t('pageTitle')}
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              {t('pageSubtitle')}
-            </p>
+            <p className="text-sm text-slate-500 mt-1">{t('pageSubtitle')}</p>
           </div>
           <div className="flex gap-2">
             <div className="bg-[#e8f6f3] text-[#00b14f] px-3.5 py-1.5 rounded-xl text-center border border-[#b2e8d3] min-w-[70px]">
@@ -719,12 +833,20 @@ export function TripList() {
               </p>
             </div>
             <div className="bg-[#fff4e5] text-[#FF5722] px-3.5 py-1.5 rounded-xl text-center border border-[#ffe0b2] min-w-[70px]">
-              <p className="font-extrabold text-lg leading-tight">{t('seatHoldTime')}</p>
-              <p className="text-[10px] uppercase font-bold">{t('seatHoldBadge')}</p>
+              <p className="font-extrabold text-lg leading-tight">
+                {t('seatHoldTime')}
+              </p>
+              <p className="text-[10px] uppercase font-bold">
+                {t('seatHoldBadge')}
+              </p>
             </div>
             <div className="border border-slate-200 text-slate-800 px-3.5 py-1.5 rounded-xl text-center bg-white min-w-[70px] shadow-2xs">
-              <p className="font-extrabold text-lg leading-tight">{t('eTicketIcon')}</p>
-              <p className="text-[10px] uppercase font-bold">{t('eTicketBadge')}</p>
+              <p className="font-extrabold text-lg leading-tight">
+                {t('eTicketIcon')}
+              </p>
+              <p className="text-[10px] uppercase font-bold">
+                {t('eTicketBadge')}
+              </p>
             </div>
           </div>
         </div>
@@ -819,73 +941,53 @@ export function TripList() {
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
                     {t('vehicleType')}
                   </label>
-                  <div className="relative">
-                    <select
-                      value={vehicleType}
-                      onChange={(e) => setVehicleType(e.target.value)}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
-                    >
-                      <option value="all">{t('allVehicleTypes')}</option>
-                      <option value="Limousine">{t('seatTypeLimousine')}</option>
-                      <option value="Giường">{t('seatTypeSleeper')}</option>
-                      <option value="Ghế">{t('seatTypeSeater')}</option>
-                    </select>
-                    <ChevronDown
-                      size={16}
-                      className="absolute right-3 top-3 text-slate-400 pointer-events-none"
-                    />
-                  </div>
+                  <DropdownSelect
+                    value={vehicleType}
+                    onChange={setVehicleType}
+                    options={[
+                      { value: 'all', label: t('allVehicleTypes') },
+                      { value: 'Limousine', label: t('seatTypeLimousine') },
+                      { value: 'Giường', label: t('seatTypeSleeper') },
+                      { value: 'Ghế', label: t('seatTypeSeater') },
+                    ]}
+                  />
                 </div>
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
                     {t('departureTime')}
                   </label>
-                  <div className="relative">
-                    <select
-                      value={timeRange}
-                      onChange={(e) => setTimeRange(e.target.value)}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
-                    >
-                      <option value="all">{t('departureTime')}: {tCommon('all')}</option>
-                      <option value="early-morning">
-                        {t('timeEarlyMorning')}
-                      </option>
-                      <option value="morning">{t('timeMorning')}</option>
-                      <option value="afternoon">
-                        {t('timeAfternoon')}
-                      </option>
-                      <option value="evening">{t('timeEvening')}</option>
-                    </select>
-                    <ChevronDown
-                      size={16}
-                      className="absolute right-3 top-3 text-slate-400 pointer-events-none"
-                    />
-                  </div>
+                  <DropdownSelect
+                    value={timeRange}
+                    onChange={setTimeRange}
+                    options={[
+                      {
+                        value: 'all',
+                        label: `${t('departureTime')}: ${tCommon('all')}`,
+                      },
+                      { value: 'early-morning', label: t('timeEarlyMorning') },
+                      { value: 'morning', label: t('timeMorning') },
+                      { value: 'afternoon', label: t('timeAfternoon') },
+                      { value: 'evening', label: t('timeEvening') },
+                    ]}
+                  />
                 </div>
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-2">
                     {t('operator')}
                   </label>
-                  <div className="relative">
-                    <select
-                      value={operator}
-                      onChange={(e) => setOperator(e.target.value)}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
-                    >
-                      <option value="all">{t('allOperators')}</option>
-                      {allOperators.map((op) => (
-                        <option key={op} value={op}>
-                          Nhà xe {op}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={16}
-                      className="absolute right-3 top-3 text-slate-400 pointer-events-none"
-                    />
-                  </div>
+                  <DropdownSelect
+                    value={operator}
+                    onChange={setOperator}
+                    options={[
+                      { value: 'all', label: t('allOperators') },
+                      ...allOperators.map((op) => ({
+                        value: op,
+                        label: `${t('operatorPrefix')} ${op}`,
+                      })),
+                    ]}
+                  />
                 </div>
 
                 {allPickupPoints.length > 0 && (
@@ -893,24 +995,17 @@ export function TripList() {
                     <label className="text-[11px] font-bold text-slate-600 block mb-2">
                       {t('pickupPoint')} ({allPickupPoints.length})
                     </label>
-                    <div className="relative">
-                      <select
-                        value={pickupPointFilter}
-                        onChange={(e) => setPickupPointFilter(e.target.value)}
-                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
-                      >
-                        <option value="all">{t('allPickupPoints')}</option>
-                        {allPickupPoints.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown
-                        size={16}
-                        className="absolute right-3 top-3 text-slate-400 pointer-events-none"
-                      />
-                    </div>
+                    <DropdownSelect
+                      value={pickupPointFilter}
+                      onChange={setPickupPointFilter}
+                      options={[
+                        { value: 'all', label: t('allPickupPoints') },
+                        ...allPickupPoints.map((name) => ({
+                          value: name,
+                          label: name,
+                        })),
+                      ]}
+                    />
                   </div>
                 )}
 
@@ -919,24 +1014,17 @@ export function TripList() {
                     <label className="text-[11px] font-bold text-slate-600 block mb-2">
                       {t('dropoffPoint')} ({allDropoffPoints.length})
                     </label>
-                    <div className="relative">
-                      <select
-                        value={dropoffPointFilter}
-                        onChange={(e) => setDropoffPointFilter(e.target.value)}
-                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
-                      >
-                        <option value="all">{t('allDropoffPoints')}</option>
-                        {allDropoffPoints.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown
-                        size={16}
-                        className="absolute right-3 top-3 text-slate-400 pointer-events-none"
-                      />
-                    </div>
+                    <DropdownSelect
+                      value={dropoffPointFilter}
+                      onChange={setDropoffPointFilter}
+                      options={[
+                        { value: 'all', label: t('allDropoffPoints') },
+                        ...allDropoffPoints.map((name) => ({
+                          value: name,
+                          label: name,
+                        })),
+                      ]}
+                    />
                   </div>
                 )}
               </div>
@@ -1070,22 +1158,28 @@ export function TripList() {
                 {t('resultsBadge').toLowerCase()}
               </p>
               <div className="flex items-center gap-2">
-                <span className="text-[13px] text-slate-500">⇅ {t('sortBy')}:</span>
-                <select
+                <span className="text-[13px] text-slate-500">
+                  ⇅ {t('sortBy')}:
+                </span>
+                <DropdownSelect
+                  compact
+                  align="right"
                   value={sort}
-                  onChange={(e) => {
-                    setSort(e.target.value);
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
                     setOutboundPageState({
                       searchKey: outboundSearchKey,
                       page: 1,
                     });
                     setReturnPageState({ searchKey: returnSearchKey, page: 1 });
                   }}
-                  className="text-[13px] font-medium text-slate-700 border border-slate-200 rounded-md px-3 py-1.5 outline-none bg-white"
-                >
-                  <option value="departure">{t('sortDepartureAsc')}</option>
-                  <option value="price">{t('sortPriceAsc')}</option>
-                </select>
+                  options={[
+                    { value: 'departure', label: t('sortDepartureAsc') },
+                    { value: 'departure-desc', label: t('sortDepartureDesc') },
+                    { value: 'price', label: t('sortPriceAsc') },
+                    { value: 'price-desc', label: t('sortPriceDesc') },
+                  ]}
+                />
               </div>
             </div>
 
@@ -1094,9 +1188,7 @@ export function TripList() {
               {loading ? (
                 <div className="bg-white rounded-xl p-12 flex flex-col items-center justify-center text-slate-500 border border-slate-100 shadow-sm">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f05123] mb-4"></div>
-                  <p className="font-semibold text-sm">
-                    {t('loadingTrips')}
-                  </p>
+                  <p className="font-semibold text-sm">{t('loadingTrips')}</p>
                 </div>
               ) : error ? (
                 <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-rose-100 shadow-sm flex flex-col items-center">
@@ -1160,7 +1252,6 @@ export function TripList() {
                     )}
                   </button>
                 ) : null}
-
               </div>
             )}
           </div>
