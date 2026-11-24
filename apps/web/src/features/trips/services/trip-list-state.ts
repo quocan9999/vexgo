@@ -4,6 +4,17 @@ export const TRIPS_PAGE_SIZE = 10;
 
 export type TripLeg = 'outbound' | 'return';
 
+export function keepSelectedFilterValue(
+  values: string[],
+  selectedValue: string,
+): string[] {
+  if (selectedValue === 'all' || values.includes(selectedValue)) {
+    return values;
+  }
+
+  return [selectedValue, ...values];
+}
+
 export function getTripSummaryCardStates(activeLeg: TripLeg): {
   outbound: 'active' | 'muted';
   return: 'active' | 'muted';
@@ -47,6 +58,10 @@ export function buildTripListSearchParams({
   fromAreaId?: number;
   toAreaId?: number;
 }): SearchTripsParams {
+  const isPriceSort =
+    sort === 'price' || sort === 'price-asc' || sort === 'price-desc';
+  const isDescSort = sort === 'departure-desc' || sort === 'price-desc';
+
   return {
     from: origin,
     to: destination,
@@ -63,8 +78,8 @@ export function buildTripListSearchParams({
     ...(operator !== 'all' ? { operator } : {}),
     page,
     pageSize: TRIPS_PAGE_SIZE,
-    sortBy: sort === 'price' ? 'price' : 'departureTime',
-    sortDirection: 'asc',
+    sortBy: isPriceSort ? 'price' : 'departureTime',
+    sortDirection: isDescSort ? 'desc' : 'asc',
   };
 }
 

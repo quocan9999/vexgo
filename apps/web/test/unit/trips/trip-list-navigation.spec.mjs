@@ -73,6 +73,44 @@ test('trip list query sends the requested page and server-side sort', () => {
       sortDirection: 'asc',
     },
   );
+
+  assert.deepEqual(
+    buildTripListSearchParams({
+      origin: 'TP.HCM',
+      destination: 'Đà Lạt',
+      date: '2026-10-15',
+      page: 1,
+      sort: 'departure-desc',
+    }),
+    {
+      from: 'TP.HCM',
+      to: 'Đà Lạt',
+      departureDate: '2026-10-15',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'desc',
+    },
+  );
+
+  assert.deepEqual(
+    buildTripListSearchParams({
+      origin: 'TP.HCM',
+      destination: 'Đà Lạt',
+      date: '2026-10-15',
+      page: 1,
+      sort: 'price-desc',
+    }),
+    {
+      from: 'TP.HCM',
+      to: 'Đà Lạt',
+      departureDate: '2026-10-15',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'price',
+      sortDirection: 'desc',
+    },
+  );
 });
 
 test('trip list sends keyword and vehicle filters before server pagination', () => {
@@ -97,6 +135,27 @@ test('trip list sends keyword and vehicle filters before server pagination', () 
       sortBy: 'departureTime',
       sortDirection: 'asc',
     },
+  );
+});
+
+test('selected pickup and dropoff filters stay visible after sorting changes the loaded page', () => {
+  assert.deepEqual(
+    tripListState.keepSelectedFilterValue?.(
+      ['Bến xe Miền Đông mới'],
+      'Ngã tư Thủ Đức',
+    ),
+    ['Ngã tư Thủ Đức', 'Bến xe Miền Đông mới'],
+  );
+  assert.deepEqual(
+    tripListState.keepSelectedFilterValue?.(
+      ['Bến xe Đà Lạt'],
+      'Văn phòng trung tâm',
+    ),
+    ['Văn phòng trung tâm', 'Bến xe Đà Lạt'],
+  );
+  assert.deepEqual(
+    tripListState.keepSelectedFilterValue?.(['Bến xe Đà Lạt'], 'all'),
+    ['Bến xe Đà Lạt'],
   );
 });
 
