@@ -4,6 +4,17 @@ export const TRIPS_PAGE_SIZE = 10;
 
 export type TripLeg = 'outbound' | 'return';
 
+export function keepSelectedFilterValue(
+  values: string[],
+  selectedValue: string,
+): string[] {
+  if (selectedValue === 'all' || values.includes(selectedValue)) {
+    return values;
+  }
+
+  return [selectedValue, ...values];
+}
+
 export function getTripSummaryCardStates(activeLeg: TripLeg): {
   outbound: 'active' | 'muted';
   return: 'active' | 'muted';

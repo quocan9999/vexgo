@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import {
   Filter,
   ChevronDown,
@@ -27,6 +27,7 @@ import {
   buildRoundTripBookingHrefAfterSelection,
   filterUpcomingTrips,
   getTripSummaryCardStates,
+  keepSelectedFilterValue,
 } from '@/features/trips/services/trip-list-state';
 
 type TripPage = {
@@ -253,23 +254,62 @@ function TripSlot({
   );
 }
 
-function DropdownSelect({
+export function DropdownSelect({
   value,
   options,
   onChange,
+  ariaLabel,
   compact = false,
   align = 'left',
 }: {
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
+  ariaLabel: string;
   compact?: boolean;
   align?: 'left' | 'right';
 }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = Math.max(
+    options.findIndex((opt) => opt.value === value),
+    0,
+  );
   const selectedOption =
     options.find((opt) => opt.value === value) ?? options[0];
+
+  function openMenu(index = selectedIndex) {
+    setActiveIndex(index);
+    setOpen(true);
+  }
+
+  function closeMenu({ restoreFocus = false } = {}) {
+    setOpen(false);
+    if (restoreFocus) {
+      triggerRef.current?.focus();
+    }
+  }
+
+  function focusOption(index: number) {
+    const nextIndex = (index + options.length) % options.length;
+    setActiveIndex(nextIndex);
+    optionRefs.current[nextIndex]?.focus();
+  }
+
+  function selectOption(option: { value: string; label: string }) {
+    onChange(option.value);
+    closeMenu({ restoreFocus: true });
+  }
+
+  useEffect(() => {
+    if (open) {
+      optionRefs.current[activeIndex]?.focus();
+    }
+  }, [activeIndex, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -278,12 +318,13 @@ function DropdownSelect({
         containerRef.current &&
         !containerRef.current.contains(event.target as Node)
       ) {
-        setOpen(false);
+        closeMenu();
       }
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setOpen(false);
+        event.preventDefault();
+        closeMenu({ restoreFocus: true });
       }
     }
     document.addEventListener('mousedown', handlePointerDown);
@@ -297,23 +338,45 @@ function DropdownSelect({
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className={`flex items-center justify-between gap-2 bg-white border transition-colors outline-none cursor-pointer ${
+        aria-controls={listboxId}
+        onClick={() => {
+          if (open) closeMenu();
+          else openMenu();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            openMenu(selectedIndex);
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            openMenu(selectedIndex);
+          } else if (event.key === 'Home') {
+            event.preventDefault();
+            openMenu(0);
+          } else if (event.key === 'End') {
+            event.preventDefault();
+            openMenu(options.length - 1);
+          }
+        }}
+        className={`flex items-center justify-between gap-2 bg-white border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#f05123] focus-visible:ring-offset-2 cursor-pointer ${
           open
             ? 'border-[#f05123] ring-2 ring-[#f05123]/15'
             : 'border-slate-200 hover:border-slate-300'
         } ${
           compact
-            ? 'min-w-[165px] rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-700'
+            ? 'w-full rounded-lg px-3 py-2 text-[13px] font-medium text-slate-700 sm:min-w-[165px]'
             : 'w-full rounded-lg px-3 py-2.5 text-sm text-slate-700'
         }`}
       >
         <span className="truncate">{selectedOption?.label ?? ''}</span>
         <ChevronDown
           size={16}
+          aria-hidden="true"
           className={`shrink-0 text-slate-400 transition-transform duration-150 ${
             open ? 'rotate-180 text-[#f05123]' : ''
           }`}
@@ -322,26 +385,50 @@ function DropdownSelect({
 
       {open && (
         <div
+          id={listboxId}
           role="listbox"
+          aria-label={ariaLabel}
           className={`absolute top-full z-40 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg ${
             align === 'right'
               ? 'right-0 min-w-full'
               : 'left-0 right-0 min-w-full'
           }`}
         >
-          {options.map((opt) => {
+          {options.map((opt, index) => {
             const isSelected = opt.value === value;
             return (
               <button
                 key={opt.value}
+                ref={(node) => {
+                  optionRefs.current[index] = node;
+                }}
                 type="button"
                 role="option"
                 aria-selected={isSelected}
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
+                tabIndex={index === activeIndex ? 0 : -1}
+                onFocus={() => setActiveIndex(index)}
+                onClick={() => selectOption(opt)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    focusOption(index + 1);
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    focusOption(index - 1);
+                  } else if (event.key === 'Home') {
+                    event.preventDefault();
+                    focusOption(0);
+                  } else if (event.key === 'End') {
+                    event.preventDefault();
+                    focusOption(options.length - 1);
+                  } else if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectOption(opt);
+                  } else if (event.key === 'Tab') {
+                    closeMenu();
+                  }
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors cursor-pointer ${
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#f05123] cursor-pointer ${
                   isSelected
                     ? 'bg-orange-50 font-semibold text-[#f05123]'
                     : 'font-medium text-slate-700 hover:bg-slate-100'
@@ -349,7 +436,11 @@ function DropdownSelect({
               >
                 <span className="truncate whitespace-nowrap">{opt.label}</span>
                 {isSelected && (
-                  <Check size={14} className="shrink-0 text-[#f05123]" />
+                  <Check
+                    size={14}
+                    aria-hidden="true"
+                    className="shrink-0 text-[#f05123]"
+                  />
                 )}
               </button>
             );
@@ -685,6 +776,14 @@ export function TripList() {
         .filter(Boolean) as string[],
     ),
   );
+  const pickupPointOptions = keepSelectedFilterValue(
+    allPickupPoints,
+    pickupPointFilter,
+  );
+  const dropoffPointOptions = keepSelectedFilterValue(
+    allDropoffPoints,
+    dropoffPointFilter,
+  );
 
   const filteredTrips = filterUpcomingTrips(activeTrips).filter((t) => {
     if (pickupPointFilter !== 'all') {
@@ -944,6 +1043,7 @@ export function TripList() {
                   <DropdownSelect
                     value={vehicleType}
                     onChange={setVehicleType}
+                    ariaLabel={t('vehicleType')}
                     options={[
                       { value: 'all', label: t('allVehicleTypes') },
                       { value: 'Limousine', label: t('seatTypeLimousine') },
@@ -960,6 +1060,7 @@ export function TripList() {
                   <DropdownSelect
                     value={timeRange}
                     onChange={setTimeRange}
+                    ariaLabel={t('departureTime')}
                     options={[
                       {
                         value: 'all',
@@ -980,6 +1081,7 @@ export function TripList() {
                   <DropdownSelect
                     value={operator}
                     onChange={setOperator}
+                    ariaLabel={t('operator')}
                     options={[
                       { value: 'all', label: t('allOperators') },
                       ...allOperators.map((op) => ({
@@ -990,7 +1092,7 @@ export function TripList() {
                   />
                 </div>
 
-                {allPickupPoints.length > 0 && (
+                {(allPickupPoints.length > 0 || pickupPointFilter !== 'all') && (
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-2">
                       {t('pickupPoint')} ({allPickupPoints.length})
@@ -998,9 +1100,10 @@ export function TripList() {
                     <DropdownSelect
                       value={pickupPointFilter}
                       onChange={setPickupPointFilter}
+                      ariaLabel={t('pickupPoint')}
                       options={[
                         { value: 'all', label: t('allPickupPoints') },
-                        ...allPickupPoints.map((name) => ({
+                        ...pickupPointOptions.map((name) => ({
                           value: name,
                           label: name,
                         })),
@@ -1009,7 +1112,7 @@ export function TripList() {
                   </div>
                 )}
 
-                {allDropoffPoints.length > 0 && (
+                {(allDropoffPoints.length > 0 || dropoffPointFilter !== 'all') && (
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-2">
                       {t('dropoffPoint')} ({allDropoffPoints.length})
@@ -1017,9 +1120,10 @@ export function TripList() {
                     <DropdownSelect
                       value={dropoffPointFilter}
                       onChange={setDropoffPointFilter}
+                      ariaLabel={t('dropoffPoint')}
                       options={[
                         { value: 'all', label: t('allDropoffPoints') },
-                        ...allDropoffPoints.map((name) => ({
+                        ...dropoffPointOptions.map((name) => ({
                           value: name,
                           label: name,
                         })),
@@ -1152,34 +1256,43 @@ export function TripList() {
             )}
 
             {/* Toolbar */}
-            <div className="flex justify-between items-center bg-white p-3 px-4 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex flex-col gap-3 bg-white p-3 px-4 rounded-xl shadow-sm border border-slate-100 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[13px] font-medium text-slate-600">
                 <span className="font-bold text-blue-600">{totalResults}</span>{' '}
                 {t('resultsBadge').toLowerCase()}
               </p>
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] text-slate-500">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <span className="shrink-0 text-[13px] text-slate-500">
                   ⇅ {t('sortBy')}:
                 </span>
-                <DropdownSelect
-                  compact
-                  align="right"
-                  value={sort}
-                  onChange={(nextSort) => {
-                    setSort(nextSort);
-                    setOutboundPageState({
-                      searchKey: outboundSearchKey,
-                      page: 1,
-                    });
-                    setReturnPageState({ searchKey: returnSearchKey, page: 1 });
-                  }}
-                  options={[
-                    { value: 'departure', label: t('sortDepartureAsc') },
-                    { value: 'departure-desc', label: t('sortDepartureDesc') },
-                    { value: 'price', label: t('sortPriceAsc') },
-                    { value: 'price-desc', label: t('sortPriceDesc') },
-                  ]}
-                />
+                <div className="min-w-0 flex-1 sm:flex-none">
+                  <DropdownSelect
+                    compact
+                    align="right"
+                    value={sort}
+                    ariaLabel={t('sortBy')}
+                    onChange={(nextSort) => {
+                      setSort(nextSort);
+                      setOutboundPageState({
+                        searchKey: outboundSearchKey,
+                        page: 1,
+                      });
+                      setReturnPageState({
+                        searchKey: returnSearchKey,
+                        page: 1,
+                      });
+                    }}
+                    options={[
+                      { value: 'departure', label: t('sortDepartureAsc') },
+                      {
+                        value: 'departure-desc',
+                        label: t('sortDepartureDesc'),
+                      },
+                      { value: 'price', label: t('sortPriceAsc') },
+                      { value: 'price-desc', label: t('sortPriceDesc') },
+                    ]}
+                  />
+                </div>
               </div>
             </div>
 

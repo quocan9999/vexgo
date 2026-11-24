@@ -138,6 +138,27 @@ test('trip list sends keyword and vehicle filters before server pagination', () 
   );
 });
 
+test('selected pickup and dropoff filters stay visible after sorting changes the loaded page', () => {
+  assert.deepEqual(
+    tripListState.keepSelectedFilterValue?.(
+      ['Bến xe Miền Đông mới'],
+      'Ngã tư Thủ Đức',
+    ),
+    ['Ngã tư Thủ Đức', 'Bến xe Miền Đông mới'],
+  );
+  assert.deepEqual(
+    tripListState.keepSelectedFilterValue?.(
+      ['Bến xe Đà Lạt'],
+      'Văn phòng trung tâm',
+    ),
+    ['Văn phòng trung tâm', 'Bến xe Đà Lạt'],
+  );
+  assert.deepEqual(
+    tripListState.keepSelectedFilterValue?.(['Bến xe Đà Lạt'], 'all'),
+    ['Bến xe Đà Lạt'],
+  );
+});
+
 test('isTripUpcoming and filterUpcomingTrips filter out trips whose departure time has passed', () => {
   const now = new Date('2026-11-08T05:15:00.000Z').getTime();
 
